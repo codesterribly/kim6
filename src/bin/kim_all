@@ -128,7 +128,7 @@ _cfg_get() {
 load_kim_config() {
   local v
 
-  # Naming: prefix or suffix for derived outputs (web/compressed/stripped).
+  # Naming: prefix or suffix for web/compressed/resized/stripped outputs.
   # Env: KIM_NAME_AFFIX_POSITION=prefix|suffix
   if [ -z "${KIM_NAME_AFFIX_POSITION:-}" ]; then
     v="$(_cfg_get NAME_AFFIX_POSITION)"
@@ -266,6 +266,19 @@ split_path() {
   fi
 
   printf '%s\n%s\n%s\n%s\n' "$dir" "$base" "$stem" "$ext"
+}
+
+# Place an action tag around the complete stem; keep numbering before the extension.
+affixed_filename() {
+  local stem="$1" tag="$2" ext="$3" number="${4:-}" separator="${5:-_}" name
+  if [ "$KIM_NAME_AFFIX_POSITION" = "prefix" ]; then
+    name="${tag}_${stem}"
+  else
+    name="${stem}_${tag}"
+  fi
+  [ -z "$number" ] || name="${name}${separator}${number}"
+  [ -z "$ext" ] || name="${name}.${ext}"
+  printf '%s\n' "$name"
 }
 
 # Best-effort: copy timestamps and permissions (mode) from src to dst.
@@ -588,8 +601,9 @@ action_album() {
 #
 # Behavior:
 # - Prompts for Create vs overwrite (unless KIM_POLICY forces a mode).
-# - Create mode: writes new files into <dir> using:
+# - Create mode: writes new files into <dir> using (suffix default):
 #     <name>_compressed.<ext>   (or <name>_compressed if no extension)
+#   NAME_AFFIX_POSITION=prefix places compressed before the complete stem.
 #   Never overwrites: adds _1, _2, ... if needed.
 # - Overwrite mode: overwrites the original files in place.
 # - Preserves original timestamps best-effort in both modes.
@@ -667,19 +681,11 @@ action_compress() {
         report_fail "$f"
       fi
     else
-      if [ -n "$ext" ]; then
-        OUTFILE="$outdir/${stem}_compressed.${ext}"
-      else
-        OUTFILE="$outdir/${stem}_compressed"
-      fi
+      OUTFILE="$outdir/$(affixed_filename "$stem" compressed "$ext")"
 
       n=1
       while [ -e "$OUTFILE" ]; do
-        if [ -n "$ext" ]; then
-          OUTFILE="$outdir/${stem}_compressed_${n}.${ext}"
-        else
-          OUTFILE="$outdir/${stem}_compressed_${n}"
-        fi
+        OUTFILE="$outdir/$(affixed_filename "$stem" compressed "$ext" "$n")"
         n=$((n + 1))
       done
 
@@ -1536,7 +1542,7 @@ action_rename() {
 # Behavior:
 # - Prompts for overwrite vs create, consistent with other kim_all actions.
 # - Overwrite mode replaces the original file using atomic overwrite logic.
-# - Create mode writes new files with a "_resized" suffix, avoiding collisions.
+# - Create mode places the resized tag per NAME_AFFIX_POSITION, avoiding collisions.
 # - Metadata is preserved best-effort on created files via helpers.
 #
 # Arguments:
@@ -1614,19 +1620,11 @@ action_resize() {
       local dir2
       dir2="${outdir:-$dir}"
 
-      if [ -n "$ext" ]; then
-        OUTFILE="$dir2/${stem}_resized.${ext}"
-      else
-        OUTFILE="$dir2/${stem}_resized"
-      fi
+      OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext")"
 
       n=1
       while [ -e "$OUTFILE" ]; do
-        if [ -n "$ext" ]; then
-          OUTFILE="$dir2/${stem}_resized_${n}.${ext}"
-        else
-          OUTFILE="$dir2/${stem}_resized_${n}"
-        fi
+        OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext" "$n")"
         n=$((n + 1))
       done
 
@@ -1910,8 +1908,9 @@ action_rotatewithexif() {
 #   - Writes to a temp output file, then overwrites the original if output looks valid.
 #   - Preserves original timestamps best-effort.
 # - Create mode:
-#   - Writes a new sibling file using:
+#   - Writes a new sibling file using (suffix default):
 #       <name>_stripped.<ext>   (or <name>_stripped if no extension)
+#     NAME_AFFIX_POSITION=prefix places stripped before the complete stem.
 #     Never overwrites: adds -1, -2, ... if needed.
 #   - Preserves original timestamps best-effort.
 # - Uses a progress dialog and supports Cancel.
@@ -1977,19 +1976,11 @@ action_stripmeta() {
       atomic_overwrite_file "$i" "$OUTTMP"
       report_ok
     else
-      if [ -n "$ext" ]; then
-        OUTFILE="$dir/${stem}_stripped.${ext}"
-      else
-        OUTFILE="$dir/${stem}_stripped"
-      fi
+      OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
 
       n=1
       while [ -e "$OUTFILE" ]; do
-        if [ -n "$ext" ]; then
-          OUTFILE="$dir/${stem}_stripped-${n}.${ext}"
-        else
-          OUTFILE="$dir/${stem}_stripped-${n}"
-        fi
+        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
         n=$((n + 1))
       done
 
@@ -2017,7 +2008,8 @@ action_stripmeta() {
 #   - Maximum image size (example: 1600x1600)
 #   - JPEG quality (1–100), default comes from KIM_WEB_QUALITY (fallback 75)
 # - Always creates derived exports, regardless of KIM_POLICY.
-# - Writes <name>_web.<ext>, adding _1, _2, ... for existing names.
+# - Writes <name>_web.<ext> by default, or web_<name>.<ext> in prefix mode.
+# - Adds _1, _2, ... for existing names.
 # - Original images are never replacement targets.
 # - Exports do NOT preserve original timestamps.
 # - Uses a progress dialog and supports Cancel.
@@ -2095,11 +2087,11 @@ action_webexport() {
       out_ext="$fmt"
     fi
 
-    OUTFILE="$outdir/${stem}_web.${out_ext}"
+    OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext")"
 
     n=1
     while [ -e "$OUTFILE" ]; do
-      OUTFILE="$outdir/${stem}_web_${n}.${out_ext}"
+      OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
       n=$((n + 1))
     done
 
