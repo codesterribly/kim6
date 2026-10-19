@@ -1,0 +1,2340 @@
+#!/usr/bin/env bash
+#
+# kim_all
+# One entrypoint for KIM actions, usually launched from a Dolphin Service Menu.
+#
+# Derived from multiple kim_* scripts in the KIM project.
+#
+# Author(s): based on the work of
+#   Charles Bouveyron <charles.bouveyron@free.fr>
+#   Tomáš Hnyk <tomashnyk@gmail.com>
+#   Raphaël Pinson <raphink@raphink.net>
+#   Mathieu Vilaplana <mathieu@creationgif.com>
+#   KIM6 contributors
+#
+# Copyright (C) 2005, 2006 - Charles Bouveyron <charles.bouveyron@free.fr>
+# Copyright (C) 2025 - Tomáš Hnyk <tomashnyk@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+# ---------------------------------------------------------------------------
+# Project intent
+# ---------------------------------------------------------------------------
+# The goal of this script is to consolidate the useful kim_* scripts into
+# a single, unified entry point. This allows the design to evolve and
+# modernize while sharing common helper functions for tasks that every
+# script needs, such as:
+#   - counting files and directories
+#   - validating inputs
+#   - creating and cleaning up temporary work directories
+#
+# Centralizing this logic also makes the codebase easier to hack on and
+# develop, without having to duplicate or synchronize changes across
+# many separate scripts.
+
+# ---------------------------------------------------------------------------
+# Planned work
+# ---------------------------------------------------------------------------
+# 1) Integrate with krename for advanced renaming workflows.
+#    krename is already extremely powerful, so the intent is to either:
+#      - pre-load a few common krename presets, or
+#      - simply launch krename directly when appropriate.
+#
+# 2) Improve how rename operations mark modified files.
+#    For example, controlling whether tags like "_stripped" or "_web"
+#    are prepended or appended, which is useful for workflows that
+#    prefer prefixes over suffixes (or vice versa).
+
+# ---------------------------------------------------------------------------
+# Work-in-progress notes
+# ---------------------------------------------------------------------------
+# THIS IS A WORK IN PROGRESS.
+# Suggestions are welcome, but expect rapid iteration and change.
+
+# Some scripts are intentionally not integrated at this time, either
+# because they appear unused or because their functionality is better
+# handled elsewhere:
+#
+# - kim_rotatewithexif
+#   Despite the name, this script does not actually rotate based on EXIF.
+#   It simply applies a custom rotation angle, which is already handled
+#   by action_rotate. EXIF-based auto-orientation is implemented instead
+#   in action_rotatewithexif.
+#
+# - kim_multiburst
+#   Handles legacy Sony multi-shot images by converting them into an
+#   animated GIF. This is a niche feature and is being deferred.
+#
+# - kim_sortbydate
+#   A rename script with a hard-coded EXIF date pattern. This behavior
+#   is better handled as part of action_rename (or via krename), and
+#   equivalent EXIF-based rename options have been integrated there.
+#
+# - kim_treatment
+#   Provides very basic image treatments (for example sepia) that are
+#   easily achievable, and often better handled, in dedicated graphics
+#   applications.
+
+# TODO re-enable when ready for testing
+#SOURCE_TRANSLATION_TTT
+
+set -euo pipefail
+
+PROG="kim_all"
+
+# Print an error and exit.
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Temp workspace
+# ---------------------------------------------------------------------------
+
+# One temp folder per run, always cleaned up on exit.
+mk_workdir() {
+  KIMDIR="$(mktemp -d /tmp/kim.XXXXXXXX)" || die "mktemp failed"
+  trap 'rm -rf "$KIMDIR"' EXIT
+}
+
+# ---------------------------------------------------------------------------
+# Configuration (KConfig file, env overrides)
+# ---------------------------------------------------------------------------
+
+# KIM uses a shared config file
+#   ${XDG_CONFIG_HOME:-~/.config}/kim_kdeimagemenu   group "<default>"
+#
+# Env vars always win over config values.
+
+KIM_CONFIG_FILE="${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}"
+
+_cfg_get() {
+  local key="$1"
+  command -v kreadconfig6 >/dev/null 2>&1 || return 0
+  [ -f "$KIM_CONFIG_FILE" ] || return 0
+  kreadconfig6 --file "$KIM_CONFIG_FILE" --group "<default>" --key "$key" 2>/dev/null || true
+}
+
+load_kim_config() {
+  local v
+
+  # Naming: prefix or suffix for derived outputs (web/compressed/stripped).
+  # Env: KIM_NAME_AFFIX_POSITION=prefix|suffix
+  if [ -z "${KIM_NAME_AFFIX_POSITION:-}" ]; then
+    v="$(_cfg_get NAME_AFFIX_POSITION)"
+    case "$v" in
+      prefix|suffix) KIM_NAME_AFFIX_POSITION="$v" ;;
+    esac
+  fi
+  : "${KIM_NAME_AFFIX_POSITION:=suffix}"
+
+  # Webexport quality default (only used as the default value in the prompt here).
+  # Env: KIM_WEB_QUALITY=1..100
+  if [ -z "${KIM_WEB_QUALITY:-}" ]; then
+    v="$(_cfg_get WEB_EXPORT_QUALITY)"
+    if [[ "$v" =~ ^[0-9]{1,3}$ ]] && [ "$v" -ge 1 ] && [ "$v" -le 100 ]; then
+      KIM_WEB_QUALITY="$v"
+    fi
+  fi
+
+  : "${KIM_WEB_QUALITY:=75}"
+
+  # Webexport output format (create mode).
+  # Env: KIM_WEB_FORMAT=jpg|webp|avif|keep
+  if [ -z "${KIM_WEB_FORMAT:-}" ]; then
+    v="$(_cfg_get WEB_EXPORT_FORMAT)"
+    case "$v" in
+      jpg|jpeg|webp|avif|keep) KIM_WEB_FORMAT="$v" ;;
+    esac
+  fi
+  : "${KIM_WEB_FORMAT:=jpg}"
+
+  # Policy mode from config (optional), only used if no env override exists.
+  # Env: KIM_POLICY
+  if [ -z "${KIM_POLICY:-}" ]; then
+    v="$(_cfg_get KIM_POLICY)"
+    case "$v" in
+      create|overwrite) KIM_CFG_POLICY="$v" ;;
+    esac
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Policy handling
+# ---------------------------------------------------------------------------
+
+# KIM_POLICY=create skips the overwrite dialog (always create new files).
+# KIM_POLICY=overwrite skips the dialog and overwrites originals.
+# Anything else keeps the default prompt.
+policy_mode() {
+  local p="${KIM_POLICY:-${KIM_CFG_POLICY:-}}"
+
+  case "$p" in
+    create) echo "create" ;;
+    overwrite) echo "overwrite" ;;
+    *) echo "prompt" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Count only real files from Dolphin selection.
+count_valid_files() {
+  local n=0 i
+  for i in "$@"; do
+    [ -f "$i" ] && n=$((n + 1))
+  done
+  echo "$n"
+}
+
+# Build an array of only real files from the Dolphin selection.
+# Usage: collect_valid_files <arrayname> <args...>
+collect_valid_files() {
+  local outvar="$1"
+  shift || true
+
+  # Bash nameref to fill caller-provided array
+  local -n out_arr="$outvar"
+  out_arr=()
+
+  local i
+  for i in "$@"; do
+    [ -f "$i" ] && out_arr+=("$i")
+  done
+}
+
+
+# ---------------------------------------------------------------------------
+# Extra helpers (mode selection, path parsing, metadata, reporting)
+# ---------------------------------------------------------------------------
+
+# Choose how to output results: create or overwrite.
+# Echoes: create | overwrite | cancel
+# Respects KIM_POLICY=create|overwrite.
+choose_output_mode() {
+  local title="$1"
+  local prompt="$2"
+
+  case "$(policy_mode)" in
+    create)  echo "create"; return 0 ;;
+    overwrite) echo "overwrite"; return 0 ;;
+  esac
+
+  kdialog --title "$title" \
+    --yesnocancel "$prompt" \
+    --yes-label "$(gettext 'Create new')" \
+    --no-label  "$(gettext 'Overwrite existing')"
+
+  case $? in
+    0) echo "create" ;;
+    1) echo "overwrite" ;;
+    *) echo "cancel" ;;
+  esac
+}
+
+# Split a path into dir/base/stem/ext.
+# Prints 4 lines: dir, base, stem, ext (ext without dot, empty if none)
+split_path() {
+  local p="$1"
+  local dir base stem ext
+
+  dir="$(dirname -- "$p")"
+  base="$(basename -- "$p")"
+
+  # Leading dotfile with no other dots has no extension (e.g. ".bashrc").
+  if [[ "$base" == .* && "$base" != *.*.* ]]; then
+    stem="$base"
+    ext=""
+  elif [[ "$base" == *.* ]]; then
+    stem="${base%.*}"
+    ext="${base##*.}"
+  else
+    stem="$base"
+    ext=""
+  fi
+
+  printf '%s\n%s\n%s\n%s\n' "$dir" "$base" "$stem" "$ext"
+}
+
+# Best-effort: copy timestamps and permissions (mode) from src to dst.
+preserve_meta_from() {
+  local src="$1"
+  local dst="$2"
+
+  touch -r "$src" "$dst" >/dev/null 2>&1 || true
+  chmod --reference="$src" "$dst" >/dev/null 2>&1 || true
+}
+
+
+# Create a temp file in $KIMDIR with the same extension as a target path.
+tmp_for_target() {
+  local target="$1"
+  local _dir _base _stem _ext
+  {
+    read -r _dir
+    read -r _base
+    read -r _stem
+    read -r _ext
+  } < <(split_path "$target")
+
+  if [ -n "$_ext" ]; then
+    mktemp "$KIMDIR/kim_out_XXXXXX.${_ext}"
+  else
+    mktemp "$KIMDIR/kim_out_XXXXXX"
+  fi
+}
+
+# Commit a temp file into its final path.
+# Uses mv with cross-device fallback (since /tmp can be different filesystem).
+commit_tmp_to_target() {
+  local tmp="$1"
+  local target="$2"
+
+  mkdir -p -- "$(dirname -- "$target")" || return 1
+
+  if mv -f -- "$tmp" "$target" 2>/dev/null; then
+    return 0
+  fi
+
+  cp -f -- "$tmp" "$target" && rm -f -- "$tmp"
+}
+
+# overwrite dst with tmp, preserving metadata from dst onto tmp first.
+atomic_overwrite_file() {
+  local dst="$1"
+  local tmp="$2"
+
+  preserve_meta_from "$dst" "$tmp"
+  commit_tmp_to_target "$tmp" "$dst"
+}
+
+# When creating a new output from src, preserve metadata best-effort.
+finalize_created_file() {
+  local src="$1"
+  local out_file="$2"
+  preserve_meta_from "$src" "$out_file"
+}
+
+# Simple per-action reporting helpers.
+report_init() {
+  REPORT_OK=0
+  REPORT_FAIL=0
+  REPORT_FAIL_LIST=()
+}
+
+report_ok() {
+  REPORT_OK=$((REPORT_OK + 1))
+}
+
+report_fail() {
+  local f="$1"
+  REPORT_FAIL=$((REPORT_FAIL + 1))
+
+  # Keep list small so dialogs stay readable.
+  if [ "${#REPORT_FAIL_LIST[@]}" -lt 10 ]; then
+    REPORT_FAIL_LIST+=("$f")
+  fi
+}
+
+# Show a summary dialog only if something failed.
+report_finish_dialog() {
+  local title="$1"
+
+  if [ "${REPORT_FAIL:-0}" -le 0 ]; then
+    return 0
+  fi
+
+  local msg
+  msg="$(printf '%s\n\n%s %d\n%s %d' \
+    "$(gettext 'Some files could not be processed.')" \
+    "$(gettext 'Succeeded:')" "${REPORT_OK:-0}" \
+    "$(gettext 'Failed:')" "${REPORT_FAIL:-0}")"
+
+  if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then
+    msg="$msg\n\n$(gettext 'Failed files (first 10):')\n$(printf '%s\n' "${REPORT_FAIL_LIST[@]}")"
+  fi
+
+  kdialog --title "$title" --error "$(printf '%b' "$msg")"
+
+}
+
+# ---------------------------------------------------------------------------
+# Progress dialog helpers
+# ---------------------------------------------------------------------------
+
+# Open a progress dialog. Returns "service path" for qdbus.
+progress_open() {
+  local max="$1"
+  local text="$2"
+
+  local dbusRef
+  dbusRef="$(kdialog --progressbar "$text" "$max" 2>/dev/null || true)"
+
+  if [ -n "$dbusRef" ]; then
+    qdbus "$dbusRef" showCancelButton true >/dev/null 2>&1 || true
+    echo "$dbusRef"
+  else
+    echo ""
+  fi
+}
+
+# True if user pressed Cancel.
+progress_cancelled() {
+  local dbusRef="$1"
+
+  # No dialog means no cancellation.
+  [ -z "$dbusRef" ] && return 1
+
+  local cancelled
+  cancelled="$(qdbus "$dbusRef" wasCancelled 2>/dev/null || echo false)"
+
+  [[ "$cancelled" == "true" ]]
+}
+
+# Convenience: cancel-check + set label for the current item.
+# Returns 0 to continue, 1 if cancelled (and closes the dialog).
+progress_begin_item() {
+  local dbusRef="$1"
+  local text="$2"
+
+  if progress_cancelled "$dbusRef"; then
+    progress_close "$dbusRef"
+    return 1
+  fi
+
+  progress_label "$dbusRef" "$text"
+  return 0
+}
+
+# Update progress text.
+progress_label() {
+  local dbusRef="$1"
+  local text="$2"
+
+  [ -z "$dbusRef" ] && return 0
+
+  qdbus "$dbusRef" setLabelText "$text" >/dev/null 2>&1 || true  
+}
+
+# Update progress value.
+progress_value() {
+  local dbusRef="$1"
+  local value="$2"
+
+  [ -z "$dbusRef" ] && return 0
+
+  qdbus "$dbusRef" org.freedesktop.DBus.Properties.Set \
+    org.kde.kdialog.ProgressDialog value int32 "$value" \
+    >/dev/null 2>&1 || true
+}
+
+# Close the dialog (best-effort).
+progress_close() {
+  local dbusRef="$1"
+
+  [ -z "$dbusRef" ] && return 0
+
+  qdbus "$dbusRef" close >/dev/null 2>&1 || true
+}
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+
+####################
+# Build a photo album PDF from selected images using ImageMagick montage.
+#
+# Usage: album <dir> <files...>
+#
+# Behavior:
+# - Prompts for an album layout (tile/page geometry presets).
+# - Asks where to save the output PDF (save dialog starts in <dir>).
+# - Generates temporary miniatures in $KIMDIR, then assembles the final PDF.
+# - Uses a progress dialog (2 steps: miniatures, album build).
+# - If no valid files are selected, exits quietly (returns 0).
+#
+# Notes:
+# - Expects montage to be available.
+# - Output is a single PDF at the user-selected path.
+
+action_album() {
+  local dir nb outpdf dbusRef
+  local page tile geom mini
+
+  # Called from a Dolphin service menu.
+  # First argument is the working directory for the save dialog.
+  dir="${1:-}"
+  shift || true
+
+  # Dolphin can pass directories or non-files.
+  # Only proceed if we have at least one real file.
+  [ "$(count_valid_files "$@")" -le 0 ] && return 0
+
+  # User picks the album layout.
+  # The selected numeric value (1-8) maps to the preset below.
+  nb="$(kdialog --radiolist "$(gettext 'Kim - Select album type:')" \
+    1 "$(gettext '1x1 portrait album')"  off \
+    2 "$(gettext '1x1 landscape album')" off \
+    3 "$(gettext '1x2 landscape album')" off \
+    4 "$(gettext '2x1 portrait album')"  off \
+    5 "$(gettext '2x2 landscape album')" on  \
+    6 "$(gettext '3x2 portrait album')"  off \
+    7 "$(gettext '3x4 landscape album')" off \
+    8 "$(gettext '4x4 landscape album')" off)"
+
+  # User cancelled the layout dialog.
+  if [ -z "$nb" ]; then
+    kdialog --title "$(gettext 'Kim')" \
+      --msgbox "$(gettext 'The action was cancelled by the user!')"
+    return 1
+  fi
+
+  # Normalize the starting directory for the save dialog.
+  if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+    dir="$PWD"
+  fi
+
+  # Where to save the PDF.
+  outpdf="$(kdialog --getsavefilename "$dir" "*.pdf")"
+  if [ -z "$outpdf" ]; then
+    return 0
+  fi
+
+  # Select the montage preset based on the chosen album type.
+  # Meanings:
+  # - tile: how many images per page (columns x rows)
+  # - geom: per-tile geometry plus padding
+  # - page: output page size (portrait vs landscape)
+  case "$nb" in
+    1) tile="1x1"; geom="600x800+5+5"; page="595x842" ;;  # portrait
+    2) tile="1x1"; geom="800x600+5+5"; page="842x595" ;;  # landscape
+    3) tile="1x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    4) tile="2x1"; geom="480x640+5+5"; page="595x842" ;;  # portrait
+    5) tile="2x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    6) tile="3x2"; geom="480x640+5+5"; page="595x842" ;;  # portrait
+    7) tile="3x4"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    8) tile="4x4"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    *)
+      kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Unrecognized option! ')"
+      return 1
+      ;;
+  esac
+
+  # Two-step progress: (1) montage image, (2) PDF output + cleanup.
+  dbusRef="$(progress_open 2 "$(gettext 'Kim - Creating miniatures ...')")"
+
+  if progress_cancelled "$dbusRef"; then
+    progress_close "$dbusRef"
+    return 1
+  fi
+
+  # Step 1: build a single montage image in the temp directory.
+  mini="$KIMDIR/miniature.jpg"
+  montage -tile "$tile" -geometry "$geom" -page "$page" -- "$@" "$mini" >/dev/null 2>&1 || true
+
+  # Validate that montage actually produced something usable.
+  if [ ! -s "$mini" ]; then
+    progress_close "$dbusRef"
+    kdialog --title "$(gettext 'Kim')" --error \
+      "$(gettext 'Kim - Failed to create the album montage. Please check that ImageMagick montage is installed and the selected files are valid images.')"
+    return 1
+  fi
+
+  progress_label "$dbusRef" "$(gettext 'Kim - Creating album ...')"
+  progress_value "$dbusRef" 1
+
+  if progress_cancelled "$dbusRef"; then
+    progress_close "$dbusRef"
+    return 1
+  fi
+
+  # Step 2: convert the montage image into the final PDF.
+  # Using magick here avoids the fragile miniature*.jpg glob and a second montage pass.
+  magick -- "$mini" "$outpdf" >/dev/null 2>&1 || true
+
+  if [ ! -s "$outpdf" ]; then
+    progress_close "$dbusRef"
+    kdialog --title "$(gettext 'Kim')" --error \
+      "$(gettext 'Kim - Failed to write the output PDF. Please verify the destination path and permissions.')"
+    return 1
+  fi
+
+  # Cleanup temp output (mk_workdir also removes $KIMDIR on exit).
+  progress_label "$dbusRef" "$(gettext 'Kim - Deleting miniatures ...')"
+  progress_value "$dbusRef" 2
+  rm -f -- "$mini" >/dev/null 2>&1 || true
+
+  progress_close "$dbusRef"
+  true
+}
+
+
+####################
+# Compress images to a specified JPEG quality using ImageMagick.
+#
+# Usage: compress <quality> <dir> <files...>
+#
+# Behavior:
+# - Prompts for Create vs overwrite (unless KIM_POLICY forces a mode).
+# - Create mode: writes new files into <dir> using:
+#     <name>_compressed.<ext>   (or <name>_compressed if no extension)
+#   Never overwrites: adds _1, _2, ... if needed.
+# - Overwrite mode: overwrites the original files in place.
+# - Preserves original timestamps best-effort in both modes.
+#
+# Policy:
+# - KIM_POLICY=create    forces Create mode
+# - KIM_POLICY=overwrite   forces Overwrite mode
+
+action_compress() {
+  local QUALITY="${1:-}"
+  local outdir="${2:-}"
+  shift 2 || true
+
+  [[ -n "$QUALITY" ]] || die "compress: missing quality"
+  [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || die "compress: quality must be a number"
+  (( QUALITY >= 1 && QUALITY <= 100 )) || die "compress: quality must be between 1 and 100"
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local mode
+  mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  if [ "$mode" = "cancel" ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+    return 1
+  fi
+
+  # Only required in create mode.
+  if [ "$mode" = "create" ]; then
+    [[ -n "$outdir" ]] || die "compress: missing output dir"
+    [[ -d "$outdir" ]] || die "compress: output dir does not exist: $outdir"
+  fi
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Compressing images ...')")"
+
+  local counter=0
+  local f dir base stem ext
+  local OUTFILE OUTTMP n
+
+  for f in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$f")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Compressing file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    if [ "$mode" = "overwrite" ]; then
+      OUTTMP="$(mktemp "$KIMDIR/kim_compress_out_${counter}_XXXXXX.${ext:-tmp}")"
+      rm -f "$OUTTMP"
+
+      magick -- "$f" -strip -interlace Plane -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || true
+
+      if [ -s "$OUTTMP" ]; then
+        atomic_overwrite_file "$f" "$OUTTMP"
+        report_ok
+      else
+        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+        report_fail "$f"
+      fi
+    else
+      if [ -n "$ext" ]; then
+        OUTFILE="$outdir/${stem}_compressed.${ext}"
+      else
+        OUTFILE="$outdir/${stem}_compressed"
+      fi
+
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        if [ -n "$ext" ]; then
+          OUTFILE="$outdir/${stem}_compressed_${n}.${ext}"
+        else
+          OUTFILE="$outdir/${stem}_compressed_${n}"
+        fi
+        n=$((n + 1))
+      done
+
+      magick -- "$f" -strip -interlace Plane -quality "$QUALITY" "$OUTFILE" >/dev/null 2>&1 || true
+
+      if [ -s "$OUTFILE" ]; then
+        finalize_created_file "$f" "$OUTFILE"
+        report_ok
+      else
+        rm -f -- "$OUTFILE" >/dev/null 2>&1 || true
+        report_fail "$f"
+      fi
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+
+####################
+# Convert images to another format using ImageMagick.
+#
+# Usage: convert <format> <files...>
+#
+# Behavior:
+# - Prompts for Create vs Overwrite (unless KIM_POLICY forces a mode).
+# - Create mode: writes new sibling files next to the originals, never overwriting.
+# - overwrite mode: converts to a temporary file in the destination directory, then moves it into place.
+# - Uses a progress dialog and supports Cancel.
+#
+# Policy:
+# - KIM_POLICY=create      forces Create mode
+# - KIM_POLICY=overwrite   forces overwrite mode
+#
+# Notes:
+# - Overwrite mode does NOT preserve timestamps (conversion produces a new file).
+# - Uses `magick` (ImageMagick) for conversion.
+
+####################
+# Convert images to another format.
+#
+# Usage: convert <format> <files...>
+#
+# Behavior:
+# - Prompts for Create vs Overwrite (unless KIM_POLICY forces a mode).
+# - Create mode: writes new sibling files next to the originals, never overwriting
+#   (adds _1, _2, ... if needed).
+# - Overwrite mode: overwrites existing converted destination files if they exist,
+#   but DOES NOT delete the original input files (matches upstream kim_convert behavior).
+# - Uses a progress dialog and supports Cancel.
+#
+# Policy:
+# - KIM_POLICY=create      forces Create mode
+# - KIM_POLICY=overwrite   forces overwrite mode
+#
+# Notes:
+# - Uses ImageMagick `magick` to write explicit outputs.
+
+action_convert() {
+  local FORMAT="${1:-}"
+  if [ -z "$FORMAT" ]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: missing format.')"
+    return 1
+  fi
+
+  # Keep format simple and safe as an extension.
+  if ! [[ "$FORMAT" =~ ^[A-Za-z0-9]+$ ]]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: invalid format.')"
+    return 1
+  fi
+
+  shift || true
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local mode
+  mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  if [ "$mode" = "cancel" ]; then
+    return 1
+  fi
+
+  # Overwrite-mode safety: abort only on collisions where two inputs map to the same output.
+  if [ "$mode" = "overwrite" ]; then
+    declare -A _convert_seen=()
+    local i dir base stem ext outfile
+
+    for i in "${files[@]}"; do
+      {
+        read -r dir
+        read -r base
+        read -r stem
+        read -r ext
+      } < <(split_path "$i")
+
+      outfile="$dir/${stem}.${FORMAT}"
+
+      if [[ -n "${_convert_seen["$outfile"]+x}" ]] && [ "${_convert_seen["$outfile"]}" != "$i" ]; then
+        kdialog --title "$(gettext 'Kim')" --error \
+          "$(gettext 'Convert aborted. Two files would write the same destination:')\n\n$outfile\n\n${_convert_seen["$outfile"]}\n$i"
+        return 1
+      fi
+      _convert_seen["$outfile"]="$i"
+    done
+  fi
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext OUTFILE n rc
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Converting file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    OUTFILE="$dir/${stem}.${FORMAT}"
+
+    # If user "converts" to the same extension, do not try to write input to itself.
+    # Create mode will create a copy with suffix, overwrite mode treats as no-op success.
+    if [ -n "$ext" ] && [[ "${ext,,}" == "${FORMAT,,}" ]]; then
+      if [ "$mode" = "overwrite" ]; then
+        report_ok
+        progress_value "$dbusRef" "$counter"
+        continue
+      fi
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        OUTFILE="$dir/${stem}_${n}.${FORMAT}"
+        n=$((n + 1))
+      done
+    fi
+
+    if [ "$mode" = "create" ]; then
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        OUTFILE="$dir/${stem}_${n}.${FORMAT}"
+        n=$((n + 1))
+      done
+    fi
+
+    rc=0
+    magick -- "$i" "$OUTFILE" >/dev/null 2>&1 || rc=$?
+
+    if [ "$rc" -eq 0 ] && [ -s "$OUTFILE" ]; then
+      report_ok
+    else
+      rm -f -- "$OUTFILE" >/dev/null 2>&1 || true
+      report_fail "$i"
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+
+####################
+# Flip or flop images in-place using ImageMagick mogrify.
+#
+# Usage: flipflop <mode> <files...>
+#
+# Behavior:
+# - <mode> is passed directly to mogrify (typically -flip or -flop).
+# - Modifies files in place.
+# - Uses a progress dialog and supports Cancel.
+# - If no valid files are selected, exits with an error.
+#
+# Notes:
+# - This action does not preserve timestamps explicitly.
+# - Uses `mogrify` for the operation.
+
+action_flipflop() {
+  [ "$#" -ge 2 ] || die "flipflop: missing mode or files"
+
+  local MODE="$1"
+  shift || true
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext
+  local rc
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Processing file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    rc=0
+    mogrify "$MODE" -- "$i" >/dev/null 2>&1 || rc=$?
+
+    if [ "$rc" -eq 0 ]; then
+      report_ok
+    else
+      report_fail "$i"
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+
+####################
+# Create a static HTML image gallery with copied originals and thumbnails.
+#
+# Usage: gallery <dir> <files...>
+#
+# Behavior:
+# - Prompts for gallery title, author, and column count.
+# - Prompts for a base output directory (chooser starts in <dir> if valid).
+# - Creates a timestamped folder:
+#     kim-gallery-YYYYMMDD-HHMMSS/
+#       images/   (copies of selected files)
+#       thumbs/   (generated thumbnails)
+#       index.html
+# - Avoids overwriting when multiple inputs share the same basename by adding suffixes.
+# - Uses a progress dialog and supports Cancel.
+# - Opens the generated index.html in the default browser.
+#
+# Notes:
+# - Uses `magick` to generate thumbnails.
+# - If index.part1 and index.part2 exist, uses them as templates, otherwise generates a basic HTML page.
+
+####################
+# Create an HTML image gallery with resized images and thumbnails.
+#
+# Usage: gallery <dir> <files...>
+#
+# Behavior (aligned with upstream kim_galery):
+# - Prompts for gallery title, author, and column count.
+# - Prompts for an output directory (chooser starts in <dir> if valid).
+# - Creates (or reuses) these within the chosen directory:
+#     images/
+#     thumbs/
+#     index.html
+# - Resizes images to 800x800 and thumbs to 200x200.
+# - Builds a table-based HTML gallery and opens it in the default browser.
+# - Uses index.part1 and index.part2 templates if present next to kim_all,
+#   otherwise generates a minimal HTML wrapper.
+#
+# Notes:
+# - Uses `magick` to generate images and thumbnails.
+# - Uses `identify` to adjust displayed dimensions based on orientation.
+
+action_gallery() {
+  local start_dir="${1:-}"
+  shift || true
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local TITLE AUTHOR COLUMNS
+  TITLE="$(kdialog --inputbox "$(gettext 'Kim - Title:')" "$(gettext 'My title ...')")" || return 1
+  AUTHOR="$(kdialog --inputbox "$(gettext 'Kim - Author:')" "${USER:-}")" || return 1
+  COLUMNS="$(kdialog --inputbox "$(gettext 'Kim - Number of columns:')" "4")" || return 1
+
+  if ! [[ "$COLUMNS" =~ ^[0-9]+$ ]] || [ "$COLUMNS" -le 0 ]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: columns must be a positive number.')"
+    return 1
+  fi
+
+  if [ -z "$start_dir" ] || [ ! -d "$start_dir" ]; then
+    start_dir="$PWD"
+  fi
+
+  local OUTDIR
+  OUTDIR="$(kdialog --getexistingdirectory "$start_dir")" || return 1
+  [ -n "$OUTDIR" ] || return 1
+
+  # If gallery artifacts already exist, confirm before overwriting index.html or reusing folders.
+  if [ -e "$OUTDIR/index.html" ] || [ -d "$OUTDIR/images" ] || [ -d "$OUTDIR/thumbs" ]; then
+    kdialog --title "$(gettext 'Kim')" --yesno \
+      "$(gettext 'Gallery output already exists in this folder (index.html and/or images/thumbs). Continue and overwrite index.html?')" \
+      || return 1
+  fi
+
+  mkdir -p -- "$OUTDIR/images" "$OUTDIR/thumbs" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: failed to create output directories.')"
+    return 1
+  }
+
+  local SCALE_1="800x800"
+  local SCALE_2="200x200"
+  local W="200"
+  local H="150"
+  local DATE_STR
+  DATE_STR="$(date +%Y%m%d)"
+
+  # HTML escape helper
+  _html_escape() {
+    local s="$1"
+    s="${s//&/&amp;}"
+    s="${s//</&lt;}"
+    s="${s//>/&gt;}"
+    s="${s//\"/&quot;}"
+    s="${s//\'/&#39;}"
+    printf '%s' "$s"
+  }
+
+  local etitle eauthor
+  etitle="$(_html_escape "$TITLE")"
+  eauthor="$(_html_escape "$AUTHOR")"
+
+  local INDEX
+  INDEX="$OUTDIR/index.html"
+
+  local script_dir tpl1 tpl2
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  tpl1="$script_dir/index.part1"
+  tpl2="$script_dir/index.part2"
+
+  # Start HTML
+  if [ -f "$tpl1" ]; then
+    cp -- "$tpl1" "$INDEX"
+  else
+    cat >"$INDEX" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>$etitle</title>
+<style>
+body { font-family: sans-serif; }
+table { border-collapse: collapse; }
+td { padding: 10px; vertical-align: top; text-align: center; }
+img.photo { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+EOF
+  fi
+
+  {
+    printf '<h1>%s</h1>\n' "$etitle"
+    printf '<h5>Author: %s<br>Date: %s</h5>\n' "$eauthor" "$DATE_STR"
+    printf '<table><tr>\n'
+  } >>"$INDEX"
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local col=0
+  local i dir base stem ext dest_base n
+  local img_path thumb_path rc W2 H2
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Processing file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    # Avoid basename collisions inside the gallery folder.
+    dest_base="$base"
+    n=1
+    while [ -e "$OUTDIR/images/$dest_base" ] || [ -e "$OUTDIR/thumbs/$dest_base" ]; do
+      if [ -n "$ext" ]; then
+        dest_base="${stem}-${n}.${ext}"
+      else
+        dest_base="${stem}-${n}"
+      fi
+      n=$((n + 1))
+    done
+
+    img_path="$OUTDIR/images/$dest_base"
+    thumb_path="$OUTDIR/thumbs/$dest_base"
+
+    rc=0
+    magick -- "$i" -resize "$SCALE_1" "$img_path" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ] || [ ! -s "$img_path" ]; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+
+    rc=0
+    magick -- "$i" -resize "$SCALE_2" "$thumb_path" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ] || [ ! -s "$thumb_path" ]; then
+      # Fallback to avoid broken <img> links
+      cp -- "$img_path" "$thumb_path" >/dev/null 2>&1 || true
+    fi
+
+    W2="$(identify -format "%w" -- "$img_path" 2>/dev/null || echo 0)"
+    H2="$(identify -format "%h" -- "$img_path" 2>/dev/null || echo 0)"
+
+    {
+      printf "<td align='center'>\n"
+      if [ "${H2:-0}" -lt "${W2:-0}" ]; then
+        printf '<a href="images/%s"><img class="photo" src="thumbs/%s" width="%s" height="%s" alt="thumbs/%s" title="%s"></a>\n' \
+          "$dest_base" "$dest_base" "$W" "$H" "$dest_base" "$dest_base"
+      else
+        printf '<a href="images/%s"><img class="photo" src="thumbs/%s" width="%s" height="%s" alt="thumbs/%s" title="%s"></a>\n' \
+          "$dest_base" "$dest_base" "$H" "$W" "$dest_base" "$dest_base"
+      fi
+      printf '<p>%s</p>\n' "$dest_base"
+      printf "</td>\n"
+    } >>"$INDEX"
+
+    report_ok
+
+    col=$((col + 1))
+    if [ "$col" -ge "$COLUMNS" ]; then
+      echo "</tr><tr>" >>"$INDEX"
+      col=0
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+
+  echo "</tr></table>" >>"$INDEX"
+
+  if [ -f "$tpl2" ]; then
+    cat -- "$tpl2" >>"$INDEX"
+  else
+    cat >>"$INDEX" <<EOF
+</body>
+</html>
+EOF
+  fi
+
+  xdg-open "$INDEX" >/dev/null 2>&1 || true
+
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+####################
+# Create a printable PDF contact sheet / layout from selected images.
+#
+# Usage: print <dir> <files...>
+#
+# Behavior:
+# - Prompts for a print layout preset.
+# - Prompts for output PDF path (save dialog starts in <dir> if valid).
+# - Uses a progress dialog and supports Cancel.
+# - Writes temporary miniatures into $KIMDIR and cleans them up automatically.
+#
+# Notes:
+# - Uses ImageMagick `magick` and `montage`.
+
+action_print() {
+  local dir nbfiles outpdf dbusRef
+  local nb tile geom page mini
+
+  dir="${1:-}"
+  shift || true
+
+  nbfiles="$(count_valid_files "$@")"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  nb="$(kdialog --radiolist "$(gettext 'Kim - Select print layout:')" \
+    1 "$(gettext '9x13 cm: 2x2 images, landscape')"  off \
+    2 "$(gettext '10x15 cm: 1x2 images, portrait')"  off \
+    3 "$(gettext '11.5x15 cm: 1x2 images, portrait')" on  \
+    4 "$(gettext '13x18 cm: 1x2 images, portrait')"  off \
+    5 "$(gettext '20x25 cm: 1 image, landscape')"    off \
+    6 "$(gettext '3x2 portrait album')"              off \
+    7 "$(gettext 'Thumbnails: 4x5 images, portrait')" off)"
+
+  if [ -z "$nb" ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+    return 1
+  fi
+
+  if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+    dir="$PWD"
+  fi
+
+  outpdf="$(kdialog --getsavefilename "$dir" "*.pdf")"
+  [ -z "$outpdf" ] && return 0
+
+  case "$nb" in
+    1) tile="2x2"; geom="600x800+5+5"; page="595x842" ;;  # portrait
+    2) tile="1x2"; geom="800x600+5+5"; page="595x842" ;;  # portrait
+    3) tile="1x2"; geom="640x480+5+5"; page="595x842" ;;  # portrait
+    4) tile="1x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    5) tile="2x2"; geom="640x480+5+5"; page="595x842" ;;  # portrait
+    6) tile="2x3"; geom="640x480+5+5"; page="842x595" ;;  # landscape
+    7) tile="4x5"; geom="640x480+5+5"; page="595x842" ;;  # portrait
+    *)
+      kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Unrecognized option! ')"
+      return 1
+      ;;
+  esac
+
+  dbusRef="$(progress_open 2 "$(gettext 'Kim - Creating miniatures ...')")"
+
+  if progress_cancelled "$dbusRef"; then
+    progress_close "$dbusRef"
+    return 1
+  fi
+
+  mini="$KIMDIR/miniature.jpg"
+  montage -tile "$tile" -geometry "$geom" -page "$page" -- "$@" "$mini" >/dev/null 2>&1 || true
+
+  if [ ! -s "$mini" ]; then
+    progress_close "$dbusRef"
+    kdialog --title "$(gettext 'Kim')" --error \
+      "$(gettext 'Kim - Failed to create the print montage. Please check that ImageMagick montage is installed and the selected files are valid images.')"
+    return 1
+  fi
+
+  progress_label "$dbusRef" "$(gettext 'Kim - Creating PDF ...')"
+  progress_value "$dbusRef" 1
+
+  if progress_cancelled "$dbusRef"; then
+    progress_close "$dbusRef"
+    return 1
+  fi
+
+  magick -- "$mini" "$outpdf" >/dev/null 2>&1 || true
+
+  if [ ! -s "$outpdf" ]; then
+    progress_close "$dbusRef"
+    kdialog --title "$(gettext 'Kim')" --error \
+      "$(gettext 'Kim - Failed to write the output PDF. Please verify the destination path and permissions.')"
+    return 1
+  fi
+
+  progress_label "$dbusRef" "$(gettext 'Kim - Deleting miniatures ...')"
+  progress_value "$dbusRef" 2
+  rm -f -- "$mini" >/dev/null 2>&1 || true
+
+  progress_close "$dbusRef"
+  true
+}
+
+
+####################
+# Rename images using simple filename rules, with Create or overwrite behavior.
+#
+# Usage: rename <mode> <files...>
+#
+# Modes:
+# - lowercase, uppercase
+# - spacestodash, dashestospace
+# - addprefix, addsuffix
+# - overwrite   (string substitution)
+#
+# Behavior:
+# - Prompts for Create vs overwrite (unless KIM_POLICY forces Create).
+# - Create mode: copies files to new names next to originals, never overwriting (adds _1, _2, ...).
+# - overwrite mode: renames files in place.
+# - overwrite mode safety:
+#   - Aborts if two inputs would map to the same destination.
+#   - Aborts if any destination path already exists (prevents overwrites and swap/chain data loss).
+# - Uses a progress dialog and supports Cancel.
+#
+# Policy:
+# - KIM_POLICY=create    forces Create mode
+# - Any other value      shows the Create vs overwrite prompt
+#
+# Notes:
+# - Uses Bash string operations and mv/cp, no external rename tool.
+
+action_rename() {
+  [ "$#" -ge 2 ] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'rename: missing mode or files')"
+    return 1
+  }
+
+  local MODE="$1"
+  shift || true
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local action_mode
+  action_mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  if [ "$action_mode" = "cancel" ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+    return 1
+  fi
+
+  local PREFIX="" SUFFIX="" FROM="" TO=""
+  local EXIF_FMT="" EXIF_PREFIX=""
+
+  case "$MODE" in
+    addprefix)
+      PREFIX="$(kdialog --inputbox "$(gettext 'Prefix to add:')" "")" || {
+        kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+        return 1
+      }
+      ;;
+    addsuffix)
+      SUFFIX="$(kdialog --inputbox "$(gettext 'Suffix to add:')" "")" || {
+        kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+        return 1
+      }
+      ;;
+    overwrite)
+      FROM="$(kdialog --inputbox "$(gettext 'Text to overwrite:')" "")" || {
+        kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+        return 1
+      }
+      TO="$(kdialog --inputbox "$(gettext 'Overwrite with:')" "")" || {
+        kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+        return 1
+      }
+      ;;
+    exifdate)
+      local preset
+      preset="$(kdialog --radiolist "$(gettext 'EXIF date rename pattern:')" \
+        1 "$(gettext 'YYYYMMDD_HHMMSS.ext')" on \
+        2 "$(gettext 'YYYY-MM-DD_HH-MM-SS.ext')" off \
+        3 "$(gettext 'YYYY-DD-MM_HH-MM-SS.ext')" off)" || {
+        kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+        return 1
+      }
+
+      # TODO Leaving EXIF_PREFIX in place, just in case we want to add "IMG_" as an option to prepend
+
+      case "$preset" in
+        1) EXIF_PREFIX="";     EXIF_FMT="%Y%m%d_%H%M%S" ;;
+        2) EXIF_PREFIX="";     EXIF_FMT="%Y-%m-%d_%H-%M-%S" ;;
+        3) EXIF_PREFIX="";     EXIF_FMT="%Y-%d-%m_%H-%M-%S" ;;
+        *)
+          kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
+          return 1
+          ;;
+      esac
+      ;;
+    lowercase|uppercase|spacestodash|dashestospace)
+      ;;
+    *)
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'rename: unknown mode')"
+      return 1
+      ;;
+  esac
+
+  # overwrite-mode safety preflight:
+  # - abort on collisions (two sources mapping to same destination)
+  # - abort if destination exists (prevents overwrites, swaps, chains)
+  #
+  # For exifdate: files missing EXIF date are skipped in preflight and will be
+  # reported as per-file failures during processing.
+  if [ "$action_mode" = "overwrite" ]; then
+    declare -A _rename_seen=()
+    local i dir base stem ext newstem outfile extdot
+
+    for i in "${files[@]}"; do
+      {
+        read -r dir
+        read -r base
+        read -r stem
+        read -r ext
+      } < <(split_path "$i")
+
+      case "$MODE" in
+        lowercase)      newstem="$(printf '%s' "$stem" | tr '[:upper:]' '[:lower:]')" ;;
+        uppercase)      newstem="$(printf '%s' "$stem" | tr '[:lower:]' '[:upper:]')" ;;
+        spacestodash)   newstem="${stem// /-}" ;;
+        dashestospace)  newstem="${stem//-/ }" ;;
+        addprefix)      newstem="${PREFIX}${stem}" ;;
+        addsuffix)      newstem="${stem}${SUFFIX}" ;;
+        overwrite)      newstem="${stem//$FROM/$TO}" ;;
+        exifdate)
+          local exif_ts=""
+          exif_ts="$(exiftool -s3 -DateTimeOriginal -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+          if [ -z "$exif_ts" ]; then
+            exif_ts="$(exiftool -s3 -CreateDate -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+          fi
+          if [ -z "$exif_ts" ]; then
+            exif_ts="$(exiftool -s3 -ModifyDate -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+          fi
+          [ -n "$exif_ts" ] || continue
+          newstem="${EXIF_PREFIX}${exif_ts}"
+          ;;
+      esac
+
+      extdot=""
+      [ -n "$ext" ] && extdot=".$ext"
+      outfile="$dir/${newstem}${extdot}"
+
+      if [[ -n "${_rename_seen["$outfile"]+x}" ]] && [ "${_rename_seen["$outfile"]}" != "$i" ]; then
+        kdialog --title "$(gettext 'Kim')" --error \
+          "$(gettext 'Rename aborted. Two files would rename to the same destination:')\n\n$outfile\n\n${_rename_seen["$outfile"]}\n$i"
+        return 1
+      fi
+      _rename_seen["$outfile"]="$i"
+
+      if [ -e "$outfile" ] && [ "$outfile" != "$i" ]; then
+        kdialog --title "$(gettext 'Kim')" --error \
+          "$(gettext 'Rename aborted in overwrite mode because the destination path already exists.')\n\n$outfile\n\n$(gettext 'Source file:')\n$i\n\n$(gettext 'This mode refuses overwriting existing paths to prevent data loss (including swap or chain renames). Use create mode or rename in smaller steps.')"
+        return 1
+      fi
+    done
+  fi
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Renaming files ...')")"
+
+  local counter=0
+  local i dir base stem ext newstem outfile n extdot rc
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Renaming file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    case "$MODE" in
+      lowercase)      newstem="$(printf '%s' "$stem" | tr '[:upper:]' '[:lower:]')" ;;
+      uppercase)      newstem="$(printf '%s' "$stem" | tr '[:lower:]' '[:upper:]')" ;;
+      spacestodash)   newstem="${stem// /-}" ;;
+      dashestospace)  newstem="${stem//-/ }" ;;
+      addprefix)      newstem="${PREFIX}${stem}" ;;
+      addsuffix)      newstem="${stem}${SUFFIX}" ;;
+      overwrite)      newstem="${stem//$FROM/$TO}" ;;
+      exifdate)
+        local exif_ts=""
+        exif_ts="$(exiftool -s3 -DateTimeOriginal -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+        if [ -z "$exif_ts" ]; then
+          exif_ts="$(exiftool -s3 -CreateDate -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+        fi
+        if [ -z "$exif_ts" ]; then
+          exif_ts="$(exiftool -s3 -ModifyDate -d "$EXIF_FMT" -- "$i" 2>/dev/null || true)"
+        fi
+
+        if [ -z "$exif_ts" ]; then
+          report_fail "$i (No EXIF date field found: DateTimeOriginal/CreateDate/ModifyDate)"
+          progress_value "$dbusRef" "$counter"
+          continue
+        fi
+        newstem="${EXIF_PREFIX}${exif_ts}"
+        ;;
+      *)
+        progress_close "$dbusRef"
+        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'rename: unknown mode')"
+        return 1
+        ;;
+    esac
+
+    extdot=""
+    [ -n "$ext" ] && extdot=".$ext"
+    outfile="$dir/${newstem}${extdot}"
+
+    rc=0
+    if [ "$action_mode" = "overwrite" ]; then
+      if [ "$outfile" != "$i" ]; then
+        mv -- "$i" "$outfile" >/dev/null 2>&1 || rc=$?
+      fi
+    else
+      n=1
+      while [ -e "$outfile" ]; do
+        outfile="$dir/${newstem}_${n}${extdot}"
+        n=$((n + 1))
+      done
+      cp -- "$i" "$outfile" >/dev/null 2>&1 || rc=$?
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+      report_ok
+    else
+      report_fail "$i"
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# action_resize
+#
+# Resize images using ImageMagick while integrating with kim_all helpers.
+#
+# Behavior:
+# - Prompts for overwrite vs create, consistent with other kim_all actions.
+# - Overwrite mode replaces the original file using atomic overwrite logic.
+# - Create mode writes new files with a "_resized" suffix, avoiding collisions.
+# - Metadata is preserved best-effort on created files via helpers.
+#
+# Arguments:
+#   $1  SCALE   ImageMagick geometry (e.g. 800x800, 50%)
+#   $2  OUTDIR  Optional output directory (Create mode only)
+#   $@  FILES   Input files
+# ---------------------------------------------------------------------------
+action_resize() {
+  local SCALE="${1:-}"
+  local outdir="${2:-}"
+  shift 2 || true
+
+  if [ -z "$SCALE" ]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: missing scale.')"
+    return 1
+  fi
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
+    outdir=""
+  fi
+
+  local mode
+  mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  [ "$mode" = "cancel" ] && return 1
+
+  report_init
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext OUTFILE OUTTMP n
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    if [ "$mode" = "overwrite" ]; then
+      if [ -n "$ext" ]; then
+        OUTTMP="$(mktemp "$KIMDIR/kim_resize_out_${counter}_XXXXXX.${ext}")"
+      else
+        OUTTMP="$(mktemp "$KIMDIR/kim_resize_out_${counter}_XXXXXX")"
+      fi
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+
+      magick -- "$i" -resize "$SCALE" "$OUTTMP" >/dev/null 2>&1 || true
+
+      if [ -s "$OUTTMP" ]; then
+        atomic_overwrite_file "$i" "$OUTTMP"
+        report_ok
+      else
+        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+        report_fail "$i"
+      fi
+    else
+      local dir2
+      dir2="${outdir:-$dir}"
+
+      if [ -n "$ext" ]; then
+        OUTFILE="$dir2/${stem}_resized.${ext}"
+      else
+        OUTFILE="$dir2/${stem}_resized"
+      fi
+
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        if [ -n "$ext" ]; then
+          OUTFILE="$dir2/${stem}_resized_${n}.${ext}"
+        else
+          OUTFILE="$dir2/${stem}_resized_${n}"
+        fi
+        n=$((n + 1))
+      done
+
+      magick -- "$i" -resize "$SCALE" "$OUTFILE" >/dev/null 2>&1 || true
+
+      if [ -s "$OUTFILE" ]; then
+        finalize_created_file "$i" "$OUTFILE"
+        report_ok
+      else
+        rm -f -- "$OUTFILE" >/dev/null 2>&1 || true
+        report_fail "$i"
+      fi
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+# ---------------------------------------------------------------------------
+# action_resizeandsend
+#
+# Prepare images for email delivery and open a mail client with attachments.
+#
+# Behavior:
+# - Prompts for a target size (full size or common email-friendly dimensions).
+# - Resized copies are written to the temporary kim_all workspace.
+# - Original files are never modified.
+# - Attempts to open an email client with the resized files attached.
+#
+# Arguments:
+#   $@  FILES   Input files
+# ---------------------------------------------------------------------------
+
+action_resizeandsend() {
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local choice
+  choice="$(kdialog --radiolist "$(gettext 'Kim - Send by mail:')" \
+    1 "$(gettext 'Full size')" off \
+    2 "$(gettext '1600x1600 px')" on \
+    3 "$(gettext '1200x1200 px')" off \
+    4 "$(gettext '800x800 px')" off \
+    5 "$(gettext '600x600 px')" off \
+    6 "$(gettext '300x300 px')" off \
+    7 "$(gettext 'Custom size...')" off)" || return 0
+
+  [ -n "$choice" ] || return 0
+
+  local CUSTOM_SIZE=""
+  if [ "$choice" = "7" ]; then
+    CUSTOM_SIZE="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT), e.g. 2048x1365:')" "1600x1600")" || return 0
+    if ! [[ "$CUSTOM_SIZE" =~ ^[0-9]+x[0-9]+$ ]]; then
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Invalid size. Use WIDTHxHEIGHT, e.g. 2048x1365.')"
+      return 1
+    fi
+  fi
+
+  report_init
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext out rc size
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing and compressing file: ')$base"; then
+      progress_close "$dbusRef"
+      return 1
+    fi
+
+    # Ensure unique output name in $KIMDIR even if basenames repeat.
+    if [ -n "$ext" ]; then
+      out="$KIMDIR/${stem}__send_${counter}.${ext}"
+    else
+      out="$KIMDIR/${stem}__send_${counter}"
+    fi
+
+    rc=0
+    case "$choice" in
+      1)
+        cp -- "$i" "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      2)
+        magick -- "$i" -resize 1600x1600 "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      3)
+        magick -- "$i" -resize 1200x1200 "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      4)
+        magick -- "$i" -resize 800x800 "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      5)
+        magick -- "$i" -resize 600x600 "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      6)
+        magick -- "$i" -resize 300x300 "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      7)
+        size="$CUSTOM_SIZE"
+        magick -- "$i" -resize "$size" "$out" >/dev/null 2>&1 || rc=$?
+        ;;
+      *)
+        rc=1
+        ;;
+    esac
+
+    if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+      report_ok
+    else
+      rm -f -- "$out" >/dev/null 2>&1 || true
+      report_fail "$i"
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+
+  local -a attach_paths=()
+  local f
+  for f in "$KIMDIR"/*; do
+    [ -f "$f" ] && attach_paths+=("$f")
+  done
+
+  if [ "${#attach_paths[@]}" -le 0 ]; then
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
+
+  if command -v kmail >/dev/null 2>&1; then
+    kmail --attach "${attach_paths[@]}" >/dev/null 2>&1 || true
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
+  elif command -v thunderbird >/dev/null 2>&1; then
+    local attachment_csv
+    attachment_csv="$(printf '%s,' "${attach_paths[@]}")"
+    attachment_csv="${attachment_csv%,}"
+    thunderbird -compose "attachment='${attachment_csv}'" >/dev/null 2>&1 || true
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
+  elif command -v xdg-email >/dev/null 2>&1; then
+    local -a xdg_args=()
+    local ap
+    for ap in "${attach_paths[@]}"; do
+      xdg_args+=(--attach "$ap")
+    done
+    xdg-email "${xdg_args[@]}" >/dev/null 2>&1 || true
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
+  else
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "Can't find your mail client. Attachments are in $KIMDIR/")"
+  fi
+
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+
+####################
+# Rotate images in-place using ImageMagick mogrify.
+#
+# Usage: rotate <angle|EXIF> <files...>
+#
+# Behavior:
+# - If angle is "EXIF", uses -auto-orient (EXIF-based orientation fix).
+# - Otherwise rotates by the specified integer angle in degrees.
+# - Modifies files in place.
+# - Preserves original timestamps best-effort.
+# - Uses a progress dialog and supports Cancel.
+#
+# Notes:
+# - Uses `mogrify` for the operation.
+
+action_rotate() {
+  [ "$#" -ge 2 ] || die "rotate: missing angle or files"
+
+  local ANGLE="$1"
+  shift || true
+  if [ "$ANGLE" != "EXIF" ]; then
+    [[ "$ANGLE" =~ ^-?[0-9]+$ ]] || die "rotate: angle must be an integer (or EXIF)"
+  fi
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext TSREF have_ts rc
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Rotating file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    TSREF="$(mktemp "$KIMDIR/kim_rotate_ts_${counter}_XXXXXX")"
+    have_ts=0
+    if touch -r "$i" "$TSREF" 2>/dev/null; then
+      have_ts=1
+    fi
+
+    rc=0
+    if [ "$ANGLE" = "EXIF" ]; then
+      mogrify -auto-orient -- "$i" >/dev/null 2>&1 || rc=$?
+    else
+      mogrify -rotate "$ANGLE" -- "$i" >/dev/null 2>&1 || rc=$?
+    fi
+
+    if [ "$have_ts" -eq 1 ]; then
+      touch -r "$TSREF" "$i" 2>/dev/null || true
+    fi
+    rm -f -- "$TSREF" >/dev/null 2>&1 || true
+
+    if [ "$rc" -eq 0 ]; then
+      report_ok
+    else
+      report_fail "$i"
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+####################
+# Convenience wrapper for EXIF-based rotation (auto-orient).
+#
+# Usage: rotatewithexif <files...>
+#
+# Behavior:
+# - Equivalent to: rotate EXIF <files...>
+
+action_rotatewithexif() {
+  [ "$#" -ge 1 ] || die "rotatewithexif: missing files"
+  action_rotate EXIF "$@"
+}
+
+####################
+# Strip metadata from images using ExifTool while keeping ICC profile and orientation.
+#
+# Usage: stripmeta <files...>
+#
+# Behavior:
+# - Create vs overwrite is controlled by:
+#   - KIM_POLICY=create   forces create mode
+#   - KIM_POLICY=overwrite  forces overwrite mode
+#   - otherwise prompts the user (Create new / overwrite existing / Cancel)
+# - overwrite mode:
+#   - Writes to a temp output file, then overwrites the original if output looks valid.
+#   - Preserves original timestamps best-effort.
+# - Create mode:
+#   - Writes a new sibling file using:
+#       <name>_stripped.<ext>   (or <name>_stripped if no extension)
+#     Never overwrites: adds -1, -2, ... if needed.
+#   - Preserves original timestamps best-effort.
+# - Uses a progress dialog and supports Cancel.
+#
+# Notes:
+# - Uses `exiftool` for metadata stripping, keeping ICC profile and Orientation.
+
+action_stripmeta() {
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local mode
+  mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  if [ "$mode" = "cancel" ]; then
+    return 1
+  fi
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+
+  local counter=0
+  local i dir base stem ext OUTFILE OUTTMP n
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+    {
+      read -r dir
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    progress_label "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"
+
+    OUTTMP="$(mktemp "$KIMDIR/kim_stripmeta_out_${counter}_XXXXXX.${ext:-tmp}")"
+    rm -f "$OUTTMP"
+
+    exiftool -all= -tagsfromfile "$i" \
+      -icc_profile -Orientation \
+      -o "$OUTTMP" -- "$i" >/dev/null 2>&1 || true
+
+    if [ ! -s "$OUTTMP" ]; then
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+
+    if [ "$mode" = "overwrite" ]; then
+      atomic_overwrite_file "$i" "$OUTTMP"
+      report_ok
+    else
+      if [ -n "$ext" ]; then
+        OUTFILE="$dir/${stem}_stripped.${ext}"
+      else
+        OUTFILE="$dir/${stem}_stripped"
+      fi
+
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        if [ -n "$ext" ]; then
+          OUTFILE="$dir/${stem}_stripped-${n}.${ext}"
+        else
+          OUTFILE="$dir/${stem}_stripped-${n}"
+        fi
+        n=$((n + 1))
+      done
+
+      mv -f -- "$OUTTMP" "$OUTFILE"
+      finalize_created_file "$i" "$OUTFILE"
+      report_ok
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+####################
+# Export images for web use by resizing and compressing.
+#
+# Usage: webexport <dir> <files...>
+#
+# Behavior:
+# - Uses <dir> as the output directory for Create mode (matches upstream kim_webexport).
+# - Prompts for:
+#   - Maximum image size (example: 1600x1600)
+#   - JPEG quality (1–100), default comes from KIM_WEB_QUALITY (fallback 75)
+# - Prompts for Create vs overwrite (unless KIM_POLICY forces a mode).
+# - overwrite mode:
+#   - Writes to a temporary output file.
+#   - Overwrites the original file if output looks valid.
+#   - Does NOT preserve original timestamps.
+# - Create mode:
+#   - Writes new files into <dir> using:
+#       <name>_web.<ext>   (or <name>_web if no extension)
+#     Never overwrites: adds _1, _2, ... if needed.
+#   - Does NOT preserve original timestamps.
+# - Uses a progress dialog and supports Cancel.
+#
+# Notes:
+# - Uses `magick` for resize and compression.
+
+action_webexport() {
+  local outdir="${1:-}"
+  shift || true
+
+  local -a files=()
+  collect_valid_files files "$@"
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -le 0 ] && return 0
+
+  local SIZE QUALITY
+  SIZE="$(kdialog --inputbox "$(gettext 'Max image size (e.g. 1600x1600):')" "1600x1600")" || return 1
+  [[ "$SIZE" =~ ^[0-9]+x[0-9]+$ ]] || die "webexport: invalid size format"
+
+  QUALITY="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-75}")" || return 1
+  [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || die "webexport: QUALITY must be a number"
+  (( QUALITY >= 1 && QUALITY <= 100 )) || die "webexport: QUALITY must be between 1 and 100"
+
+  local mode
+  mode="$(choose_output_mode \
+    "$(gettext 'Kim')" \
+    "$(gettext 'Do you want to create new files?')")"
+
+  if [ "$mode" = "cancel" ]; then
+    return 1
+  fi
+
+  # Format selection:
+  # - overwrite mode always keeps the original file's extension (in-place edit)
+  # - create mode uses KIM_WEB_FORMAT (default: jpg)
+  local fmt
+  fmt="${KIM_WEB_FORMAT:-jpg}"
+  fmt="${fmt,,}"
+  case "$fmt" in
+    jpeg) fmt="jpg" ;;
+  esac
+
+  if [ "$mode" = "overwrite" ]; then
+    case "$fmt" in
+      ""|keep|jpg|webp|avif) : ;;  # accepted, but ignored
+      *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
+    esac
+  else
+    case "$fmt" in
+      jpg|webp|avif|keep) : ;;
+      *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
+    esac
+  fi
+
+  # In create mode, we must have a usable output directory. If not provided, prompt.
+  if [ "$mode" = "create" ]; then
+    if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
+      outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
+      [ -n "$outdir" ] || return 1
+    fi
+  fi
+
+  report_init
+
+  local dbusRef
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Web exporting images ...')")"
+
+  local counter=0
+  local i dir2 base stem ext out_ext OUTFILE OUTTMP n rc
+
+  for i in "${files[@]}"; do
+    counter=$((counter + 1))
+
+    {
+      read -r dir2
+      read -r base
+      read -r stem
+      read -r ext
+    } < <(split_path "$i")
+
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Exporting file: ')$base"; then
+      progress_close "$dbusRef"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+
+    rc=0
+
+    if [ "$mode" = "overwrite" ]; then
+      # Overwrite originals in place (format stays as-is).
+      OUTTMP="$(tmp_for_target "$i")" || OUTTMP=""
+      if [ -z "$OUTTMP" ]; then
+        report_fail "$i"
+        progress_value "$dbusRef" "$counter"
+        continue
+      fi
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+
+      # Web export: normalize orientation and strip metadata by default.
+      magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+
+      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+        # Do not preserve timestamps for webexport overwrite: writing a new web-optimized file is a content change.
+        if commit_tmp_to_target "$OUTTMP" "$i" >/dev/null 2>&1; then
+          report_ok
+        else
+          rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+          report_fail "$i"
+        fi
+      else
+        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+        report_fail "$i"
+      fi
+
+    else
+      # Create mode: choose output extension.
+      if [ "$fmt" = "keep" ]; then
+        out_ext="$ext"
+        [ -n "$out_ext" ] || out_ext="jpg"
+      else
+        out_ext="$fmt"
+      fi
+
+      OUTFILE="$outdir/${stem}_web.${out_ext}"
+
+      n=1
+      while [ -e "$OUTFILE" ]; do
+        OUTFILE="$outdir/${stem}_web_${n}.${out_ext}"
+        n=$((n + 1))
+      done
+
+      OUTTMP="$(tmp_for_target "$OUTFILE")" || OUTTMP=""
+      if [ -z "$OUTTMP" ]; then
+        report_fail "$i"
+        progress_value "$dbusRef" "$counter"
+        continue
+      fi
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+
+      # Web export: normalize orientation and strip metadata by default.
+      magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+
+      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+        if commit_tmp_to_target "$OUTTMP" "$OUTFILE" >/dev/null 2>&1; then
+          report_ok
+        else
+          rm -f -- "$OUTTMP" "$OUTFILE" >/dev/null 2>&1 || true
+          report_fail "$i"
+        fi
+      else
+        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+        report_fail "$i"
+      fi
+    fi
+
+    progress_value "$dbusRef" "$counter"
+  done
+
+  progress_close "$dbusRef"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
+
+
+
+# ---------------------------------------------------------------------------
+# Action stubs
+# ---------------------------------------------------------------------------
+
+action_multiburst()      { :; }
+action_other()           { :; }
+action_pelemele()        { :; }
+action_sortbydate()      { :; }
+action_treatment()       { :; }
+action_video()           { :; }
+
+# ---------------------------------------------------------------------------
+# Router
+# ---------------------------------------------------------------------------
+
+usage() {
+  cat <<EOF
+Usage: $PROG <command> [arguments...]
+
+Commands:
+
+  album <dir> <files...>
+      Build a PDF photo album from selected images.
+
+  compress <quality> <dir> <files...>
+      Compress images to the given quality (1-100).
+      overwrite mode modifies originals.
+      Create mode writes *_compressed files into <dir>.
+
+  convert <format> <files...>
+      Convert images to another format.
+      overwrite mode overwrites existing converted outputs
+      but never deletes original source files.
+
+  flipflop <mode> <files...>
+      Flip or flop images.
+
+  gallery <dir> <files...>
+      Create an HTML image gallery.
+      Prompts for an output directory and generates:
+        images/   resized images (800x800)
+        thumbs/   thumbnails (200x200)
+        index.html
+
+  multiburst <files...>
+      Not implemented yet.
+
+  other <files...>
+      Not implemented yet.
+
+  pelemele <files...>
+      Not implemented yet.
+
+  print <dir> <files...>
+      Create a printable PDF layout or contact sheet.
+
+  rename <mode> <files...>
+      Rename images using filename rules.
+      Supports EXIF-based renaming and safety checks.
+
+  resize <scale> <dir> <files...>
+      Resize images to the given scale (e.g. 800x800, 50%).
+      overwrite mode modifies originals (metadata preserved best-effort).
+      Create mode writes *_resized files into <dir>.
+
+  resizeandsend <files...>
+      Resize selected images for email and open your mail client
+      with the resized copies attached.
+
+  rotate <angle|EXIF> <files...>
+      Rotate images by a fixed angle, or auto-orient using EXIF.
+
+  rotatewithexif <files...>
+      Rotate images using EXIF orientation.
+
+  sortbydate <files...>
+      Not implemented yet.
+
+  stripmeta <files...>
+      Strip metadata while preserving ICC profile and orientation.
+
+  treatment <mode> <files...>
+      Not implemented yet.
+
+  video <files...>
+      Not implemented yet.
+
+  webexport <dir> <files...>
+      Prepare images for web use.
+      Prompts for max size and quality.
+      overwrite mode modifies originals.
+      Create mode writes *_web files into <dir>.
+      Create mode format uses KIM_WEB_FORMAT (default: jpg).
+
+Environment:
+  KIM_POLICY=create
+      Always create new files (no overwrites).
+
+  KIM_POLICY=overwrite
+      Overwrite originals (use with care).
+
+  If KIM_POLICY is unset or any other value:
+      Prompt for Create vs overwrite (default).
+
+  KIM_WEB_QUALITY=1..100
+      Default value for the web-export quality prompt.
+      Does not suppress the prompt. Fallback: 75.
+
+  KIM_WEB_FORMAT=jpg|webp|avif|keep
+      Output format for webexport create mode. Default: jpg.
+      keep uses the source file extension.
+EOF
+}
+
+main() {
+  [[ $# -ge 1 ]] || { usage; exit 1; }
+  load_kim_config
+  cmd="$1"
+  shift || true
+
+  case "$cmd" in
+    album)           mk_workdir; action_album "$@" ;;
+    compress)        mk_workdir; action_compress "$@" ;;
+    convert)         mk_workdir; action_convert "$@" ;;
+    flipflop)        mk_workdir; action_flipflop "$@" ;;
+    gallery)         mk_workdir; action_gallery "$@" ;;
+    multiburst)      mk_workdir; action_multiburst "$@" ;;
+    other)           mk_workdir; action_other "$@" ;;
+    pelemele)        mk_workdir; action_pelemele "$@" ;;
+    print)           mk_workdir; action_print "$@" ;;
+    rename)          mk_workdir; action_rename "$@" ;;
+    resize)          mk_workdir; action_resize "$@" ;;
+    resizeandsend)   mk_workdir; action_resizeandsend "$@" ;;
+    rotate)          mk_workdir; action_rotate "$@" ;;
+    rotatewithexif)  mk_workdir; action_rotatewithexif "$@" ;;
+    sortbydate)      mk_workdir; action_sortbydate "$@" ;;
+    stripmeta)       mk_workdir; action_stripmeta "$@" ;;
+    treatment)       mk_workdir; action_treatment "$@" ;;
+    video)           mk_workdir; action_video "$@" ;;
+    webexport)       mk_workdir; action_webexport "$@" ;;
+    help|-h|--help)  usage ;;
+    *) die "Unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"
+
