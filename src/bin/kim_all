@@ -104,7 +104,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 # One temp folder per run, always cleaned up on exit.
 mk_workdir() {
   KIMDIR="$(mktemp -d /tmp/kim.XXXXXXXX)" || die "mktemp failed"
-  trap 'rm -rf "$KIMDIR"' EXIT
+  trap 'cleanup_stages; rm -rf -- "$KIMDIR"' EXIT
 }
 
 # ---------------------------------------------------------------------------
@@ -291,46 +291,140 @@ preserve_meta_from() {
 }
 
 
-# Create a temp file in $KIMDIR with the same extension as a target path.
-tmp_for_target() {
-  local target="$1"
-  local _dir _base _stem _ext
-  {
-    read -r _dir
-    read -r _base
-    read -r _stem
-    read -r _ext
-  } < <(split_path "$target")
-
-  if [ -n "$_ext" ]; then
-    mktemp "$KIMDIR/kim_out_XXXXXX.${_ext}"
-  else
-    mktemp "$KIMDIR/kim_out_XXXXXX"
-  fi
+# Allocations may occur in command substitutions: persist ownership in KIMDIR.
+# The token also prevents cleanup of a later directory reusing the same inode.
+register_stage_dir() {
+  local stage="$1" identity
+  identity="$(stat -c '%d:%i' -- "$stage")" || return 1
+  printf '%s' "$KIMDIR" > "$stage/.kim6-owner" || return 1
+  printf '%s\0%s\0' "$stage" "$identity" >> "$KIMDIR/stages"
 }
 
-# Commit a temp file into its final path.
-# Uses mv with cross-device fallback (since /tmp can be different filesystem).
+owned_stage_dir() {
+  local stage="$1" registered identity
+  [ ! -L "$stage" ] && [ -d "$stage" ] || return 1
+  [ ! -L "$stage/.kim6-owner" ] && [ -f "$stage/.kim6-owner" ] || return 1
+  [ "$(< "$stage/.kim6-owner")" = "$KIMDIR" ] || return 1
+  [ -f "$KIMDIR/stages" ] || return 1
+  while IFS= read -r -d '' registered && IFS= read -r -d '' identity; do
+    if [ "$stage" = "$registered" ] &&
+       [ "$(stat -c '%d:%i' -- "$stage" 2>/dev/null)" = "$identity" ]; then
+      return 0
+    fi
+  done < "$KIMDIR/stages"
+  return 1
+}
+
+cleanup_stages() {
+  local stage identity
+  [ -f "$KIMDIR/stages" ] || return 0
+  while IFS= read -r -d '' stage && IFS= read -r -d '' identity; do
+    if owned_stage_dir "$stage"; then
+      rm -rf -- "$stage" || true
+    fi
+  done < "$KIMDIR/stages"
+}
+
+# Return an unused filename in a private directory on the target filesystem.
+# Resolve parent symlinks, never the final destination entry.
+tmp_for_target() {
+  local target="$1" parent stage base ext=""
+  parent="$(cd -P -- "$(dirname -- "$target")" && pwd -P)" || return 1
+  stage="$(mktemp -d "$parent/.kim6-stage.XXXXXX")" || return 1
+  if ! register_stage_dir "$stage"; then
+    rm -rf -- "$stage"
+    return 1
+  fi
+  base="${target##*/}"
+  if [[ "$base" == *.* && ! ( "$base" == .* && "$base" != *.*.* ) ]]; then
+    ext=".${base##*.}"
+  fi
+  printf '%s/output%s\n' "$stage" "$ext"
+}
+
+# Accept registered stages and the private scratch files of unmigrated callers.
+owned_stage_file() {
+  local tmp="$1" parent workspace
+  [ ! -L "$tmp" ] && [ -f "$tmp" ] || return 1
+  parent="$(cd -P -- "$(dirname -- "$tmp")" && pwd -P)" || return 1
+  workspace="$(cd -P -- "$KIMDIR" && pwd -P)" || return 1
+  [ "$parent" = "$workspace" ] || owned_stage_dir "$parent"
+}
+
+# Two arguments retain create-only publication. Overwrite must be explicit.
+# Atomic visibility only; no crash-durability or hostile-writer guarantee.
 commit_tmp_to_target() {
-  local tmp="$1"
-  local target="$2"
+  local tmp="$1" target="$2" mode="${3:-create}" parent lock source_device target_device
+  case "$mode" in create|overwrite) : ;; *) return 1 ;; esac
+  owned_stage_file "$tmp" || return 1
+  parent="$(cd -P -- "$(dirname -- "$target")" && pwd -P)" || return 1
+  target="$parent/${target##*/}"
+  source_device="$(stat -c '%d' -- "$tmp")" || return 1
+  target_device="$(stat -c '%d' -- "$parent")" || return 1
+  [ "$source_device" = "$target_device" ] || return 1
+  # Retain the directory check for existing failure-injection contracts.
+  mkdir -p -- "$parent" || return 1
 
-  mkdir -p -- "$(dirname -- "$target")" || return 1
-
-  if mv -f -- "$tmp" "$target" 2>/dev/null; then
+  if [ "$mode" = "create" ]; then
+    # No check-then-move: link itself refuses ANY occupied directory entry.
+    ln -T -- "$tmp" "$target" || return 1
+    rm -f -- "$tmp" || true
     return 0
   fi
 
-  cp -f -- "$tmp" "$target" && rm -f -- "$tmp"
+  # Directory locks serialize cooperative KIM publishers, not arbitrary writers.
+  lock="$parent/.kim6-publish.lock"
+  if (umask 077; mkdir -- "$lock") 2>/dev/null; then
+    if ! register_stage_dir "$lock"; then
+      rm -rf -- "$lock"
+      return 1
+    fi
+  else
+    owned_stage_dir "$lock" || return 1
+  fi
+  [ ! -L "$target" ] && [ -f "$target" ] || return 1
+  [ "$(stat -c '%h' -- "$target")" = "1" ] || return 1
+  # Prefer a rename-only move when available. Never use ordinary mv -f.
+  case "$(mv --help 2>/dev/null)" in
+    *--no-copy*) mv --no-copy -fT -- "$tmp" "$target"; return $? ;;
+  esac
+  # Audited uutils 0.12.0 dispatches --exchange directly to renameat2(EXCHANGE)
+  # and returns its error without entering the move/copy code path. Restrict
+  # this fallback to that verified implementation, not arbitrary future tools.
+  case "$(mv --version 2>/dev/null)" in
+    'mv (uutils coreutils) 0.12.0')
+      if mv --exchange -T -- "$tmp" "$target"; then
+        # Publication is complete. The old authorized destination now occupies
+        # our private staging entry; remove it without touching the new target.
+        rm -f -- "$tmp" || true
+        return 0
+      fi
+      return 1
+      ;;
+    *) return 1 ;;
+  esac
 }
 
-# overwrite dst with tmp, preserving metadata from dst onto tmp first.
+# Keep the existing metadata policy and explicit dst,tmp argument order.
 atomic_overwrite_file() {
-  local dst="$1"
-  local tmp="$2"
-
+  local dst="$1" tmp="$2" parent source_device target_device
+  owned_stage_file "$tmp" || return 1
+  [ ! -L "$dst" ] && [ -f "$dst" ] || return 1
+  parent="$(cd -P -- "$(dirname -- "$dst")" && pwd -P)" || return 1
+  source_device="$(stat -c '%d' -- "$tmp")" || return 1
+  target_device="$(stat -c '%d' -- "$parent")" || return 1
+  if [ "$source_device" != "$target_device" ]; then
+    # Unmigrated callers still produce in KIMDIR. Prepare an owned destination-
+    # local copy BEFORE attempting publication; never copy into dst or recover
+    # from a failed publication by copying. The original scratch file remains
+    # owned by the existing workspace trap.
+    local local_tmp
+    local_tmp="$(tmp_for_target "$dst")" || return 1
+    cp -- "$tmp" "$local_tmp" || return 1
+    tmp="$local_tmp"
+  fi
   preserve_meta_from "$dst" "$tmp"
-  commit_tmp_to_target "$tmp" "$dst"
+  commit_tmp_to_target "$tmp" "$dst" overwrite
 }
 
 # When creating a new output from src, preserve metadata best-effort.
@@ -807,7 +901,7 @@ action_convert() {
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
 
   local counter=0
-  local i dir base stem ext OUTFILE n rc
+  local i dir base stem ext OUTFILE OUTTMP publication_mode n rc
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -848,6 +942,40 @@ action_convert() {
         OUTFILE="$dir/${stem}_${n}.${FORMAT}"
         n=$((n + 1))
       done
+    fi
+
+    if [ "$mode" = "overwrite" ]; then
+      # Snapshot absent-vs-authorized-present before producing any output.
+      publication_mode=overwrite
+      if [ ! -e "$OUTFILE" ] && [ ! -L "$OUTFILE" ]; then
+        publication_mode=create
+      fi
+      if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
+        report_fail "$i"
+        progress_value "$dbusRef" "$counter"
+        continue
+      fi
+      rc=0
+      magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+      # Full decode, not a nonempty/header-only test. Conversion-specific
+      # format/frame semantics and the create path remain K13 work.
+      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ] &&
+         identify -regard-warnings +ping -- "$OUTTMP" >/dev/null 2>&1; then
+        # Direct replacement previously retained an existing target's mode.
+        if [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
+          chmod --reference="$OUTFILE" "$OUTTMP" || rc=$?
+        fi
+        if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$publication_mode"; then
+          report_ok
+        else
+          report_fail "$i"
+        fi
+      else
+        report_fail "$i"
+      fi
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+      progress_value "$dbusRef" "$counter"
+      continue
     fi
 
     rc=0

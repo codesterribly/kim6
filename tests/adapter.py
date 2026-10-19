@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 
 ROOT = Path(os.environ["KIM_TEST_ROOT"]).resolve()
@@ -58,6 +59,15 @@ def main():
         response = response[index]
     if response and response.get("passthrough"):
         response = None
+    if tool == "mv" and "real_mv" in plan and response is None:
+        if args in (["--help"], ["--version"]):
+            return subprocess.call([plan["real_mv"], *args])
+        if len(args) != 5 or args[2] != "--" or args[:2] not in (
+                ["--no-copy", "-fT"], ["--exchange", "-T"]):
+            raise ValueError("real mv requires a rename-only publication form")
+        for value in args[3:]:
+            owned(value)
+        return subprocess.call([plan["real_mv"], *args])
     if response is not None:
         if tool == "kdialog" and any(flag in args for flag in (
                 "--getexistingdirectory", "--getsavefilename")) and response.get("stdout", "").strip():
@@ -77,6 +87,15 @@ def main():
         if response.get("cancel"):
             (CONTROL / "cancelled").touch()
             EFFECTS["cancel_requested"] = True
+        if response.get("barrier"):
+            barrier = owned(CONTROL / ("barrier-" + response["barrier"]))
+            barrier.mkdir(exist_ok=True)
+            (barrier / str(os.getpid())).touch()
+            deadline = time.monotonic() + 5
+            while len(list(barrier.iterdir())) < 2:
+                if time.monotonic() > deadline:
+                    raise ValueError("barrier timed out")
+                time.sleep(0.01)
         sys.stdout.write(response.get("stdout", ""))
         sys.stderr.write(response.get("stderr", ""))
         return response.get("status", 0)
@@ -123,11 +142,43 @@ def main():
         if not separator:
             raise ValueError("unsupported mktemp template")
         if directory:
-            print(tempfile.mkdtemp(prefix=prefix, suffix=suffix, dir=path.parent))
+            directory_name = tempfile.mkdtemp(prefix=prefix, suffix=suffix, dir=path.parent)
+            EFFECTS["directory_mode"] = Path(directory_name).stat().st_mode & 0o777
+            print(directory_name)
         else:
             descriptor, name = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=path.parent)
             os.close(descriptor)
             print(name)
+    elif tool == "identify":
+        if len(args) != 4 or args[:3] != ["-regard-warnings", "+ping", "--"]:
+            raise ValueError("unconfigured external command: identify")
+        path = owned(args[3])
+        # Real decoding is limited to tiny, test-owned producer outputs. Give
+        # the decoder a safe private filename to avoid ImageMagick path syntax.
+        if path.stat().st_size > 4096:
+            raise ValueError("validation fixture too large")
+        executable = shutil.which("identify", path=os.defpath)
+        if not executable:
+            raise ValueError("test image validator is unavailable")
+        with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
+            fixture = Path(folder) / "fixture"
+            fixture.write_bytes(path.read_bytes())
+            return subprocess.call([executable, "-regard-warnings", "+ping", "--", str(fixture)])
+    elif tool == "mv" and args == ["--help"]:
+        # Model a rename-only-capable installation; missing capability is tested
+        # separately. Filesystem implementation below uses os.rename, no copy.
+        print("--no-copy --no-target-directory")
+    elif tool == "mv" and args == ["--version"]:
+        print("mv (modeled coreutils)")
+    elif tool == "stat":
+        if len(args) != 4 or args[:1] != ["-c"] or args[2] != "--":
+            raise ValueError("unsupported stat invocation")
+        info = owned(args[3]).lstat()
+        formats = {"%d:%i": f"{info.st_dev}:{info.st_ino}", "%d": str(info.st_dev),
+                   "%h": str(info.st_nlink)}
+        if args[1] not in formats:
+            raise ValueError("unsupported stat format")
+        print(formats[args[1]])
     elif tool in ("basename", "dirname"):
         value = args[-1]
         print(os.path.basename(value) if tool == "basename" else os.path.dirname(value) or ".")
@@ -143,7 +194,7 @@ def main():
         for value in args:
             if value != "--":
                 sys.stdout.buffer.write(owned(value).read_bytes())
-    elif tool in ("mkdir", "rm", "cp", "mv", "touch", "chmod"):
+    elif tool in ("mkdir", "rm", "cp", "mv", "touch", "chmod", "ln"):
         filesystem(tool, args)
     else:
         raise ValueError("unconfigured external command: " + tool)
@@ -174,7 +225,8 @@ def real_magick(executable, args):
 def filesystem(tool, args):
     # Only forms used by the recovered dispatcher; reject unknown options.
     allowed = {"mkdir": {"-p", "--"}, "rm": {"-f", "-rf", "--"},
-               "cp": {"-f", "--"}, "mv": {"-f", "--"},
+               "cp": {"-f", "--"}, "mv": {"-f", "-fT", "--no-copy", "--"},
+               "ln": {"-T", "--"},
                "touch": {"-r", "--"}, "chmod": set()}
     values = []
     for value in args:
@@ -200,11 +252,17 @@ def filesystem(tool, args):
                 shutil.rmtree(path)
             else:
                 path.unlink(missing_ok="-f" in args or "-rf" in args)
+    elif tool == "ln":
+        if len(paths) != 2 or args[:2] != ["-T", "--"]:
+            raise ValueError("unsupported link invocation")
+        os.link(*paths, follow_symlinks=False)
     elif tool in ("cp", "mv"):
         if len(paths) != 2 or paths[1].is_dir():
             raise ValueError("only explicit single-file destinations are supported")
         if tool == "cp":
             shutil.copyfile(*paths)
+        elif "--no-copy" in args:
+            os.rename(*paths)
         else:
             shutil.move(*paths)
     elif tool == "touch":

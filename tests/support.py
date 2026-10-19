@@ -80,7 +80,7 @@ class Workspace:
             "convert", "mogrify", "montage", "identify", "exiftool", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
             "mktemp", "rm", "cp", "mv", "mkdir", "touch", "chmod", "dirname",
-            "basename", "cat", "date", "tr",
+            "basename", "cat", "date", "tr", "stat", "ln",
         }
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)
@@ -181,6 +181,15 @@ class Workspace:
             raise unittest.SkipTest("optional real ImageMagick magick is unavailable")
         plan = json.loads(self.plan.read_text())
         plan["real_magick"] = executable
+        self.plan.write_text(json.dumps(plan))
+
+    def use_real_mv(self):
+        """Exercise only installed rename-only forms on test-owned paths."""
+        executable = shutil.which("mv")
+        if not executable:
+            raise unittest.SkipTest("mv is unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_mv"] = executable
         self.plan.write_text(json.dumps(plan))
 
     def _snapshot(self):
