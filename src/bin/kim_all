@@ -2012,20 +2012,14 @@ action_stripmeta() {
 # Usage: webexport <dir> <files...>
 #
 # Behavior:
-# - Uses <dir> as the output directory for Create mode (matches upstream kim_webexport).
+# - Uses <dir> as the export directory, prompting if it is not usable.
 # - Prompts for:
 #   - Maximum image size (example: 1600x1600)
 #   - JPEG quality (1–100), default comes from KIM_WEB_QUALITY (fallback 75)
-# - Prompts for Create vs overwrite (unless KIM_POLICY forces a mode).
-# - overwrite mode:
-#   - Writes to a temporary output file.
-#   - Overwrites the original file if output looks valid.
-#   - Does NOT preserve original timestamps.
-# - Create mode:
-#   - Writes new files into <dir> using:
-#       <name>_web.<ext>   (or <name>_web if no extension)
-#     Never overwrites: adds _1, _2, ... if needed.
-#   - Does NOT preserve original timestamps.
+# - Always creates derived exports, regardless of KIM_POLICY.
+# - Writes <name>_web.<ext>, adding _1, _2, ... for existing names.
+# - Original images are never replacement targets.
+# - Exports do NOT preserve original timestamps.
 # - Uses a progress dialog and supports Cancel.
 #
 # Notes:
@@ -2048,18 +2042,7 @@ action_webexport() {
   [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || die "webexport: QUALITY must be a number"
   (( QUALITY >= 1 && QUALITY <= 100 )) || die "webexport: QUALITY must be between 1 and 100"
 
-  local mode
-  mode="$(choose_output_mode \
-    "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')")"
-
-  if [ "$mode" = "cancel" ]; then
-    return 1
-  fi
-
-  # Format selection:
-  # - overwrite mode always keeps the original file's extension (in-place edit)
-  # - create mode uses KIM_WEB_FORMAT (default: jpg)
+  # Export format is independent of the policy used for image-editing actions.
   local fmt
   fmt="${KIM_WEB_FORMAT:-jpg}"
   fmt="${fmt,,}"
@@ -2067,24 +2050,15 @@ action_webexport() {
     jpeg) fmt="jpg" ;;
   esac
 
-  if [ "$mode" = "overwrite" ]; then
-    case "$fmt" in
-      ""|keep|jpg|webp|avif) : ;;  # accepted, but ignored
-      *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
-    esac
-  else
-    case "$fmt" in
-      jpg|webp|avif|keep) : ;;
-      *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
-    esac
-  fi
+  case "$fmt" in
+    jpg|webp|avif|keep) : ;;
+    *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
+  esac
 
-  # In create mode, we must have a usable output directory. If not provided, prompt.
-  if [ "$mode" = "create" ]; then
-    if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
-      outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
-      [ -n "$outdir" ] || return 1
-    fi
+  # Always honor the export directory, including under KIM_POLICY=overwrite.
+  if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
+    outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
+    [ -n "$outdir" ] || return 1
   fi
 
   report_init
@@ -2113,71 +2087,43 @@ action_webexport() {
 
     rc=0
 
-    if [ "$mode" = "overwrite" ]; then
-      # Overwrite originals in place (format stays as-is).
-      OUTTMP="$(tmp_for_target "$i")" || OUTTMP=""
-      if [ -z "$OUTTMP" ]; then
-        report_fail "$i"
-        progress_value "$dbusRef" "$counter"
-        continue
-      fi
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-
-      # Web export: normalize orientation and strip metadata by default.
-      magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
-
-      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
-        # Do not preserve timestamps for webexport overwrite: writing a new web-optimized file is a content change.
-        if commit_tmp_to_target "$OUTTMP" "$i" >/dev/null 2>&1; then
-          report_ok
-        else
-          rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-          report_fail "$i"
-        fi
-      else
-        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-        report_fail "$i"
-      fi
-
+    # Choose the derived output extension.
+    if [ "$fmt" = "keep" ]; then
+      out_ext="$ext"
+      [ -n "$out_ext" ] || out_ext="jpg"
     else
-      # Create mode: choose output extension.
-      if [ "$fmt" = "keep" ]; then
-        out_ext="$ext"
-        [ -n "$out_ext" ] || out_ext="jpg"
-      else
-        out_ext="$fmt"
-      fi
+      out_ext="$fmt"
+    fi
 
-      OUTFILE="$outdir/${stem}_web.${out_ext}"
+    OUTFILE="$outdir/${stem}_web.${out_ext}"
 
-      n=1
-      while [ -e "$OUTFILE" ]; do
-        OUTFILE="$outdir/${stem}_web_${n}.${out_ext}"
-        n=$((n + 1))
-      done
+    n=1
+    while [ -e "$OUTFILE" ]; do
+      OUTFILE="$outdir/${stem}_web_${n}.${out_ext}"
+      n=$((n + 1))
+    done
 
-      OUTTMP="$(tmp_for_target "$OUTFILE")" || OUTTMP=""
-      if [ -z "$OUTTMP" ]; then
-        report_fail "$i"
-        progress_value "$dbusRef" "$counter"
-        continue
-      fi
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+    OUTTMP="$(tmp_for_target "$OUTFILE")" || OUTTMP=""
+    if [ -z "$OUTTMP" ]; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+    rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
 
-      # Web export: normalize orientation and strip metadata by default.
-      magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+    # Web export: normalize orientation and strip metadata by default.
+    magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
 
-      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
-        if commit_tmp_to_target "$OUTTMP" "$OUTFILE" >/dev/null 2>&1; then
-          report_ok
-        else
-          rm -f -- "$OUTTMP" "$OUTFILE" >/dev/null 2>&1 || true
-          report_fail "$i"
-        fi
+    if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+      if commit_tmp_to_target "$OUTTMP" "$OUTFILE" >/dev/null 2>&1; then
+        report_ok
       else
         rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
         report_fail "$i"
       fi
+    else
+      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+      report_fail "$i"
     fi
 
     progress_value "$dbusRef" "$counter"
@@ -2281,9 +2227,8 @@ Commands:
   webexport <dir> <files...>
       Prepare images for web use.
       Prompts for max size and quality.
-      overwrite mode modifies originals.
-      Create mode writes *_web files into <dir>.
-      Create mode format uses KIM_WEB_FORMAT (default: jpg).
+      Always creates distinct *_web files into <dir>, regardless of KIM_POLICY.
+      Output format uses KIM_WEB_FORMAT (default: jpg).
 
 Environment:
   KIM_POLICY=create
