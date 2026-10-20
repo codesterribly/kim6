@@ -174,6 +174,33 @@ class Workspace:
         path.write_bytes(base64.b64decode(data, validate=True))
         return path
 
+    def png(self, relative):
+        """3x2 six-color RGB PNG built with the standard library, no encoder."""
+        import struct
+        import zlib
+        def chunk(kind, data):
+            return (struct.pack("!I", len(data)) + kind + data
+                    + struct.pack("!I", zlib.crc32(kind + data)))
+        pixels = bytes.fromhex("ff0000 00ff00 0000ff ffff00 ff00ff 00ffff")
+        raw = b"\0" + pixels[:9] + b"\0" + pixels[9:]
+        data = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", 3, 2, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+        path = self.path(relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path
+
+    def use_real_conversion(self):
+        """Enable the narrow real encoder seam for tiny owned image fixtures."""
+        executable = shutil.which("magick")
+        if not executable:
+            raise unittest.SkipTest("ImageMagick magick is unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_conversion"] = executable
+        self.plan.write_text(json.dumps(plan))
+        self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
+        self.env["MAGICK_THREAD_LIMIT"] = "1"
+
     def use_real_magick(self):
         """Opt in to narrowly validated real PPM operations, never arbitrary CLI."""
         executable = shutil.which("magick")

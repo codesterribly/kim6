@@ -862,6 +862,15 @@ action_convert() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
+  local selected_path
+  for selected_path in "${files[@]}"; do
+    # split_path uses newline records; refuse an ambiguous destination mapping.
+    if [[ "$selected_path" == *$'\n'* ]]; then
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: ambiguous filename.')"
+      return 1
+    fi
+  done
+
   local mode
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
@@ -871,27 +880,37 @@ action_convert() {
     return 1
   fi
 
-  # Overwrite-mode safety: abort only on collisions where two inputs map to the same output.
+  # Resolve parent aliases before comparing destination mappings. Never publish
+  # over any selected source, including an inode reached by a different name.
   if [ "$mode" = "overwrite" ]; then
     declare -A _convert_seen=()
-    local i dir base stem ext outfile
-
+    local i dir base stem ext outfile selected
     for i in "${files[@]}"; do
       {
-        read -r dir
-        read -r base
-        read -r stem
-        read -r ext
+        IFS= read -r dir
+        IFS= read -r base
+        IFS= read -r stem
+        IFS= read -r ext
       } < <(split_path "$i")
-
+      dir="$(cd -P -- "$dir" && pwd)" || return 1
       outfile="$dir/${stem}.${FORMAT}"
-
-      if [[ -n "${_convert_seen["$outfile"]+x}" ]] && [ "${_convert_seen["$outfile"]}" != "$i" ]; then
+      if [[ -n "${_convert_seen["$outfile"]+x}" ]]; then
         kdialog --title "$(gettext 'Kim')" --error \
-          "$(gettext 'Convert aborted. Two files would write the same destination:')\n\n$outfile\n\n${_convert_seen["$outfile"]}\n$i"
+          "$(gettext 'Convert aborted. Two files would write the same destination:')\n\n$outfile"
         return 1
       fi
       _convert_seen["$outfile"]="$i"
+      # Existing same-format overwrite is an intentional no-op.
+      if [ -n "$ext" ] && [[ "${ext,,}" == "${FORMAT,,}" ]]; then
+        continue
+      fi
+      for selected in "${files[@]}"; do
+        if [ "$outfile" -ef "$selected" ]; then
+          kdialog --title "$(gettext 'Kim')" --error \
+            "$(gettext 'Convert aborted. Destination aliases a selected source:')\n\n$outfile"
+          return 1
+        fi
+      done
     done
   fi
 
@@ -901,16 +920,18 @@ action_convert() {
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
 
   local counter=0
-  local i dir base stem ext OUTFILE OUTTMP publication_mode n rc
+  local i dir base stem ext OUTFILE OUTTMP publication_mode n rc actual expected frame
+  local bus_service bus_object bus_extra cancelled
+  read -r bus_service bus_object bus_extra <<< "$dbusRef"
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
 
     {
-      read -r dir
-      read -r base
-      read -r stem
-      read -r ext
+      IFS= read -r dir
+      IFS= read -r base
+      IFS= read -r stem
+      IFS= read -r ext
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Converting file: ')$base"; then
@@ -919,6 +940,16 @@ action_convert() {
       return 1
     fi
 
+    # The shared progress API still has a K14 argument-splitting defect.
+    # Keep this conversion-only check at the actual D-Bus interface.
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    if [ "$cancelled" = true ]; then
+      report_fail "$i"
+      break
+    fi
     OUTFILE="$dir/${stem}.${FORMAT}"
 
     # If user "converts" to the same extension, do not try to write input to itself.
@@ -930,7 +961,7 @@ action_convert() {
         continue
       fi
       n=1
-      while [ -e "$OUTFILE" ]; do
+      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir/${stem}_${n}.${FORMAT}"
         n=$((n + 1))
       done
@@ -938,15 +969,16 @@ action_convert() {
 
     if [ "$mode" = "create" ]; then
       n=1
-      while [ -e "$OUTFILE" ]; do
+      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir/${stem}_${n}.${FORMAT}"
         n=$((n + 1))
       done
     fi
 
-    if [ "$mode" = "overwrite" ]; then
+    {
       # Snapshot absent-vs-authorized-present before producing any output.
-      publication_mode=overwrite
+      publication_mode=create
+      [ "$mode" != overwrite ] || publication_mode=overwrite
       if [ ! -e "$OUTFILE" ] && [ ! -L "$OUTFILE" ]; then
         publication_mode=create
       fi
@@ -957,38 +989,45 @@ action_convert() {
       fi
       rc=0
       magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
-      # Full decode, not a nonempty/header-only test. Conversion-specific
-      # format/frame semantics and the create path remain K13 work.
-      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ] &&
-         identify -regard-warnings +ping -- "$OUTTMP" >/dev/null 2>&1; then
-        # Direct replacement previously retained an existing target's mode.
-        if [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
-          chmod --reference="$OUTFILE" "$OUTTMP" || rc=$?
+      # Decode every frame from bytes, without trusting the requested suffix.
+      expected="${FORMAT^^}"
+      case "$expected" in
+        JPG|JPE|JPS) expected=JPEG ;;
+        TIF) expected=TIFF ;;
+        PNG00|PNG8|PNG24|PNG32|PNG48|PNG64) expected=PNG ;;
+        GIF87) expected=GIF ;;
+      esac
+      actual=""
+      if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+        actual="$(identify -regard-warnings +ping -format '%m\n' - < "$OUTTMP" 2>/dev/null)" || rc=$?
+      fi
+      [ -n "$actual" ] || rc=1
+      while IFS= read -r frame; do
+        if [ "$expected" = PNM ]; then
+          case "$frame" in PBM|PGM|PPM|PAM) ;; *) rc=1 ;; esac
+        elif [ "$frame" != "$expected" ]; then
+          rc=1
         fi
-        if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$publication_mode"; then
-          report_ok
-        else
-          report_fail "$i"
-        fi
+      done <<< "$actual"
+      # Direct replacement previously retained an existing target's mode.
+      if [ "$rc" -eq 0 ] && [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
+        chmod --reference="$OUTFILE" "$OUTTMP" || rc=$?
+      fi
+      cancelled=false
+      if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+        cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+      fi
+      [ "$cancelled" != true ] || rc=1
+      if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$publication_mode"; then
+        report_ok
       else
         report_fail "$i"
       fi
       rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
       progress_value "$dbusRef" "$counter"
+      [ "$cancelled" != true ] || break
       continue
-    fi
-
-    rc=0
-    magick -- "$i" "$OUTFILE" >/dev/null 2>&1 || rc=$?
-
-    if [ "$rc" -eq 0 ] && [ -s "$OUTFILE" ]; then
-      report_ok
-    else
-      rm -f -- "$OUTFILE" >/dev/null 2>&1 || true
-      report_fail "$i"
-    fi
-
-    progress_value "$dbusRef" "$counter"
+    }
   done
 
   progress_close "$dbusRef"

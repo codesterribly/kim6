@@ -1,5 +1,6 @@
 """Infrastructure contracts, not K02 action-preservation acceptance tests."""
 from pathlib import Path
+import base64
 import subprocess
 import sys
 import unittest
@@ -96,15 +97,19 @@ class FoundationTests(unittest.TestCase):
 
     def test_dispatcher_outputs_and_media_arguments_are_observable(self):
         source = self.workspace.ppm("input/space 雪.ppm")
-        # Scripted bytes deliberately are NOT evidence of a valid PNG codec.
-        self.workspace.respond("magick", writes={"input/space 雪.png": "adapter output"})
+        payload = self.workspace.png(".control/reference.png").read_bytes()
+        self.workspace.respond("magick", output_base64=base64.b64encode(payload).decode())
         self.workspace.env["KIM_POLICY"] = "create"
         result = self.workspace.dispatch("convert", "png", source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.outputs, {"input/space 雪.png": b"adapter output"})
+        self.assertEqual(result.outputs, {"input/space 雪.png": payload})
         media = [call for call in result.calls if call["tool"] == "magick"]
-        self.assertEqual(media[0]["argv"],
-                         ["--", str(source), str(source.with_suffix(".png"))])
+        self.assertEqual(media[0]["argv"][:2], ["--", str(source)])
+        stage = Path(media[0]["argv"][-1])
+        self.assertNotEqual(stage, source.with_suffix(".png"))
+        self.assertEqual(stage.suffix, ".png")
+        self.assertEqual(stage.parent.parent, source.parent)
+        self.assertTrue(stage.parent.name.startswith(".kim6-stage."))
         self.assertEqual(list((self.workspace.control / "tmp").iterdir()), [])
 
     def test_unconfigured_media_and_desktop_tools_fail_without_forwarding(self):

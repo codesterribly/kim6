@@ -50,6 +50,8 @@ def main():
             raise ValueError("qdbus requires separate service and object path")
     if tool == "magick" and "real_magick" in plan and response is None:
         return real_magick(plan["real_magick"], args)
+    if tool == "magick" and "real_conversion" in plan and response is None:
+        return real_conversion(plan["real_conversion"], args)
     if isinstance(response, list):
         counter = CONTROL / (counter_name + ".index")
         index = int(counter.read_text()) if counter.exists() else 0
@@ -150,20 +152,27 @@ def main():
             os.close(descriptor)
             print(name)
     elif tool == "identify":
-        if len(args) != 4 or args[:3] != ["-regard-warnings", "+ping", "--"]:
+        formatted = args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
+        if formatted:
+            payload = sys.stdin.buffer.read(4097)
+        elif len(args) == 4 and args[:3] == ["-regard-warnings", "+ping", "--"]:
+            payload = owned(args[3]).read_bytes()
+        else:
             raise ValueError("unconfigured external command: identify")
-        path = owned(args[3])
-        # Real decoding is limited to tiny, test-owned producer outputs. Give
-        # the decoder a safe private filename to avoid ImageMagick path syntax.
-        if path.stat().st_size > 4096:
+        if len(payload) > 4096:
             raise ValueError("validation fixture too large")
         executable = shutil.which("identify", path=os.defpath)
         if not executable:
             raise ValueError("test image validator is unavailable")
         with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
             fixture = Path(folder) / "fixture"
-            fixture.write_bytes(path.read_bytes())
-            return subprocess.call([executable, "-regard-warnings", "+ping", "--", str(fixture)])
+            fixture.write_bytes(payload)
+            options = ["-format", "%m\n"] if formatted else []
+            # Decoder delegates (e.g. Ghostscript) need their normal utility
+            # PATH. Input remains a bounded, private synthetic fixture.
+            environment = dict(os.environ, PATH=os.defpath)
+            return subprocess.call([executable, "-regard-warnings", "+ping", *options, "--", str(fixture)],
+                                   env=environment)
     elif tool == "mv" and args == ["--help"]:
         # Model a rename-only-capable installation; missing capability is tested
         # separately. Filesystem implementation below uses os.rename, no copy.
@@ -220,6 +229,21 @@ def real_magick(executable, args):
         raise ValueError("real magick accepts only the synthetic fixture")
     destination.parent.mkdir(parents=True, exist_ok=True)
     return subprocess.call([executable, str(source), *operation, "-depth", "8", str(destination)])
+
+
+def real_conversion(executable, args):
+    if len(args) != 3 or args[0] != "--":
+        raise ValueError("real conversion requires explicit source and output")
+    source, destination = map(owned, args[1:])
+    formats = {"ppm", "png", "jpg", "jpeg", "jpe", "gif", "gif87", "bmp", "bmp2", "bmp3",
+               "tif", "tiff", "tiff64", "webp", "avif", "heic", "pnm", "pam", "pgm", "pbm",
+               "png00", "png8", "png24", "png32", "png48", "png64", "pdf", "miff", "ico"}
+    for path in (source, destination):
+        if path.suffix.lower().lstrip(".") not in formats or any(c in str(path) for c in "[]%@:*?\\"):
+            raise ValueError("real conversion requires plain owned fixture paths")
+    if source.stat().st_size > 4096 or source == destination or destination.exists() or destination.is_symlink():
+        raise ValueError("real conversion requires tiny input and unused output")
+    return subprocess.call([executable, *args])
 
 
 def filesystem(tool, args):
