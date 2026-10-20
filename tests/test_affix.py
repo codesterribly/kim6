@@ -17,7 +17,8 @@ class AffixTests(unittest.TestCase):
     def run_action(self, action, sources, destination=None, payload=None):
         payload = sources[0].read_bytes() if payload is None else payload
         self.workspace.respond("exiftool" if action == "stripmeta" else "magick",
-                               output_base64=base64.b64encode(payload).decode())
+                               output_base64=base64.b64encode(payload).decode(),
+                               **({"stdout": "3 2\n"} if action == "resize" else {}))
         destination = destination or sources[0].parent
         args = {"webexport": (destination,), "compress": ("75", destination),
                 "resize": ("3x2", destination), "stripmeta": ()}[action]
@@ -90,8 +91,8 @@ def naming_case(action, env, config, position, scenario="ordinary"):
             self.workspace.env["KIM_POLICY"] = "overwrite"
             names = {"input/photo.part 雪.jpg"}
         payload = b"processed image bytes" if scenario == "overwrite" else source.read_bytes()
-        if action == "compress" and scenario == "overwrite":
-            # Naming still requires changed bytes, now a valid JPEG for K19.
+        if action in ("compress", "resize") and scenario == "overwrite":
+            # Naming still requires changed bytes, now a valid JPEG for K19/K20.
             # A JPEG COM marker changes the fixture without requiring an encoder.
             original = source.read_bytes()
             payload = original[:2] + b"\xff\xfe\x00\x06K19!" + original[2:]

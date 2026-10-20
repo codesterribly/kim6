@@ -54,6 +54,8 @@ def main():
         return real_conversion(plan["real_conversion"], args)
     if tool == "magick" and "real_compression" in plan and response is None:
         return real_compression(plan["real_compression"], args)
+    if tool == "magick" and "real_resize" in plan and response is None:
+        return real_resize(plan["real_resize"], args)
     if isinstance(response, list):
         counter = CONTROL / (counter_name + ".index")
         index = int(counter.read_text()) if counter.exists() else 0
@@ -156,15 +158,17 @@ def main():
             os.close(descriptor)
             print(name)
     elif tool == "identify":
-        compression = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
+        hinted = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "TGA:-"]
+        compression = hinted or args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
         formatted = compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
+        limit = 8388608 if compression and "real_resize" in plan else (65536 if compression else 4096)
         if formatted:
-            payload = sys.stdin.buffer.read(65537 if compression else 4097)
+            payload = sys.stdin.buffer.read(limit + 1)
         elif len(args) == 4 and args[:3] == ["-regard-warnings", "+ping", "--"]:
             payload = owned(args[3]).read_bytes()
         else:
             raise ValueError("unconfigured external command: identify")
-        if len(payload) > (65536 if compression else 4096):
+        if len(payload) > limit:
             raise ValueError("validation fixture too large")
         executable = shutil.which("identify", path=os.defpath)
         if not executable:
@@ -173,10 +177,11 @@ def main():
             fixture = Path(folder) / "fixture"
             fixture.write_bytes(payload)
             options = ["-format", "%m %w %h\n" if compression else "%m\n"] if formatted else []
+            input_name = ("TGA:" if hinted else "") + str(fixture)
             # Decoder delegates (e.g. Ghostscript) need their normal utility
             # PATH. Input remains a bounded, private synthetic fixture.
             environment = dict(os.environ, PATH=os.defpath)
-            return subprocess.call([executable, "-regard-warnings", "+ping", *options, "--", str(fixture)],
+            return subprocess.call([executable, "-regard-warnings", "+ping", *options, "--", input_name],
                                    env=environment)
     elif tool == "mv" and args == ["--help"]:
         # Model a rename-only-capable installation; missing capability is tested
@@ -264,6 +269,24 @@ def real_compression(executable, args):
     if any(c in str(p) for p in (source, destination) for c in "[]%@:*?\\"):
         raise ValueError("real compression requires plain fixture paths")
     return subprocess.call([executable, *args])
+
+
+def real_resize(executable, args):
+    if (len(args) != 9 or args[0] != "--" or args[2] != "-resize"
+            or args[4:8] != ["-format", "%w %h\\n", "-write", "info:"]):
+        raise ValueError("real resize requires explicit source, geometry and output")
+    source, destination = owned(args[1]), owned(args[-1])
+    if source.stat().st_size > 65536 or destination.exists() or destination.is_symlink():
+        raise ValueError("real resize requires bounded input and unused output")
+    if any(c in str(p) for p in (source, destination) for c in "[]%@:*?\\"):
+        raise ValueError("real resize requires plain owned fixture paths")
+    # Test-only caps allow the 60 MP fixture but contain deliberate enormous
+    # geometry failures. Production imposes no additional dimension limits.
+    limits = ["-limit", "width", "16384", "-limit", "height", "16384",
+              "-limit", "memory", "768MiB", "-limit", "map", "0",
+              "-limit", "disk", "0"]
+    return subprocess.run([executable, *limits, *args], timeout=60,
+                          env=dict(os.environ, PATH=os.defpath)).returncode
 
 
 def filesystem(tool, args):

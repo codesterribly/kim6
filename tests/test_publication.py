@@ -312,8 +312,9 @@ class PublicationTests(unittest.TestCase):
         self.destination.chmod(0o640)
         os.utime(self.destination, ns=(1_600_000_000_000_000_000, 1_600_000_001_123_456_789))
         before = self.workspace.observe(self.destination)
-        self.produce()
-        result = self.workspace.dispatch("resize", "3x2", self.destination.parent, self.destination)
+        # Keep exercising the unchanged legacy helper through an unmigrated action.
+        self.workspace.respond("exiftool", output_base64=base64.b64encode(self.destination.read_bytes()).decode())
+        result = self.workspace.dispatch("stripmeta", self.destination)
         self.assertEqual(result.returncode, 0, result.stderr)
         after = self.workspace.observe(self.destination)
         self.assertEqual(after.mode, before.mode)
@@ -323,9 +324,10 @@ class PublicationTests(unittest.TestCase):
 
     def test_unmigrated_overwrite_fails_closed_on_unsupported_tools(self):
         before = self.protect(self.destination)
-        self.produce()
+        # Keep exercising the unchanged legacy helper through an unmigrated action.
+        self.workspace.respond("exiftool", output_base64=base64.b64encode(self.destination.read_bytes()).decode())
         self.workspace.respond_to("mv", "--help", {"stdout": "no rename-only support\n"})
-        result = self.workspace.dispatch("resize", "3x2", self.destination.parent, self.destination)
+        result = self.workspace.dispatch("stripmeta", self.destination)
         self.assertNotEqual(result.returncode, 0)
         self.assert_preserved(before)
         self.assert_clean()
@@ -372,8 +374,9 @@ class PublicationTests(unittest.TestCase):
         self.destination.chmod(0o640)
         os.utime(self.destination, ns=(1_600_000_000_000_000_000, 1_600_000_001_123_456_789))
         before = self.workspace.observe(self.destination)
-        self.produce()
-        result = self.workspace.dispatch("resize", "3x2", self.destination.parent, self.destination)
+        # Keep exercising the unchanged legacy helper through an unmigrated action.
+        self.workspace.respond("exiftool", output_base64=base64.b64encode(self.destination.read_bytes()).decode())
+        result = self.workspace.dispatch("stripmeta", self.destination)
         self.assertEqual(result.returncode, 0, result.stderr)
         after = self.workspace.observe(self.destination)
         self.assertNotEqual(after.inode, before.inode)
@@ -384,14 +387,15 @@ class PublicationTests(unittest.TestCase):
     def test_atomic_caller_rehomes_cross_device_stage_before_real_publication(self):
         self.workspace.use_real_mv()
         before = self.workspace.observe(self.destination)
-        self.produce()
+        # Keep exercising the unchanged legacy helper through an unmigrated action.
+        self.workspace.respond("exiftool", output_base64=base64.b64encode(self.destination.read_bytes()).decode())
         # Scratch and destination appear different; destination-side stage then
         # matches the destination. Real cp and mv effects stay test-owned.
         self.workspace.respond_to("stat", "%d", [
             {"stdout": "1\n"}, {"stdout": "2\n"},
             {"stdout": "2\n"}, {"stdout": "2\n"},
         ])
-        result = self.workspace.dispatch("resize", "3x2", self.destination.parent, self.destination)
+        result = self.workspace.dispatch("stripmeta", self.destination)
         self.assertEqual(result.returncode, 0, result.stderr)
         copies = [e for e in result.events if e["tool"] == "cp"]
         self.assertEqual(len(copies), 1)
@@ -406,11 +410,12 @@ class PublicationTests(unittest.TestCase):
 
     def test_failed_cross_device_stage_preparation_preserves_destination(self):
         before = self.protect(self.destination)
-        self.produce()
+        # Keep exercising the unchanged legacy helper through an unmigrated action.
+        self.workspace.respond("exiftool", output_base64=base64.b64encode(self.destination.read_bytes()).decode())
         self.workspace.respond_to("stat", "%d", [{"stdout": "1\n"}, {"stdout": "2\n"}])
         self.workspace.respond("cp", status=74,
                                output_base64=base64.b64encode(b"partial private copy").decode())
-        result = self.workspace.dispatch("resize", "3x2", self.destination.parent, self.destination)
+        result = self.workspace.dispatch("stripmeta", self.destination)
         self.assertTrue(any(e["tool"] == "cp" and e["status"] == 74 for e in result.events))
         self.assertFalse(any(e["tool"] == "mv" for e in result.events))
         self.assert_preserved(before)

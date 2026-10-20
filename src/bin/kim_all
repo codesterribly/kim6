@@ -1744,7 +1744,7 @@ action_rename() {
 # - Prompts for overwrite vs create, consistent with other kim_all actions.
 # - Overwrite mode replaces the original file using atomic overwrite logic.
 # - Create mode places the resized tag per NAME_AFFIX_POSITION, avoiding collisions.
-# - Metadata is preserved best-effort on created files via helpers.
+# - ImageMagick retains image metadata; changed content receives a fresh mtime.
 #
 # Arguments:
 #   $1  SCALE   ImageMagick geometry (e.g. 800x800, 50%)
@@ -1766,9 +1766,6 @@ action_resize() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
-  if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
-    outdir=""
-  fi
 
   local mode
   mode="$(choose_output_mode \
@@ -1777,21 +1774,31 @@ action_resize() {
 
   [ "$mode" = "cancel" ] && return 1
 
+  if [ "$mode" = create ] && [ -n "$outdir" ] &&
+     { [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; }; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: output directory is unavailable:') $outdir"
+    return 1
+  fi
+
   report_init
   local dbusRef
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
 
   local counter=0
-  local i dir base stem ext OUTFILE OUTTMP n
+  local i dir base stem ext OUTFILE OUTTMP n rc
+  local source_info source_frame source_format source_frames produced_frames dimensions expected_dimensions
+  local actual actual_dimensions frame format expected_format read_hint decoder_rc
+  local bus_service bus_object bus_extra cancelled
+  read -r bus_service bus_object bus_extra <<< "$dbusRef"
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
 
     {
-      read -r dir
-      read -r base
-      read -r stem
-      read -r ext
+      IFS= read -r dir
+      IFS= read -r base
+      IFS= read -r stem
+      IFS= read -r ext
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing file: ')$base"; then
@@ -1800,45 +1807,147 @@ action_resize() {
       return 1
     fi
 
+    # Match the conversion/compression cancellation pattern; shared UI is K14.
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    if [ "$cancelled" = true ]; then
+      report_fail "$i"
+      break
+    fi
+
+    rc=0
+    source_info=""
+    read_hint=""
+    case "${ext^^}" in TGA|ICB|VDA|VST) read_hint=TGA ;; esac
+    if [[ "$i" != *$'\n'* ]]; then
+      source_info="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$i" 2>/dev/null)" || rc=$?
+      if [ "$rc" -ne 0 ] && [ -n "$read_hint" ]; then
+        # Targa has no signature. A selected decoder still fully validates its
+        # header and pixels; never use a filename alone as evidence of integrity.
+        rc=0
+        source_info="$(identify -regard-warnings +ping -format '%m %w %h\n' "$read_hint:-" < "$i" 2>/dev/null)" || rc=$?
+      fi
+    else
+      rc=1
+    fi
+    if [ "$rc" -ne 0 ] || [ -z "$source_info" ]; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
     if [ "$mode" = "overwrite" ]; then
-      if [ -n "$ext" ]; then
-        OUTTMP="$(mktemp "$KIMDIR/kim_resize_out_${counter}_XXXXXX.${ext}")"
-      else
-        OUTTMP="$(mktemp "$KIMDIR/kim_resize_out_${counter}_XXXXXX")"
-      fi
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-
-      magick -- "$i" -resize "$SCALE" "$OUTTMP" >/dev/null 2>&1 || true
-
-      if [ -s "$OUTTMP" ]; then
-        atomic_overwrite_file "$i" "$OUTTMP"
-        report_ok
-      else
-        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-        report_fail "$i"
-      fi
+      OUTFILE="$i"
     else
       local dir2
       dir2="${outdir:-$dir}"
-
       OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext")"
-
       n=1
-      while [ -e "$OUTFILE" ]; do
+      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext" "$n")"
         n=$((n + 1))
       done
-
-      magick -- "$i" -resize "$SCALE" "$OUTFILE" >/dev/null 2>&1 || true
-
-      if [ -s "$OUTFILE" ]; then
-        finalize_created_file "$i" "$OUTFILE"
-        report_ok
-      else
-        rm -f -- "$OUTFILE" >/dev/null 2>&1 || true
-        report_fail "$i"
-      fi
     fi
+    if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+    source_frames=0
+    source_format=""
+    while IFS= read -r source_frame; do
+      if [[ "$source_frame" =~ ^([A-Z0-9]+)\ ([1-9][0-9]*)\ ([1-9][0-9]*)$ ]]; then
+        [ -n "$source_format" ] || source_format="${BASH_REMATCH[1]}"
+        source_frames=$((source_frames + 1))
+      else
+        rc=1
+        break
+      fi
+    done <<< "$source_info"
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+    expected_format="${ext^^}"
+    [ -n "$expected_format" ] || expected_format="$source_format"
+    case "$expected_format" in
+      JPG|JPE|JFIF|JPS|PJPEG) expected_format=JPEG ;;
+      TIF|PTIF) expected_format=TIFF ;;
+      HEIF) expected_format=HEIC ;;
+      ICB|VDA|VST) expected_format=TGA ;;
+      J2C|JPC|JPM) expected_format=JP2 ;;
+      AI|EPDF|PDFA) expected_format=PDF ;;
+      APNG) expected_format=PNG ;;
+      PNG00|PNG8|PNG24|PNG32|PNG48|PNG64) expected_format=PNG ;;
+      GIF87) expected_format=GIF ;;
+    esac
+
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    if [ "$cancelled" = true ]; then
+      report_fail "$i"
+      break
+    fi
+    rc=0
+    # Record dimensions from the sole resize, before encoding. ImageMagick
+    # remains responsible for geometry parsing/rounding; no pixel-sized probe
+    # or second resize is needed. Validate the encoded file against this stream.
+    expected_dimensions="$(magick -- "$i" -resize "$SCALE" -format '%w %h\n' -write info: "$OUTTMP" 2>/dev/null)" || rc=$?
+    produced_frames=0
+    while IFS= read -r dimensions; do
+      if [[ "$dimensions" =~ ^[1-9][0-9]*\ [1-9][0-9]*$ ]]; then
+        produced_frames=$((produced_frames + 1))
+      else
+        rc=1
+      fi
+    done <<< "$expected_dimensions"
+    [ "$produced_frames" -eq "$source_frames" ] || rc=1
+    actual=""
+    if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+      decoder_rc=0
+      actual="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$OUTTMP" 2>/dev/null)" || decoder_rc=$?
+      if [ "$decoder_rc" -ne 0 ] && [ "$expected_format" = TGA ]; then
+        decoder_rc=0
+        actual="$(identify -regard-warnings +ping -format '%m %w %h\n' TGA:- < "$OUTTMP" 2>/dev/null)" || decoder_rc=$?
+      fi
+      [ "$decoder_rc" -eq 0 ] || rc="$decoder_rc"
+    fi
+    [ -n "$actual" ] || rc=1
+    actual_dimensions=""
+    while IFS= read -r frame; do
+      if [[ "$frame" =~ ^([A-Z0-9]+)\ ([1-9][0-9]*)\ ([1-9][0-9]*)$ ]]; then
+        format="${BASH_REMATCH[1]}"
+        actual_dimensions+="${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"$'\n'
+        if [ "$expected_format" = PNM ]; then
+          case "$format" in PBM|PGM|PPM|PAM) ;; *) rc=1 ;; esac
+        elif [ "$format" != "$expected_format" ]; then
+          rc=1
+        fi
+      else
+        rc=1
+      fi
+    done <<< "$actual"
+    [ "${actual_dimensions%$'\n'}" = "$expected_dimensions" ] || rc=1
+    if [ "$rc" -eq 0 ]; then
+      chmod --reference="$i" "$OUTTMP" || rc=$?
+    fi
+    # Match the conversion/compression cancellation pattern; shared UI is K14.
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    [ "$cancelled" != true ] || rc=1
+    if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
+      report_ok
+    else
+      report_fail "$i"
+    fi
+    rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+    [ "$cancelled" != true ] || break
 
     progress_value "$dbusRef" "$counter"
   done

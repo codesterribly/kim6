@@ -82,7 +82,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
         self.workspace.env["KIM_POLICY"] = "overwrite"
-        self.producer("magick", source.read_bytes())
+        self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mkdir", status=73)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
         self.assert_event(result, "magick", 0)
@@ -93,7 +93,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
         self.workspace.env["KIM_POLICY"] = "overwrite"
-        self.producer("magick", source.read_bytes())
+        self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mv", status=73)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
         self.assert_event(result, "magick", 0)
@@ -107,7 +107,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
         self.workspace.env["KIM_POLICY"] = "overwrite"
-        self.producer("magick", source.read_bytes())
+        self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mv", status=73)
         self.producer("cp", b"truncated during fallback", status=74)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
@@ -157,9 +157,10 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
         self.workspace.env["KIM_POLICY"] = "overwrite"
-        self.producer("magick", source.read_bytes(), cancel=True)
+        self.producer("magick", source.read_bytes(), stdout="3 2\n", cancel=True)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
-        event = self.assert_event(result, "magick", 0)[0]
+        event = next(event for event in self.assert_event(result, "magick", 0)
+                     if event["argv"][:1] == ["--"])
         self.assertTrue(event.get("cancel_requested"), "cancellation injection not reached")
         # A real progress reference is still required: the adapter does NOT
         # accept kim_all's malformed qdbus arguments to manufacture a green test.

@@ -212,6 +212,17 @@ class Workspace:
         self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
         self.env["MAGICK_THREAD_LIMIT"] = "1"
 
+    def use_real_resize(self):
+        """Enable only bounded synthetic fixture resizing with installed ImageMagick."""
+        executable = shutil.which("magick")
+        if not executable:
+            raise unittest.SkipTest("ImageMagick magick is unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_resize"] = executable
+        self.plan.write_text(json.dumps(plan))
+        self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
+        self.env["MAGICK_THREAD_LIMIT"] = "1"
+
     def use_real_magick(self):
         """Opt in to narrowly validated real PPM operations, never arbitrary CLI."""
         executable = shutil.which("magick")
