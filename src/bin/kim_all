@@ -2238,26 +2238,30 @@ action_stripmeta() {
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
     "$(gettext 'Do you want to create new files?')")"
-
-  if [ "$mode" = "cancel" ]; then
-    return 1
-  fi
+  [ "$mode" != cancel ] || return 1
 
   report_init
-
-  local dbusRef
+  local dbusRef bus_service bus_object bus_extra cancelled
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
-
-  local counter=0
-  local i dir base stem ext OUTFILE OUTTMP n
+  read -r bus_service bus_object bus_extra <<< "$dbusRef"
+  local counter=0 i dir base stem ext OUTFILE OUTTMP n rc source_info actual frame read_hint
+  # Compare decoded pixels as well as encoding, dimensions, frame order/count,
+  # orientation, colorspace, gamma, frame canvas and timing/disposal.
+  # No re-encoding or auto-orientation.
+  local candidate profile_json profile_line profile_records source_icc actual_icc
+  # ExifTool serializes forced binary values as base64 (or '-' when absent).
+  # Compare every ICC occurrence, including duplicate profiles and their container locations.
+  local icc_key_pattern='^[[:space:]]*"[A-Za-z0-9_:.-]*ICC_Profile":'
+  local icc_value_pattern='^[[:space:]]*"([A-Za-z0-9_:.-]*ICC_Profile)":[[:space:]]*"(base64:[A-Za-z0-9+/=]+|-)"[,]?[[:space:]]*$'
+  local image_format='%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\n'
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
     {
-      read -r dir
-      read -r base
-      read -r stem
-      read -r ext
+      IFS= read -r dir
+      IFS= read -r base
+      IFS= read -r stem
+      IFS= read -r ext
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"; then
@@ -2265,43 +2269,116 @@ action_stripmeta() {
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    if [ "$cancelled" = true ]; then
+      report_fail "$i"
+      break
+    fi
 
-    progress_label "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"
-
-    OUTTMP="$(mktemp "$KIMDIR/kim_stripmeta_out_${counter}_XXXXXX.${ext:-tmp}")"
-    rm -f "$OUTTMP"
-
-    exiftool -all= -tagsfromfile "$i" \
-      -icc_profile -Orientation \
-      -o "$OUTTMP" -- "$i" >/dev/null 2>&1 || true
-
-    if [ ! -s "$OUTTMP" ]; then
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+    read_hint='-'
+    rc=0
+    source_info="$(identify -regard-warnings +ping -format "$image_format" - < "$i" 2>/dev/null)" || rc=$?
+    case "${ext^^}" in
+      TGA|ICB|VDA|VST)
+        if [ "$rc" -ne 0 ]; then
+          read_hint=TGA:-
+          rc=0
+          source_info="$(identify -regard-warnings +ping -format "$image_format" "$read_hint" < "$i" 2>/dev/null)" || rc=$?
+        fi ;;
+    esac
+    [ -n "$source_info" ] || rc=1
+    while IFS= read -r frame; do
+      [[ "$frame" =~ ^[A-Z0-9]+\ [1-9][0-9]*\ [1-9][0-9]*\ [A-Za-z]+\ [A-Za-z0-9]+\ [0-9.eE+-]+\ [0-9x+-]+\ [0-9]+\ [A-Za-z]+\ [0-9a-f]{64}$ ]] || rc=1
+    done <<< "$source_info"
+    if [ "$rc" -ne 0 ]; then
       report_fail "$i"
       progress_value "$dbusRef" "$counter"
       continue
     fi
 
-    if [ "$mode" = "overwrite" ]; then
-      atomic_overwrite_file "$i" "$OUTTMP"
-      report_ok
+    if [ "$mode" = overwrite ]; then
+      OUTFILE="$i"
     else
       OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
-
       n=1
-      while [ -e "$OUTFILE" ]; do
+      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
         n=$((n + 1))
       done
-
-      mv -f -- "$OUTTMP" "$OUTFILE"
-      finalize_created_file "$i" "$OUTFILE"
-      report_ok
     fi
-
+    if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
+      report_fail "$i"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    if [ "$cancelled" = true ]; then
+      report_fail "$i"
+      break
+    fi
+    rc=0
+    # Preserve the existing removal policy: restore only ICC and Orientation.
+    exiftool -all= -tagsfromfile "$i" -icc_profile -Orientation \
+      -o "$OUTTMP" -- "$i" >/dev/null 2>&1 || rc=$?
+    actual=''
+    if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+      actual="$(identify -regard-warnings +ping -format "$image_format" "$read_hint" < "$OUTTMP" 2>/dev/null)" || rc=$?
+    fi
+    [ -n "$actual" ] && [ "$actual" = "$source_info" ] || rc=1
+    if [ "$rc" -eq 0 ]; then
+      source_icc=''
+      actual_icc=''
+      for candidate in "$i" "$OUTTMP"; do
+        profile_json="$(exiftool -j -b -f -a -G1:4 -ICC_Profile -- "$candidate" 2>/dev/null)" || rc=$?
+        [ "$rc" -eq 0 ] || break
+        profile_records=''
+        while IFS= read -r profile_line; do
+          if [[ "$profile_line" =~ $icc_key_pattern ]]; then
+            if [[ "$profile_line" =~ $icc_value_pattern ]]; then
+              profile_records+="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"$'\n'
+            else
+              rc=1
+              break
+            fi
+          fi
+        done <<< "$profile_json"
+        [ -n "$profile_records" ] || rc=1
+        [ "$rc" -eq 0 ] || break
+        if [ "$candidate" = "$i" ]; then
+          source_icc="$profile_records"
+        else
+          actual_icc="$profile_records"
+        fi
+      done
+      [ "$source_icc" = "$actual_icc" ] || rc=1
+    fi
+    if [ "$rc" -eq 0 ]; then
+      # Stripping changes metadata only: unlike resize/compression, keep mtime.
+      chmod --reference="$i" "$OUTTMP" || rc=$?
+      if [ "$rc" -eq 0 ]; then
+        touch -r "$i" -- "$OUTTMP" || rc=$?
+      fi
+    fi
+    cancelled=false
+    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
+      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
+    fi
+    [ "$cancelled" != true ] || rc=1
+    if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
+      report_ok
+    else
+      report_fail "$i"
+    fi
+    rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+    [ "$cancelled" != true ] || break
     progress_value "$dbusRef" "$counter"
   done
-
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
   true

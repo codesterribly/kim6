@@ -44,6 +44,16 @@ def main():
             response = routed
             counter_name += "." + hashlib.sha256(argument.encode()).hexdigest()[:12]
             break
+    # Profile validation is independent of scripted metadata producers.
+    profile_query = ["-j", "-b", "-f", "-a", "-G1:4", "-ICC_Profile", "--"]
+    if tool == "exiftool" and args[:-1] == profile_query and "-ICC_Profile" not in plan.get("routes", {}).get(tool, {}):
+        fixture = owned(args[-1])
+        if fixture.stat().st_size > 8388608:
+            raise ValueError("profile fixture exceeds owned test bound")
+        executable = shutil.which("exiftool", path=os.defpath)
+        if not executable:
+            raise ValueError("profile validator unavailable")
+        return subprocess.run([executable, *args], timeout=10).returncode
     # Validate the D-Bus boundary even when a response has been scripted.
     if tool in ("qdbus", "qdbus6"):
         if len(args) < 3 or args[:2] != ["org.kde.kdialog-test", "/ProgressDialog"]:
@@ -56,6 +66,8 @@ def main():
         return real_compression(plan["real_compression"], args)
     if tool == "magick" and "real_resize" in plan and response is None:
         return real_resize(plan["real_resize"], args)
+    if tool == "exiftool" and "real_stripmeta" in plan and response is None:
+        return real_stripmeta(plan["real_stripmeta"], args)
     if isinstance(response, list):
         counter = CONTROL / (counter_name + ".index")
         index = int(counter.read_text()) if counter.exists() else 0
@@ -107,6 +119,14 @@ def main():
         sys.stdout.write(response.get("stdout", ""))
         sys.stderr.write(response.get("stderr", ""))
         return response.get("status", 0)
+    if tool in plan.get("real_metadata_tools", {}):
+        if tool == "touch" and len(args) == 4 and args[0] == "-r" and args[2] == "--":
+            owned(args[1]); owned(args[3])
+        elif tool == "chmod" and len(args) == 2 and args[0].startswith("--reference="):
+            owned(args[0].split("=", 1)[1]); owned(args[1])
+        else:
+            raise ValueError("unsupported real metadata preparation")
+        return subprocess.run([plan["real_metadata_tools"][tool], *args], timeout=10).returncode
     if tool == "gettext":
         print(args[-1])
     elif tool == "kreadconfig6":
@@ -158,10 +178,13 @@ def main():
             os.close(descriptor)
             print(name)
     elif tool == "identify":
+        signature_format = "%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\\n"
+        signature = (len(args) == 5 and args[:3] == ["-regard-warnings", "+ping", "-format"]
+                     and args[3] == signature_format and args[4] in ("-", "TGA:-"))
         hinted = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "TGA:-"]
         compression = hinted or args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
-        formatted = compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
-        limit = 8388608 if compression and "real_resize" in plan else (65536 if compression else 4096)
+        formatted = signature or compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
+        limit = 8388608 if signature else (8388608 if compression and "real_resize" in plan else (65536 if compression else 4096))
         if formatted:
             payload = sys.stdin.buffer.read(limit + 1)
         elif len(args) == 4 and args[:3] == ["-regard-warnings", "+ping", "--"]:
@@ -176,8 +199,8 @@ def main():
         with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
             fixture = Path(folder) / "fixture"
             fixture.write_bytes(payload)
-            options = ["-format", "%m %w %h\n" if compression else "%m\n"] if formatted else []
-            input_name = ("TGA:" if hinted else "") + str(fixture)
+            options = ["-format", args[3] if signature else ("%m %w %h\n" if compression else "%m\n")] if formatted else []
+            input_name = ("TGA:" if hinted or (signature and args[4] == "TGA:-") else "") + str(fixture)
             # Decoder delegates (e.g. Ghostscript) need their normal utility
             # PATH. Input remains a bounded, private synthetic fixture.
             environment = dict(os.environ, PATH=os.defpath)
@@ -269,6 +292,20 @@ def real_compression(executable, args):
     if any(c in str(p) for p in (source, destination) for c in "[]%@:*?\\"):
         raise ValueError("real compression requires plain fixture paths")
     return subprocess.call([executable, *args])
+
+
+def real_stripmeta(executable, args):
+    if (len(args) != 9 or args[0:2] != ["-all=", "-tagsfromfile"]
+            or args[3:6] != ["-icc_profile", "-Orientation", "-o"]
+            or args[7] != "--" or args[2] != args[8]):
+        raise ValueError("unsupported metadata stripping operation")
+    source, destination = owned(args[2]), owned(args[6])
+    if source.stat().st_size > 8388608 or destination.exists() or destination.is_symlink():
+        raise ValueError("stripmeta requires bounded input and unused output")
+    if any(c in str(p) for p in (source, destination) for c in "[]%@:*?\\"):
+        raise ValueError("stripmeta requires plain owned fixture paths")
+    return subprocess.run([executable, *args], timeout=10,
+                          env=dict(os.environ, PATH=os.defpath)).returncode
 
 
 def real_resize(executable, args):

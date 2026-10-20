@@ -212,6 +212,39 @@ class Workspace:
         self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
         self.env["MAGICK_THREAD_LIMIT"] = "1"
 
+    def use_real_stripmeta(self):
+        """Run only the fixed metadata-removal command on owned fixtures."""
+        executable = shutil.which("exiftool")
+        if not executable:
+            raise unittest.SkipTest("exiftool unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_stripmeta"] = executable
+        self.plan.write_text(json.dumps(plan))
+
+    def use_real_metadata_tools(self):
+        """Check installed chmod/touch on owned staging entries."""
+        plan = json.loads(self.plan.read_text())
+        plan["real_metadata_tools"] = {name: shutil.which(name) for name in ("touch", "chmod")}
+        if not all(plan["real_metadata_tools"].values()):
+            raise unittest.SkipTest("chmod/touch unavailable")
+        self.plan.write_text(json.dumps(plan))
+
+    def atomic_overwrite(self, destination):
+        """Exercise unmodified K12 helpers independently of action migration."""
+        source = self.dispatcher.read_text()
+        entrypoint = '\nmain "$@"\n'
+        if source.count(entrypoint) != 1:
+            raise ValueError("dispatcher entrypoint changed")
+        harness = self.control / "atomic-helper"
+        harness.write_text(source.replace(entrypoint, "\n") + '''
+mk_workdir
+scratch="$(mktemp "$KIMDIR/atomic_XXXXXX.${1##*.}")"
+rm -f -- "$scratch"
+exiftool -all= -tagsfromfile "$1" -icc_profile -Orientation -o "$scratch" -- "$1" || exit "$?"
+atomic_overwrite_file "$1" "$scratch"
+''')
+        return self._run(["/bin/bash", str(harness), str(destination)])
+
     def use_real_resize(self):
         """Enable only bounded synthetic fixture resizing with installed ImageMagick."""
         executable = shutil.which("magick")

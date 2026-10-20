@@ -96,6 +96,10 @@ def naming_case(action, env, config, position, scenario="ordinary"):
             # A JPEG COM marker changes the fixture without requiring an encoder.
             original = source.read_bytes()
             payload = original[:2] + b"\xff\xfe\x00\x06K19!" + original[2:]
+        if action == "stripmeta" and scenario == "overwrite":
+            # Model lossless comment removal with valid JPEG bytes.
+            payload = source.read_bytes()
+            source.write_bytes(payload[:2] + b"\xff\xfe\x00\x06K22!" + payload[2:])
         result = self.run_action(action, sources, destination, payload=payload)
         if scenario == "overwrite":
             self.assertEqual(list(source.parent.iterdir()), [source])
