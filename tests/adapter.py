@@ -52,6 +52,8 @@ def main():
         return real_magick(plan["real_magick"], args)
     if tool == "magick" and "real_conversion" in plan and response is None:
         return real_conversion(plan["real_conversion"], args)
+    if tool == "magick" and "real_compression" in plan and response is None:
+        return real_compression(plan["real_compression"], args)
     if isinstance(response, list):
         counter = CONTROL / (counter_name + ".index")
         index = int(counter.read_text()) if counter.exists() else 0
@@ -82,6 +84,8 @@ def main():
             if tool not in ("magick", "convert", "montage", "mogrify", "exiftool", "cp"):
                 raise ValueError("output injection unsupported for " + tool)
             output = args[args.index("-o") + 1] if tool == "exiftool" else args[-1]
+            if tool == "magick":
+                output = output.removeprefix("JPEG:")
             path = owned(output)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(base64.b64decode(response["output_base64"], validate=True))
@@ -152,14 +156,15 @@ def main():
             os.close(descriptor)
             print(name)
     elif tool == "identify":
-        formatted = args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
+        compression = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
+        formatted = compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
         if formatted:
-            payload = sys.stdin.buffer.read(4097)
+            payload = sys.stdin.buffer.read(65537 if compression else 4097)
         elif len(args) == 4 and args[:3] == ["-regard-warnings", "+ping", "--"]:
             payload = owned(args[3]).read_bytes()
         else:
             raise ValueError("unconfigured external command: identify")
-        if len(payload) > 4096:
+        if len(payload) > (65536 if compression else 4096):
             raise ValueError("validation fixture too large")
         executable = shutil.which("identify", path=os.defpath)
         if not executable:
@@ -167,7 +172,7 @@ def main():
         with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
             fixture = Path(folder) / "fixture"
             fixture.write_bytes(payload)
-            options = ["-format", "%m\n"] if formatted else []
+            options = ["-format", "%m %w %h\n" if compression else "%m\n"] if formatted else []
             # Decoder delegates (e.g. Ghostscript) need their normal utility
             # PATH. Input remains a bounded, private synthetic fixture.
             environment = dict(os.environ, PATH=os.defpath)
@@ -243,6 +248,21 @@ def real_conversion(executable, args):
             raise ValueError("real conversion requires plain owned fixture paths")
     if source.stat().st_size > 4096 or source == destination or destination.exists() or destination.is_symlink():
         raise ValueError("real conversion requires tiny input and unused output")
+    return subprocess.call([executable, *args])
+
+
+def real_compression(executable, args):
+    if args[:1] != ["--"] or args[2:-1] not in (
+            ["-strip", "-interlace", "Plane", "-quality", args[-2]],
+            ["+profile", "!{icc,exif}", "+set", "comment", "-interlace", "Plane", "-quality", args[-2]]):
+        raise ValueError("real compression requires approved JPEG options")
+    if not args[-2].isdigit() or not 1 <= int(args[-2]) <= 100:
+        raise ValueError("invalid real compression quality")
+    source, destination = owned(args[1]), owned(args[-1].removeprefix("JPEG:"))
+    if source.stat().st_size > 65536 or destination.exists() or destination.is_symlink():
+        raise ValueError("real compression requires bounded input and unused output")
+    if any(c in str(p) for p in (source, destination) for c in "[]%@:*?\\"):
+        raise ValueError("real compression requires plain fixture paths")
     return subprocess.call([executable, *args])
 
 

@@ -90,6 +90,11 @@ def naming_case(action, env, config, position, scenario="ordinary"):
             self.workspace.env["KIM_POLICY"] = "overwrite"
             names = {"input/photo.part 雪.jpg"}
         payload = b"processed image bytes" if scenario == "overwrite" else source.read_bytes()
+        if action == "compress" and scenario == "overwrite":
+            # Naming still requires changed bytes, now a valid JPEG for K19.
+            # A JPEG COM marker changes the fixture without requiring an encoder.
+            original = source.read_bytes()
+            payload = original[:2] + b"\xff\xfe\x00\x06K19!" + original[2:]
         result = self.run_action(action, sources, destination, payload=payload)
         if scenario == "overwrite":
             self.assertEqual(list(source.parent.iterdir()), [source])
