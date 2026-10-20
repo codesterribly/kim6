@@ -32,6 +32,14 @@ def owned(value):
     return path
 
 
+def interrupt_progress(state):
+    """Inject one progress outcome only within this synthetic workspace."""
+    if state not in ('cancelled', 'gone', 'query_failed', 'owner_failed', 'malformed'):
+        raise ValueError("unknown progress interruption")
+    (CONTROL / "progress-state").write_text(state)
+    EFFECTS["progress_interruption"] = state
+
+
 def main():
     tool, args = Path(sys.argv[0]).name, sys.argv[1:]
     with (CONTROL / "calls.jsonl").open("a") as stream:
@@ -56,8 +64,42 @@ def main():
         return subprocess.run([executable, *args], timeout=10).returncode
     # Validate the D-Bus boundary even when a response has been scripted.
     if tool in ("qdbus", "qdbus6"):
-        if len(args) < 3 or args[:2] != ["org.kde.kdialog-test", "/ProgressDialog"]:
+        references = plan.get("progress_references", [plan.get("progress_reference", "org.kde.kdialog-test /ProgressDialog")])
+        owner_query = (len(args) == 4 and args[:3] == ["org.freedesktop.DBus",
+            "/org/freedesktop/DBus", "org.freedesktop.DBus.NameHasOwner"]
+            and any(args[3] == reference.split()[0] for reference in references))
+        if not owner_query and (len(args) < 3 or not any(args[:2] == reference.split() for reference in references)):
             raise ValueError("qdbus requires separate service and object path")
+        method = args[2]
+        interface = "org.kde.kdialog.ProgressDialog"
+        valid = (owner_query or (method in ("wasCancelled", "close") and len(args) == 3)
+                 or (method == "showCancelButton" and len(args) == 4 and args[3] in ("true", "false"))
+                 or (method == "setLabelText" and len(args) == 4)
+                 or (method == "org.freedesktop.DBus.Properties.Set" and len(args) == 6
+                     and args[3] == interface and
+                     ((args[4] == "autoClose" and args[5] in ("true", "false"))
+                      or (args[4] == "value" and args[5].isdecimal()))))
+        if not valid:
+            raise ValueError("qdbus method argument contract mismatch")
+    # A producer can remove only this workspace's simulated dialog service.
+    if tool in ("qdbus", "qdbus6") and (CONTROL / "progress-gone").exists():
+        if owner_query:
+            print("false")
+            return 0
+        sys.stderr.write("ServiceUnknown: owned simulated service disappeared\n")
+        return 2
+    if tool in ("qdbus", "qdbus6") and (CONTROL / "progress-state").exists():
+        state = (CONTROL / "progress-state").read_text()
+        if owner_query:
+            if state == "owner_failed":
+                return 2
+            print("false" if state == "gone" else "true")
+            return 0
+        if state == "gone" or (args[2] == "wasCancelled" and state in ("query_failed", "owner_failed")):
+            return 2
+        if args[2] == "wasCancelled":
+            print("true" if state == "cancelled" else "unexpected")
+            return 0
     if tool == "magick" and "real_magick" in plan and response is None:
         return real_magick(plan["real_magick"], args)
     if tool == "magick" and "real_conversion" in plan and response is None:
@@ -76,6 +118,8 @@ def main():
         counter.write_text(str(index + 1))
         response = response[index]
     if response and response.get("passthrough"):
+        if "interrupt" in response:
+            interrupt_progress(response["interrupt"])
         response = None
     if tool == "mv" and "real_mv" in plan and response is None:
         if args in (["--help"], ["--version"]):
@@ -104,6 +148,11 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(base64.b64decode(response["output_base64"], validate=True))
             EFFECTS["output"] = str(path)
+        if "interrupt" in response:
+            interrupt_progress(response["interrupt"])
+        if response.get("disappear_progress"):
+            (CONTROL / "progress-gone").touch()
+            EFFECTS["progress_service_disappeared"] = True
         if response.get("cancel"):
             (CONTROL / "cancelled").touch()
             EFFECTS["cancel_requested"] = True
@@ -133,11 +182,13 @@ def main():
         key = args[args.index("--key") + 1]
         print(plan["config"].get(key, ""))
     elif tool in ("qdbus", "qdbus6"):
-        if args[2] == "wasCancelled":
+        if args[2] == "org.freedesktop.DBus.NameHasOwner":
+            print("true")
+        elif args[2] == "wasCancelled":
             print("true" if (CONTROL / "cancelled").exists() else "false")
     elif tool == "kdialog":
         if "--progressbar" in args:
-            print("org.kde.kdialog-test /ProgressDialog")
+            print(plan.get("progress_reference", "org.kde.kdialog-test /ProgressDialog"))
         elif "--inputbox" in args:
             index = args.index("--inputbox")
             print(args[index + 2] if len(args) > index + 2 else "")

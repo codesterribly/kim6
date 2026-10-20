@@ -212,6 +212,16 @@ class Workspace:
         self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
         self.env["MAGICK_THREAD_LIMIT"] = "1"
 
+    def shared_progress(self, body, *args):
+        """Exercise shared progress helpers with the real dispatcher definitions."""
+        source = self.dispatcher.read_text()
+        entrypoint = '\nmain "$@"\n'
+        if source.count(entrypoint) != 1:
+            raise ValueError("dispatcher entrypoint changed")
+        harness = self.control / "progress-helper"
+        harness.write_text(source.replace(entrypoint, "\n") + "\nmk_workdir\n" + body + "\n")
+        return self._run(["/bin/bash", str(harness), *map(str, args)])
+
     def use_real_stripmeta(self):
         """Run only the fixed metadata-removal command on owned fixtures."""
         executable = shutil.which("exiftool")

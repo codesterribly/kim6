@@ -104,7 +104,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 # One temp folder per run, always cleaned up on exit.
 mk_workdir() {
   KIMDIR="$(mktemp -d /tmp/kim.XXXXXXXX)" || die "mktemp failed"
-  trap 'cleanup_stages; rm -rf -- "$KIMDIR"' EXIT
+  trap 'progress_cleanup; cleanup_stages; rm -rf -- "$KIMDIR"' EXIT
 }
 
 # ---------------------------------------------------------------------------
@@ -481,79 +481,201 @@ report_finish_dialog() {
 # Progress dialog helpers
 # ---------------------------------------------------------------------------
 
-# Open a progress dialog. Returns "service path" for qdbus.
-progress_open() {
-  local max="$1"
-  local text="$2"
+# Canonical internal reference: "service /object/path" on one line.
+# Only horizontal separator/surrounding whitespace is accepted; D-Bus names
+# and object paths cannot contain whitespace. Keep callers' scalar contract.
+progress_parse_ref() {
+  local ref="$1" service object
+  local -n parsed_parts="$2"
+  parsed_parts=()
+  [[ "$ref" =~ ^[[:blank:]]*([^[:space:]]+)[[:blank:]]+([^[:space:]]+)[[:blank:]]*$ ]] || return 1
+  service="${BASH_REMATCH[1]}"
+  object="${BASH_REMATCH[2]}"
+  [ "${#service}" -le 255 ] || return 1
+  [[ "$service" =~ ^(:[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+|[A-Za-z_-][A-Za-z0-9_-]*(\.[A-Za-z_-][A-Za-z0-9_-]*)+)$ ]] || return 1
+  [[ "$object" =~ ^(/|(/[A-Za-z0-9_]+)+)$ ]] || return 1
+  # Output is read by the caller through this nameref.
+  # shellcheck disable=SC2034
+  parsed_parts=("$service" "$object")
+}
 
-  local dbusRef
-  dbusRef="$(kdialog --progressbar "$text" "$max" 2>/dev/null || true)"
+progress_call() {
+  local ref="$1"
+  shift
+  local -a parts=()
+  progress_parse_ref "$ref" parts || return 1
+  qdbus "${parts[@]}" "$@"
+}
 
-  if [ -n "$dbusRef" ]; then
-    qdbus "$dbusRef" showCancelButton true >/dev/null 2>&1 || true
-    echo "$dbusRef"
-  else
-    echo ""
+# 0 = service present, 1 = confirmed absent, 2 = unknown/failed ownership query.
+# Absence is an interruption, not proof that the user pressed Cancel (KDE 507443).
+progress_service_present() {
+  local owner
+  local -a parts=()
+  progress_parse_ref "$1" parts || return 2
+  owner="$(qdbus org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus.NameHasOwner "${parts[0]}" 2>/dev/null)" || return 2
+  case "$owner" in
+    true) return 0 ;;
+    false) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+progress_error() {
+  local message="$1"
+  kdialog --title "$(gettext 'Kim')" --error "$message" 2>/dev/null || printf '%s\n' "$message" >&2
+}
+
+progress_registered() {
+  local ref="$1" registered
+  [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/progress.refs" ] || return 1
+  while IFS= read -r registered; do
+    [ "$registered" != "$ref" ] || return 0
+  done < "$KIMDIR/progress.refs"
+  return 1
+}
+
+# Close only a dialog opened by this invocation. Successful closes unregister
+# it; failed closes stay registered for one final EXIT-cleanup retry.
+progress_close() {
+  local ref="$1" registered
+  [ -n "$ref" ] || return 0
+  local -a parts=() references=()
+  progress_parse_ref "$ref" parts || return 1
+  ref="${parts[0]} ${parts[1]}"
+  progress_registered "$ref" || return 0
+  if ! progress_call "$ref" close >/dev/null 2>&1; then
+    local owner_rc=0
+    progress_service_present "$ref" || owner_rc=$?
+    # A vanished owned service already has no dialog to close.
+    [ "$owner_rc" -eq 1 ] || return 1
   fi
+  mapfile -t references < "$KIMDIR/progress.refs" || return 1
+  : > "$KIMDIR/progress.refs" || return 1
+  for registered in "${references[@]}"; do
+    if [ "$registered" != "$ref" ]; then
+      printf '%s\n' "$registered" >> "$KIMDIR/progress.refs" || return 1
+    fi
+  done
 }
 
-# True if user pressed Cancel.
-progress_cancelled() {
-  local dbusRef="$1"
-
-  # No dialog means no cancellation.
-  [ -z "$dbusRef" ] && return 1
-
-  local cancelled
-  cancelled="$(qdbus "$dbusRef" wasCancelled 2>/dev/null || echo false)"
-
-  [[ "$cancelled" == "true" ]]
+progress_cleanup() {
+  local ref
+  local -a references=()
+  [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/progress.refs" ] || return 0
+  if ! mapfile -t references < "$KIMDIR/progress.refs"; then
+    printf 'Kim: cannot read owned progress dialog registry\n' >&2
+    return 0
+  fi
+  for ref in "${references[@]}"; do
+    progress_close "$ref" || printf 'Kim: could not close owned progress dialog %s\n' "$ref" >&2
+  done
 }
 
-# Convenience: cancel-check + set label for the current item.
-# Returns 0 to continue, 1 if cancelled (and closes the dialog).
-progress_begin_item() {
-  local dbusRef="$1"
-  local text="$2"
+progress_abort() {
+  local ref="$1" message="$2"
+  progress_error "$message"
+  progress_close "$ref" || true
+  return 1
+}
 
-  if progress_cancelled "$dbusRef"; then
-    progress_close "$dbusRef"
+# A failed method on a vanished service is a quiet interruption. A live
+# service or unconfirmable ownership remains a distinct communication error.
+progress_bus_failure() {
+  local ref="$1" message="$2" owner_rc=0
+  progress_service_present "$ref" || owner_rc=$?
+  if [ "$owner_rc" -eq 1 ]; then
+    progress_close "$ref" || true
     return 1
   fi
-
-  progress_label "$dbusRef" "$text"
-  return 0
+  progress_abort "$ref" "$message"
 }
 
-# Update progress text.
+# Open, register, and initialize a cancellable dialog. Failure is fatal to the
+# caller under set -e; never silently substitute a console-only workflow.
+progress_open() {
+  local max="$1" text="$2" ref rc=0
+  local -a parts=()
+  if ! command -v kdialog >/dev/null 2>&1 || ! command -v qdbus >/dev/null 2>&1; then
+    progress_error "$(gettext 'KDialog or qdbus is unavailable. Processing stopped.')"
+    return 1
+  fi
+  if [ -z "${KIMDIR:-}" ] || [ ! -d "$KIMDIR" ] ||
+     ! [[ "$max" =~ ^[0-9]+$ ]] || [ "${#max}" -gt 10 ] || ((10#$max > 2147483647)); then
+    progress_error "$(gettext 'Cannot initialize the progress dialog. Processing stopped.')"
+    return 1
+  fi
+  ref="$(kdialog --progressbar "$text" "$((10#$max))" 2>/dev/null)" || rc=$?
+  if ! progress_parse_ref "$ref" parts; then
+    progress_error "$(gettext 'KDialog returned an invalid progress reference. Processing stopped.')"
+    return 1
+  fi
+  ref="${parts[0]} ${parts[1]}"
+  # Persist across command substitution; the parent invocation owns cleanup.
+  if ! (umask 077; printf '%s\n' "$ref" >> "$KIMDIR/progress.refs"); then
+    progress_call "$ref" close >/dev/null 2>&1 || true
+    progress_error "$(gettext 'Cannot register the progress dialog. Processing stopped.')"
+    return 1
+  fi
+  if [ "$rc" -ne 0 ] ||
+     ! progress_call "$ref" showCancelButton true >/dev/null 2>&1 ||
+     ! progress_call "$ref" org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog autoClose false >/dev/null 2>&1 ||
+     ! progress_call "$ref" org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value 0 >/dev/null 2>&1; then
+    progress_bus_failure "$ref" "$(gettext 'Cannot initialize the progress dialog. Processing stopped.')"
+    return 1
+  fi
+  printf '%s\n' "$ref"
+}
+
+# Stop-policy predicate, retaining all existing callers' boolean contract:
+# 1 = confirmed false (continue); 0 = true OR unconfirmable (stop).
+# A failed query checks ownership: confirmed disappearance stops quietly; a
+# present service, unknown ownership or malformed reply reports an error. None
+# of these failures proves user cancellation. K14 will
+# consolidate the separate action-local cancellation queries.
+progress_cancelled() {
+  local ref="$1" cancelled
+  if ! cancelled="$(progress_call "$ref" wasCancelled 2>/dev/null)"; then
+    progress_bus_failure "$ref" "$(gettext 'Cannot check progress cancellation. Processing stopped.')" || true
+    return 0
+  fi
+  case "$cancelled" in
+    true) return 0 ;;
+    false) return 1 ;;
+    *) progress_abort "$ref" "$(gettext 'Unexpected progress cancellation reply. Processing stopped.')" || true
+       return 0 ;;
+  esac
+}
+
+progress_begin_item() {
+  local ref="$1" text="$2"
+  if progress_cancelled "$ref"; then
+    progress_close "$ref" || true
+    return 1
+  fi
+  progress_label "$ref" "$text" || return 1
+}
+
 progress_label() {
-  local dbusRef="$1"
-  local text="$2"
-
-  [ -z "$dbusRef" ] && return 0
-
-  qdbus "$dbusRef" setLabelText "$text" >/dev/null 2>&1 || true  
+  local ref="$1" text="$2"
+  if ! progress_call "$ref" setLabelText "$text" >/dev/null 2>&1; then
+    progress_bus_failure "$ref" "$(gettext 'Cannot update the progress label. Processing stopped.')"
+    return 1
+  fi
 }
 
-# Update progress value.
 progress_value() {
-  local dbusRef="$1"
-  local value="$2"
-
-  [ -z "$dbusRef" ] && return 0
-
-  qdbus "$dbusRef" org.freedesktop.DBus.Properties.Set \
-    org.kde.kdialog.ProgressDialog value int32 "$value" \
-    >/dev/null 2>&1 || true
-}
-
-# Close the dialog (best-effort).
-progress_close() {
-  local dbusRef="$1"
-
-  [ -z "$dbusRef" ] && return 0
-
-  qdbus "$dbusRef" close >/dev/null 2>&1 || true
+  local ref="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "${#value}" -gt 10 ] || ((10#$value > 2147483647)); then
+    progress_abort "$ref" "$(gettext 'Cannot update the progress value. Processing stopped.')"
+    return 1
+  fi
+  if ! progress_call "$ref" org.freedesktop.DBus.Properties.Set \
+       org.kde.kdialog.ProgressDialog value "$((10#$value))" >/dev/null 2>&1; then
+    progress_bus_failure "$ref" "$(gettext 'Cannot update the progress value. Processing stopped.')"
+    return 1
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -747,8 +869,7 @@ action_compress() {
   local counter=0
   local f dir base stem ext
   local OUTFILE OUTTMP n rc actual input_info
-  local bus_service bus_object bus_extra cancelled
-  read -r bus_service bus_object bus_extra <<< "$dbusRef"
+  local interrupted
 
   for f in "${files[@]}"; do
     counter=$((counter + 1))
@@ -761,17 +882,13 @@ action_compress() {
     } < <(split_path "$f")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Compressing file: ')$base"; then
+      report_fail "$f"
       progress_close "$dbusRef"
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
 
-    # Conversion uses the same narrow workaround pending the K14 progress fix.
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$f"
       break
     fi
@@ -802,6 +919,10 @@ action_compress() {
       progress_value "$dbusRef" "$counter"
       continue
     fi
+    if progress_cancelled "$dbusRef"; then
+      report_fail "$f"
+      break
+    fi
     rc=0
     # Retain EXIF orientation and ICC interpretation without rotating pixels.
     # EXIF is a container: finer-grained EXIF removal remains a policy decision.
@@ -814,19 +935,16 @@ action_compress() {
     if [ "$rc" -eq 0 ]; then
       chmod --reference="$f" "$OUTTMP" || rc=$?
     fi
-    # Conversion uses the same narrow workaround pending the K14 progress fix.
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    [ "$cancelled" != true ] || rc=1
+    interrupted=false
+    if progress_cancelled "$dbusRef"; then interrupted=true; fi
+    [ "$interrupted" != true ] || rc=1
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
     else
       report_fail "$f"
     fi
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-    [ "$cancelled" != true ] || break
+    [ "$interrupted" != true ] || break
 
     progress_value "$dbusRef" "$counter"
   done
@@ -955,8 +1073,7 @@ action_convert() {
 
   local counter=0
   local i dir base stem ext OUTFILE OUTTMP publication_mode n rc actual expected frame
-  local bus_service bus_object bus_extra cancelled
-  read -r bus_service bus_object bus_extra <<< "$dbusRef"
+  local interrupted
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -969,18 +1086,13 @@ action_convert() {
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Converting file: ')$base"; then
+      report_fail "$i"
       progress_close "$dbusRef"
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
 
-    # The shared progress API still has a K14 argument-splitting defect.
-    # Keep this conversion-only check at the actual D-Bus interface.
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
     fi
@@ -1021,6 +1133,10 @@ action_convert() {
         progress_value "$dbusRef" "$counter"
         continue
       fi
+      if progress_cancelled "$dbusRef"; then
+        report_fail "$i"
+        break
+      fi
       rc=0
       magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
       # Decode every frame from bytes, without trusting the requested suffix.
@@ -1047,19 +1163,17 @@ action_convert() {
       if [ "$rc" -eq 0 ] && [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
         chmod --reference="$OUTFILE" "$OUTTMP" || rc=$?
       fi
-      cancelled=false
-      if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-        cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-      fi
-      [ "$cancelled" != true ] || rc=1
+      interrupted=false
+      if progress_cancelled "$dbusRef"; then interrupted=true; fi
+      [ "$interrupted" != true ] || rc=1
       if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$publication_mode"; then
         report_ok
       else
         report_fail "$i"
       fi
       rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+      [ "$interrupted" != true ] || break
       progress_value "$dbusRef" "$counter"
-      [ "$cancelled" != true ] || break
       continue
     }
   done
@@ -1788,8 +1902,7 @@ action_resize() {
   local i dir base stem ext OUTFILE OUTTMP n rc
   local source_info source_frame source_format source_frames produced_frames dimensions expected_dimensions
   local actual actual_dimensions frame format expected_format read_hint decoder_rc
-  local bus_service bus_object bus_extra cancelled
-  read -r bus_service bus_object bus_extra <<< "$dbusRef"
+  local interrupted
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -1802,17 +1915,13 @@ action_resize() {
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing file: ')$base"; then
+      report_fail "$i"
       progress_close "$dbusRef"
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
 
-    # Match the conversion/compression cancellation pattern; shared UI is K14.
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
     fi
@@ -1884,11 +1993,7 @@ action_resize() {
       GIF87) expected_format=GIF ;;
     esac
 
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
     fi
@@ -1935,19 +2040,16 @@ action_resize() {
     if [ "$rc" -eq 0 ]; then
       chmod --reference="$i" "$OUTTMP" || rc=$?
     fi
-    # Match the conversion/compression cancellation pattern; shared UI is K14.
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    [ "$cancelled" != true ] || rc=1
+    interrupted=false
+    if progress_cancelled "$dbusRef"; then interrupted=true; fi
+    [ "$interrupted" != true ] || rc=1
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
     else
       report_fail "$i"
     fi
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-    [ "$cancelled" != true ] || break
+    [ "$interrupted" != true ] || break
 
     progress_value "$dbusRef" "$counter"
   done
@@ -2241,9 +2343,8 @@ action_stripmeta() {
   [ "$mode" != cancel ] || return 1
 
   report_init
-  local dbusRef bus_service bus_object bus_extra cancelled
+  local dbusRef interrupted
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
-  read -r bus_service bus_object bus_extra <<< "$dbusRef"
   local counter=0 i dir base stem ext OUTFILE OUTTMP n rc source_info actual frame read_hint
   # Compare decoded pixels as well as encoding, dimensions, frame order/count,
   # orientation, colorspace, gamma, frame canvas and timing/disposal.
@@ -2265,15 +2366,13 @@ action_stripmeta() {
     } < <(split_path "$i")
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"; then
+      # Preserve stripmeta failure accounting when the shared check stops early.
+      report_fail "$i"
       progress_close "$dbusRef"
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
     fi
@@ -2314,11 +2413,7 @@ action_stripmeta() {
       progress_value "$dbusRef" "$counter"
       continue
     fi
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    if [ "$cancelled" = true ]; then
+    if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
     fi
@@ -2365,18 +2460,16 @@ action_stripmeta() {
         touch -r "$i" -- "$OUTTMP" || rc=$?
       fi
     fi
-    cancelled=false
-    if [ -n "$bus_service" ] && [ -n "$bus_object" ] && [ -z "$bus_extra" ]; then
-      cancelled="$(qdbus "$bus_service" "$bus_object" wasCancelled 2>/dev/null)" || cancelled=false
-    fi
-    [ "$cancelled" != true ] || rc=1
+    interrupted=false
+    if progress_cancelled "$dbusRef"; then interrupted=true; fi
+    [ "$interrupted" != true ] || rc=1
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
     else
       report_fail "$i"
     fi
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-    [ "$cancelled" != true ] || break
+    [ "$interrupted" != true ] || break
     progress_value "$dbusRef" "$counter"
   done
   progress_close "$dbusRef"
