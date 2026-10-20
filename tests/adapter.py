@@ -108,6 +108,8 @@ def main():
         return real_compression(plan["real_compression"], args)
     if tool == "magick" and "real_resize" in plan and response is None:
         return real_resize(plan["real_resize"], args)
+    if tool == "magick" and "real_transform" in plan and response is None:
+        return real_transform(plan["real_transform"], args)
     if tool == "exiftool" and "real_stripmeta" in plan and response is None:
         return real_stripmeta(plan["real_stripmeta"], args)
     if isinstance(response, list):
@@ -121,6 +123,8 @@ def main():
         if "interrupt" in response:
             interrupt_progress(response["interrupt"])
         response = None
+        if tool == "magick" and "real_transform" in plan:
+            return real_transform(plan["real_transform"], args)
     if tool == "mv" and "real_mv" in plan and response is None:
         if args in (["--help"], ["--version"]):
             return subprocess.call([plan["real_mv"], *args])
@@ -144,6 +148,8 @@ def main():
             output = args[args.index("-o") + 1] if tool == "exiftool" else args[-1]
             if tool == "magick":
                 output = output.removeprefix("JPEG:")
+                if "real_transform" in plan and ":" in output:
+                    output = output.split(":", 1)[1]
             path = owned(output)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(base64.b64decode(response["output_base64"], validate=True))
@@ -374,6 +380,23 @@ def real_resize(executable, args):
               "-limit", "memory", "768MiB", "-limit", "map", "0",
               "-limit", "disk", "0"]
     return subprocess.run([executable, *limits, *args], timeout=60,
+                          env=dict(os.environ, PATH=os.defpath)).returncode
+
+
+def real_transform(executable, args):
+    if (args[:1] != ["--"] or args[2] not in ("-rotate", "-auto-orient", "-flip", "-flop")
+            or args[-5:-1] != ["-format", "%w %h\\n", "-write", "info:"]):
+        raise ValueError("unsupported real transformation")
+    output = args[-1]
+    if ":" in output:
+        encoding, output = output.split(":", 1)
+        if not encoding.isalnum():
+            raise ValueError("invalid transformation encoder")
+    source, destination = owned(args[1]), owned(output)
+    if (source.stat().st_size > 65536 or destination.exists() or destination.is_symlink()
+            or not destination.parent.name.startswith('.kim6-stage.')):
+        raise ValueError("transformation requires small source and unused private stage")
+    return subprocess.run([executable, *args], timeout=15,
                           env=dict(os.environ, PATH=os.defpath)).returncode
 
 

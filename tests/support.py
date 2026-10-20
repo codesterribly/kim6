@@ -266,6 +266,17 @@ atomic_overwrite_file "$1" "$scratch"
         self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
         self.env["MAGICK_THREAD_LIMIT"] = "1"
 
+    def use_real_transform(self):
+        """Run rotation/reflection only on small owned fixtures and private stages."""
+        executable = shutil.which("magick")
+        if not executable:
+            raise unittest.SkipTest("ImageMagick unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_transform"] = executable
+        self.plan.write_text(json.dumps(plan))
+        self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
+        self.env["MAGICK_THREAD_LIMIT"] = "1"
+
     def use_real_magick(self):
         """Opt in to narrowly validated real PPM operations, never arbitrary CLI."""
         executable = shutil.which("magick")
