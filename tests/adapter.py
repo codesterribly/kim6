@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """External-command adapters. Never forward media or desktop calls by default.
 
-Unknown invocations fail closed. Scripted writes are confined to the owned root.
+Unknown invocations fail closed. Writes stay within registered, owned fixture roots.
 Filesystem adapters are deliberately narrow: extend them with tests when needed.
 """
 import json
@@ -25,9 +25,10 @@ def owned(value):
     path = Path(value)
     if not path.is_absolute():
         path = Path.cwd() / path
-    if not path.resolve().is_relative_to(ROOT):
+    roots = [ROOT, *(Path(p).resolve() for p in json.loads(os.environ.get('KIM_TEST_EXTRA_ROOTS', '[]')))]
+    if not any(path.resolve().is_relative_to(root) for root in roots):
         raise ValueError("adapter refused path outside test workspace")
-    if path.resolve() == ROOT:
+    if path.resolve() in roots:
         raise ValueError("adapter refused workspace root operation")
     return path
 
@@ -174,6 +175,32 @@ def main():
         sys.stdout.write(response.get("stdout", ""))
         sys.stderr.write(response.get("stderr", ""))
         return response.get("status", 0)
+    if tool in plan.get('real_rename_files', {}) and not (tool == 'rm' and '-rf' in args):
+        if tool == 'stat':
+            if len(args) != 4 or args[0] != '-c' or args[2] != '--':
+                raise ValueError('unsupported rename stat')
+            owned(args[-1])
+        else:
+            forms = {'cp': ['--preserve=mode,ownership,timestamps,xattr', '--'], 'ln': ['-T', '--'], 'cmp': ['-s', '--']}
+            if tool == 'rm':
+                values = args[2:] if args[:2] == ['-f', '--'] else args[1:] if args[:1] == ['--'] else []
+                if len(values) != 1:
+                    raise ValueError('unsupported rename removal')
+            else:
+                if args[:2] != forms[tool] or len(args) != 4:
+                    raise ValueError('unsupported rename filesystem command')
+                values = args[2:]
+            for value in values:
+                owned(value)
+            if tool == 'cp' and not Path(args[-1]).parent.name.startswith('.kim6-stage.'):
+                raise ValueError('rename copies require private staging')
+        return subprocess.run([plan['real_rename_files'][tool], *args], timeout=10).returncode
+    if tool == 'exiftool' and 'real_rename_exif' in plan:
+        if not (len(args) == 6 and args[0] == '-s3' and args[1] in
+                ('-DateTimeOriginal', '-CreateDate', '-ModifyDate') and args[2] == '-d' and args[4] == '--'):
+            raise ValueError('unsupported rename EXIF query')
+        owned(args[-1])
+        return subprocess.run([plan['real_rename_exif'], *args], timeout=10).returncode
     if tool in plan.get("real_metadata_tools", {}):
         if tool == "touch" and len(args) == 4 and args[0] == "-r" and args[2] == "--":
             owned(args[1]); owned(args[3])
@@ -269,12 +296,27 @@ def main():
         print("--no-copy --no-target-directory")
     elif tool == "mv" and args == ["--version"]:
         print("mv (modeled coreutils)")
+    elif tool == 'cmp':
+        if len(args) != 4 or args[:2] != ['-s', '--']:
+            raise ValueError('unsupported byte comparison')
+        for value in args[2:]:
+            owned(value)
+        return subprocess.call([shutil.which('cmp', path=os.defpath), *args])
     elif tool == "stat":
         if len(args) != 4 or args[:1] != ["-c"] or args[2] != "--":
             raise ValueError("unsupported stat invocation")
         info = owned(args[3]).lstat()
         formats = {"%d:%i": f"{info.st_dev}:{info.st_ino}", "%d": str(info.st_dev),
                    "%h": str(info.st_nlink)}
+        if args[1] == '%d:%i:%s:%y:%f:%u:%g':
+            print(f'{info.st_dev}:{info.st_ino}:{info.st_size}:{info.st_mtime_ns}:{info.st_mode}:{info.st_uid}:{info.st_gid}')
+            return 0
+        if args[1] == '%a:%u:%g:%y':
+            print(f'{info.st_mode & 0o7777}:{info.st_uid}:{info.st_gid}:{info.st_mtime_ns}')
+            return 0
+        if args[1] == '%x:%y':
+            print(f'{info.st_atime_ns}:{info.st_mtime_ns}')
+            return 0
         if args[1] not in formats:
             raise ValueError("unsupported stat format")
         print(formats[args[1]])
@@ -403,7 +445,7 @@ def real_transform(executable, args):
 def filesystem(tool, args):
     # Only forms used by the recovered dispatcher; reject unknown options.
     allowed = {"mkdir": {"-p", "--"}, "rm": {"-f", "-rf", "--"},
-               "cp": {"-f", "--"}, "mv": {"-f", "-fT", "--no-copy", "--"},
+               "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--"}, "mv": {"-f", "-fT", "--no-copy", "--"},
                "ln": {"-T", "--"},
                "touch": {"-r", "--"}, "chmod": set()}
     values = []
@@ -438,7 +480,7 @@ def filesystem(tool, args):
         if len(paths) != 2 or paths[1].is_dir():
             raise ValueError("only explicit single-file destinations are supported")
         if tool == "cp":
-            shutil.copyfile(*paths)
+            (shutil.copy2 if '-p' in args or '--preserve=mode,ownership,timestamps,xattr' in args else shutil.copyfile)(*paths)
         elif "--no-copy" in args:
             os.rename(*paths)
         else:

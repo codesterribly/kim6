@@ -1,7 +1,8 @@
 """Owned workspaces for dispatcher subprocess tests; Python standard library only.
 
 These helpers are for trusted tests of the current Bash dispatcher, not a kernel
-sandbox for hostile scripts. All test fixtures belong under Workspace.root.
+sandbox for hostile scripts. Fixtures belong under Workspace.root or explicitly
+registered temporary roots used for cross-filesystem tests.
 """
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -56,6 +57,7 @@ class EntryState:
 class Workspace:
     def __init__(self):
         self._temporary = tempfile.TemporaryDirectory(prefix="kim6-test-", dir="/tmp")
+        self._extra_temporaries = []
         self.root = Path(self._temporary.name).resolve()
         self.control = self.root / ".control"
         self.bin = self.control / "bin"
@@ -80,7 +82,7 @@ class Workspace:
             "convert", "mogrify", "montage", "identify", "exiftool", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
             "mktemp", "rm", "cp", "mv", "mkdir", "touch", "chmod", "dirname",
-            "basename", "cat", "date", "tr", "stat", "ln",
+            "basename", "cat", "date", "tr", "stat", "ln", "cmp",
         }
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)
@@ -100,12 +102,22 @@ class Workspace:
 
     def path(self, relative):
         path = self.root / relative
-        if not path.resolve().is_relative_to(self.root):
+        roots = [self.root, *(Path(t.name) for t in self._extra_temporaries)]
+        if not any(path.resolve().is_relative_to(root) for root in roots):
             raise ValueError("path escapes test workspace")
         return path
 
     def close(self):
+        for temporary in self._extra_temporaries:
+            temporary.cleanup()
         self._temporary.cleanup()
+
+    def add_filesystem_root(self, parent):
+        """Register another temporary fixture root for genuine EXDEV tests."""
+        temporary = tempfile.TemporaryDirectory(prefix='.kim6-test-', dir=parent)
+        self._extra_temporaries.append(temporary)
+        self.env['KIM_TEST_EXTRA_ROOTS'] = json.dumps([t.name for t in self._extra_temporaries])
+        return Path(temporary.name)
 
     def respond(self, tool, **response):
         """Script an external response: stdout/stderr/status and owned writes.
@@ -295,6 +307,17 @@ atomic_overwrite_file "$1" "$scratch"
         plan["real_mv"] = executable
         self.plan.write_text(json.dumps(plan))
 
+    def use_real_rename_files(self):
+        """Exercise installed copy/link/unlink/stat/compare on owned fixtures."""
+        plan = json.loads(self.plan.read_text())
+        plan['real_rename_files'] = {name: shutil.which(name) for name in ('cp', 'ln', 'rm', 'stat', 'cmp')}
+        if not all(plan['real_rename_files'].values()):
+            raise unittest.SkipTest('rename filesystem utilities unavailable')
+        plan['real_rename_exif'] = shutil.which('exiftool')
+        if not plan['real_rename_exif']:
+            raise unittest.SkipTest('ExifTool unavailable')
+        self.plan.write_text(json.dumps(plan))
+
     def _snapshot(self):
         return {
             str(path.relative_to(self.root)): path.read_bytes()
@@ -312,7 +335,8 @@ atomic_overwrite_file "$1" "$scratch"
         observed as an entry even if it points outside or no longer resolves.
         """
         path = Path(os.path.abspath(self.root / relative))
-        if not path.is_relative_to(self.root) or not path.parent.resolve().is_relative_to(self.root):
+        roots = [self.root, *(Path(t.name) for t in self._extra_temporaries)]
+        if not any(path.is_relative_to(root) and path.parent.resolve().is_relative_to(root) for root in roots):
             raise ValueError("observation escapes test workspace")
         try:
             info = path.lstat()
