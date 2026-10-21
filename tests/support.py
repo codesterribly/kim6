@@ -79,7 +79,7 @@ class Workspace:
         adapter.chmod(0o700)
         self.tools = {
             "kdialog", "qdbus", "qdbus6", "kreadconfig6", "gettext", "magick",
-            "convert", "mogrify", "montage", "identify", "exiftool", "ffmpeg",
+            "convert", "mogrify", "montage", "identify", "exiftool", "pdfinfo", "pdftoppm", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
             "mktemp", "rm", "cp", "mv", "mkdir", "touch", "chmod", "dirname",
             "basename", "cat", "date", "tr", "stat", "ln", "cmp",
@@ -297,6 +297,17 @@ atomic_overwrite_file "$1" "$scratch"
         plan = json.loads(self.plan.read_text())
         plan["real_magick"] = executable
         self.plan.write_text(json.dumps(plan))
+
+    def use_real_publication_tools(self):
+        """Run real PDF/TIFF/GIF producers and validators on tiny owned fixtures."""
+        tools = {name: shutil.which(name) for name in ('magick', 'identify', 'pdfinfo', 'pdftoppm')}
+        if not all(tools.values()):
+            raise unittest.SkipTest('real publication tools are unavailable')
+        plan = json.loads(self.plan.read_text())
+        plan['real_publication_tools'] = tools
+        self.plan.write_text(json.dumps(plan))
+        self.env['MAGICK_TEMPORARY_PATH'] = str(self.control / 'tmp')
+        self.env['MAGICK_THREAD_LIMIT'] = '1'
 
     def use_real_mv(self):
         """Exercise only installed rename-only forms on test-owned paths."""

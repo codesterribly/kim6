@@ -111,6 +111,8 @@ def main():
         return real_resize(plan["real_resize"], args)
     if tool == "magick" and "real_transform" in plan and response is None:
         return real_transform(plan["real_transform"], args)
+    if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
+        return real_publication_tool(plan["real_publication_tools"], tool, args)
     if tool == "exiftool" and "real_stripmeta" in plan and response is None:
         return real_stripmeta(plan["real_stripmeta"], args)
     if isinstance(response, list):
@@ -126,6 +128,8 @@ def main():
         response = None
         if tool == "magick" and "real_transform" in plan:
             return real_transform(plan["real_transform"], args)
+        if tool == "magick" and "real_publication_tools" in plan:
+            return real_publication_tool(plan["real_publication_tools"], tool, args)
     if tool == "mv" and "real_mv" in plan and response is None:
         if args in (["--help"], ["--version"]):
             return subprocess.call([plan["real_mv"], *args])
@@ -361,6 +365,70 @@ def real_magick(executable, args):
         raise ValueError("real magick accepts only the synthetic fixture")
     destination.parent.mkdir(parents=True, exist_ok=True)
     return subprocess.call([executable, str(source), *operation, "-depth", "8", str(destination)])
+
+
+def real_publication_tool(tools, tool, args):
+    executable = tools[tool]
+    if tool == 'magick':
+        if len(args) < 4 or args[-1].split('.')[-1].lower() not in ('pdf', 'tif', 'tiff', 'gif'):
+            raise ValueError('publication producer requires an approved derived format')
+        output = owned(args[-1])
+        if output.exists() or output.is_symlink() or not output.parent.name.startswith('.kim6-stage.'):
+            raise ValueError('publication producer requires a new private stage')
+        if args[0] == 'montage':
+            if (len(args) < 14 or args[1] != '-tile' or args[3] != '-geometry' or
+                    args[5] != '-page' or args[7:11] != ['-density', '72', '-background', 'white'] or
+                    args[11] != '--'):
+                raise ValueError('unsupported real montage invocation')
+            input_values = args[12:-1]
+            if not input_values:
+                raise ValueError('real montage requires input images')
+        elif args[0] == '--':
+            if len(args) >= 4 and args[-2] == '-adjoin':
+                input_values = args[1:-2]
+                if not input_values:
+                    raise ValueError('real TIFF join requires input images')
+            elif (len(args) >= 8 and args[-6:-4] == ['-set', 'delay'] and
+                  args[-4].isdigit() and args[-3] == '-loop' and args[-2].isdigit()):
+                input_values = args[1:-6]
+                if not input_values:
+                    raise ValueError('real GIF animation requires input images')
+            else:
+                raise ValueError('unsupported real publication command')
+        else:
+            raise ValueError('unsupported real publication command')
+        for value in input_values:
+            source = owned(value)
+            if not source.is_file() or source.stat().st_size > 65536 or source.suffix.lower() not in ('.ppm', '.png'):
+                raise ValueError('publication producer requires small owned image fixtures')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'identify':
+        if (len(args) == 5 and args[0] in ('-ping', '-regard-warnings') and
+                args[1] == '-format' and args[3] == '--'):
+            owned(args[4])
+        elif len(args) == 4 and args[:3] == ['-regard-warnings', '-verbose', '--']:
+            owned(args[3])
+        elif len(args) == 3 and args[0] == '-verbose' and args[1] == '--':
+            owned(args[2])
+        else:
+            raise ValueError('unsupported real publication identify query')
+        return subprocess.run([executable, *args], timeout=20,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'pdfinfo':
+        if len(args) != 1:
+            raise ValueError('pdfinfo accepts one owned PDF')
+        owned(args[0])
+        return subprocess.run([executable, *args], timeout=20, text=True,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'pdftoppm':
+        if len(args) != 9 or args[:6] != ['-f', args[1], '-l', args[3], '-scale-to', '32'] or args[6] != '-png':
+            raise ValueError('unsupported PDF validation render')
+        owned(args[7])
+        owned(args[8])
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    raise ValueError('unsupported real publication tool')
 
 
 def real_conversion(executable, args):

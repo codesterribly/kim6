@@ -682,7 +682,147 @@ progress_value() {
 # Actions
 # ---------------------------------------------------------------------------
 
-####################
+# Check and canonicalize one ordered image selection for a derived artifact.
+# Symlinked and hardlinked selected inputs are ambiguous and are refused.
+collect_publication_inputs() {
+  local -n result_ref="$1"
+  shift
+  local raw path parent identity
+  local -A seen=()
+  result_ref=()
+  for raw in "$@"; do
+    [[ "$raw" != *$'\n'* && "$raw" != *$'\r'* ]] || return 1
+    [[ "$raw" = /* ]] || raw="$PWD/$raw"
+    parent="$(cd -P -- "$(dirname -- "$raw")" && printf '%s/.' "$PWD")" || return 1
+    parent="${parent%/.}"
+    path="$parent/${raw##*/}"
+    [ ! -L "$path" ] && [ -f "$path" ] || return 1
+    [ "$(stat -c '%h' -- "$path")" = 1 ] || return 1
+    identity="$(stat -c '%d:%i' -- "$path")" || return 1
+    [[ -z "${seen[$identity]:-}" ]] || return 1
+    seen[$identity]=1
+    result_ref+=("$path")
+  done
+  [ "${#result_ref[@]}" -gt 0 ]
+}
+
+# Resolve one explicitly selected output and choose a no-clobber destination.
+# Existing targets are replaceable only with explicit overwrite policy, and
+# never if they alias a selected source or have multiple hard links.
+prepare_derived_target() {
+  local requested="$1" extension="$2" mode="$3"
+  shift 3
+  local parent base stem target numbered identity source
+  [[ "$requested" != *$'\n'* && "$requested" != *$'\r'* ]] || return 1
+  [[ "$requested" = /* ]] || requested="$PWD/$requested"
+  parent="$(cd -P -- "$(dirname -- "$requested")" && printf '%s/.' "$PWD")" || return 1
+  parent="${parent%/.}"
+  [[ "$parent" != *$'\n'* && "$parent" != *$'\r'* ]] || return 1
+  [ -d "$parent" ] && [ -w "$parent" ] && [ -x "$parent" ] || return 1
+  base="${requested##*/}"
+  [ -n "$base" ] && [ "$base" != . ] && [ "$base" != .. ] || return 1
+  case "${base,,}" in *."$extension") ;; *) base="$base.$extension" ;; esac
+  target="$parent/$base"
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    identity="$(stat -c '%d:%i' -- "$target" 2>/dev/null || true)"
+    for source in "$@"; do
+      [ -n "$identity" ] || continue
+      [ "$(stat -c '%d:%i' -- "$source" 2>/dev/null || true)" != "$identity" ] || return 1
+    done
+    if [ "$mode" = overwrite ]; then
+      [ ! -L "$target" ] && [ -f "$target" ] && [ "$(stat -c '%h' -- "$target")" = 1 ] || return 1
+      DERIVED_TARGET="$target"
+      DERIVED_MODE=overwrite
+      return 0
+    fi
+    stem="${base%.*}"
+    numbered=1
+    while [ -e "$target" ] || [ -L "$target" ]; do
+      target="$parent/${stem}_${numbered}.${extension}"
+      numbered=$((numbered + 1))
+    done
+  fi
+  DERIVED_TARGET="$target"
+  DERIVED_MODE=create
+}
+
+publication_fail() {
+  local ref="$1" tmp="$2" message="$3"
+  [ -z "$tmp" ] || rm -f -- "$tmp" || true
+  [ -z "$ref" ] || progress_close "$ref" || true
+  kdialog --title "$(gettext 'Kim')" --error "$message" || true
+  return 1
+}
+
+# Full image decoding and image-header inspection without a second resize.
+publication_image_records() {
+  identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$1"
+}
+
+publication_input_frames() {
+  local file="$1" records count=0 record format width height scenes
+  records="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || return 1
+  while IFS= read -r record; do
+    IFS='|' read -r format width height scenes <<< "$record"
+    [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ &&
+       "$height" =~ ^[1-9][0-9]*$ && "$scenes" =~ ^[1-9][0-9]*$ ]] || return 1
+    count=$((count + 1))
+  done <<< "$records"
+  [ "$count" -gt 0 ] || return 1
+  printf '%s\n' "$count"
+}
+
+# Validate PDF page count, format and page geometry after a complete decoder
+# pass at ImageMagick's normal 72-DPI PDF resolution.
+validate_publication_pdf() {
+  local file="$1" expected_pages="$2" expected_width="$3" expected_height="$4"
+  local records record format width height pages=0
+  records="$(publication_image_records "$file" 2>/dev/null)" || return 1
+  while IFS= read -r record; do
+    IFS='|' read -r format width height _ <<< "$record"
+    [ "$format" = PDF ] && [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || return 1
+    [ "$width" = "$expected_width" ] && [ "$height" = "$expected_height" ] || return 1
+    pages=$((pages + 1))
+  done <<< "$records"
+  [ "$pages" -eq "$expected_pages" ] && [ -s "$file" ]
+}
+
+# One verbose decode provides GIF frame geometry, delay and loop metadata.
+validate_publication_gif() {
+  local file="$1" expected_delay="$2" expected_loops="$3" expected_name="$4" expected_frames="$5"
+  local -n expected_ref="$expected_name"
+  local verbose detail format='' geometry='' frame_delay=0 iterations='' index=0 expected_width expected_height width height
+  verbose="$(identify -regard-warnings -verbose -- "$file" 2>/dev/null)" || return 1
+  while IFS= read -r detail; do
+    case "$detail" in
+      'Image:'*)
+        if [ "$index" -gt 0 ]; then
+          [[ "$format" = GIF && "$geometry" =~ ^[1-9][0-9]*x[1-9][0-9]* ]] || return 1
+          IFS='x' read -r width height <<< "${geometry%%+*}"
+          IFS='|' read -r expected_width expected_height <<< "${expected_ref[$((index - 1))]:-}"
+          [ "$width" = "$expected_width" ] && [ "$height" = "$expected_height" ] && [ "$frame_delay" = "$expected_delay" ] || return 1
+          if [ -n "$iterations" ]; then [ "$iterations" = "$expected_loops" ] || return 1
+          elif [ "$expected_loops" -ne 1 ]; then return 1
+          fi
+        fi
+        index=$((index + 1)); format=''; geometry=''; frame_delay=0; iterations=''
+        ;;
+      '  Format: '*) format="${detail#*: }"; format="${format%% *}" ;;
+      '  Geometry: '*) geometry="${detail#*: }" ;;
+      '  Delay: '*) frame_delay="${detail#*: }"; frame_delay="${frame_delay%%x*}" ;;
+      '  Iterations: '*) iterations="${detail#*: }"; iterations="${iterations//[[:space:]]/}" ;;
+    esac
+  done <<< "$verbose"
+  [ "$index" -eq "$expected_frames" ] || return 1
+  [[ "$format" = GIF && "$geometry" =~ ^[1-9][0-9]*x[1-9][0-9]* ]] || return 1
+  IFS='x' read -r width height <<< "${geometry%%+*}"
+  IFS='|' read -r expected_width expected_height <<< "${expected_ref[$((index - 1))]:-}"
+  [ "$width" = "$expected_width" ] && [ "$height" = "$expected_height" ] && [ "$frame_delay" = "$expected_delay" ] || return 1
+  if [ -n "$iterations" ]; then [ "$iterations" = "$expected_loops" ]
+  else [ "$expected_loops" -eq 1 ]
+  fi
+}
+
 # Build a photo album PDF from selected images using ImageMagick montage.
 #
 # Usage: album <dir> <files...>
@@ -690,123 +830,75 @@ progress_value() {
 # Behavior:
 # - Prompts for an album layout (tile/page geometry presets).
 # - Asks where to save the output PDF (save dialog starts in <dir>).
-# - Generates temporary miniatures in $KIMDIR, then assembles the final PDF.
-# - Uses a progress dialog (2 steps: miniatures, album build).
-# - If no valid files are selected, exits quietly (returns 0).
+# - Uses destination-local staging and validates every generated PDF page.
 #
 # Notes:
 # - Expects montage to be available.
 # - Output is a single PDF at the user-selected path.
 
 action_album() {
-  local dir nb outpdf dbusRef
-  local page tile geom mini
-
-  # Called from a Dolphin service menu.
-  # First argument is the working directory for the save dialog.
+  local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
+  local file frame_count
+  local -a files=()
   dir="${1:-}"
   shift || true
-
-  # Dolphin can pass directories or non-files.
-  # Only proceed if we have at least one real file.
-  [ "$(count_valid_files "$@")" -le 0 ] && return 0
-
-  # User picks the album layout.
-  # The selected numeric value (1-8) maps to the preset below.
+  if ! collect_publication_inputs files "$@"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: select regular, unambiguous image files.')"
+    return 1
+  fi
+  case "$dir" in
+    ''|--*) dir="${files[0]%/*}" ;;
+  esac
+  [ -d "$dir" ] || dir="${files[0]%/*}"
   nb="$(kdialog --radiolist "$(gettext 'Kim - Select album type:')" \
-    1 "$(gettext '1x1 portrait album')"  off \
+    1 "$(gettext '1x1 portrait album')" off \
     2 "$(gettext '1x1 landscape album')" off \
     3 "$(gettext '1x2 landscape album')" off \
-    4 "$(gettext '2x1 portrait album')"  off \
-    5 "$(gettext '2x2 landscape album')" on  \
-    6 "$(gettext '3x2 portrait album')"  off \
+    4 "$(gettext '2x1 portrait album')" off \
+    5 "$(gettext '2x2 landscape album')" on \
+    6 "$(gettext '3x2 portrait album')" off \
     7 "$(gettext '3x4 landscape album')" off \
-    8 "$(gettext '4x4 landscape album')" off)"
-
-  # User cancelled the layout dialog.
-  if [ -z "$nb" ]; then
-    kdialog --title "$(gettext 'Kim')" \
-      --msgbox "$(gettext 'The action was cancelled by the user!')"
-    return 1
-  fi
-
-  # Normalize the starting directory for the save dialog.
-  if [ -z "$dir" ] || [ ! -d "$dir" ]; then
-    dir="$PWD"
-  fi
-
-  # Where to save the PDF.
-  outpdf="$(kdialog --getsavefilename "$dir" "*.pdf")"
-  if [ -z "$outpdf" ]; then
-    return 0
-  fi
-
-  # Select the montage preset based on the chosen album type.
-  # Meanings:
-  # - tile: how many images per page (columns x rows)
-  # - geom: per-tile geometry plus padding
-  # - page: output page size (portrait vs landscape)
+    8 "$(gettext '4x4 landscape album')" off)" || return 1
   case "$nb" in
-    1) tile="1x1"; geom="600x800+5+5"; page="595x842" ;;  # portrait
-    2) tile="1x1"; geom="800x600+5+5"; page="842x595" ;;  # landscape
-    3) tile="1x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    4) tile="2x1"; geom="480x640+5+5"; page="595x842" ;;  # portrait
-    5) tile="2x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    6) tile="3x2"; geom="480x640+5+5"; page="595x842" ;;  # portrait
-    7) tile="3x4"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    8) tile="4x4"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    *)
-      kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Unrecognized option! ')"
-      return 1
-      ;;
+    1) tile=1x1; geometry=575x820+5+5; page=595x842; width=595; height=842 ;;
+    2) tile=1x1; geometry=820x575+5+5; page=842x595; width=842; height=595 ;;
+    3) tile=1x2; geometry=380x285+5+5; page=842x595; width=842; height=595 ;;
+    4) tile=2x1; geometry=285x427+5+5; page=595x842; width=595; height=842 ;;
+    5) tile=2x2; geometry=410x280+5+5; page=842x595; width=842; height=595 ;;
+    6) tile=3x2; geometry=185x277+5+5; page=595x842; width=595; height=842 ;;
+    7) tile=3x4; geometry=270x135+5+5; page=842x595; width=842; height=595 ;;
+    8) tile=4x4; geometry=200x135+5+5; page=842x595; width=842; height=595 ;;
+    *) return 1 ;;
   esac
-
-  # Two-step progress: (1) montage image, (2) PDF output + cleanup.
-  dbusRef="$(progress_open 2 "$(gettext 'Kim - Creating miniatures ...')")"
-
-  if progress_cancelled "$dbusRef"; then
-    progress_close "$dbusRef"
+  capacity=$(( ${tile%x*} * ${tile#*x} ))
+  frames=0
+  for file in "${files[@]}"; do
+    frame_count="$(publication_input_frames "$file")" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: an input image could not be inspected.')"; return 1; }
+    frames=$((frames + frame_count))
+  done
+  expected_pages=$(( (frames + capacity - 1) / capacity ))
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new PDF?')")"
+  [ "$mode" != cancel ] || return 1
+  outpdf="$(kdialog --getsavefilename "$dir" "album.pdf")" || return 1
+  [ -n "$outpdf" ] || return 1
+  prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: invalid or unsafe output destination.')"
     return 1
-  fi
-
-  # Step 1: build a single montage image in the temp directory.
-  mini="$KIMDIR/miniature.jpg"
-  montage -tile "$tile" -geometry "$geom" -page "$page" -- "$@" "$mini" >/dev/null 2>&1 || true
-
-  # Validate that montage actually produced something usable.
-  if [ ! -s "$mini" ]; then
-    progress_close "$dbusRef"
-    kdialog --title "$(gettext 'Kim')" --error \
-      "$(gettext 'Kim - Failed to create the album montage. Please check that ImageMagick montage is installed and the selected files are valid images.')"
-    return 1
-  fi
-
-  progress_label "$dbusRef" "$(gettext 'Kim - Creating album ...')"
-  progress_value "$dbusRef" 1
-
-  if progress_cancelled "$dbusRef"; then
-    progress_close "$dbusRef"
-    return 1
-  fi
-
-  # Step 2: convert the montage image into the final PDF.
-  # Using magick here avoids the fragile miniature*.jpg glob and a second montage pass.
-  magick -- "$mini" "$outpdf" >/dev/null 2>&1 || true
-
-  if [ ! -s "$outpdf" ]; then
-    progress_close "$dbusRef"
-    kdialog --title "$(gettext 'Kim')" --error \
-      "$(gettext 'Kim - Failed to write the output PDF. Please verify the destination path and permissions.')"
-    return 1
-  fi
-
-  # Cleanup temp output (mk_workdir also removes $KIMDIR on exit).
-  progress_label "$dbusRef" "$(gettext 'Kim - Deleting miniatures ...')"
-  progress_value "$dbusRef" 2
-  rm -f -- "$mini" >/dev/null 2>&1 || true
-
-  progress_close "$dbusRef"
-  true
+  }
+  outpdf="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
+  ref="$(progress_open 2 "$(gettext 'Kim - Creating album ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$outpdf")" || { publication_fail "$ref" '' "$(gettext 'Album: cannot create destination-local staging.')"; return 1; }
+  if ! magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
+      -background white -- "${files[@]}" "$tmp" >/dev/null 2>&1; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then rc=1; fi
+  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Album: ImageMagick failed or produced an invalid PDF.')"; return 1; fi
+  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Album: publication interrupted; no output was written.')"; return 1; fi
+  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF publication failed; existing files were preserved.')"; return 1; fi
+  progress_value "$ref" 2
+  progress_close "$ref"
+  return 0
 }
 
 
@@ -1447,104 +1539,204 @@ EOF
 }
 
 ####################
-# Create a printable PDF contact sheet / layout from selected images.
-#
-# Usage: print <dir> <files...>
-#
-# Behavior:
-# - Prompts for a print layout preset.
-# - Prompts for output PDF path (save dialog starts in <dir> if valid).
-# - Uses a progress dialog and supports Cancel.
-# - Writes temporary miniatures into $KIMDIR and cleans them up automatically.
-#
-# Notes:
-# - Uses ImageMagick `magick` and `montage`.
+# Build a validated, destination-local print-layout PDF from selected images.
 
 action_print() {
-  local dir nbfiles outpdf dbusRef
-  local nb tile geom page mini
-
+  local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
+  local file frame_count
+  local -a files=()
   dir="${1:-}"
   shift || true
-
-  nbfiles="$(count_valid_files "$@")"
-  [ "$nbfiles" -le 0 ] && return 0
-
+  if ! collect_publication_inputs files "$@"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
+    return 1
+  fi
+  case "$dir" in ''|--*) dir="${files[0]%/*}" ;; esac
+  [ -d "$dir" ] || dir="${files[0]%/*}"
   nb="$(kdialog --radiolist "$(gettext 'Kim - Select print layout:')" \
-    1 "$(gettext '9x13 cm: 2x2 images, landscape')"  off \
-    2 "$(gettext '10x15 cm: 1x2 images, portrait')"  off \
-    3 "$(gettext '11.5x15 cm: 1x2 images, portrait')" on  \
-    4 "$(gettext '13x18 cm: 1x2 images, portrait')"  off \
-    5 "$(gettext '20x25 cm: 1 image, landscape')"    off \
-    6 "$(gettext '3x2 portrait album')"              off \
-    7 "$(gettext 'Thumbnails: 4x5 images, portrait')" off)"
-
-  if [ -z "$nb" ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
-    return 1
-  fi
-
-  if [ -z "$dir" ] || [ ! -d "$dir" ]; then
-    dir="$PWD"
-  fi
-
-  outpdf="$(kdialog --getsavefilename "$dir" "*.pdf")"
-  [ -z "$outpdf" ] && return 0
-
+    1 "$(gettext '9x13 cm: 2x2 images, landscape')" off \
+    2 "$(gettext '10x15 cm: 1x2 images, portrait')" off \
+    3 "$(gettext '11.5x15 cm: 1x2 images, portrait')" on \
+    4 "$(gettext '13x18 cm: 1x2 images, portrait')" off \
+    5 "$(gettext '20x25 cm: 1 image, landscape')" off \
+    6 "$(gettext '3x2 portrait album')" off \
+    7 "$(gettext 'Thumbnails: 4x5 images, portrait')" off)" || return 1
   case "$nb" in
-    1) tile="2x2"; geom="600x800+5+5"; page="595x842" ;;  # portrait
-    2) tile="1x2"; geom="800x600+5+5"; page="595x842" ;;  # portrait
-    3) tile="1x2"; geom="640x480+5+5"; page="595x842" ;;  # portrait
-    4) tile="1x2"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    5) tile="2x2"; geom="640x480+5+5"; page="595x842" ;;  # portrait
-    6) tile="2x3"; geom="640x480+5+5"; page="842x595" ;;  # landscape
-    7) tile="4x5"; geom="640x480+5+5"; page="595x842" ;;  # portrait
-    *)
-      kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Unrecognized option! ')"
-      return 1
-      ;;
+    1) tile=2x2; geometry=368x255+5+5; page=842x595; width=842; height=595 ;;
+    # Preserve the labelled 15 cm image height; two copies need A3 portrait.
+    2) tile=1x2; geometry=283x425+5+5; page=842x1191; width=842; height=1191 ;;
+    3) tile=1x2; geometry=326x425+5+5; page=842x1191; width=842; height=1191 ;;
+    4) tile=1x2; geometry=369x510+5+5; page=842x1191; width=842; height=1191 ;;
+    5) tile=1x1; geometry=709x567+5+5; page=842x595; width=842; height=595 ;;
+    6) tile=3x2; geometry=160x300+5+5; page=595x842; width=595; height=842 ;;
+    7) tile=4x5; geometry=110x150+5+5; page=595x842; width=595; height=842 ;;
+    *) return 1 ;;
   esac
+  capacity=$(( ${tile%x*} * ${tile#*x} ))
+  frames=0
+  for file in "${files[@]}"; do
+    frame_count="$(publication_input_frames "$file")" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: an input image could not be inspected.')"; return 1; }
+    frames=$((frames + frame_count))
+  done
+  expected_pages=$(( (frames + capacity - 1) / capacity ))
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new print PDF?')")"
+  [ "$mode" != cancel ] || return 1
+  outpdf="$(kdialog --getsavefilename "$dir" "print.pdf")" || return 1
+  [ -n "$outpdf" ] || return 1
+  prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
+    return 1
+  }
+  outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+  ref="$(progress_open 2 "$(gettext 'Kim - Creating print layout ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$outpdf")" || { publication_fail "$ref" '' "$(gettext 'Print: cannot create destination-local staging.')"; return 1; }
+  if ! magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
+      -background white -- "${files[@]}" "$tmp" >/dev/null 2>&1; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then rc=1; fi
+  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Print: ImageMagick failed or produced an invalid PDF.')"; return 1; fi
+  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Print: publication interrupted; no output was written.')"; return 1; fi
+  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Print: PDF publication failed; existing files were preserved.')"; return 1; fi
+  progress_value "$ref" 2
+  progress_close "$ref"
+  return 0
+}
 
-  dbusRef="$(progress_open 2 "$(gettext 'Kim - Creating miniatures ...')")"
 
-  if progress_cancelled "$dbusRef"; then
-    progress_close "$dbusRef"
+# Join selected image frames into one ordered multi-page TIFF file.
+action_tiffjoin() {
+  local requested='' file dir mode output ref tmp='' info record format width height scenes rc=0 frames=0
+  local index=0 expected_width expected_height
+  local -a files=() source_geometry=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --output) [ "$#" -ge 2 ] || return 1; requested="$2"; shift 2 ;;
+      --) shift; break ;;
+      *) break ;;
+    esac
+  done
+  collect_publication_inputs files "$@" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
+  dir="${files[0]%/*}"
+  for file in "${files[@]}"; do
+    info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || {
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: an input image could not be decoded.')"
+      return 1
+    }
+    while IFS= read -r record; do
+      IFS='|' read -r format width height scenes <<< "$record"
+      [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || {
+        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: an input frame has invalid dimensions or format.')"
+        return 1
+      }
+      source_geometry+=("$width|$height")
+      frames=$((frames + 1))
+    done <<< "$info"
+  done
+  [ "$frames" -gt 0 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"; return 1; }
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new joined TIFF?')")"
+  [ "$mode" != cancel ] || return 1
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "$dir" "my_images.tiff")" || return 1
+  fi
+  [ -n "$requested" ] || return 1
+  local extension=tiff
+  [[ "${requested,,}" == *.tif ]] && extension=tif
+  prepare_derived_target "$requested" "$extension" "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
+    return 1
+  }
+  output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+  ref="$(progress_open 2 "$(gettext 'Kim - Joining TIFF images ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'TIFF join: cannot create destination-local staging.')"; return 1; }
+  if ! magick -- "${files[@]}" -adjoin "$tmp" >/dev/null 2>&1; then rc=1; fi
+  if [ "$rc" -eq 0 ]; then
+    info="$(publication_image_records "$tmp" 2>/dev/null)" || rc=1
+    if [ "$rc" -eq 0 ]; then
+      while IFS= read -r record; do
+        IFS='|' read -r format width height _ <<< "$record"
+        IFS='|' read -r expected_width expected_height <<< "${source_geometry[$index]:-}"
+        [[ "$format" =~ ^(TIFF|TIF)$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ &&
+           "$width" = "$expected_width" && "$height" = "$expected_height" ]] || { rc=1; break; }
+        index=$((index + 1))
+      done <<< "$info"
+      [ "$index" -eq "$frames" ] || rc=1
+    fi
+  fi
+  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: ImageMagick failed or produced an invalid TIFF.')"; return 1; fi
+  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication interrupted; no output was written.')"; return 1; fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication failed; existing files were preserved.')"; return 1; fi
+  progress_value "$ref" 2
+  progress_close "$ref"
+}
+
+# Create an ordered animated GIF. Delay is in centiseconds and loop count zero
+# repeats forever, matching the historical service-menu command.
+action_animate() {
+  local requested='' delay='' loops='' file dir mode output ref tmp='' info record format width height scenes
+  local rc=0 frames=0
+  local -a files=() source_geometry=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --output) [ "$#" -ge 2 ] || return 1; requested="$2"; shift 2 ;;
+      --delay) [ "$#" -ge 2 ] || return 1; delay="$2"; shift 2 ;;
+      --loop) [ "$#" -ge 2 ] || return 1; loops="$2"; shift 2 ;;
+      --) shift; break ;;
+      *) break ;;
+    esac
+  done
+  collect_publication_inputs files "$@" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: select regular, unambiguous image files.')"; return 1; }
+  dir="${files[0]%/*}"
+  if [ -z "$delay" ]; then
+    delay="$(kdialog --inputbox "$(gettext 'Delay between images in centiseconds (100 is one second):')" "${KIM_GIF_DELAY:-100}")" || return 1
+  fi
+  if ! [[ "$delay" =~ ^[0-9]{1,5}$ ]] || ((10#$delay > 65535)); then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: delay must be an integer from 0 to 65535 centiseconds.')"
     return 1
   fi
-
-  mini="$KIMDIR/miniature.jpg"
-  montage -tile "$tile" -geometry "$geom" -page "$page" -- "$@" "$mini" >/dev/null 2>&1 || true
-
-  if [ ! -s "$mini" ]; then
-    progress_close "$dbusRef"
-    kdialog --title "$(gettext 'Kim')" --error \
-      "$(gettext 'Kim - Failed to create the print montage. Please check that ImageMagick montage is installed and the selected files are valid images.')"
+  delay=$((10#$delay))
+  if [ -z "$loops" ]; then
+    loops="$(kdialog --inputbox "$(gettext 'Animation loop count (0 means infinite):')" 0)" || return 1
+  fi
+  if ! [[ "$loops" =~ ^[0-9]{1,5}$ ]] || ((10#$loops > 65535)); then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: loop count must be an integer from 0 to 65535.')"
     return 1
   fi
-
-  progress_label "$dbusRef" "$(gettext 'Kim - Creating PDF ...')"
-  progress_value "$dbusRef" 1
-
-  if progress_cancelled "$dbusRef"; then
-    progress_close "$dbusRef"
-    return 1
+  loops=$((10#$loops))
+  for file in "${files[@]}"; do
+    info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || {
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: an input image could not be decoded.')"
+      return 1
+    }
+    while IFS= read -r record; do
+      IFS='|' read -r format width height scenes <<< "$record"
+      [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || {
+        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: an input frame has invalid dimensions or format.')"
+        return 1
+      }
+      source_geometry+=("$width|$height")
+      frames=$((frames + 1))
+    done <<< "$info"
+  done
+  [ "$frames" -gt 0 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"; return 1; }
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new GIF animation?')")"
+  [ "$mode" != cancel ] || return 1
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "$dir" "my_animation.gif")" || return 1
   fi
-
-  magick -- "$mini" "$outpdf" >/dev/null 2>&1 || true
-
-  if [ ! -s "$outpdf" ]; then
-    progress_close "$dbusRef"
-    kdialog --title "$(gettext 'Kim')" --error \
-      "$(gettext 'Kim - Failed to write the output PDF. Please verify the destination path and permissions.')"
-    return 1
-  fi
-
-  progress_label "$dbusRef" "$(gettext 'Kim - Deleting miniatures ...')"
-  progress_value "$dbusRef" 2
-  rm -f -- "$mini" >/dev/null 2>&1 || true
-
-  progress_close "$dbusRef"
-  true
+  [ -n "$requested" ] || return 1
+  prepare_derived_target "$requested" gif "$mode" "${files[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: invalid or unsafe output destination.')"; return 1; }
+  output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+  ref="$(progress_open 2 "$(gettext 'Kim - Creating animation ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'Animation: cannot create destination-local staging.')"; return 1; }
+  if ! magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp" >/dev/null 2>&1; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames"; then rc=1; fi
+  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: ImageMagick failed or produced an invalid GIF.')"; return 1; fi
+  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication interrupted; no output was written.')"; return 1; fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication failed; existing files were preserved.')"; return 1; fi
+  progress_value "$ref" 2
+  progress_close "$ref"
 }
 
 
@@ -2717,7 +2909,8 @@ Usage: $PROG <command> [arguments...]
 Commands:
 
   album <dir> <files...>
-      Build a PDF photo album from selected images.
+      Build a validated multi-page PDF from selected images on A4 pages.
+      Offers eight portrait/landscape album layouts.
 
   compress <quality> <dir> <files...>
       Compress images to the given quality (1-100).
@@ -2749,7 +2942,17 @@ Commands:
       Not implemented yet.
 
   print <dir> <files...>
-      Create a printable PDF layout or contact sheet.
+      Create a validated multi-page print PDF with seven layouts.
+      Uses A3 portrait pages for the 10x15, 11.5x15 and 13x18 cm presets;
+      other presets use A4 pages.
+
+  tiffjoin [--output PATH] [--] <files...>
+      Join selected image frames in order into a TIFF file.
+      Supports destination selection and safe create/overwrite policy.
+
+  animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] [--] <files...>
+      Create an ordered animated GIF. Loop count 0 repeats forever.
+      Delay defaults to 100 centiseconds (one second); loop defaults to 0.
 
   rename <mode> <files...>
       Rename images using filename rules.
@@ -2816,6 +3019,7 @@ main() {
 
   case "$cmd" in
     album)           mk_workdir; action_album "$@" ;;
+    animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
@@ -2831,6 +3035,7 @@ main() {
     rotatewithexif)  mk_workdir; action_rotatewithexif "$@" ;;
     sortbydate)      mk_workdir; action_sortbydate "$@" ;;
     stripmeta)       mk_workdir; action_stripmeta "$@" ;;
+    tiffjoin)        mk_workdir; action_tiffjoin "$@" ;;
     treatment)       mk_workdir; action_treatment "$@" ;;
     video)           mk_workdir; action_video "$@" ;;
     webexport)       mk_workdir; action_webexport "$@" ;;
