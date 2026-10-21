@@ -82,7 +82,7 @@ class Workspace:
             "convert", "mogrify", "montage", "identify", "exiftool", "pdfinfo", "pdftoppm", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
             "mktemp", "rm", "cp", "mv", "mkdir", "mkfifo", "touch", "chmod", "dirname", "awk",
-            "basename", "cat", "date", "tr", "stat", "ln", "cmp", "sleep",
+            "basename", "cat", "date", "tr", "stat", "ln", "cmp", "sleep", "head", "grep", "cut", "od",
         }
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)

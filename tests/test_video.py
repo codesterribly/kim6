@@ -182,6 +182,55 @@ class VideoTests(unittest.TestCase):
         self.assertTrue(numbered.is_file())
         self.assertEqual(self.w.observe(self.source), source_before)
 
+    def test_av1_real_encode_uses_supported_encoder_and_validates_result(self):
+        encoders = subprocess.run([self.ffmpeg, "-hide_banner", "-encoders"],
+                                  capture_output=True, text=True, check=True).stdout
+        encoder = "libsvtav1" if "libsvtav1" in encoders else "libaom-av1" if "libaom-av1" in encoders else ""
+        if not encoder:
+            self.skipTest("FFmpeg has neither supported software AV1 encoder")
+        before = self.w.observe(self.source)
+        result = self.w.dispatch("video", "--size", "hd720", "--codec", "av1",
+                                 "--av1-quality", "high", "--container", "mp4", "--", self.source)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output = self.source.with_name("short clip-transcoded.mp4")
+        details = self.probe_text(output)
+        self.assertIn("codec_name=av1", details)
+        self.assertIn("width=64", details)
+        self.assertIn("height=48", details)
+        self.assertEqual(self.w.observe(self.source), before)
+        self.assertIn("codec_type=audio", details)
+        args = self.ffmpeg_calls(result)[0]
+        self.assertEqual(args[args.index("-c:v") + 1], encoder)
+        self.assertEqual(args[args.index("-crf") + 1], "28")
+
+    def test_av1_balanced_preset_uses_its_own_quality_and_missing_encoder_fails_closed(self):
+        self.plan_update(video_fail_encoding=True)
+        result = self.w.dispatch("video", "--size", "hd1080", "--codec", "av1",
+                                 "--av1-quality", "balanced", "--container", "mp4", "--", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        args = self.ffmpeg_calls(result)[0]
+        self.assertEqual(args[args.index("-crf") + 1], "35")
+        self.plan_update(video_fail_encoding=False)
+        self.w.respond("ffmpeg", stdout=" V..... libx264 H.264 encoder\n")
+        rejected = self.w.dispatch("video", "--size", "hd720", "--codec", "av1",
+                                   "--av1-quality", "high", "--container", "mp4", "--", self.source)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertEqual(self.ffmpeg_calls(rejected), [])
+        self.assertFalse(self.source.with_name("short clip-transcoded_1.mp4").exists())
+
+    def test_av1_falls_back_to_libaom_only_when_svt_is_not_advertised(self):
+        self.w.sequence("ffmpeg", [
+            {"stdout": " V..... libaom-av1 AV1 encoder\n"},
+            {"status": 19, "stderr": "injected producer failure\n"},
+        ])
+        result = self.w.dispatch("video", "--size", "hd720", "--codec", "av1",
+                                 "--av1-quality", "balanced", "--container", "mp4", "--", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        args = self.ffmpeg_calls(result)[0]
+        self.assertEqual(args[args.index("-c:v") + 1], "libaom-av1")
+        self.assertEqual(args[args.index("-crf") + 1], "35")
+        self.assertIn("-cpu-used", args)
+
     def test_destination_created_during_transcode_survives_and_uses_next_collision_number(self):
         self.plan_update(video_create_collision=True)
         source_before = self.w.observe(self.source)

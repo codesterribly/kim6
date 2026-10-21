@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
-Actions=Videohd72017265orig;Videohd72017265mp4;Videohd72017264orig;Videohd72017264mp4;Videohd72023265orig;Videohd72023265mp4;Videohd72023264orig;Videohd72023264mp4;Videohd72029265orig;Videohd72029265mp4;Videohd72029264orig;Videohd72029264mp4;Videohd108017265orig;Videohd108017265mp4;Videohd108017264orig;Videohd108017264mp4;Videohd108023265orig;Videohd108023265mp4;Videohd108023264orig;Videohd108023264mp4;Videohd108029265orig;Videohd108029265mp4;Videohd108029264orig;Videohd108029264mp4;Manual;License;About;
+Actions=Videohd72017265orig;Videohd72017265mp4;Videohd72017264orig;Videohd72017264mp4;Videohd72023265orig;Videohd72023265mp4;Videohd72023264orig;Videohd72023264mp4;Videohd72029265orig;Videohd72029265mp4;Videohd72029264orig;Videohd72029264mp4;Videohd108017265orig;Videohd108017265mp4;Videohd108017264orig;Videohd108017264mp4;Videohd108023265orig;Videohd108023265mp4;Videohd108023264orig;Videohd108023264mp4;Videohd108029265orig;Videohd108029265mp4;Videohd108029264orig;Videohd108029264mp4;Av1hd720High;Av1hd720Balanced;Av1hd1080High;Av1hd1080Balanced;Av1Custom;Manual;License;About;
 _X-KDE-Submenu=KIM6 — Video transcoding
 X-KIM6-Managed=true
 
@@ -103,6 +103,26 @@ Exec=kim_all video --size hd1080 --crf 29 --codec libx264 --container orig -- %F
 [Desktop Action Videohd108029264mp4]
 _Name=Transcode 1080 smaller file H.264 (MP4)
 Exec=kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F
+
+[Desktop Action Av1hd720High]
+_Name=AV1 720p high quality
+Exec=kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F
+
+[Desktop Action Av1hd720Balanced]
+_Name=AV1 720p balanced
+Exec=kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F
+
+[Desktop Action Av1hd1080High]
+_Name=AV1 1080p high quality
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F
+
+[Desktop Action Av1hd1080Balanced]
+_Name=AV1 1080p balanced
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F
+
+[Desktop Action Av1Custom]
+_Name=Custom AV1 settings…
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F
 
 [Desktop Action Manual]
 _Name=KIM6 Manual

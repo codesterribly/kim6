@@ -68,6 +68,16 @@ def main():
         if not executable:
             raise ValueError("profile validator unavailable")
         return subprocess.run([executable, *args], timeout=10).returncode
+    if (tool == "exiftool" and args[:3] == ["-b", "-ICC_Profile", "--"]
+            and len(args) == 4 and response is None):
+        fixture = owned(args[3])
+        if fixture.stat().st_size > 8388608:
+            raise ValueError("ICC profile fixture exceeds owned test bound")
+        executable = shutil.which("exiftool", path=os.defpath)
+        if not executable:
+            raise ValueError("test ICC profile reader is unavailable")
+        return subprocess.run([executable, *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
     # Validate the D-Bus boundary even when a response has been scripted.
     if tool in ("qdbus", "qdbus6"):
         references = plan.get("progress_references", [plan.get("progress_reference", "org.kde.kdialog-test /ProgressDialog")])
@@ -113,8 +123,62 @@ def main():
             return 0
     if tool == "magick" and "real_magick" in plan and response is None:
         return real_magick(plan["real_magick"], args)
+    if (tool == "magick" and "real_conversion" in plan and response is None
+            and args == ["-list", "format"]):
+        return subprocess.run([plan["real_conversion"], *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
     if tool == "magick" and "real_conversion" in plan and response is None:
         return real_conversion(plan["real_conversion"], args)
+    if tool == "exiftool" and "real_web_email_tools" in plan and response is None:
+        return real_web_email_tool(plan["real_web_email_tools"], tool, args)
+    if tool == "exiftool" and "real_conversion" in plan and response is None:
+        executable = shutil.which("exiftool", path=os.defpath)
+        for value in args:
+            path = value.split("<=", 1)[-1] if "<=" in value else value
+            if path != "--" and path.startswith("/"):
+                owned(path)
+        return subprocess.run([executable, *args], timeout=15,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == "cmp" and "real_web_email_tools" in plan and response is None:
+        for value in args:
+            if value != "--" and value.startswith("/"):
+                candidate = Path(value)
+                if candidate.is_relative_to(ROOT):
+                    owned(candidate)
+        executable = shutil.which("cmp", path=os.defpath)
+        return subprocess.run([executable, *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == "cmp" and "real_conversion" in plan and response is None:
+        for value in args:
+            if value != "--" and value.startswith("/"):
+                owned(value)
+        return subprocess.run([shutil.which("cmp", path=os.defpath), *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool in ("head", "grep", "cut", "od") and response is None:
+        executable = shutil.which(tool, path=os.defpath)
+        if tool in ("head", "od"):
+            path = owned(args[-1])
+            if path.stat().st_size > 8388608:
+                raise ValueError("format-probe fixture exceeds test bound")
+            if tool == "head" and args[:2] != ["-c", "1048576"]:
+                raise ValueError("APNG header read exceeded the approved prefix")
+        else:
+            payload = sys.stdin.buffer.read(1048577)
+            if len(payload) > 1048576:
+                raise ValueError("format-probe input exceeds its one-megabyte bound")
+            result = subprocess.run([executable, *args], input=payload, capture_output=True,
+                                    timeout=10, env=dict(os.environ, PATH=os.defpath))
+            sys.stdout.buffer.write(result.stdout)
+            sys.stderr.buffer.write(result.stderr)
+            return result.returncode
+        return subprocess.run([executable, *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == "identify" and response is None:
+        executable = shutil.which("identify", path=os.defpath)
+        if executable and args and "--" in args and args[-1] != "-":
+            owned(args[-1])
+            return subprocess.run([executable, *args], timeout=15,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
     if tool == "magick" and "real_compression" in plan and response is None:
         return real_compression(plan["real_compression"], args)
     if tool == "magick" and "real_resize" in plan and response is None:
@@ -123,9 +187,13 @@ def main():
         return real_transform(plan["real_transform"], args)
     if tool in ("ffmpeg", "ffprobe") and "real_video_tools" in plan and response is None:
         return real_video_tool(plan["real_video_tools"], tool, args, plan)
+    if tool == "exiftool" and "real_video_tools" in plan and response is None:
+        source = owned(args[-1])
+        return subprocess.run([shutil.which("exiftool", path=os.defpath), *args], timeout=15,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
     if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
         return real_publication_tool(plan["real_publication_tools"], tool, args)
-    if "real_web_email_tools" in plan and tool in ("magick", "identify") and response is None:
+    if "real_web_email_tools" in plan and tool in ("magick", "identify", "exiftool") and response is None:
         return real_web_email_tool(plan["real_web_email_tools"], tool, args)
     if "real_gallery_collage_tools" in plan and tool in ("magick", "identify") and response is None:
         return real_gallery_collage_tool(plan["real_gallery_collage_tools"], tool, args)
@@ -313,13 +381,18 @@ def main():
         signature_format = "%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\\n"
         image_records_format = "%m|%w|%h|%T|%n|%#\\n"
         web_input_format = "%m|%w|%h|%[orientation]|%n\\n"
+        web_color_input_format = "%m|%w|%h|%[orientation]|%n|%[colorspace]\\n"
         signature = (len(args) == 5 and args[:3] == ["-regard-warnings", "+ping", "-format"]
                      and args[3] == signature_format and args[4] in ("-", "TGA:-"))
         hinted = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "TGA:-"]
         compression = hinted or args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
         formatted = signature or compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
         limit = 8388608 if signature else (8388608 if compression and "real_resize" in plan else (65536 if compression else 4096))
-        if (len(args) == 4 and args[:3] == ['-ping', '-format', web_input_format]
+        if (len(args) == 4 and args[:3] == ['-ping', '-format', web_color_input_format]
+                and args[3] == '-'):
+            payload = sys.stdin.buffer.read(limit + 1)
+            image_format = web_color_input_format
+        elif (len(args) == 4 and args[:3] == ['-ping', '-format', web_input_format]
                 and args[3] == '-'):
             payload = sys.stdin.buffer.read(limit + 1)
             image_format = web_input_format
@@ -345,7 +418,7 @@ def main():
         with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
             fixture = Path(folder) / "fixture"
             fixture.write_bytes(payload)
-            options = ["-format", image_format] if formatted or image_format in (image_records_format, web_input_format) else []
+            options = ["-format", image_format] if formatted or image_format in (image_records_format, web_input_format, web_color_input_format) else []
             input_name = ("TGA:" if hinted or (signature and args[4] == "TGA:-") else "") + str(fixture)
             # Decoder delegates (e.g. Ghostscript) need their normal utility
             # PATH. Input remains a bounded, private synthetic fixture.
@@ -428,7 +501,7 @@ def real_magick(executable, args):
 
 
 def real_publication_tool(tools, tool, args):
-    executable = tools[tool]
+    executable = tools.get(tool, shutil.which(tool, path=os.defpath))
     if tool == 'magick':
         if len(args) < 4 or args[-1].split('.')[-1].lower() not in ('pdf', 'tif', 'tiff', 'gif'):
             raise ValueError('publication producer requires an approved derived format')
@@ -464,6 +537,12 @@ def real_publication_tool(tools, tool, args):
         return subprocess.run([executable, *args], timeout=30,
                               env=dict(os.environ, PATH=os.defpath)).returncode
     if tool == 'identify':
+        if args and args[-1] != '-' and '--' in args:
+            fixture = owned(args[-1])
+            if fixture.stat().st_size > 1048576:
+                raise ValueError('web/email image exceeds test bound')
+            return subprocess.run([executable, *args], timeout=20,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
         if (len(args) == 5 and args[0] in ('-ping', '-regard-warnings') and
                 args[1] == '-format' and args[3] == '--'):
             owned(args[4])
@@ -543,7 +622,7 @@ def real_gallery_collage_tool(tools, tool, args):
                                   env=dict(os.environ, PATH=os.defpath)).returncode
         if args[:2] == ['--', '-[0]']:
             output = owned(args[-1].removeprefix('PNG:'))
-            payload = sys.stdin.buffer.read(131073)
+            payload = sys.stdin.buffer.read(1048577)
             if (args[2] != '-resize' or len(payload) > 131072
                     or not payload.startswith((b'P6\n', b'P3\n'))
                     or not is_private_stage(output)
@@ -556,26 +635,32 @@ def real_gallery_collage_tool(tools, tool, args):
 
 def real_web_email_tool(tools, tool, args):
     """Run only small PPM/JPEG fixtures through the web/email action grammar."""
-    executable = tools[tool]
+    executable = tools.get(tool, shutil.which(tool, path=os.defpath))
     if tool == 'identify':
         if (len(args) == 5 and args[:2] == ['-regard-warnings', '-format']
                 and args[3] == '--'):
             fixture = owned(args[4])
-            if fixture.stat().st_size > 131072:
+            if fixture.stat().st_size > 1048576:
                 raise ValueError('web/email output exceeds test bound')
             return subprocess.run([executable, *args], timeout=20,
                                   env=dict(os.environ, PATH=os.defpath)).returncode
         if (len(args) == 4 and args[0] == '-ping' and args[1] == '-format'
                 and args[3] == '-'):
-            payload = sys.stdin.buffer.read(131073)
+            payload = sys.stdin.buffer.read(1048577)
         elif (len(args) == 4 and args[0] == '-regard-warnings'
               and args[1] == '-format' and args[3] == '-'):
-            payload = sys.stdin.buffer.read(131073)
+            payload = sys.stdin.buffer.read(1048577)
         else:
             raise ValueError('unsupported web/email identify command')
-        if len(payload) > 131072:
+        if len(payload) > 1048576:
             raise ValueError('web/email fixture exceeds test bound')
         return subprocess.run([executable, *args], input=payload, timeout=20,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'exiftool' and args[:2] == ['-b', '-ICC_Profile'] and len(args) == 4 and args[2] == '--':
+        source = owned(args[3])
+        if source.stat().st_size > 1048576:
+            raise ValueError('web/email source exceeds test bound')
+        return subprocess.run([shutil.which('exiftool', path=os.defpath), *args], timeout=15,
                               env=dict(os.environ, PATH=os.defpath)).returncode
     if not args or args[0] != '-' or len(args) < 4:
         raise ValueError('web/email production must read one image from stdin')
@@ -588,6 +673,15 @@ def real_web_email_tool(tools, tool, args):
             index += 2
         elif args[index] == '-quality' and index + 1 < len(args) - 1:
             index += 2
+        elif args[index] == '-profile' and index + 1 < len(args) - 1:
+            profile = Path(args[index + 1])
+            if not profile.is_relative_to(Path('/usr/share/color/icc')):
+                profile = owned(profile)
+            if not profile.is_file() or profile.is_symlink():
+                raise ValueError('web/email profile is not a trusted installed resource')
+            if profile.stat().st_size > 8388608:
+                raise ValueError('web/email profile exceeds test bound')
+            index += 2
         else:
             break
     if index != len(args) - 1 or ':' not in args[-1]:
@@ -595,10 +689,10 @@ def real_web_email_tool(tools, tool, args):
     output = owned(args[-1].split(':', 1)[1])
     if output.exists() or output.is_symlink():
         raise ValueError('web/email producer requires a new owned stage')
-    payload = sys.stdin.buffer.read(131073)
-    if len(payload) > 131072 or not payload.startswith((b'P6\n', b'P3\n', b'\xff\xd8\xff',
-                                                          b'GIF87a', b'GIF89a')):
-        raise ValueError('web/email producer requires a small synthetic PPM, JPEG, or GIF')
+    payload = sys.stdin.buffer.read(1048577)
+    if len(payload) > 1048576 or not payload.startswith((b'P6\n', b'P3\n', b'\xff\xd8\xff',
+                                                          b'GIF87a', b'GIF89a', b'II*\x00', b'MM\x00*')):
+        raise ValueError('web/email producer requires a small synthetic image fixture')
     if not (output.parent.name.startswith('.kim6-stage.') or
             output.parent.resolve().is_relative_to((CONTROL / 'tmp').resolve())):
         raise ValueError('web/email output must be in a private or destination-local stage')
@@ -607,16 +701,29 @@ def real_web_email_tool(tools, tool, args):
 
 
 def real_conversion(executable, args):
-    if len(args) != 3 or args[0] != "--":
+    if not args or args[0] != "--" or len(args) < 3:
         raise ValueError("real conversion requires explicit source and output")
-    source, destination = map(owned, args[1:])
-    formats = {"ppm", "png", "jpg", "jpeg", "jpe", "gif", "gif87", "bmp", "bmp2", "bmp3",
+    source = owned(args[1])
+    destination_name = args[-1].split(":", 1)[-1]
+    destination = owned(destination_name)
+    if len(args) == 3:
+        pass
+    elif (len(args) == 5 and args[2:4] == ["-define", "jp2:rate=1"]
+          and args[-1].startswith("JP2:")):
+        pass
+    elif (len(args) == 5 and args[2] == "-quality" and args[-1].startswith("JP2:")
+          and args[3].isdigit()):
+        pass
+    else:
+        raise ValueError("real conversion options are outside the approved test grammar")
+    formats = {"ppm", "png", "jpg", "jpeg", "jpe", "jfif", "gif", "gif87", "bmp", "dib", "bmp2", "bmp3",
                "tif", "tiff", "tiff64", "webp", "avif", "heic", "pnm", "pam", "pgm", "pbm",
-               "png00", "png8", "png24", "png32", "png48", "png64", "pdf", "miff", "ico"}
+               "png00", "png8", "png24", "png32", "png48", "png64", "pdf", "miff", "ico",
+               "cur", "apng", "jp2", "j2k", "jpc", "jxl", "heif"}
     for path in (source, destination):
         if path.suffix.lower().lstrip(".") not in formats or any(c in str(path) for c in "[]%@:*?\\"):
             raise ValueError("real conversion requires plain owned fixture paths")
-    if source.stat().st_size > 4096 or source == destination or destination.exists() or destination.is_symlink():
+    if source.stat().st_size > 8 * 1024 * 1024 or source == destination or destination.exists() or destination.is_symlink():
         raise ValueError("real conversion requires tiny input and unused output")
     return subprocess.call([executable, *args])
 

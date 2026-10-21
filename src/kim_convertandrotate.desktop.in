@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=ConvertJPG;ConvertPNG;ConvertGIF;ConvertBMP;ConvertTIFF;ConvertPDF;ConvertWEBP;ConvertAVIF;ConvertCustom;Rotateexif;Rotate90;Rotate180;Rotate270;RotateCustom;FlipVertical;FlipHorizontal;
+Actions=ConvertJPG;ConvertPNG;ConvertGIF;ConvertBMP;ConvertTIFF;ConvertPDF;ConvertWEBP;ConvertAVIF;ConvertHEIC;ConvertJXL;ConvertJP2Lossless;ConvertJP2Lossy;ConvertCustom;Rotateexif;Rotate90;Rotate180;Rotate270;RotateCustom;FlipVertical;FlipHorizontal;
 _X-KDE-Submenu=KIM6 — Convert and transform
 X-KIM6-Managed=true
 
@@ -39,6 +39,22 @@ Exec=kim_all convert --format webp -- %F
 [Desktop Action ConvertAVIF]
 _Name=Convert to AVIF
 Exec=kim_all convert --format avif -- %F
+
+[Desktop Action ConvertHEIC]
+_Name=Convert to HEIC/HEIF
+Exec=kim_all convert --format heic -- %F
+
+[Desktop Action ConvertJXL]
+_Name=Convert to JPEG XL
+Exec=kim_all convert --format jxl -- %F
+
+[Desktop Action ConvertJP2Lossless]
+_Name=Convert to JPEG 2000 (lossless)
+Exec=kim_all convert --format jp2 --jp2-mode lossless -- %F
+
+[Desktop Action ConvertJP2Lossy]
+_Name=Convert to JPEG 2000 (lossy)
+Exec=kim_all convert --format jp2 --jp2-mode lossy -- %F
 
 [Desktop Action ConvertCustom]
 _Name=Convert to custom format…

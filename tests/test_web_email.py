@@ -103,7 +103,32 @@ class WebEmailTests(unittest.TestCase):
         self.assertEqual(decoded, ['GIF 3 2 2', 'GIF 3 2 2'])
         self.assertEqual(self.w.observe(animation), before)
 
-    def test_web_export_preserves_the_established_orientation_and_metadata_policy(self):
+    def test_web_export_rejects_apng_when_image_magick_would_flatten_frames(self):
+        self.w.use_real_conversion()
+        self.w.use_real_video_tools()
+        first = self.w.ppm('input/apng-first.ppm')
+        second = self.w.ppm('input/apng-second.ppm')
+        second.write_bytes(b'P6\n3 2\n255\n' + bytes.fromhex(
+            '000000 000000 000000 000000 ffffff 000000'))
+        source_gif = self.w.path('input/source.gif')
+        subprocess.run([shutil.which('magick'), '-delay', '10', str(first),
+                        '-delay', '20', str(second), str(source_gif)], check=True,
+                       capture_output=True, timeout=15)
+        apng = self.w.dispatch('convert', 'apng', source_gif)
+        self.assertTrue(source_gif.with_suffix('.apng').is_file(), apng.events)
+        source = source_gif.with_suffix('.apng')
+        before = self.w.observe(source)
+        self.w.use_real_web_email()
+        destination = self.w.path('apng-export')
+        destination.mkdir()
+        result = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                 '--output-dir', destination, '--', source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call['tool'] == 'magick' for call in result.calls))
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertEqual(self.w.observe(source), before)
+
+    def test_web_export_normalizes_orientation_and_embeds_srgb_profile_by_default(self):
         self.w.use_real_web_email()
         exiftool = shutil.which('exiftool')
         if not exiftool:
@@ -126,10 +151,131 @@ class WebEmailTests(unittest.TestCase):
         self.assertEqual(self.w.observe(source), before)
         profile_result = subprocess.run([exiftool, '-b', '-ICC_Profile', str(output)],
                                         check=True, capture_output=True)
-        self.assertEqual(profile_result.stdout, b'', 'the established -strip web policy removes ICC metadata')
+        self.assertTrue(profile_result.stdout, 'default sRGB export carries its output ICC profile')
         orientation = subprocess.run([exiftool, '-s3', '-Orientation', str(output)],
                                      check=True, capture_output=True, text=True)
         self.assertEqual(orientation.stdout.strip(), '')
+
+    def test_web_export_performs_real_adobe_rgb_to_srgb_transform(self):
+        self.w.use_real_web_email()
+        magick = shutil.which('magick')
+        adobe = Path('/usr/share/color/icc/colord/AdobeRGB1998.icc')
+        srgb = Path('/usr/share/color/icc/ghostscript/srgb.icc')
+        if not magick or not adobe.is_file() or not srgb.is_file():
+            self.skipTest('ImageMagick and Adobe RGB/sRGB profiles are required')
+        ppm = self.w.ppm('input/adobe-source.ppm')
+        ppm.write_bytes(b'P6\n3 2\n255\n' + bytes.fromhex(
+            '9a5a32 8040b0 30a080 6050a0 b07040 2288aa'))
+        source = self.w.path('input/adobe-source.tif')
+        subprocess.run([magick, str(ppm), '-profile', str(adobe), str(source)],
+                       check=True, capture_output=True, timeout=15)
+        before = self.w.observe(source)
+        source_pixel = subprocess.run([magick, str(source), '-format', '%[pixel:p{0,0}]', 'info:'],
+                                      check=True, capture_output=True, text=True).stdout
+        destination = self.w.path('srgb-export')
+        destination.mkdir()
+        result = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                 '--output-dir', destination, '--', source)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output = destination / 'adobe-source_web.tif'
+        output_pixel = subprocess.run([magick, str(output), '-format', '%[pixel:p{0,0}]', 'info:'],
+                                      check=True, capture_output=True, text=True).stdout
+        self.assertNotEqual(output_pixel, source_pixel, 'ICC conversion changes encoded color samples')
+        profile_name = subprocess.run([magick, str(output), '-format', '%[profile:icc]', 'info:'],
+                                      check=True, capture_output=True, text=True).stdout
+        self.assertRegex(profile_name, r'(?i)sRGB')
+        self.assertEqual(self.w.observe(source), before)
+
+    def test_web_export_transforms_display_p3_and_tagged_cmyk_when_profiles_exist(self):
+        self.w.use_real_web_email()
+        magick = shutil.which('magick')
+        exiftool = shutil.which('exiftool')
+        srgb = Path('/usr/share/color/icc/ghostscript/srgb.icc')
+        profiles = (
+            ('display-p3', Path('/usr/share/color/icc/DisplayP3-v2-micro.icc'), 'RGB'),
+            ('tagged-cmyk', Path('/usr/share/color/icc/ghostscript/default_cmyk.icc'), 'CMYK'),
+        )
+        available = [(name, profile, space) for name, profile, space in profiles if profile.is_file()]
+        if not magick or not exiftool or not srgb.is_file() or not available:
+            self.skipTest('ImageMagick, ExifTool, or Display P3/CMYK ICC profiles are unavailable')
+        for name, profile, space in available:
+            with self.subTest(profile=name):
+                ppm = self.w.ppm('input/' + name + '.ppm')
+                ppm.write_bytes(b'P6\n3 2\n255\n' + bytes.fromhex(
+                    'ff1808 8040b0 30a080 6050a0 b07040 2288aa'))
+                source = self.w.path('input/' + name + '.tif')
+                args = [magick, str(ppm)]
+                if space == 'CMYK':
+                    args.extend(['-profile', str(srgb)])
+                args.extend(['-profile', str(profile), str(source)])
+                subprocess.run(args, check=True, capture_output=True, timeout=15)
+                before = self.w.observe(source)
+                source_pixel = subprocess.run([magick, str(source), '-format', '%[pixel:p{0,0}]', 'info:'],
+                                              check=True, capture_output=True, text=True).stdout
+                destination = self.w.path(name + '-srgb')
+                destination.mkdir()
+                result = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                         '--output-dir', destination, '--', source)
+                self.assertEqual(result.returncode, 0, (name, result.stderr, result.events))
+                output = destination / (name + '_web.tif')
+                output_pixel = subprocess.run([magick, str(output), '-format', '%[pixel:p{0,0}]', 'info:'],
+                                              check=True, capture_output=True, text=True).stdout
+                self.assertNotEqual(output_pixel, source_pixel,
+                                    'profile transform must change encoded samples when source profile differs')
+                output_profile = subprocess.run([magick, str(output), '-format', '%[profile:icc]', 'info:'],
+                                                check=True, capture_output=True, text=True).stdout
+                self.assertRegex(output_profile, r'(?i)sRGB')
+                self.assertEqual(self.w.observe(source), before)
+
+    def test_web_preserve_mode_retains_embedded_profile_and_config_fallback(self):
+        self.w.use_real_web_email()
+        magick = shutil.which('magick')
+        adobe = Path('/usr/share/color/icc/colord/AdobeRGB1998.icc')
+        if not magick or not adobe.is_file():
+            self.skipTest('Adobe RGB ICC profile is unavailable')
+        source_ppm = self.w.ppm('input/profile.ppm')
+        source = self.w.path('input/profile.tif')
+        subprocess.run([magick, str(source_ppm), '-profile', str(adobe), str(source)],
+                       check=True, capture_output=True, timeout=15)
+        self.w.configure('WEB_COLOR_MODE', 'preserve')
+        destination = self.w.path('preserve-export')
+        destination.mkdir()
+        result = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                 '--output-dir', destination, '--', source)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output_profile = subprocess.run([magick, str(destination / 'profile_web.tif'),
+                                          '-format', '%[profile:icc]', 'info:'],
+                                        check=True, capture_output=True, text=True).stdout
+        self.assertRegex(output_profile, r'(?i)Adobe RGB')
+
+        self.w.env['KIM_WEB_COLOR_MODE'] = 'srgb'
+        override = self.w.path('environment-srgb-export')
+        override.mkdir()
+        overridden = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                     '--output-dir', override, '--', source)
+        self.assertEqual(overridden.returncode, 0, (overridden.stderr, overridden.events))
+        override_profile = subprocess.run([magick, str(override / 'profile_web.tif'),
+                                             '-format', '%[profile:icc]', 'info:'],
+                                           check=True, capture_output=True, text=True).stdout
+        self.assertRegex(override_profile, r'(?i)sRGB')
+
+    def test_web_export_rejects_untagged_cmyk_in_srgb_mode(self):
+        self.w.use_real_web_email()
+        magick = shutil.which('magick')
+        if not magick:
+            self.skipTest('ImageMagick is unavailable')
+        ppm = self.w.ppm('input/cmyk-pixels.ppm')
+        source = self.w.path('input/untagged-cmyk.tif')
+        subprocess.run([magick, str(ppm), '-colorspace', 'CMYK', str(source)],
+                       check=True, capture_output=True, timeout=15)
+        before = self.w.observe(source)
+        destination = self.w.path('cmyk-export')
+        destination.mkdir()
+        result = self.w.dispatch('webexport', '--size', '3x2', '--format', 'keep',
+                                 '--color', 'srgb', '--output-dir', destination, '--', source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertEqual(self.w.observe(source), before)
 
     def test_web_collision_and_service_loss_never_replace_or_publish(self):
         self.w.use_real_web_email()

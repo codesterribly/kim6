@@ -163,6 +163,284 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
+    def test_real_apng_conversion_preserves_all_animation_frames(self):
+        self.workspace.use_real_conversion()
+        self.workspace.use_real_video_tools()
+        first = self.workspace.ppm("input/apng-first.ppm")
+        second = self.workspace.ppm("input/apng-second.ppm")
+        second.write_bytes(b"P6\n3 2\n255\n" + bytes.fromhex(
+            "000000 000000 000000 000000 ffffff 000000"))
+        source = self.workspace.path("input/two-frames.gif")
+        subprocess.run([shutil.which("magick"), "-delay", "20", str(first),
+                        "-delay", "60", str(second), "-loop", "0", str(source)],
+                       check=True, capture_output=True, timeout=15)
+        before = self.workspace.observe(source)
+        result = self.workspace.dispatch("convert", "apng", source)
+        output = source.with_suffix(".apng")
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        self.assertTrue(output.is_file(), result.events)
+        details = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                                  "-count_frames", "-show_entries", "stream=codec_name,nb_read_frames",
+                                  "-of", "default=noprint_wrappers=1", str(output)], check=True,
+                                 capture_output=True, text=True, timeout=15).stdout
+        self.assertIn("codec_name=apng", details)
+        self.assertIn("nb_read_frames=2", details)
+        import struct
+        data = output.read_bytes()
+        offset = 8
+        animation_control = None
+        delays = []
+        while offset + 12 <= len(data):
+            length = struct.unpack_from(">I", data, offset)[0]
+            kind = data[offset + 4:offset + 8]
+            if kind == b'acTL':
+                animation_control = struct.unpack_from(">II", data, offset + 8)
+            elif kind == b'fcTL':
+                numerator, denominator = struct.unpack_from(">HH", data, offset + 28)
+                delays.append((numerator, denominator))
+            offset += length + 12
+        self.assertEqual(animation_control, (2, 0), '2 frames and infinite playback must survive')
+        self.assertEqual(len(delays), 2)
+        self.assertAlmostEqual(delays[0][0] / delays[0][1], 0.2, delta=0.01)
+        self.assertAlmostEqual(delays[1][0] / delays[1][1], 0.6, delta=0.01)
+        producer = next(call["argv"] for call in result.calls
+                        if call["tool"] == "ffmpeg" and "-progress" in call["argv"])
+        self.assertEqual(producer[producer.index("-plays") + 1], "0")
+        self.assertIn(b"acTL", output.read_bytes(), "success requires a real APNG animation")
+        self.assertEqual(self.workspace.observe(source), before)
+
+        roundtrip = self.workspace.dispatch("convert", "apng", output)
+        self.assertEqual(roundtrip.returncode, 0, (roundtrip.stderr, roundtrip.events))
+        second_output = output.with_name("two-frames_1.apng")
+        self.assertTrue(second_output.is_file())
+        second_probe = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-select_streams", "v:0",
+                                       "-count_frames", "-show_entries", "stream=codec_name,nb_read_frames",
+                                       "-of", "default=noprint_wrappers=1", str(second_output)], check=True,
+                                      capture_output=True, text=True, timeout=15).stdout
+        self.assertIn("codec_name=apng", second_probe)
+        self.assertIn("nb_read_frames=2", second_probe)
+        second_data = second_output.read_bytes()
+        second_offset = 8
+        second_animation_control = None
+        second_delays = []
+        while second_offset + 12 <= len(second_data):
+            length = struct.unpack_from(">I", second_data, second_offset)[0]
+            kind = second_data[second_offset + 4:second_offset + 8]
+            if kind == b'acTL':
+                second_animation_control = struct.unpack_from(">II", second_data, second_offset + 8)
+            elif kind == b'fcTL':
+                numerator, denominator = struct.unpack_from(">HH", second_data, second_offset + 28)
+                second_delays.append((numerator, denominator))
+            second_offset += length + 12
+        self.assertEqual(second_animation_control, animation_control)
+        self.assertEqual(second_delays, delays)
+
+        animated_gif = self.workspace.dispatch("convert", "gif", output)
+        self.assertFalse(output.with_name("two-frames_1.gif").exists())
+        self.assertFalse(any(call["tool"] == "magick" for call in animated_gif.calls))
+        self.assertTrue(any(call["tool"] == "kdialog" and "APNG" in " ".join(call["argv"])
+                            for call in animated_gif.calls))
+
+        flattened = self.workspace.dispatch("convert", "jpg", output)
+        self.assertFalse(output.with_suffix(".jpg").exists())
+        self.assertFalse(any(call["tool"] == "magick" for call in flattened.calls))
+        self.assertTrue(any(call["tool"] == "kdialog" and "APNG" in " ".join(call["argv"])
+                            for call in flattened.calls))
+        self.assert_clean()
+
+    def test_real_gif_conversion_preserves_frame_delays_and_looping(self):
+        self.workspace.use_real_conversion()
+        magick = shutil.which("magick")
+        first = self.workspace.ppm("input/gif-first.ppm")
+        second = self.workspace.path("input/gif-second.ppm")
+        second.write_bytes(b"P6\n3 2\n255\n" + bytes.fromhex(
+            "000000 000000 000000 000000 ffffff 000000"))
+        source = self.workspace.path("input/timed.gif")
+        subprocess.run([magick, "-delay", "20", str(first), "-delay", "60", str(second),
+                        "-loop", "0", str(source)], check=True, capture_output=True, timeout=15)
+        result = self.workspace.dispatch("convert", "gif", source)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output = source.with_name("timed_1.gif")
+        source_delays = subprocess.run([shutil.which("identify"), "-format", "%T\n", str(source)],
+                                       check=True, capture_output=True, text=True, timeout=10).stdout
+        output_delays = subprocess.run([shutil.which("identify"), "-format", "%T\n", str(output)],
+                                       check=True, capture_output=True, text=True, timeout=10).stdout
+        self.assertEqual(output_delays, source_delays)
+        source_loop = subprocess.run([shutil.which("exiftool"), "-s", "-AnimationIterations", str(source)],
+                                     check=True, capture_output=True, text=True, timeout=10).stdout
+        output_loop = subprocess.run([shutil.which("exiftool"), "-s", "-AnimationIterations", str(output)],
+                                     check=True, capture_output=True, text=True, timeout=10).stdout
+        self.assertEqual(output_loop, source_loop)
+        self.assertEqual(output_delays.splitlines(), ["20", "60"])
+        self.assertIn("Infinite", output_loop)
+        self.assert_clean()
+
+    def test_real_optional_heic_jp2_and_jxl_decoders_are_used_when_available(self):
+        self.workspace.use_real_conversion()
+        magick = shutil.which("magick")
+        if not magick:
+            self.skipTest("ImageMagick is unavailable")
+        listing = subprocess.run([magick, "-list", "format"], check=True,
+                                 capture_output=True, text=True).stdout
+        import re
+        attempted = 0
+        for extension, coder in (("heic", "HEIC"), ("jp2", "JP2"), ("jxl", "JXL")):
+            readable = any(re.search(r"^\s*" + coder + r"\*?\s", line)
+                           and len(line.split()) > 2 and "r" in line.split()[2]
+                           for line in listing.splitlines())
+            if not readable:
+                continue
+            attempted += 1
+            encoded = self.workspace.path("input/source." + extension)
+            producer = subprocess.run([magick, str(self.source), coder + ":" + str(encoded)],
+                                      capture_output=True, text=True, timeout=20)
+            if producer.returncode != 0 or not encoded.is_file() or encoded.stat().st_size == 0:
+                self.skipTest(coder + " encoder is advertised but unusable in this ImageMagick build")
+            result = self.workspace.dispatch("convert", "png", encoded)
+            self.assertEqual(result.returncode, 0, (coder, result.stderr, result.events))
+            self.assertEqual(self.workspace.image_info(encoded.with_suffix(".png"))[0], "PNG")
+        if not attempted:
+            self.skipTest("No HEIC, JPEG 2000 or JPEG XL decoder is installed")
+        self.assert_clean()
+
+    def test_hdr_input_fails_closed_for_sdr_output_without_modifying_source(self):
+        self.workspace.use_real_conversion()
+        magick = shutil.which("magick")
+        if not magick:
+            self.skipTest("ImageMagick is unavailable")
+        hdr = self.workspace.path("input/high-range.exr")
+        subprocess.run([magick, str(self.source), "-colorspace", "RGB", "-depth", "16", str(hdr)],
+                       check=True, capture_output=True, timeout=15)
+        before = self.workspace.observe(hdr)
+        result = self.workspace.dispatch("convert", "jpg", hdr)
+        self.assertTrue(any(call["tool"] == "kdialog" and "tone mapping" in " ".join(call["argv"])
+                            for call in result.calls))
+        self.assertEqual(self.workspace.observe(hdr), before)
+        self.assertFalse(hdr.with_suffix(".jpg").exists())
+        self.assertFalse(any(call["tool"] == "magick" for call in result.calls))
+        self.assertTrue(any(call["tool"] == "kdialog" and "Failed: 1" in " ".join(call["argv"])
+                            for call in result.calls))
+        self.assert_clean()
+
+    def test_format_capability_probe_fails_closed_for_unavailable_jxl_encoder(self):
+        source_before = self.workspace.observe(self.source)
+        self.workspace.respond("magick", stdout="JPEG* rw- JPEG\nPNG* rw- PNG\n")
+        result = self.workspace.dispatch("convert", "jxl", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.source.with_suffix(".jxl").exists())
+        self.assertEqual(self.workspace.observe(self.source), source_before)
+        self.assertTrue(any("JPEG XL" in " ".join(call["argv"]) or
+                            "JXL" in " ".join(call["argv"]) for call in result.calls
+                            if call["tool"] == "kdialog"))
+        self.assert_clean()
+
+    def test_multiframe_conversion_to_still_format_is_rejected_before_producer(self):
+        first = self.workspace.ppm("input/first.ppm")
+        second = self.workspace.ppm("input/second.ppm")
+        source = self.workspace.path("input/animated.gif")
+        subprocess.run([shutil.which("magick"), "-delay", "10", str(first),
+                        "-delay", "20", str(second), str(source)], check=True,
+                       capture_output=True, timeout=15)
+        before = self.workspace.observe(source)
+        result = self.workspace.dispatch("convert", "jpg", source)
+        self.assertFalse(source.with_suffix(".jpg").exists())
+        self.assertFalse(any(call["tool"] == "magick" for call in result.calls))
+        self.assertEqual(self.workspace.observe(source), before)
+        self.assertTrue(any(call["tool"] == "kdialog" and "multi-frame" in " ".join(call["argv"])
+                            for call in result.calls))
+        self.assert_clean()
+
+    def test_jp2_lossless_uses_the_jpeg2000_rate_option_after_runtime_capability_check(self):
+        self.workspace.sequence("magick", [
+            {"stdout": "JP2* JP2 rw+ JPEG-2000\n"},
+            {"output_base64": base64.b64encode(self.source.read_bytes()).decode()},
+        ])
+        result = self.workspace.dispatch("convert", "--format", "jp2", "--jp2-mode", "lossless",
+                                         "--", self.source)
+        producer = next(call["argv"] for call in result.calls
+                        if call["tool"] == "magick" and "-list" not in call["argv"])
+        self.assertIn("jp2:rate=1", producer)
+        self.assertTrue(any(value.startswith("JP2:") for value in producer))
+        self.assertFalse(self.source.with_suffix(".jp2").exists(),
+                         "fake PPM bytes must fail JP2 validation")
+        self.assert_clean()
+
+    def test_jp2_lossy_uses_image_magick_quality_not_jpeg_options(self):
+        self.workspace.sequence("magick", [
+            {"stdout": "JP2* JP2 rw+ JPEG-2000\n"},
+            {"output_base64": base64.b64encode(self.source.read_bytes()).decode()},
+        ])
+        result = self.workspace.dispatch("convert", "--format", "jp2", "--jp2-mode", "lossy",
+                                         "--jp2-quality", "62", "--", self.source)
+        producer = next(call["argv"] for call in result.calls
+                        if call["tool"] == "magick" and "-list" not in call["argv"])
+        self.assertEqual(producer[producer.index("-quality") + 1], "62")
+        self.assertFalse(any("jp2:rate=1" in value for value in producer))
+        self.assertFalse(self.source.with_suffix(".jp2").exists())
+        self.assert_clean()
+
+    def test_real_jpeg2000_lossless_mode_is_pixel_exact_when_encoder_exists(self):
+        self.workspace.use_real_conversion()
+        magick = shutil.which("magick")
+        listing = subprocess.run([magick, "-list", "format"], check=True,
+                                 capture_output=True, text=True).stdout
+        import re
+        if not any(re.search(r"^\s*JP2\*?\s", line) and len(line.split()) > 2
+                   and "w" in line.split()[2] for line in listing.splitlines()):
+            self.skipTest("ImageMagick JPEG 2000 encoder is unavailable")
+        original = subprocess.run([magick, str(self.source), "-depth", "8", "-format",
+                                   "%[pixel:p{0,0}]", "info:"], capture_output=True)
+        self.assertEqual(original.returncode, 0, original.stderr)
+        result = self.workspace.dispatch("convert", "--format", "jp2", "--jp2-mode", "lossless",
+                                         "--", self.source)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output = self.source.with_suffix(".jp2")
+        self.assertEqual(self.workspace.image_info(output)[0], "JP2")
+        decoded = subprocess.run([magick, str(output), "-depth", "8", "-format",
+                                 "%[pixel:p{0,0}]", "info:"], capture_output=True)
+        self.assertEqual(decoded.returncode, 0, decoded.stderr)
+        self.assertEqual(decoded.stdout, original.stdout)
+        self.assert_clean()
+
+    def test_real_jpeg2000_lossy_and_16_bit_profiled_lossless_when_encoder_exists(self):
+        magick = shutil.which("magick")
+        if not magick:
+            self.skipTest("ImageMagick is unavailable")
+        listing = subprocess.run([magick, "-list", "format"], check=True,
+                                 capture_output=True, text=True).stdout
+        import re
+        writable = any(re.search(r"^\s*JP2\*?\s", line) and len(line.split()) > 2
+                       and "w" in line.split()[2] for line in listing.splitlines())
+        if not writable:
+            self.skipTest("ImageMagick JPEG 2000 encoder is unavailable")
+
+        self.workspace.use_real_conversion()
+        lossy = self.workspace.dispatch("convert", "--format", "jp2", "--jp2-mode", "lossy",
+                                        "--jp2-quality", "65", "--", self.source)
+        self.assertEqual(lossy.returncode, 0, (lossy.stderr, lossy.events))
+        self.assertEqual(self.workspace.image_info(self.source.with_suffix(".jp2"))[0], "JP2")
+
+        import struct
+        sixteen = self.workspace.path("input/16-bit.ppm")
+        sixteen.write_bytes(b"P6\n2 1\n65535\n" + struct.pack(">6H", 1000, 7000, 16000, 30000, 40000, 60000))
+        adobe = Path("/usr/share/color/icc/colord/AdobeRGB1998.icc")
+        if not adobe.is_file():
+            self.skipTest("Adobe RGB ICC profile is unavailable")
+        profiled = self.workspace.path("input/16-bit-profiled.tif")
+        subprocess.run([magick, str(sixteen), "-profile", str(adobe), str(profiled)],
+                       check=True, capture_output=True, timeout=15)
+        result = self.workspace.dispatch("convert", "--format", "jp2", "--jp2-mode", "lossless",
+                                         "--", profiled)
+        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
+        output = profiled.with_suffix(".jp2")
+        self.assertEqual(self.workspace.image_info(output)[:3], ("JP2", 2, 1))
+        profile = subprocess.run([shutil.which("exiftool"), "-b", "-ICC_Profile", str(output)],
+                                 check=True, capture_output=True, timeout=15).stdout
+        self.assertTrue(profile, "lossless JPEG 2000 should retain embedded ICC when supported")
+        difference = subprocess.run([magick, "compare", "-metric", "AE", str(profiled), str(output), "null:"],
+                                    capture_output=True, text=True, timeout=15)
+        self.assertEqual(difference.returncode, 0, difference.stderr + difference.stdout)
+
     def test_producer_time_destination_creation_is_preserved(self):
         payload = self.workspace.png(".control/reference.png").read_bytes()
         self.workspace.respond("magick", output_base64=base64.b64encode(payload).decode(),
@@ -278,6 +556,20 @@ for _failure in ("symlink", "dangling", "metadata"):
 
 def real_format_case(extension, magic):
     def test(self):
+        executable = shutil.which("magick")
+        if not executable:
+            self.skipTest("ImageMagick is unavailable")
+        coder = {"avif": "AVIF", "heic": "HEIC", "heif": "HEIC", "webp": "WEBP",
+                 "jxl": "JXL", "jp2": "JP2", "j2k": "JP2", "jpc": "JP2"}.get(extension)
+        if coder:
+            import re
+            formats = subprocess.run([executable, "-list", "format"], capture_output=True,
+                                     text=True, check=True).stdout
+            writable = any(re.search(r"^\s*" + coder + r"\*?\s", line)
+                           and len(line.split()) > 2 and "w" in line.split()[2]
+                           for line in formats.splitlines())
+            if not writable:
+                self.skipTest("ImageMagick " + coder + " encoder is unavailable")
         self.workspace.use_real_conversion()
         before = self.workspace.observe(self.source)
         result = self.workspace.dispatch("convert", extension, self.source)
@@ -288,10 +580,11 @@ def real_format_case(extension, magic):
     return test
 
 
-for _extension, _magic in (("jpg", "JPEG"), ("jpeg", "JPEG"), ("jpe", "JPEG"),
+for _extension, _magic in (("jpg", "JPEG"), ("jpeg", "JPEG"), ("jpe", "JPEG"), ("jfif", "JPEG"),
         ("png8", "PNG"), ("gif", "GIF"), ("gif87", "GIF"), ("bmp", "BMP"),
-        ("bmp2", "BMP2"), ("bmp3", "BMP3"), ("tif", "TIFF"), ("tiff", "TIFF"),
+        ("dib", "BMP"), ("bmp2", "BMP2"), ("bmp3", "BMP3"), ("tif", "TIFF"), ("tiff", "TIFF"),
         ("tiff64", "TIFF64"), ("webp", "WEBP"), ("avif", "AVIF"), ("heic", "HEIC"),
+        ("heif", "HEIC"), ("jxl", "JXL"), ("jp2", "JP2"), ("j2k", "J2K"), ("jpc", "JP2"),
         ("pdf", "PDF"), ("pnm", "PPM"), ("pgm", "PGM"), ("pbm", "PBM"), ("pam", "PAM")):
     setattr(ConversionTests, "test_real_format_" + _extension, real_format_case(_extension, _magic))
 

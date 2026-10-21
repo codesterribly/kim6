@@ -34,7 +34,7 @@
                 </li>
                 <li>
                     <b>Convert and rotate</b>
-                    <p>This menu converts images to JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, or AVIF; it also provides custom format selection, EXIF auto-orientation, fixed/custom rotation, and horizontal/vertical flips.</p>
+                    <p>This menu converts images to JPEG, PNG/APNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL, or JPEG 2000 when the installed encoders support the requested format. JPEG 2000 offers lossless and lossy choices. Animated input is preserved only by outputs that validate with all frames; unsupported conversions fail instead of flattening. It also provides custom format selection, EXIF auto-orientation, fixed/custom rotation, and horizontal/vertical flips.</p>
                 </li>
                 <li>
                     <b>Treatment and publication</b>
@@ -47,11 +47,12 @@
                 </li>
                 <li>
                     <b>Video Compress and resize</b>
-                    <p>Transcodes video using either libx264 or libx265 to HD (1280x720) or FullHD (1920x1080) in three qualities (CFR values 17, 23 and 29 — only 17 should more or less preserve the amount of detail). Audio is copied and container (like MKV) is either preserved or converted to MP4.</p>
+                    <p>Transcodes video using libx264 or libx265 to HD (1280x720) or FullHD (1920x1080) in the existing 24 size, quality, codec and container presets. Five additional AV1 actions use libsvtav1 when available and libaom-av1 otherwise; High uses AV1 CRF 28, Balanced CRF 35, and Custom asks for AV1 quality and speed settings. These AV1 values are codec-specific and are not direct equivalents of the H.264/H.265 quality numbers. Audio is copied when compatible, and an incompatible original container is rejected rather than silently changed.</p>
                 </li>
             </ul>
             <h1>Usage</h1>
             <p> KIM6 is used via the file manager context menu. Select one or more image or video files, right-click, and choose the desired action from the KIM6 submenu. </p>
+            <p>Web export always creates derived images and never replaces the selected source. Its default color policy uses ICC profiles to transform tagged images to sRGB; untagged RGB is assumed to be sRGB and untagged CMYK is rejected. Set <span id="code">KIM_WEB_COLOR_MODE=preserve</span>, or KConfig <span id="code">WEB_COLOR_MODE=preserve</span>, to retain an embedded profile when the selected output format supports ICC data; the environment setting takes precedence and sRGB is the default. Optional image formats depend on the installed ImageMagick delegates and FFmpeg encoders; unavailable encoders are reported without substituting another format.</p>
             <p> Most actions will prompt for confirmation before overwriting existing files. Pressing Enter will usually select the default option, which is to create new files rather than overwrite existing ones. </p>
             <p> Some behavior can be customized using environment variables. These variables can be set in the environment where your file manager is launched. </p>
                     <p>All installed Dolphin processing entries launch the unified <span id="code">kim_all</span> dispatcher and pass local selections as individual arguments. The historical <span id="code">kim_*</span> source scripts are references and are not installed as active commands.</p>

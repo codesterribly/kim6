@@ -124,6 +124,13 @@ load_kim_config() {
   fi
   : "${KIM_WEB_FORMAT:=jpg}"
 
+  # Web color handling: sRGB is the default; preserve is explicit.
+  if [ -z "${KIM_WEB_COLOR_MODE:-}" ]; then
+    v="$(_cfg_get WEB_COLOR_MODE)"
+    case "$v" in srgb|preserve) KIM_WEB_COLOR_MODE="$v" ;; esac
+  fi
+  : "${KIM_WEB_COLOR_MODE:=srgb}"
+
   # Policy mode from config (optional), only used if no env override exists.
   # Env: KIM_POLICY
   if [ -z "${KIM_POLICY:-}" ]; then
@@ -253,9 +260,10 @@ image_format_class() {
     JPG|JPE|JFIF|JPS|PJPEG|JPEG) printf 'JPEG\n' ;;
     TIF|TIFF64|PTIF|TIFF) printf 'TIFF\n' ;;
     PNG[0-9]*|APNG|PNG) printf 'PNG\n' ;;
-    BMP2|BMP3|BMP) printf 'BMP\n' ;;
+    BMP2|BMP3|BMP|DIB) printf 'BMP\n' ;;
     GIF87|GIF) printf 'GIF\n' ;;
     J2C|J2K|JPC|JPM|JPT|JP2) printf 'JP2\n' ;;
+    HEIF|HEIC) printf 'HEIC\n' ;;
     *) printf '%s\n' "${1^^}" ;;
   esac
 }
@@ -273,6 +281,56 @@ image_format_extension() {
 
 image_extension_matches_format() {
   [ -n "$1" ] && [ "$(image_format_class "$1")" = "$(image_format_class "$2")" ]
+}
+
+# Test the installed ImageMagick coder registry rather than assuming an
+# extension implies an encoder. The first column is the coder name and the
+# permissions column explicitly reports read/write support.
+image_coder_supports() {
+  local requested="${1^^}" operation="$2" registry line coder permissions
+  registry="$(magick -list format 2>/dev/null)" || return 1
+  while IFS= read -r line; do
+    read -r coder _ permissions _ <<< "$line"
+    coder="${coder%\*}"
+    coder="${coder^^}"
+    [ "$coder" = "$requested" ] || continue
+    [[ "$permissions" == *r* ]] && [ "$operation" = read ] && return 0
+    [[ "$permissions" == *w* ]] && [ "$operation" = write ] && return 0
+  done <<< "$registry"
+  return 1
+}
+
+image_output_preserves_frames() {
+  case "${1,,}" in
+    gif|tif|tiff|tiff64|webp|avif|heic|heif|apng|pdf|ico|cur) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# APNG control chunks occur before image data. Read only the PNG header region
+# so ordinary large PNG photographs do not require a full-file format scan.
+image_has_apng_control_chunk() {
+  local header="$KIMDIR/apng-header"
+  head -c 1048576 -- "$1" > "$header" || return 1
+  LC_ALL=C grep -a -q -m1 'acTL' -- "$header"
+}
+
+image_apng_play_count() {
+  local path="$1" header="$KIMDIR/apng-header" offset plays
+  head -c 1048576 -- "$path" > "$header" || return 1
+  offset="$(LC_ALL=C grep -aob -m1 'acTL' -- "$header" | cut -d: -f1)" || return 1
+  [[ "$offset" =~ ^[0-9]+$ ]] || return 1
+  plays="$(od -An -N4 -j "$((offset + 8))" -tu4 --endian=big -- "$path")" || return 1
+  plays="${plays//[$' \t\n\r']/}"
+  [[ "$plays" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$plays"
+}
+
+image_format_carries_icc() {
+  case "$(image_format_class "$1")" in
+    JPEG|PNG|TIFF|WEBP|AVIF|HEIC|HEIF|JP2|JXL|EXR|HDR) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # Return the dimensions ImageMagick's plain `-resize WIDTHxHEIGHT` fit geometry
@@ -1174,12 +1232,14 @@ action_compress() {
 # - Uses ImageMagick `magick` to write explicit outputs.
 
 action_convert() {
-  local FORMAT='' bmp5=false custom=false
+  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --format) [ "$#" -ge 2 ] || die "convert: --format needs a value"; FORMAT="$2"; shift 2 ;;
+        --jp2-mode) [ "$#" -ge 2 ] || die "convert: --jp2-mode needs lossless or lossy"; jp2_mode="$2"; shift 2 ;;
+        --jp2-quality) [ "$#" -ge 2 ] || die "convert: --jp2-quality needs a value"; jp2_quality="$2"; shift 2 ;;
         --bmp5) bmp5=true; shift ;;
         --custom-format) custom=true; shift ;;
         --) shift; raw_files+=("$@"); break ;;
@@ -1209,6 +1269,36 @@ action_convert() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: --bmp5 is valid only with BMP output.')"
     return 1
   fi
+  FORMAT="${FORMAT,,}"
+  case "$jp2_mode" in ''|lossless|lossy) ;; *) progress_error "$(gettext 'JPEG 2000 mode must be lossless or lossy.')"; return 2 ;; esac
+  if ! [[ "$jp2_quality" =~ ^[0-9]{1,3}$ ]] || [ "$jp2_quality" -lt 1 ] || [ "$jp2_quality" -gt 100 ]; then
+    progress_error "$(gettext 'JPEG 2000 lossy quality must be between 1 and 100.')"; return 2
+  fi
+  case "$FORMAT" in
+    jp2|j2k|jpc)
+      [ -n "$jp2_mode" ] || jp2_mode=lossy
+      [ "$FORMAT" = jp2 ] || [ -z "$jp2_mode" ] || [ "$jp2_mode" = lossy ] || {
+        progress_error "$(gettext 'JPEG 2000 mode options apply only to JP2 output.')"; return 2;
+      }
+      if ! image_coder_supports "$FORMAT" write; then
+        progress_error "$(gettext 'The installed ImageMagick JPEG 2000 encoder is unavailable for:') $FORMAT"; return 1
+      fi
+      ;;
+    jxl)
+      if ! image_coder_supports JXL write; then
+        progress_error "$(gettext 'The installed ImageMagick JPEG XL encoder is unavailable.')"; return 1
+      fi
+      ;;
+    heic|heif)
+      if ! image_coder_supports HEIC write; then
+        progress_error "$(gettext 'The installed ImageMagick HEIC/HEIF encoder is unavailable.')"; return 1
+      fi
+      ;;
+  esac
+  # DIB and JFIF are filename aliases of ImageMagick's BMP and JPEG coders.
+  # Probe and invoke the actual coder, then validate against its encoded magic.
+  local format_coder=''
+  case "$FORMAT" in dib) format_coder=BMP ;; jfif) format_coder=JPEG ;; esac
 
   local -a files=()
   collect_valid_files files "${raw_files[@]}"
@@ -1274,7 +1364,16 @@ action_convert() {
 
   local counter=0
   local i dir base stem ext OUTFILE OUTTMP publication_mode n rc actual expected frame
+  local input_records input_frames output_frames source_width source_height actual_format input_format
+  local frame_width frame_height
   local interrupted
+  local apng_error apng_probe apng_codec apng_width apng_height apng_output_frames apng_loop
+  local apng_duration apng_packets apng_packet apng_final_delay input_is_apng
+  local convert_source_icc convert_output_icc
+  local apng_input_record apng_input_key apng_input_value apng_input_codec apng_input_width apng_input_height apng_input_frames
+  local -a apng_args=()
+  local -a _apng_records=()
+  local -a input_dimensions=()
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -1298,6 +1397,72 @@ action_convert() {
       break
     fi
     OUTFILE="$dir/${stem}.${FORMAT}"
+
+    rc=0
+    input_is_apng=false
+    apng_codec=''
+    apng_output_frames=''
+    apng_loop=''
+    input_records="$(identify -regard-warnings -ping -format '%m|%w|%h\n' -- "$i" 2>/dev/null)" || input_records=''
+    input_frames=0
+    source_width=''; source_height=''
+    input_format=''
+    input_dimensions=()
+    while IFS= read -r frame; do
+      IFS='|' read -r actual_format frame_width frame_height <<< "$frame"
+      [[ "$frame_width" =~ ^[1-9][0-9]*$ && "$frame_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      input_dimensions+=("${frame_width}x${frame_height}")
+      [ -n "$input_format" ] || input_format="$actual_format"
+      input_frames=$((input_frames + 1))
+      [ -n "$source_width" ] || source_width="$frame_width"
+      [ -n "$source_height" ] || source_height="$frame_height"
+    done <<< "$input_records"
+    if [ "$(image_format_class "$input_format")" = PNG ] && image_has_apng_control_chunk "$i"; then
+      apng_input_record="$(ffprobe -v error -select_streams v:0 -count_frames \
+        -show_entries stream=codec_name,width,height,nb_read_frames -of default=noprint_wrappers=1 -i "$i" 2>/dev/null)" || rc=1
+      apng_input_codec=''; apng_input_width=''; apng_input_height=''; apng_input_frames=''
+      while IFS='=' read -r apng_input_key apng_input_value; do
+        case "$apng_input_key" in
+          codec_name) apng_input_codec="$apng_input_value" ;;
+          width) apng_input_width="$apng_input_value" ;;
+          height) apng_input_height="$apng_input_value" ;;
+          nb_read_frames) apng_input_frames="$apng_input_value" ;;
+        esac
+      done <<< "$apng_input_record"
+      if [ "$apng_input_codec" = apng ] && [[ "$apng_input_frames" =~ ^[1-9][0-9]*$ &&
+         "$apng_input_width" =~ ^[1-9][0-9]*$ && "$apng_input_height" =~ ^[1-9][0-9]*$ ]]; then
+        input_is_apng=true
+        input_frames="$apng_input_frames"
+        source_width="$apng_input_width"; source_height="$apng_input_height"
+        input_dimensions=("${source_width}x${source_height}")
+      else
+        rc=1
+      fi
+    fi
+    if [ "$rc" -ne 0 ]; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Convert: APNG animation could not be safely inspected.')\n\n$base"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    if [[ "${input_format^^}" == EXR || "${input_format^^}" == HDR ]] &&
+       [[ "${FORMAT^^}" != "${input_format^^}" ]]; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Convert: HDR and OpenEXR sources require explicit tone mapping before conversion to another format; this action does not guess an SDR mapping.')\n\n$base"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    if [ "$input_frames" -lt 1 ]; then
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    if [ "$input_is_apng" = true ] && [ "$FORMAT" != apng ]; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Convert: preserving animated PNG timing and looping is supported only for APNG output.')\n\n$base"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    if [ "$input_frames" -gt 1 ] && ! image_output_preserves_frames "$FORMAT"; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Convert: the selected output format cannot preserve this multi-frame image.')\n\n$base"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
 
     # If user "converts" to the same extension, do not try to write input to itself.
     # Create mode will create a copy with suffix, overwrite mode treats as no-op success.
@@ -1339,31 +1504,124 @@ action_convert() {
         break
       fi
       rc=0
+      convert_source_icc=''
+      convert_output_icc=''
+      if [ "$FORMAT" = jp2 ]; then
+        convert_source_icc="$KIMDIR/convert-source.icc"
+        if ! exiftool -b -ICC_Profile -- "$i" > "$convert_source_icc" 2>/dev/null; then
+          rc=1
+        fi
+      fi
       if [ "$bmp5" = true ]; then
         magick -- "$i" -define bmp:format=bmp5 "$OUTTMP" >/dev/null 2>&1 || rc=$?
+      elif [ "$FORMAT" = apng ]; then
+        apng_error="${OUTTMP}.stderr"
+        apng_loop=1
+        apng_final_delay='0.1'
+        if [ "$input_frames" -gt 1 ]; then
+          if [ "$input_is_apng" = true ]; then
+            apng_loop="$(image_apng_play_count "$i")" || rc=1
+          else
+            local iterations
+            iterations="$(exiftool -s3 -AnimationIterations -- "$i" 2>/dev/null || true)"
+            case "${iterations,,}" in infinite) apng_loop=0 ;; *)
+              [[ "$iterations" =~ ^[0-9]+$ ]] && apng_loop="$iterations" ;;
+            esac
+          fi
+          apng_packets="$(ffprobe -v error -select_streams v:0 -show_entries packet=pts_time,duration_time \
+            -of csv=p=0 -i "$i" 2>/dev/null)" || apng_packets=''
+          while IFS= read -r apng_packet; do
+            IFS=',' read -r _ apng_final_delay <<< "$apng_packet"
+            [[ "$apng_final_delay" =~ ^[0-9]+([.][0-9]+)?$ ]] || apng_final_delay=''
+          done <<< "$apng_packets"
+          [[ "$apng_final_delay" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+            rc=1; apng_final_delay='0.1';
+          }
+        fi
+        apng_duration=1
+        apng_args=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats -i "$i"
+          -map 0:v:0 -an -sn -dn -fps_mode passthrough -c:v apng -plays "$apng_loop" \
+          -final_delay "$apng_final_delay" -f apng "$OUTTMP")
+        if [ "$rc" -eq 0 ]; then
+          if video_run_monitored "$dbusRef" "$(gettext 'Kim - Converting animated image: ')$base" \
+              "$apng_duration" "$apng_error" "${apng_args[@]}"; then
+            rc=0
+          else
+            rc=$?
+            if [ "$rc" -eq 130 ]; then interrupted=true; fi
+          fi
+        fi
+        if [ "$rc" -eq 0 ]; then
+          apng_probe="$(ffprobe -v error -select_streams v:0 -count_frames \
+            -show_entries stream=codec_name,width,height,nb_read_frames -of default=noprint_wrappers=1:nokey=1 \
+            -i "$OUTTMP" 2>/dev/null)" || rc=1
+          mapfile -t _apng_records <<< "$apng_probe"
+          apng_codec="${_apng_records[0]:-}"; apng_width="${_apng_records[1]:-0}"
+          apng_height="${_apng_records[2]:-0}"; apng_output_frames="${_apng_records[3]:-0}"
+          [[ "$apng_codec" == apng && "$apng_width" =~ ^[1-9][0-9]*$ &&
+             "$apng_height" =~ ^[1-9][0-9]*$ && "$apng_output_frames" =~ ^[1-9][0-9]*$ &&
+             "$apng_width" -eq "$source_width" && "$apng_height" -eq "$source_height" &&
+             "$apng_output_frames" -eq "$input_frames" ]] || rc=1
+        fi
+        if [ "$rc" -eq 0 ]; then
+          video_run_monitored "$dbusRef" "$(gettext 'Kim - Validating animated PNG: ')$base" \
+            "$apng_duration" "$apng_error" -hide_banner -v error -xerror -nostdin -progress pipe:1 \
+            -nostats -i "$OUTTMP" -map 0:v:0 -f null - || rc=$?
+        fi
+      elif [[ "$FORMAT" == jp2 || "$FORMAT" == j2k || "$FORMAT" == jpc ]]; then
+        if [ "$FORMAT" = jp2 ] && [ "$jp2_mode" = lossless ]; then
+          magick -- "$i" -define jp2:rate=1 "JP2:$OUTTMP" >/dev/null 2>&1 || rc=$?
+        elif [ "$FORMAT" = jp2 ]; then
+          magick -- "$i" -quality "$jp2_quality" "JP2:$OUTTMP" >/dev/null 2>&1 || rc=$?
+        else
+          magick -- "$i" "$FORMAT:$OUTTMP" >/dev/null 2>&1 || rc=$?
+        fi
       else
-        magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+        if [ -n "$format_coder" ]; then
+          magick -- "$i" "$format_coder:$OUTTMP" >/dev/null 2>&1 || rc=$?
+        else
+          magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+        fi
+      fi
+      if [ "$rc" -eq 0 ] && [ "$FORMAT" = jp2 ] && [ -s "$convert_source_icc" ]; then
+        exiftool -overwrite_original "-ICC_Profile<=$convert_source_icc" -- "$OUTTMP" >/dev/null 2>&1 || rc=$?
+        convert_output_icc="$KIMDIR/convert-output.icc"
+        exiftool -b -ICC_Profile -- "$OUTTMP" > "$convert_output_icc" 2>/dev/null || rc=$?
+        cmp -s -- "$convert_source_icc" "$convert_output_icc" || rc=1
       fi
       # Decode every frame from bytes, without trusting the requested suffix.
       expected="${FORMAT^^}"
       case "$expected" in
-        JPG|JPE|JPS) expected=JPEG ;;
+        JPG|JPE|JFIF|JPS) expected=JPEG ;;
         TIF) expected=TIFF ;;
         PNG00|PNG8|PNG24|PNG32|PNG48|PNG64) expected=PNG ;;
         GIF87) expected=GIF ;;
+        DIB) expected=BMP ;;
       esac
       actual=""
       if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
-        actual="$(identify -regard-warnings +ping -format '%m\n' - < "$OUTTMP" 2>/dev/null)" || rc=$?
+        actual="$(identify -regard-warnings +ping -format '%m|%w|%h\n' -- "$OUTTMP" 2>/dev/null)" || rc=$?
       fi
       [ -n "$actual" ] || rc=1
+      output_frames=0
       while IFS= read -r frame; do
+        [ -z "$frame" ] || output_frames=$((output_frames + 1))
+        IFS='|' read -r actual_format frame_width frame_height <<< "$frame"
+        if [[ "$frame_width" =~ ^[1-9][0-9]*$ && "$frame_height" =~ ^[1-9][0-9]*$ ]] &&
+           [ "${frame_width}x${frame_height}" != "${input_dimensions[output_frames-1]:-}" ]; then
+          rc=1
+        fi
         if [ "$expected" = PNM ]; then
-          case "$frame" in PBM|PGM|PPM|PAM) ;; *) rc=1 ;; esac
-        elif [ "$frame" != "$expected" ]; then
+          case "$(image_format_class "$actual_format")" in PBM|PGM|PPM|PAM) ;; *) rc=1 ;; esac
+        elif [ "$(image_format_class "$actual_format")" != "$(image_format_class "$expected")" ]; then
           rc=1
         fi
       done <<< "$actual"
+      if [ "$FORMAT" = apng ] && [ "$apng_codec" = apng ]; then
+        output_frames="$apng_output_frames"
+      fi
+      [ "$output_frames" -eq "$input_frames" ] || rc=1
+      if [ "$FORMAT" = apng ] && [ "$apng_codec" != apng ]; then rc=1; fi
       # Direct replacement previously retained an existing target's mode.
       if [ "$rc" -eq 0 ] && [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
         chmod --reference="$OUTFILE" "$OUTTMP" || rc=$?
@@ -1376,7 +1634,7 @@ action_convert() {
       else
         report_fail "$i"
       fi
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+      rm -f -- "$OUTTMP" "${apng_error:-}" >/dev/null 2>&1 || true
       [ "$interrupted" != true ] || break
       progress_value "$dbusRef" "$counter"
       continue
@@ -3026,16 +3284,17 @@ action_stripmeta() {
 # - Uses `magick` for resize and compression.
 
 action_webexport() {
-  local outdir='' size='' quality='' fmt='' explicit_dir=false
+  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false
   local -a files=()
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        --size|--quality|--format|--output-dir)
+        --size|--quality|--format|--output-dir|--color)
           [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
           case "$1" in
             --size) size="$2" ;; --quality) quality="$2" ;; --format) fmt="$2" ;;
             --output-dir) outdir="$2"; explicit_dir=true ;;
+            --color) color_mode="$2" ;;
           esac
           shift 2 ;;
         --) shift; files+=("$@"); break ;;
@@ -3077,6 +3336,12 @@ action_webexport() {
     jpeg) fmt="jpg" ;;
   esac
 
+  color_mode="${color_mode:-${KIM_WEB_COLOR_MODE:-srgb}}"
+  case "$color_mode" in srgb|preserve) ;; *)
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: --color must be srgb or preserve.')"
+    return 2 ;;
+  esac
+
   case "$fmt" in
     jpg|webp|avif|keep) : ;;
     *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
@@ -3104,11 +3369,26 @@ action_webexport() {
 
   local counter=0
   local i dir2 base stem ext out_ext OUTFILE OUTTMP n rc input_info input_format source_frames
-  local output_records record actual_format actual_width actual_height actual_frames
-  local expected_format coder
+  local output_records record actual_format actual_width actual_height actual_frames output_profiles
+  local expected_format coder srgb_profile colorspace has_icc profile_path
+  local output_profile_name
+  local animation_probe animation_codec animation_frames animation_key animation_value
   local source_width source_height orientation expected_dimensions source_dimensions
   local -a input_dimensions=()
   local interrupted=false failures=0 published=false
+
+  srgb_profile=''
+  if [ "$color_mode" = srgb ]; then
+    for profile_path in /usr/share/color/icc/sRGB.icc /usr/share/color/icc/ghostscript/srgb.icc \
+      /usr/share/color/icc/colord/sRGB.icc /usr/share/color/icc/sRGB-v2-micro.icc; do
+      if [ -s "$profile_path" ]; then srgb_profile="$profile_path"; break; fi
+    done
+    if [ -z "$srgb_profile" ]; then
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: an installed sRGB ICC profile is required for color-managed export.')"
+      progress_close "$dbusRef" || true
+      return 1
+    fi
+  fi
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -3129,20 +3409,51 @@ action_webexport() {
     rc=0
     if progress_cancelled "$dbusRef"; then interrupted=true; break; fi
 
-    input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n\n' - < "$i" 2>/dev/null)" || rc=1
+    input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n|%[colorspace]\n' - < "$i" 2>/dev/null)" || rc=1
     input_format=''
+    colorspace=''
     source_frames=0
     input_dimensions=()
     while IFS= read -r record; do
-      IFS='|' read -r actual_format source_width source_height orientation _ <<< "$record"
+      IFS='|' read -r actual_format source_width source_height orientation _ actual_format_color <<< "$record"
       [[ "$actual_format" =~ ^[A-Za-z0-9]+$ && "$source_width" =~ ^[1-9][0-9]*$ &&
          "$source_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
       [ -n "$input_format" ] || input_format="$actual_format"
+      [ -n "$colorspace" ] || colorspace="$actual_format_color"
       [ "$input_format" = "$actual_format" ] || { rc=1; break; }
+      [ "$colorspace" = "$actual_format_color" ] || { rc=1; break; }
       input_dimensions+=("$(oriented_image_dimensions "$source_width" "$source_height" "$orientation")")
       source_frames=$((source_frames + 1))
     done <<< "$input_info"
     [ "$source_frames" -gt 0 ] || rc=1
+    if [ "$rc" -eq 0 ] && [ "$(image_format_class "$input_format")" = PNG ] && image_has_apng_control_chunk "$i"; then
+      animation_probe="$(ffprobe -v error -select_streams v:0 -count_frames \
+        -show_entries stream=codec_name,nb_read_frames -of default=noprint_wrappers=1 -i "$i" 2>/dev/null)" || rc=1
+      animation_codec=''; animation_frames=''
+      while IFS='=' read -r animation_key animation_value; do
+        case "$animation_key" in codec_name) animation_codec="$animation_value" ;; nb_read_frames) animation_frames="$animation_value" ;; esac
+      done <<< "$animation_probe"
+      if [ "$animation_codec" = apng ] && [[ "$animation_frames" =~ ^[1-9][0-9]*$ ]] &&
+         [ "$animation_frames" -gt "$source_frames" ]; then
+        kdialog --title "$(gettext 'Kim')" --error \
+          "$(gettext 'webexport: this ImageMagick build cannot safely preserve animated PNG frames during export.')\n\n$base"
+        report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
+      fi
+      if [ "$animation_codec" != apng ]; then rc=1; fi
+    fi
+    has_icc=false
+    profile_path="$KIMDIR/web-source.icc"
+    if exiftool -b -ICC_Profile -- "$i" > "$profile_path" 2>/dev/null && [ -s "$profile_path" ]; then
+      has_icc=true
+    else
+      profile_path=''
+    fi
+    if [ "$color_mode" = srgb ] && [ "$has_icc" != true ] && [[ "${colorspace,,}" == *cmyk* ]]; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'webexport: untagged CMYK has ambiguous color and was not converted.')\n\n$base"
+      report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
+    fi
+    if [ "$color_mode" = preserve ] && [ "$has_icc" != true ]; then profile_path=''; fi
     if [ "$rc" -ne 0 ]; then
       report_fail "$i"
       failures=$((failures + 1))
@@ -3184,10 +3495,20 @@ action_webexport() {
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
 
     if [ -n "$OUTTMP" ] && [ "$rc" -eq 0 ]; then
-      # Keep the established web policy: normalize EXIF orientation, strip
-      # metadata, and do not convert color profiles or reinterpret pixels.
-      magick - -auto-orient -strip -resize "$size" -quality "$quality" "$coder:$OUTTMP" \
-        < "$i" >/dev/null 2>&1 || rc=$?
+      if [ "$color_mode" = srgb ]; then
+        # With an embedded profile ImageMagick performs an ICC transform;
+        # without one, applying the sRGB profile records the documented RGB
+        # working-space assumption without changing sample values.
+        magick - -auto-orient -profile "$srgb_profile" -resize "$size" \
+          -quality "$quality" -strip -profile "$srgb_profile" "$coder:$OUTTMP" \
+          < "$i" >/dev/null 2>&1 || rc=$?
+      elif [ -n "$profile_path" ]; then
+        magick - -auto-orient -resize "$size" -quality "$quality" -strip \
+          -profile "$profile_path" "$coder:$OUTTMP" < "$i" >/dev/null 2>&1 || rc=$?
+      else
+        magick - -auto-orient -strip -resize "$size" -quality "$quality" "$coder:$OUTTMP" \
+          < "$i" >/dev/null 2>&1 || rc=$?
+      fi
     else
       rc=1
     fi
@@ -3215,6 +3536,18 @@ action_webexport() {
       actual_frames=$((actual_frames + 1))
     done <<< "$output_records"
     [ "$actual_frames" -eq "$source_frames" ] || rc=1
+    if [ "$rc" -eq 0 ] && image_format_carries_icc "$coder" && \
+       { [ "$color_mode" = srgb ] || [ "$has_icc" = true ]; }; then
+      output_profiles="$(identify -format '%[profiles]\n' -- "$OUTTMP" 2>/dev/null)" || rc=1
+      [[ "${output_profiles,,}" == *icc* ]] || rc=1
+      output_profile_name="$(identify -format '%[profile:icc]' -- "$OUTTMP" 2>/dev/null)" || rc=1
+      if [ "$color_mode" = srgb ]; then
+        [[ "${output_profile_name,,}" == *srgb* ]] || rc=1
+      elif [ "$has_icc" = true ]; then
+        exiftool -b -ICC_Profile -- "$OUTTMP" > "$KIMDIR/web-output.icc" 2>/dev/null || rc=1
+        cmp -s -- "$profile_path" "$KIMDIR/web-output.icc" || rc=1
+      fi
+    fi
 
     if progress_cancelled "$dbusRef"; then interrupted=true; rc=1; fi
     published=false
@@ -3499,7 +3832,7 @@ video_probe() {
 }
 
 video_resolve_container() {
-  local path="$1" requested="$2" extension formats="${3,,}"
+  local path="$1" requested="$2" extension formats="${3,,}" output_codec="${4:-$VIDEO_CODEC}"
   VIDEO_MUXER=''
   extension="${path##*.}"
   extension="${extension,,}"
@@ -3524,8 +3857,8 @@ video_resolve_container() {
   esac
   [ -n "${VIDEO_MUXER:-}" ] || return 1
   VIDEO_EXTENSION="$extension"
-  case "$VIDEO_MUXER:$VIDEO_CODEC" in
-    webm:*|ogg:*) return 2 ;;
+  case "$VIDEO_MUXER:$output_codec" in
+    webm:libx264|webm:libx265|ogg:*) return 2 ;;
   esac
   return 0
 }
@@ -3630,7 +3963,8 @@ video_validate_output() {
   audio_count="$(video_count_records a "$output")" || return 1
   [ "$video_count" -eq 1 ] || return 1
   [ "$audio_count" -eq "$input_audio" ] || return 1
-  case "$codec" in libx264) expected_codec=h264 ;; libx265) expected_codec=hevc ;; *) return 1 ;; esac
+  case "$codec" in libx264) expected_codec=h264 ;; libx265) expected_codec=hevc ;;
+    av1) expected_codec=av1 ;; *) return 1 ;; esac
   [ "$output_codec" = "$expected_codec" ] || return 1
   case "$muxer" in
     mp4|mov)
@@ -3691,7 +4025,7 @@ video_ffmpeg_error_summary() {
 }
 
 action_video() {
-  local size='' crf='' codec='' container='' option='' mode rc=0 ref=''
+  local size='' crf='' codec='' container='' av1_quality='' av1_encoder='' av1_speed='' option='' mode rc=0 ref=''
   local max_width max_height source input_ext muxer ext target stem directory stage error_file
   local source_width source_height display_width display_height rotation duration formats dar
   local audio_count encoder_output label index=0 retry target_number
@@ -3699,7 +4033,7 @@ action_video() {
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --size|--crf|--codec|--container)
+      --size|--crf|--codec|--container|--av1-quality)
         [ "$#" -ge 2 ] || { progress_error "$(gettext 'Video options require a value.')"; return 2; }
         option="$1"; shift
         case "$option" in
@@ -3707,6 +4041,7 @@ action_video() {
           --crf) [ -z "$crf" ] || { progress_error "$(gettext 'Video CRF was specified more than once.')"; return 2; }; crf="$1" ;;
           --codec) [ -z "$codec" ] || { progress_error "$(gettext 'Video codec was specified more than once.')"; return 2; }; codec="$1" ;;
           --container) [ -z "$container" ] || { progress_error "$(gettext 'Video container was specified more than once.')"; return 2; }; container="$1" ;;
+          --av1-quality) [ -z "$av1_quality" ] || { progress_error "$(gettext 'AV1 quality was specified more than once.')"; return 2; }; av1_quality="$1" ;;
         esac
         shift
         ;;
@@ -3717,14 +4052,42 @@ action_video() {
   done
   case "$size" in hd720) max_width=1280; max_height=720 ;; hd1080) max_width=1920; max_height=1080 ;;
     *) progress_error "$(gettext 'Video size must be hd720 or hd1080.')"; return 2 ;; esac
-  case "$crf" in 17|23|29) : ;; *) progress_error "$(gettext 'Video CRF must be 17, 23 or 29.')"; return 2 ;; esac
-  case "$codec" in libx264|libx265) : ;; *) progress_error "$(gettext 'Video codec must be libx264 or libx265.')"; return 2 ;; esac
+  case "$codec" in
+    libx264|libx265)
+      [ -z "$av1_quality" ] || { progress_error "$(gettext 'AV1 quality options require --codec av1.')"; return 2; }
+      case "$crf" in 17|23|29) : ;; *) progress_error "$(gettext 'Video CRF must be 17, 23 or 29.')"; return 2 ;; esac
+      ;;
+    av1)
+      [ -z "$crf" ] || { progress_error "$(gettext 'AV1 uses --av1-quality; do not pass the H.264/H.265 --crf option.')"; return 2; }
+      case "$av1_quality" in
+        high) crf=28; av1_speed=6 ;;
+        balanced) crf=35; av1_speed=8 ;;
+        custom)
+          crf="$(kdialog --inputbox "$(gettext 'AV1 CRF quality (0-63):')" 30)" || return 1
+          av1_speed="$(kdialog --inputbox "$(gettext 'AV1 speed preset (0-13; lower is slower):')" 7)" || return 1
+          [[ "$crf" =~ ^[0-9]{1,2}$ ]] && [ "$crf" -le 63 ] || { progress_error "$(gettext 'AV1 CRF must be between 0 and 63.')"; return 2; }
+          [[ "$av1_speed" =~ ^-?[0-9]{1,2}$ ]] && [ "$av1_speed" -ge -2 ] && [ "$av1_speed" -le 13 ] || { progress_error "$(gettext 'AV1 speed preset must be between -2 and 13.')"; return 2; }
+          ;;
+        *) progress_error "$(gettext 'AV1 requires --av1-quality high, balanced or custom.')"; return 2 ;;
+      esac
+      ;;
+    *) progress_error "$(gettext 'Video codec must be libx264, libx265 or av1.')"; return 2 ;;
+  esac
   case "$container" in orig|mp4) : ;; *) progress_error "$(gettext 'Video container must be orig or mp4.')"; return 2 ;; esac
   if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
     progress_error "$(gettext 'FFmpeg and ffprobe are required for video transcoding.')"; return 1
   fi
-  if ! encoder_output="$(ffmpeg -hide_banner -encoders 2>/dev/null)" ||
-     ! [[ "$encoder_output" =~ [[:space:]]${codec}[[:space:]] ]]; then
+  if ! encoder_output="$(ffmpeg -hide_banner -encoders 2>/dev/null)"; then
+    progress_error "$(gettext 'FFmpeg encoder capabilities could not be queried.')"; return 1
+  fi
+  if [ "$codec" = av1 ]; then
+    if [[ "$encoder_output" =~ [[:space:]]libsvtav1[[:space:]] ]]; then av1_encoder=libsvtav1
+    elif [[ "$encoder_output" =~ [[:space:]]libaom-av1[[:space:]] ]]; then av1_encoder=libaom-av1
+    else progress_error "$(gettext 'No supported AV1 encoder is available (libsvtav1 or libaom-av1).')"; return 1; fi
+    if [ "$av1_quality" = custom ] && [ "$av1_encoder" = libaom-av1 ] && [ "$av1_speed" -gt 8 ]; then
+      progress_error "$(gettext 'The selected AV1 encoder accepts custom CPU speed values from 0 to 8.')"; return 2
+    fi
+  elif ! [[ "$encoder_output" =~ [[:space:]]${codec}[[:space:]] ]]; then
     progress_error "$(gettext 'The selected FFmpeg video encoder is unavailable:') $codec"; return 1
   fi
   if ! collect_publication_inputs files "${raw_files[@]}"; then
@@ -3755,7 +4118,7 @@ action_video() {
     else
       display_width="$source_width"; display_height="$source_height"
     fi
-    if video_resolve_container "$source" "$container" "$formats"; then
+    if video_resolve_container "$source" "$container" "$formats" "$codec"; then
       rc=0
     else
       rc=$?
@@ -3802,7 +4165,15 @@ action_video() {
     fi
     ffmpeg_args=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats -i "$source" -map 0:v:0 -map '0:a?' \
       -map_metadata 0 -map_chapters 0 -vf "scale=w='min(iw,$max_width)':h='min(ih,$max_height)':force_original_aspect_ratio=decrease:force_divisible_by=2" \
-      -fps_mode passthrough -c:v "$codec" -crf "$crf" -c:a copy)
+      -fps_mode passthrough)
+    if [ "$codec" = av1 ]; then
+      ffmpeg_args+=(-c:v "$av1_encoder" -crf "$crf" -pix_fmt yuv420p)
+      if [ "$av1_encoder" = libsvtav1 ]; then ffmpeg_args+=(-preset "$av1_speed")
+      else ffmpeg_args+=(-b:v 0 -cpu-used "$av1_speed"); fi
+    else
+      ffmpeg_args+=(-c:v "$codec" -crf "$crf")
+    fi
+    ffmpeg_args+=(-c:a copy)
     if [ "$muxer" = mp4 ]; then ffmpeg_args+=(-movflags +faststart); fi
     ffmpeg_args+=(-f "$muxer" "$stage")
     rc=0
@@ -3897,9 +4268,15 @@ Commands:
       Compress JPEG images at the selected quality. Create mode writes
       *_compressed files beside the first selected file by default.
 
-  convert --format FORMAT [--bmp5] -- <files...>
+  convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy]
+          [--jp2-quality 1..100] -- <files...>
   convert --custom-format -- <files...>
-      Convert images to another format; BMP menus select BMP5 explicitly.
+      Convert to JPEG, PNG, APNG, GIF, BMP, TIFF, PDF, WebP, AVIF, HEIC/HEIF,
+      JPEG XL or JPEG 2000 where the installed encoder is available. APNG
+      uses FFmpeg and preserves frame count, timing and loop metadata when read.
+      JP2 lossless uses the delegate's rate=1 mode; lossy quality is a
+      JPEG-2000-specific ImageMagick quality value, not JPEG quality.
+      BMP menus select BMP5 explicitly.
       overwrite mode overwrites existing converted outputs
       but never deletes original source files.
 
@@ -3963,20 +4340,28 @@ Commands:
 
   video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265
         --container orig|mp4 -- <files...>
+  video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|custom
+        --container orig|mp4 -- <files...>
       Safely transcode each selected video with FFmpeg. Original-container
       mode fails when the chosen codec/streams are incompatible; it never
-      silently changes to MP4. KIM_POLICY or the batch-wide dialog selects
+      silently changes to MP4. AV1 prefers libsvtav1 and uses libaom-av1 only
+      when SVT-AV1 is unavailable. AV1 High uses CRF 28, Balanced CRF 35;
+      these values are not direct equivalents of the H.264/H.265 presets.
+      KIM_POLICY or the batch-wide dialog selects
       create versus authorized overwrite.
 
   webexport [<dir>] <files...>
       Prepare images for web use.
       Prompts for max size and quality. Existing dispatcher form remains supported.
   webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
-            [--output-dir DIR] -- <files...>
+            [--color srgb|preserve] [--output-dir DIR] -- <files...>
       Action-local arguments expose size, quality, format, and output choices.
       Web export always creates derived files; KIM_POLICY never replaces originals.
       Always creates distinct *_web files into the chosen output directory.
       Output format uses KIM_WEB_FORMAT (default: jpg).
+      Color defaults to an ICC-managed sRGB transform. Untagged RGB is
+      assumed sRGB; untagged CMYK is rejected. --color preserve retains an
+      embedded ICC profile when the selected output format supports it.
 
   about | license | manual
       Show About information or open the installed License and Manual.
@@ -3998,6 +4383,10 @@ Environment:
   KIM_WEB_FORMAT=jpg|webp|avif|keep
       Output format for webexport. Default: jpg.
       keep uses the source file extension.
+
+  KIM_WEB_COLOR_MODE=srgb|preserve
+      Default web-export color policy. Default: srgb.
+      KConfig key: WEB_COLOR_MODE. Environment takes precedence.
 EOF
 }
 
