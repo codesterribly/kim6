@@ -835,6 +835,8 @@ def real_video_tool(tools, tool, args, plan):
         os.write(progress_fd, b"out_time_ms=100000\nprogress=continue\n")
         os.close(progress_fd)
         return 19
+    if tool == "ffmpeg" and plan.get("video_fail_before_progress"):
+        return 19
     if tool == "ffprobe":
         if "-i" not in args:
             raise ValueError("real ffprobe requires an explicit input")
@@ -850,18 +852,25 @@ def real_video_tool(tools, tool, args, plan):
                 b"format_name=mov,mp4,m4a,3gp,3g2,mj2",
                 plan["video_force_output_format"].encode("ascii"),
             )
+        if (plan.get("video_force_input_dimensions") and
+                not source.parent.name.startswith(".kim6-stage.") and
+                "stream=codec_type,codec_name,width,height,duration,nb_frames" in args):
+            dimensions = plan["video_force_input_dimensions"]
+            result.stdout = result.stdout.replace(b"width=96", f"width={dimensions['width']}".encode())
+            result.stdout = result.stdout.replace(b"height=64", f"height={dimensions['height']}".encode())
         if plan.get("video_interrupt_on_probe_output") and source.parent.name.startswith(".kim6-stage."):
             (CONTROL / "progress-state").write_text(plan["video_interrupt_on_probe_output"])
         sys.stdout.buffer.write(result.stdout)
         sys.stderr.buffer.write(result.stderr)
         return result.returncode
     else:
-        if "-nostdin" not in args or "-progress" not in args:
-            raise ValueError("real ffmpeg must be noninteractive and no-clobber")
+        decoding_validation = args[-3:] == ["-f", "null", "-"]
+        if "-nostdin" not in args or ("-progress" not in args and not decoding_validation):
+            raise ValueError("real ffmpeg must be noninteractive and monitored or a decode validation")
         input_paths = [owned(args[index + 1]) for index, value in enumerate(args[:-1]) if value == "-i"]
         if not input_paths or any(path.stat().st_size > 2 * 1024 * 1024 for path in input_paths):
             raise ValueError("real ffmpeg requires bounded test-owned inputs")
-        if args[-1] == "-" and "null" in args:
+        if decoding_validation:
             output = None
         else:
             if "-n" not in args:

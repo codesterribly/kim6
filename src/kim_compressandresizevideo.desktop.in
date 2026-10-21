@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
-Actions=Videohd72017265orig;Videohd72017265mp4;Videohd72017264orig;Videohd72017264mp4;Videohd72023265orig;Videohd72023265mp4;Videohd72023264orig;Videohd72023264mp4;Videohd72029265orig;Videohd72029265mp4;Videohd72029264orig;Videohd72029264mp4;Videohd108017265orig;Videohd108017265mp4;Videohd108017264orig;Videohd108017264mp4;Videohd108023265orig;Videohd108023265mp4;Videohd108023264orig;Videohd108023264mp4;Videohd108029265orig;Videohd108029265mp4;Videohd108029264orig;Videohd108029264mp4;Av1hd720High;Av1hd720Balanced;Av1hd1080High;Av1hd1080Balanced;Av1Custom;Manual;License;About;
+Actions=Videohd72017265orig;Videohd72017265mp4;Videohd72017264orig;Videohd72017264mp4;Videohd72023265orig;Videohd72023265mp4;Videohd72023264orig;Videohd72023264mp4;Videohd72029265orig;Videohd72029265mp4;Videohd72029264orig;Videohd72029264mp4;Videohd108017265orig;Videohd108017265mp4;Videohd108017264orig;Videohd108017264mp4;Videohd108023265orig;Videohd108023265mp4;Videohd108023264orig;Videohd108023264mp4;Videohd108029265orig;Videohd108029265mp4;Videohd108029264orig;Videohd108029264mp4;Av1hd720High;Av1hd720Balanced;Av1hd1080High;Av1hd1080Balanced;Av1Custom;VideoFrameAt;VideoThumbnail;VideoContactSheet;ExtractVideoAudio;MuteVideo;VideoToGif;Manual;License;About;
 _X-KDE-Submenu=KIM6 — Video transcoding
 X-KIM6-Managed=true
 
@@ -123,6 +123,30 @@ Exec=kim_all video --size hd1080 --codec av1 --av1-quality balanced --container 
 [Desktop Action Av1Custom]
 _Name=Custom AV1 settings…
 Exec=kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F
+
+[Desktop Action VideoFrameAt]
+_Name=Extract frame at timestamp…
+Exec=kim_all videoframes --mode single --format png --interactive -- %F
+
+[Desktop Action VideoThumbnail]
+_Name=Extract automatic thumbnail
+Exec=kim_all videoframes --mode thumbnail --format jpg -- %F
+
+[Desktop Action VideoContactSheet]
+_Name=Create video contact sheet…
+Exec=kim_all videoframes --mode contact --format jpg --interactive -- %F
+
+[Desktop Action ExtractVideoAudio]
+_Name=Extract audio…
+Exec=kim_all videoaudio --mode extract --format m4a --interactive -- %F
+
+[Desktop Action MuteVideo]
+_Name=Remove audio (copy video)
+Exec=kim_all videoaudio --mode mute -- %F
+
+[Desktop Action VideoToGif]
+_Name=Create animated GIF from video…
+Exec=kim_all videogif --interactive -- %F
 
 [Desktop Action Manual]
 _Name=KIM6 Manual

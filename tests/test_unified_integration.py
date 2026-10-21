@@ -54,7 +54,7 @@ class MenuContractTests(unittest.TestCase):
     def test_supported_menu_capabilities_and_presets_are_represented(self):
         entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
         commands = [command for _, command, _ in entries]
-        self.assertEqual(98, len(entries))
+        self.assertEqual(104, len(entries))
         dispatcher = (ROOT / "src/bin/kim_all").read_text()
         self.assertNotRegex(dispatcher, r"action_[A-Za-z0-9_]+\(\)\s*\{\s*:\s*;\s*\}")
         routes = set(re.findall(r'^\s{4}([a-z][a-z0-9]*)\)\s+[^;]*;', dispatcher, re.M))
@@ -89,6 +89,18 @@ class MenuContractTests(unittest.TestCase):
             "kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F",
             "kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F",
         }, av1_commands)
+        utility_actions = {
+            "VideoFrameAt": "kim_all videoframes --mode single --format png --interactive -- %F",
+            "VideoThumbnail": "kim_all videoframes --mode thumbnail --format jpg -- %F",
+            "VideoContactSheet": "kim_all videoframes --mode contact --format jpg --interactive -- %F",
+            "ExtractVideoAudio": "kim_all videoaudio --mode extract --format m4a --interactive -- %F",
+            "MuteVideo": "kim_all videoaudio --mode mute -- %F",
+            "VideoToGif": "kim_all videogif --interactive -- %F",
+        }
+        video_menu = dict((action_id, command) for action_id, command, _ in action_entries(
+            ROOT / "src/kim_compressandresizevideo.desktop.in"))
+        for action_id, command in utility_actions.items():
+            self.assertEqual(command, video_menu[action_id])
         self.assertEqual(6, sum(command.startswith("kim_all compress ") for command in commands))
         self.assertEqual(12, sum(command.startswith("kim_all resize ") for command in commands))
         for required in ("webexport", "resizeandsend", "rename", "album", "print", "gallery",
