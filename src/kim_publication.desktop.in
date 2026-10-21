@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;Album;Print;TiffJoin;Animation;Manual;License;About;
+Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;Album;Print;TiffJoin;Animation;Manual;License;About;
 _X-KDE-Submenu=KIM6 — Publish and organize
 X-KIM6-Managed=true
 
@@ -27,6 +27,22 @@ Exec=kim_all rename exifdate -- %F
 [Desktop Action StripMetadata]
 _Name=Strip metadata…
 Exec=kim_all stripmeta -- %F
+
+[Desktop Action StripGPS]
+_Name=Remove GPS coordinates…
+Exec=kim_all stripmeta --mode gps -- %F
+
+[Desktop Action RemoveAIMetadata]
+_Name=Remove recognized AI metadata…
+Exec=kim_all stripmeta --mode ai -- %F
+
+[Desktop Action SetCopyright]
+_Name=Set creator and copyright…
+Exec=kim_all copyright --interactive -- %F
+
+[Desktop Action AdjustCaptureTime]
+_Name=Adjust camera timestamps…
+Exec=kim_all timeshift --interactive -- %F
 
 [Desktop Action Album]
 _Name=Create a PDF album…

@@ -54,7 +54,7 @@ class MenuContractTests(unittest.TestCase):
     def test_supported_menu_capabilities_and_presets_are_represented(self):
         entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
         commands = [command for _, command, _ in entries]
-        self.assertEqual(94, len(entries))
+        self.assertEqual(98, len(entries))
         dispatcher = (ROOT / "src/bin/kim_all").read_text()
         self.assertNotRegex(dispatcher, r"action_[A-Za-z0-9_]+\(\)\s*\{\s*:\s*;\s*\}")
         routes = set(re.findall(r'^\s{4}([a-z][a-z0-9]*)\)\s+[^;]*;', dispatcher, re.M))
@@ -70,6 +70,11 @@ class MenuContractTests(unittest.TestCase):
         legacy_video = {command for command in commands
                         if command.startswith("kim_all video ") and "--crf " in command}
         self.assertEqual(24, len(legacy_video))
+        metadata_commands = {action_id: command for action_id, command, _ in entries}
+        self.assertEqual("kim_all stripmeta --mode gps -- %F", metadata_commands["StripGPS"])
+        self.assertEqual("kim_all stripmeta --mode ai -- %F", metadata_commands["RemoveAIMetadata"])
+        self.assertEqual("kim_all copyright --interactive -- %F", metadata_commands["SetCopyright"])
+        self.assertEqual("kim_all timeshift --interactive -- %F", metadata_commands["AdjustCaptureTime"])
         expected_video = {
             f"kim_all video --size {size} --crf {crf} --codec {codec} --container {container} -- %F"
             for size in ("hd720", "hd1080") for crf in (17, 23, 29)
@@ -87,8 +92,8 @@ class MenuContractTests(unittest.TestCase):
         self.assertEqual(6, sum(command.startswith("kim_all compress ") for command in commands))
         self.assertEqual(12, sum(command.startswith("kim_all resize ") for command in commands))
         for required in ("webexport", "resizeandsend", "rename", "album", "print", "gallery",
-                         "pelemele", "tiffjoin", "animate", "stripmeta", "rotate", "flipflop",
-                         "convert", "about", "license", "manual"):
+                         "pelemele", "tiffjoin", "animate", "stripmeta", "copyright", "timeshift",
+                         "rotate", "flipflop", "convert", "about", "license", "manual"):
             self.assertTrue(any(re.search(rf"\b{required}\b", command) for command in commands), required)
         self.assertTrue(any("bmp5" in command for command in commands))
         bmp = next(command for command in commands if "--format bmp" in command)

@@ -121,6 +121,10 @@ def main():
         if args[2] == "wasCancelled":
             print("true" if state == "cancelled" else "unexpected")
             return 0
+    if tool in ("qdbus", "qdbus6") and args[2] == "wasCancelled" and plan.get("metadata_cancel_after_stage"):
+        if any(ROOT.rglob(".kim6-stage.*")):
+            print("true")
+            return 0
     if tool == "magick" and "real_magick" in plan and response is None:
         return real_magick(plan["real_magick"], args)
     if (tool == "magick" and "real_conversion" in plan and response is None
@@ -230,6 +234,8 @@ def main():
             raise ValueError("real mv requires a rename-only publication form")
         for value in args[3:]:
             owned(value)
+        if plan.get("metadata_publication_fail"):
+            return 74
         return subprocess.call([plan["real_mv"], *args])
     if response is not None:
         if tool == "ffmpeg" and "-progress" in args:
@@ -301,13 +307,39 @@ def main():
         owned(args[-1])
         return subprocess.run([plan['real_rename_exif'], *args], timeout=10).returncode
     if tool in plan.get("real_metadata_tools", {}):
-        if tool == "touch" and len(args) == 4 and args[0] == "-r" and args[2] == "--":
+        if tool == "exiftool":
+            for value in args:
+                if value == "--":
+                    continue
+                candidate = value.split("<=", 1)[-1]
+                if candidate.startswith("/") and Path(candidate).exists():
+                    owned(candidate)
+            if "-o" in args:
+                destination = owned(args[args.index("-o") + 1])
+                if destination.exists() or destination.is_symlink():
+                    raise ValueError("metadata output must be an unused owned stage")
+                if plan.get("metadata_fail_output"):
+                    return int(plan["metadata_fail_output"])
+        elif tool == "touch" and len(args) == 4 and args[0] == "-r" and args[2] == "--":
             owned(args[1]); owned(args[3])
         elif tool == "chmod" and len(args) == 2 and args[0].startswith("--reference="):
             owned(args[0].split("=", 1)[1]); owned(args[1])
         else:
-            raise ValueError("unsupported real metadata preparation")
-        return subprocess.run([plan["real_metadata_tools"][tool], *args], timeout=10).returncode
+            if tool != "exiftool":
+                raise ValueError("unsupported real metadata preparation")
+        result = subprocess.run([plan["real_metadata_tools"][tool], *args], timeout=10)
+        if (tool == "exiftool" and result.returncode == 0 and "-o" in args
+                and plan.get("metadata_corrupt_output")):
+            owned(args[args.index("-o") + 1]).write_bytes(b"invalid metadata-only output")
+        if (tool == "exiftool" and result.returncode == 0 and "-o" in args
+                and plan.get("metadata_wrong_timestamp")):
+            stage = owned(args[args.index("-o") + 1])
+            subprocess.run([plan["real_metadata_tools"][tool], "-overwrite_original",
+                            "-DateTimeOriginal=2000:01:01 00:00:00", str(stage)],
+                           timeout=10, check=True)
+        if tool == "exiftool" and "-o" in args and plan.get("metadata_disappear_after_output"):
+            (CONTROL / "progress-gone").touch()
+        return result.returncode
     if tool == "gettext":
         print(args[-1])
     elif tool == "kreadconfig6":

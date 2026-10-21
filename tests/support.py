@@ -246,9 +246,15 @@ class Workspace:
     def use_real_metadata_tools(self):
         """Check installed chmod/touch on owned staging entries."""
         plan = json.loads(self.plan.read_text())
-        plan["real_metadata_tools"] = {name: shutil.which(name) for name in ("touch", "chmod")}
+        plan["real_metadata_tools"] = {name: shutil.which(name) for name in ("touch", "chmod", "exiftool")}
         if not all(plan["real_metadata_tools"].values()):
             raise unittest.SkipTest("chmod/touch unavailable")
+        self.plan.write_text(json.dumps(plan))
+
+    def metadata_fault(self, **options):
+        """Inject a metadata producer failure or owned D-Bus disappearance."""
+        plan = json.loads(self.plan.read_text())
+        plan.update(options)
         self.plan.write_text(json.dumps(plan))
 
     def atomic_overwrite(self, destination):

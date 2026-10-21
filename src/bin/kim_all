@@ -131,6 +131,19 @@ load_kim_config() {
   fi
   : "${KIM_WEB_COLOR_MODE:=srgb}"
 
+  if [ -z "${KIM_COPYRIGHT_CREATOR:-}" ]; then
+    v="$(_cfg_get COPYRIGHT_CREATOR)"
+    [ -z "$v" ] || KIM_COPYRIGHT_CREATOR="$v"
+  fi
+  if [ -z "${KIM_COPYRIGHT_NOTICE:-}" ]; then
+    v="$(_cfg_get COPYRIGHT_NOTICE)"
+    [ -z "$v" ] || KIM_COPYRIGHT_NOTICE="$v"
+  fi
+  if [ -z "${KIM_COPYRIGHT_USAGE_RIGHTS:-}" ]; then
+    v="$(_cfg_get COPYRIGHT_USAGE_RIGHTS)"
+    [ -z "$v" ] || KIM_COPYRIGHT_USAGE_RIGHTS="$v"
+  fi
+
   # Policy mode from config (optional), only used if no env override exists.
   # Env: KIM_POLICY
   if [ -z "${KIM_POLICY:-}" ]; then
@@ -3116,11 +3129,38 @@ action_rotatewithexif() {
 # - Uses `exiftool` for metadata stripping, keeping ICC profile and Orientation.
 
 action_stripmeta() {
-  [ "${1:-}" != -- ] || shift
+  local strip_mode=all remove_ai=false interactive=false option
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --mode)
+        [ "$#" -ge 2 ] || die "stripmeta: --mode requires gps, ai or all"
+        strip_mode="$2"; shift 2 ;;
+      --remove-ai) remove_ai=true; shift ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; break ;;
+      --*) die "stripmeta: unknown option $1" ;;
+      *) break ;;
+    esac
+  done
+  case "$strip_mode" in gps|ai|all) : ;; *) die "stripmeta: mode must be gps, ai or all" ;; esac
   local -a files=()
   collect_valid_files files "$@"
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
+
+  if [ "$interactive" = true ]; then
+    local selected
+    selected="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose metadata to remove:')" \
+      all "$(gettext 'All metadata')" gps "$(gettext 'GPS coordinates')" ai "$(gettext 'Recognized AI-generation fields')" 2>/dev/null)" || return 1
+    case "$selected" in all|gps|ai) strip_mode="$selected" ;; *) return 1 ;; esac
+  fi
+  if [ "$strip_mode" != all ]; then
+    action_stripmeta_selective "$strip_mode" "$remove_ai" "${files[@]}"
+    return $?
+  fi
+  if [ "$remove_ai" = true ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal.')" 2>/dev/null || true
+  fi
 
   local mode
   mode="$(choose_output_mode \
@@ -3261,6 +3301,365 @@ action_stripmeta() {
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
   true
+}
+
+# Read-only metadata probes, plus pixel/ICC fingerprints used by every
+# metadata-only writer. ExifTool edits a destination-local copy; publication
+# remains the existing K12 atomic operation.
+metadata_image_fingerprint() {
+  identify -regard-warnings +ping -format '%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\n' -- "$1" 2>/dev/null
+}
+
+metadata_icc_fingerprint() {
+  local result line records='' rc=0
+  local icc_key_pattern='^[[:space:]]*"[A-Za-z0-9_:.-]*ICC_Profile":'
+  local icc_value_pattern='^[[:space:]]*"([A-Za-z0-9_:.-]*ICC_Profile)":[[:space:]]*"(base64:[A-Za-z0-9+/=]+|-)"[,]?[[:space:]]*$'
+  # ExifTool's JSON serializer represents binary values as base64, so the
+  # comparison remains binary-safe without placing profile bytes in Bash vars.
+  result="$(exiftool -j -b -f -a -G1:4 -ICC_Profile -- "$1" 2>/dev/null)" || return 1
+  while IFS= read -r line; do
+    [[ "$line" =~ $icc_key_pattern ]] || continue
+    if [[ "$line" =~ $icc_value_pattern ]]; then
+      records+="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"$'\n'
+    else
+      rc=1
+      break
+    fi
+  done <<< "$result"
+  [ "$rc" -eq 0 ] || return 1
+  printf '%s' "$records"
+}
+
+metadata_query() {
+  local file="$1"; shift
+  exiftool -s3 "$@" -- "$file" 2>/dev/null
+}
+
+metadata_is_raw() {
+  local ext="${1##*.}"
+  case "${ext^^}" in DNG|CR2|CR3|NEF|ARW|RAF|ORF|RW2|PEF|SRW|3FR|IIQ|KDC|X3F) return 0 ;; *) return 1 ;; esac
+}
+
+# Inputs: source target publication-mode progress-ref expected-tags producer-options...
+# expected-tags is a nameref to pairs of ExifTool query option and expected value.
+metadata_publish_one() {
+  local source="$1" target="$2" publication_mode="$3" ref="$4" expected_name="$5"
+  shift 5
+  local -n expected_pairs="$expected_name"
+  local tmp source_info output_info source_icc output_icc rc=0 pair actual tag value
+  [ ! -L "$source" ] && [ "$(stat -c '%h' -- "$source" 2>/dev/null)" = 1 ] || return 1
+  metadata_is_raw "$source" && return 1
+  source_info="$(metadata_image_fingerprint "$source")" || return 1
+  [ -n "$source_info" ] || return 1
+  tmp="$(tmp_for_target "$target")" || return 1
+  if progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rm -f -- "$tmp" >/dev/null 2>&1 || true
+    return 1
+  fi
+  exiftool "$@" -o "$tmp" -- "$source" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 0 ] && [ -s "$tmp" ] || { rm -f -- "$tmp"; return 1; }
+  output_info="$(metadata_image_fingerprint "$tmp")" || rc=$?
+  [ -n "$output_info" ] && [ "$output_info" = "$source_info" ] || rc=1
+  source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
+  output_icc="$(metadata_icc_fingerprint "$tmp")" || rc=1
+  [ "$source_icc" = "$output_icc" ] || rc=1
+  for pair in "${expected_pairs[@]}"; do
+    tag="${pair%%$'\034'*}"; value="${pair#*$'\034'}"
+    actual="$(metadata_query "$tmp" "$tag")" || rc=1
+    [ "$actual" = "$value" ] || rc=1
+  done
+  if [ "$rc" -eq 0 ]; then
+    chmod --reference="$source" "$tmp" || rc=$?
+    [ "$rc" -ne 0 ] || touch -r "$source" -- "$tmp" || rc=$?
+  fi
+  if [ "$rc" -eq 0 ] && progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; rc=1; fi
+  if [ "$rc" -eq 0 ]; then commit_tmp_to_target "$tmp" "$target" "$publication_mode" || rc=$?; fi
+  rm -f -- "$tmp" >/dev/null 2>&1 || true
+  [ "$rc" -eq 0 ]
+}
+
+metadata_output_path() {
+  local source="$1" tag="$2" publication_mode="$3" dir stem ext target n=1
+  {
+    IFS= read -r dir
+    IFS= read -r _
+    IFS= read -r stem
+    IFS= read -r ext
+  } < <(split_path "$source")
+  if [ "$publication_mode" = overwrite ]; then printf '%s\n' "$source"; return; fi
+  target="$dir/$(affixed_filename "$stem" "$tag" "$ext")"
+  while [ -e "$target" ] || [ -L "$target" ]; do
+    target="$dir/$(affixed_filename "$stem" "$tag" "$ext" "$n" "-")"
+    n=$((n + 1))
+  done
+  printf '%s\n' "$target"
+}
+
+action_stripmeta_selective() {
+  local strip_mode="$1" remove_ai="$2"; shift 2
+  local -a files=() expected args ai_tags=(XMP-iptcExt:AIPromptInformation XMP-iptcExt:AIPromptWriterName)
+  local -a gps_ext_tags=(XMP-iptcExt:LocationShownGPSLatitude XMP-iptcExt:LocationShownGPSLongitude
+    XMP-iptcExt:LocationShownGPSAltitude XMP-iptcExt:LocationShownGPSAltitudeRef
+    XMP-iptcExt:LocationCreatedGPSLatitude XMP-iptcExt:LocationCreatedGPSLongitude
+    XMP-iptcExt:LocationCreatedGPSAltitude XMP-iptcExt:LocationCreatedGPSAltitudeRef
+    XMP-iptcExt:RatingRegionGPSLatitude XMP-iptcExt:RatingRegionGPSLongitude
+    XMP-iptcExt:RatingRegionGPSAltitude XMP-iptcExt:RatingRegionGPSAltitudeRef)
+  collect_valid_files files "$@"
+  [ "${#files[@]}" -gt 0 ] || return 0
+  if ! command -v exiftool >/dev/null 2>&1; then
+    progress_error "$(gettext 'ExifTool is required for selective metadata removal.')"
+    return 1
+  fi
+  local publication_mode counter=0 source ref target rc i tag query_before ai_source do_ai=false ai_remove=false ai_tag
+  local -a ai_queries=()
+  for ai_tag in "${ai_tags[@]}"; do ai_queries+=("-$ai_tag"); done
+  [ "$strip_mode" = ai ] || [ "$remove_ai" != true ] || do_ai=true
+  [ "$strip_mode" != ai ] || do_ai=true
+  if [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values and AIPromptInformation/AIPromptWriterName; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
+  fi
+  METADATA_INTERRUPTED=false
+  publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"
+  [ "$publication_mode" != cancel ] || return 1
+  report_init
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter + 1)); tag="$strip_mode"
+    [ "$remove_ai" != true ] || tag="${tag}_ai"
+    progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
+    if [ "$strip_mode" = gps ] || [ "$strip_mode" = ai ] || [ "$remove_ai" = true ]; then
+      if [ "$strip_mode" = gps ]; then
+        local -a gps_queries=(-GPS:all '-XMP-exif:GPS*' '-XMP:GPS*')
+        local gps_tag
+        for gps_tag in "${gps_ext_tags[@]}"; do gps_queries+=("-$gps_tag"); done
+        if ! query_before="$(metadata_query "$source" "${gps_queries[@]}")"; then
+          report_fail "$source"; progress_value "$ref" "$counter"; continue
+        fi
+        if [ "$do_ai" = true ]; then
+          if ! ai_source="$(metadata_query "$source" -XMP-iptcExt:DigitalSourceType)"; then
+            report_fail "$source"; progress_value "$ref" "$counter"; continue
+          fi
+          local ai_prompt_tags
+          if ! ai_prompt_tags="$(metadata_query "$source" "${ai_queries[@]}")"; then
+            report_fail "$source"; progress_value "$ref" "$counter"; continue
+          fi
+          query_before+="$ai_prompt_tags"
+          case "$ai_source" in *trainedAlgorithmicMedia*|*compositeWithTrainedAlgorithmicMedia*|*algorithmicMedia*)
+            query_before+="$ai_source"; ai_remove=true ;; esac
+        fi
+      else
+        if ! query_before="$(metadata_query "$source" "${ai_queries[@]}")"; then
+          report_fail "$source"; progress_value "$ref" "$counter"; continue
+        fi
+        if ! ai_source="$(metadata_query "$source" -XMP-iptcExt:DigitalSourceType)"; then
+          report_fail "$source"; progress_value "$ref" "$counter"; continue
+        fi
+        case "$ai_source" in
+          *trainedAlgorithmicMedia*|*compositeWithTrainedAlgorithmicMedia*|*algorithmicMedia*)
+            ai_remove=true; query_before+="$ai_source" ;;
+        esac
+      fi
+    fi
+    if [ "$strip_mode" = gps ]; then
+      args=(-GPS:all= '-XMP-exif:GPS*=' '-XMP:GPS*=' \
+        -XMP-iptcExt:LocationShownGPSLatitude= -XMP-iptcExt:LocationShownGPSLongitude= \
+        -XMP-iptcExt:LocationShownGPSAltitude= -XMP-iptcExt:LocationShownGPSAltitudeRef= \
+        -XMP-iptcExt:LocationCreatedGPSLatitude= -XMP-iptcExt:LocationCreatedGPSLongitude= \
+        -XMP-iptcExt:LocationCreatedGPSAltitude= -XMP-iptcExt:LocationCreatedGPSAltitudeRef= \
+        -XMP-iptcExt:RatingRegionGPSLatitude= -XMP-iptcExt:RatingRegionGPSLongitude= \
+        -XMP-iptcExt:RatingRegionGPSAltitude= -XMP-iptcExt:RatingRegionGPSAltitudeRef=)
+      if [ "$do_ai" = true ]; then
+        for ai_tag in "${ai_tags[@]}"; do args+=("-$ai_tag="); done
+        [ "$ai_remove" != true ] || args+=(-XMP-iptcExt:DigitalSourceType=)
+      fi
+    else
+      args=()
+      for ai_tag in "${ai_tags[@]}"; do args+=("-$ai_tag="); done
+      [ "$ai_remove" != true ] || args+=(-XMP-iptcExt:DigitalSourceType=)
+    fi
+    if [ -z "$query_before" ]; then
+      report_ok
+      progress_value "$ref" "$counter"
+      continue
+    fi
+    target="$(metadata_output_path "$source" "$tag" "$publication_mode")"
+    if [ "$strip_mode" = gps ]; then
+      expected=("-GPS:all"$'\034' "-XMP-exif:GPS*"$'\034' "-XMP:GPS*"$'\034')
+      for gps_tag in "${gps_ext_tags[@]}"; do expected+=("-$gps_tag"$'\034'); done
+      if [ "$do_ai" = true ]; then
+        for ai_tag in "${ai_tags[@]}"; do expected+=("-$ai_tag"$'\034'); done
+        case "$ai_source" in *trainedAlgorithmicMedia*|*compositeWithTrainedAlgorithmicMedia*|*algorithmicMedia*)
+          expected+=("-XMP-iptcExt:DigitalSourceType"$'\034') ;; esac
+      fi
+    else
+      expected=()
+      for ai_tag in "${ai_tags[@]}"; do expected+=("-$ai_tag"$'\034'); done
+      case "$ai_source" in *trainedAlgorithmicMedia*|*compositeWithTrainedAlgorithmicMedia*|*algorithmicMedia*)
+        expected+=("-XMP-iptcExt:DigitalSourceType"$'\034') ;; esac
+    fi
+    if metadata_publish_one "$source" "$target" "$publication_mode" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+    progress_value "$ref" "$counter"
+    [ "$METADATA_INTERRUPTED" != true ] || break
+  done
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
+}
+
+action_copyright() {
+  local creator="${KIM_COPYRIGHT_CREATOR:-}" notice="${KIM_COPYRIGHT_NOTICE:-}" rights="${KIM_COPYRIGHT_USAGE_RIGHTS:-}"
+  local year='' interactive=false provided=false
+  local -a files=() args expected
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --creator|--notice|--usage-rights|--year)
+        [ "$#" -ge 2 ] || die "copyright: $1 requires a value"
+        provided=true
+        case "$1" in --creator) creator="$2" ;; --notice) notice="$2" ;; --usage-rights) rights="$2" ;; --year) year="$2" ;; esac
+        shift 2 ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      --*) die "copyright: unknown option $1" ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  collect_valid_files files "${files[@]}"; [ "${#files[@]}" -gt 0 ] || return 0
+  if ! command -v exiftool >/dev/null 2>&1; then
+    progress_error "$(gettext 'ExifTool is required for copyright metadata editing.')"
+    return 1
+  fi
+  if [ "$interactive" = true ] || { [ "$provided" != true ] && [ -z "$creator$notice$rights" ]; }; then
+    creator="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Creator / Artist (leave blank to keep unchanged):')" "$creator")" || return 1
+    notice="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Copyright notice (leave blank to keep unchanged):')" "$notice")" || return 1
+    rights="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Optional usage rights (leave blank to keep unchanged):')" "$rights")" || return 1
+  fi
+  [ -n "$creator$notice$rights" ] || die "copyright: select at least one nonempty field"
+  [ -z "$year" ] || [[ "$year" =~ ^[0-9]{4}$ ]] || die "copyright: year must be four digits"
+  local policy counter=0 source ref target capture_year expected_value option rc
+  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"; [ "$policy" != cancel ] || return 1
+  METADATA_INTERRUPTED=false
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter + 1)); progress_begin_item "$ref" "$(gettext 'Kim - Setting rights: ')${source##*/}" || { report_fail "$source"; break; }
+    args=(); expected=()
+    if [ -n "$creator" ]; then
+      args+=(-EXIF:Artist="$creator" -IPTC:By-line="$creator" -XMP-dc:Creator="$creator")
+      expected+=('-Artist'$'\034'"$creator" '-IPTC:By-line'$'\034'"$creator" '-XMP-dc:Creator'$'\034'"$creator")
+    fi
+    if [ -n "$notice" ]; then
+      capture_year="$(metadata_query "$source" -DateTimeOriginal)" || { report_fail "$source"; progress_value "$ref" "$counter"; continue; }
+      if [[ "$capture_year" =~ ^([0-9]{4}): ]]; then capture_year="${BASH_REMATCH[1]}"; else capture_year="$(date +%Y)"; fi
+      [ -n "$year" ] && capture_year="$year"
+      expected_value="${notice//\{YEAR\}/$capture_year}"
+      args+=(-EXIF:Copyright="$expected_value" -IPTC:CopyrightNotice="$expected_value" -XMP-dc:Rights="$expected_value")
+      expected+=('-Copyright'$'\034'"$expected_value" '-IPTC:CopyrightNotice'$'\034'"$expected_value" '-XMP-dc:Rights'$'\034'"$expected_value")
+    fi
+    if [ -n "$rights" ]; then args+=(-XMP-xmpRights:UsageTerms="$rights"); expected+=('-XMP-xmpRights:UsageTerms'$'\034'"$rights"); fi
+    local already=true pair current pair_tag pair_value
+    for pair in "${expected[@]}"; do
+      pair_tag="${pair%%$'\034'*}"; pair_value="${pair#*$'\034'}"
+      current="$(metadata_query "$source" "$pair_tag")" || current=''
+      [ "$current" = "$pair_value" ] || already=false
+    done
+    if [ "$already" = true ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+    target="$(metadata_output_path "$source" copyright "$policy")"
+    if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+    progress_value "$ref" "$counter"
+    [ "$METADATA_INTERRUPTED" != true ] || break
+  done
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ]
+}
+
+action_timeshift() {
+  local offset='' fields=all interactive=false sign hours minutes seconds shiftarg policy source ref target counter=0 capture_year preview_before preview_after preview_shift rc key previous parent canonical_parent
+  local -a files=() args expected seen_sources=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --offset|--fields)
+        [ "$#" -ge 2 ] || die "timeshift: $1 requires a value"
+        if [ "$1" = --offset ]; then offset="$2"; else fields="$2"; fi
+        shift 2 ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      --*) die "timeshift: unknown option $1" ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  collect_valid_files files "${files[@]}"; [ "${#files[@]}" -gt 0 ] || return 0
+  if ! command -v exiftool >/dev/null 2>&1; then
+    progress_error "$(gettext 'ExifTool is required for camera timestamp editing.')"
+    return 1
+  fi
+  if [ "$interactive" = true ] || [ -z "$offset" ]; then
+    interactive=true
+    offset="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Signed camera-time offset (±HH:MM:SS):')" '+00:00:00')" || return 1
+    fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Capture, creation and modification dates')" capture "$(gettext 'Capture time only')")" || return 1
+  fi
+  [[ "$offset" =~ ^([+-])([0-9]{2,4}):([0-5][0-9]):([0-5][0-9])$ ]] || die "timeshift: offset must be signed HH:MM:SS"
+  sign="${BASH_REMATCH[1]}"; hours="${BASH_REMATCH[2]}"; minutes="${BASH_REMATCH[3]}"; seconds="${BASH_REMATCH[4]}"
+  [[ "$fields" == all || "$fields" == capture ]] || die "timeshift: fields must be all or capture"
+  shiftarg="0:0:0 ${hours}:${minutes}:${seconds}"
+  local direction=+
+  [ "$sign" = + ] || direction=-
+  [ "$fields" = capture ] && shiftarg="-DateTimeOriginal${direction}=${shiftarg}" || shiftarg="-AllDates${direction}=${shiftarg}"
+  if [ "$interactive" = true ]; then
+    local first_source="${files[0]}"
+    preview_before="$(metadata_query "$first_source" -DateTimeOriginal)"
+    preview_shift="${hours}:${minutes}:${seconds}"
+    [ "$sign" = + ] || preview_shift="-${preview_shift}"
+    preview_after="$(exiftool -globalTimeShift "${sign}0:0:0 ${hours}:${minutes}:${seconds}" -s3 -DateTimeOriginal -- "$first_source" 2>/dev/null)" || preview_after=''
+    local preview_message
+    preview_message="$(printf '%s\n\n%s %s\n%s %s\n\n%s' \
+      "$(gettext 'Preview camera-time adjustment')" \
+      "$(gettext 'Before:')" "${preview_before:-$(gettext 'no capture time')}" \
+      "$(gettext 'After:')" "${preview_after:-$(gettext 'unavailable')}" \
+      "$(gettext 'Apply this fixed local-clock offset? Timezone offsets are not converted.')")"
+    if ! kdialog --title "$(gettext 'Kim')" --yesno "$preview_message"; then return 1; fi
+  fi
+  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"; [ "$policy" != cancel ] || return 1
+  METADATA_INTERRUPTED=false
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter + 1)); progress_begin_item "$ref" "$(gettext 'Kim - Shifting camera time: ')${source##*/}" || { report_fail "$source"; break; }
+    key=''
+    if [ ! -L "$source" ]; then
+      parent="${source%/*}"
+      [ "$parent" != "$source" ] || parent=.
+      canonical_parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || canonical_parent=''
+      [ -z "$canonical_parent" ] || key="$canonical_parent/${source##*/}"
+    fi
+    if [ -n "$key" ]; then
+      for previous in "${seen_sources[@]}"; do
+        if [ "$key" = "$previous" ]; then
+          report_ok; progress_value "$ref" "$counter"; continue 2
+        fi
+      done
+    fi
+    args=("$shiftarg"); expected=(); rc=0
+    for option in DateTimeOriginal CreateDate ModifyDate; do
+      if [ "$fields" = capture ] && [ "$option" != DateTimeOriginal ]; then continue; fi
+      capture_year="$(metadata_query "$source" "-$option")" || { rc=1; break; }
+      [ -n "$capture_year" ] || continue
+      preview_after="$(exiftool -globalTimeShift "${sign}0:0:0 ${hours}:${minutes}:${seconds}" \
+        -s3 "-$option" -- "$source" 2>/dev/null)" || { rc=1; break; }
+      [ -n "$preview_after" ] || { rc=1; break; }
+      expected+=("-$option"$'\034'"$preview_after")
+    done
+    if [ "$rc" -ne 0 ]; then report_fail "$source"; progress_value "$ref" "$counter"; continue; fi
+    if [ "${#expected[@]}" -eq 0 ] || [[ "$offset" == +00:00:00 || "$offset" == -00:00:00 ]]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+    # ExifTool computes expected camera-local clock values too; exact staged
+    # values are validated before publication. Unselected fields remain untouched.
+    target="$(metadata_output_path "$source" timeshift "$policy")"
+    if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
+      report_ok
+      [ -z "$key" ] || seen_sources+=("$key")
+    else
+      report_fail "$source"
+    fi
+    progress_value "$ref" "$counter"
+    [ "$METADATA_INTERRUPTED" != true ] || break
+  done
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 ####################
@@ -4335,8 +4734,22 @@ Commands:
   rotatewithexif <files...>
       Rotate images using EXIF orientation.
 
-  stripmeta [--] <files...>
-      Strip metadata while preserving ICC profile and orientation.
+  stripmeta [--mode all|gps|ai] [--remove-ai] [--] <files...>
+      Remove all metadata (default), GPS location fields, or recognized
+      AI-generation fields. Selective modes preserve pixels, ICC and mtime.
+      --interactive opens a removal-mode chooser. C2PA signed credentials
+      are not guaranteed to be removable by ExifTool.
+
+  copyright [--creator TEXT] [--notice TEXT] [--usage-rights TEXT]
+            [--year YYYY] -- <files...>
+      Update selected creator, copyright and usage-rights fields. Empty
+      values leave fields unchanged. {YEAR} uses capture year when available,
+      otherwise the current year. With no values, opens the interactive form.
+
+  timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- <files...>
+      Shift local camera time. Defaults to DateTimeOriginal, CreateDate and
+      ModifyDate; capture selects DateTimeOriginal only. Subseconds and
+      timezone-offset tags are retained; this is not UTC conversion.
 
   video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265
         --container orig|mp4 -- <files...>
@@ -4387,6 +4800,12 @@ Environment:
   KIM_WEB_COLOR_MODE=srgb|preserve
       Default web-export color policy. Default: srgb.
       KConfig key: WEB_COLOR_MODE. Environment takes precedence.
+
+  KIM_COPYRIGHT_CREATOR, KIM_COPYRIGHT_NOTICE,
+  KIM_COPYRIGHT_USAGE_RIGHTS
+      Defaults for the copyright editor. KConfig keys:
+      COPYRIGHT_CREATOR, COPYRIGHT_NOTICE, COPYRIGHT_USAGE_RIGHTS.
+      Environment values take precedence.
 EOF
 }
 
@@ -4401,6 +4820,7 @@ main() {
     animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
+    copyright)       mk_workdir; action_copyright "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
     gallery)         mk_workdir; action_gallery "$@" ;;
     pelemele)        mk_workdir; action_pelemele "$@" ;;
@@ -4411,6 +4831,7 @@ main() {
     rotate)          mk_workdir; action_rotate "$@" ;;
     rotatewithexif)  mk_workdir; action_rotatewithexif "$@" ;;
     stripmeta)       mk_workdir; action_stripmeta "$@" ;;
+    timeshift)       mk_workdir; action_timeshift "$@" ;;
     tiffjoin)        mk_workdir; action_tiffjoin "$@" ;;
     video)           mk_workdir; action_video "$@" ;;
     webexport)       mk_workdir; action_webexport "$@" ;;
