@@ -48,12 +48,12 @@ class WebExportTests(unittest.TestCase):
             {"stdout": "3x2\n"}, {"stdout": "75\n"},
         ])
         self.workspace.respond("magick", output_base64=base64.b64encode(source.read_bytes()).decode())
-        # Occupy the chosen destination after name selection, then fail publication
-        # before any move/copy. Both destination files belong to other invocations.
-        self.workspace.respond("mkdir", status=73,
-                               writes={"images/photo_web_1.ppm": sentinel})
+        # Occupy the chosen destination at the atomic no-clobber operation.
+        # Both destination files belong to other invocations.
+        self.workspace.respond("ln", status=73,
+                              writes={"images/photo_web_1.ppm": sentinel})
         result = self.workspace.dispatch("webexport", source.parent, source)
-        self.assertTrue(any(event["tool"] == "mkdir" and event["status"] == 73
+        self.assertTrue(any(event["tool"] == "ln" and event["status"] == 73
                             for event in result.events), "publication failure was not reached")
         self.assertEqual({path.name: self.workspace.observe(path) for path in (source, occupied)},
                          before)

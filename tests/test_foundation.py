@@ -114,11 +114,20 @@ class FoundationTests(unittest.TestCase):
 
     def test_unconfigured_media_and_desktop_tools_fail_without_forwarding(self):
         for tool in ("magick", "mogrify", "montage", "identify", "exiftool",
-                     "ffmpeg", "xdg-email", "xdg-open", "kmail", "okular"):
+                     "ffmpeg", "xdg-open", "okular"):
             with self.subTest(tool=tool):
                 result = self.workspace.command(tool, "unused")
                 self.assertEqual(result.returncode, 97)
                 self.assertIn("unconfigured external command", result.stderr)
+
+        # Mail clients now have isolated adapters for their supported
+        # attachment contracts. Malformed direct calls must still fail closed
+        # rather than reaching a host mail client.
+        for tool in ("xdg-email", "kmail"):
+            with self.subTest(tool=tool):
+                result = self.workspace.command(tool, "unused")
+                self.assertEqual(result.returncode, 97)
+                self.assertIn("attachments must use repeated --attach PATH", result.stderr)
 
     def test_outside_paths_and_symlink_escapes_are_refused(self):
         other = Workspace()

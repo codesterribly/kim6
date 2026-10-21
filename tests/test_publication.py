@@ -276,9 +276,10 @@ class PublicationTests(unittest.TestCase):
                 process.communicate()
         events = [json.loads(line) for line in self.workspace.events.read_text().splitlines()]
         publications = [e for e in events if e["tool"] == "ln"]
-        self.assertEqual(len(publications), 2)
-        self.assertEqual(sum(e["status"] == 0 for e in publications), 1)
+        self.assertEqual(sum(e["status"] == 0 for e in publications), 2)
+        self.assertEqual(sum(e["status"] != 0 for e in publications), 1)
         self.assertEqual(self.workspace.path("input/photo_web.ppm").read_bytes(), self.source.read_bytes())
+        self.assertEqual(self.workspace.path("input/photo_web_1.ppm").read_bytes(), self.source.read_bytes())
         self.assert_clean()
 
     def test_conversion_stage_allocation_failure_keeps_destination(self):

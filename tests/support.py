@@ -320,6 +320,28 @@ atomic_overwrite_file "$1" "$scratch"
         self.env['MAGICK_TEMPORARY_PATH'] = str(self.control / 'tmp')
         self.env['MAGICK_THREAD_LIMIT'] = '1'
 
+    def use_real_web_email(self):
+        """Run bounded synthetic-image web/email producers and validators."""
+        tools = {name: shutil.which(name) for name in ('magick', 'identify')}
+        if not all(tools.values()):
+            raise unittest.SkipTest('real web/email image tools are unavailable')
+        plan = json.loads(self.plan.read_text())
+        plan['real_web_email_tools'] = tools
+        self.plan.write_text(json.dumps(plan))
+        self.env['MAGICK_TEMPORARY_PATH'] = str(self.control / 'tmp')
+        self.env['MAGICK_THREAD_LIMIT'] = '1'
+
+    def image_info(self, path):
+        executable = shutil.which('identify')
+        if not executable:
+            raise unittest.SkipTest('ImageMagick identify unavailable')
+        result = subprocess.run([executable, '-regard-warnings', '-format', '%m|%w|%h', '-'],
+                                input=Path(path).read_bytes(), capture_output=True, text=False, timeout=10)
+        if result.returncode:
+            raise AssertionError(result.stderr.decode(errors='replace'))
+        format_name, width, height = result.stdout.decode().split('|')
+        return format_name, int(width), int(height)
+
     def use_real_mv(self):
         """Exercise only installed rename-only forms on test-owned paths."""
         executable = shutil.which("mv")

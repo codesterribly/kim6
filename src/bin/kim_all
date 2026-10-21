@@ -281,6 +281,71 @@ affixed_filename() {
   printf '%s\n' "$name"
 }
 
+# Normalize ImageMagick's common coder aliases so a file's extension can be
+# checked against its encoded format without trusting the original suffix.
+image_format_class() {
+  case "${1^^}" in
+    JPG|JPE|JFIF|JPS|PJPEG|JPEG) printf 'JPEG\n' ;;
+    TIF|TIFF64|PTIF|TIFF) printf 'TIFF\n' ;;
+    PNG[0-9]*|APNG|PNG) printf 'PNG\n' ;;
+    BMP2|BMP3|BMP) printf 'BMP\n' ;;
+    GIF87|GIF) printf 'GIF\n' ;;
+    J2C|J2K|JPC|JPM|JPT|JP2) printf 'JP2\n' ;;
+    *) printf '%s\n' "${1^^}" ;;
+  esac
+}
+
+image_format_extension() {
+  case "$(image_format_class "$1")" in
+    JPEG) printf 'jpg\n' ;; TIFF) printf 'tiff\n' ;; PNG) printf 'png\n' ;;
+    BMP) printf 'bmp\n' ;; GIF) printf 'gif\n' ;; JP2) printf 'jp2\n' ;;
+    AVIF) printf 'avif\n' ;; HEIC) printf 'heic\n' ;; HEIF) printf 'heif\n' ;;
+    PPM) printf 'ppm\n' ;; PGM) printf 'pgm\n' ;; PBM) printf 'pbm\n' ;;
+    PAM) printf 'pam\n' ;; PNM) printf 'pnm\n' ;; MIFF) printf 'miff\n' ;;
+    PDF) printf 'pdf\n' ;; *) printf '%s\n' "${1,,}" ;;
+  esac
+}
+
+image_extension_matches_format() {
+  [ -n "$1" ] && [ "$(image_format_class "$1")" = "$(image_format_class "$2")" ]
+}
+
+# Return the dimensions ImageMagick's plain `-resize WIDTHxHEIGHT` fit geometry
+# should produce, without allocating a synthetic image. ImageMagick rounds the
+# unconstrained dimension to the nearest integer; clamp extreme aspect ratios
+# to one pixel, as its resize operation does.
+resize_fit_dimensions() {
+  local source_dimensions="$1" max_width="$2" max_height="$3"
+  local source_width="${source_dimensions%x*}" source_height="${source_dimensions#*x}"
+  local result_width result_height
+  if (( max_width * source_height <= max_height * source_width )); then
+    result_width="$max_width"
+    result_height="$(( (source_height * max_width + source_width / 2) / source_width ))"
+  else
+    result_height="$max_height"
+    result_width="$(( (source_width * max_height + source_height / 2) / source_height ))"
+  fi
+  [ "$result_width" -gt 0 ] || result_width=1
+  [ "$result_height" -gt 0 ] || result_height=1
+  printf '%sx%s\n' "$result_width" "$result_height"
+}
+
+oriented_image_dimensions() {
+  local width="$1" height="$2" orientation="$3"
+  if image_orientation_swaps_dimensions "$orientation"; then
+    printf '%sx%s\n' "$height" "$width"
+  else
+    printf '%sx%s\n' "$width" "$height"
+  fi
+}
+
+image_orientation_swaps_dimensions() {
+  case "$1" in
+    LeftTop|RightTop|RightBottom|LeftBottom) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Best-effort: copy timestamps and permissions (mode) from src to dst.
 preserve_meta_from() {
   local src="$1"
@@ -2326,136 +2391,199 @@ action_resize() {
 # ---------------------------------------------------------------------------
 
 action_resizeandsend() {
-  local -a files=()
-  collect_valid_files files "$@"
-  local nbfiles="${#files[@]}"
-  [ "$nbfiles" -le 0 ] && return 0
-
-  local choice
-  choice="$(kdialog --radiolist "$(gettext 'Kim - Send by mail:')" \
-    1 "$(gettext 'Full size')" off \
-    2 "$(gettext '1600x1600 px')" on \
-    3 "$(gettext '1200x1200 px')" off \
-    4 "$(gettext '800x800 px')" off \
-    5 "$(gettext '600x600 px')" off \
-    6 "$(gettext '300x300 px')" off \
-    7 "$(gettext 'Custom size...')" off)" || return 0
-
-  [ -n "$choice" ] || return 0
-
-  local CUSTOM_SIZE=""
-  if [ "$choice" = "7" ]; then
-    CUSTOM_SIZE="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT), e.g. 2048x1365:')" "1600x1600")" || return 0
-    if ! [[ "$CUSTOM_SIZE" =~ ^[0-9]+x[0-9]+$ ]]; then
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Invalid size. Use WIDTHxHEIGHT, e.g. 2048x1365.')"
-      return 1
-    fi
+  local size='' i base stem output_ext coder input_info input_format input_frames
+  local output_info record actual_format actual_width actual_height output_frames rc counter=0
+  local source_width source_height orientation expected_dimensions source_dimensions
+  local interrupted=false persistent_dir client='' handoff=0 attachment_csv uri escaped byte
+  local -a files=() prepared=() attach_paths=() mail_args=() input_dimensions=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --size)
+        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: --size needs a value.')"; return 2; }
+        size="$2"; shift 2 ;;
+      --)
+        shift; files+=("$@"); break ;;
+      --*) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: unknown option.')"; return 2 ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  if ! collect_publication_inputs files "${files[@]}"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: select regular, unambiguous image files.')"
+    return 1
   fi
+  local nbfiles="${#files[@]}"
+  [ "$nbfiles" -gt 0 ] || return 0
+
+  if [ -z "$size" ]; then
+    local choice
+    choice="$(kdialog --radiolist "$(gettext 'Kim - Send by mail:')" \
+      1 "$(gettext 'Full size')" off \
+      2 "$(gettext '1600x1600 px')" on \
+      3 "$(gettext '1200x1200 px')" off \
+      4 "$(gettext '800x800 px')" off \
+      5 "$(gettext '600x600 px')" off \
+      6 "$(gettext '300x300 px')" off \
+      7 "$(gettext 'Custom size...')" off)" || return 0
+    case "$choice" in
+      1) size=full ;; 2) size=1600x1600 ;; 3) size=1200x1200 ;; 4) size=800x800 ;;
+      5) size=600x600 ;; 6) size=300x300 ;;
+      7) size="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT):')" '1600x1600')" || return 0 ;;
+      *) return 0 ;;
+    esac
+  fi
+  if [ "$size" != full ] && ! [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: size must be full or positive WIDTHxHEIGHT.')"
+    return 1
+  fi
+  local max_width=0 max_height=0
+  if [ "$size" != full ]; then max_width="${BASH_REMATCH[1]}"; max_height="${BASH_REMATCH[2]}"; fi
 
   report_init
   local dbusRef
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
-
-  local counter=0
-  local i dir base stem ext out rc size
-
+  local stage_index=0 out
   for i in "${files[@]}"; do
     counter=$((counter + 1))
-
-    {
-      read -r dir
-      read -r base
-      read -r stem
-      read -r ext
-    } < <(split_path "$i")
-
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing and compressing file: ')$base"; then
-      progress_close "$dbusRef"
-      return 1
+    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Preparing email image: ')${i##*/}"; then
+      interrupted=true
+      break
     fi
-
-    # Ensure unique output name in $KIMDIR even if basenames repeat.
-    if [ -n "$ext" ]; then
-      out="$KIMDIR/${stem}__send_${counter}.${ext}"
-    else
-      out="$KIMDIR/${stem}__send_${counter}"
-    fi
-
+    base="${i##*/}"
+    if [[ "$base" == .* && "$base" != *.*.* ]]; then stem="$base"; else stem="${base%.*}"; fi
     rc=0
-    case "$choice" in
-      1)
-        cp -- "$i" "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      2)
-        magick -- "$i" -resize 1600x1600 "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      3)
-        magick -- "$i" -resize 1200x1200 "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      4)
-        magick -- "$i" -resize 800x800 "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      5)
-        magick -- "$i" -resize 600x600 "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      6)
-        magick -- "$i" -resize 300x300 "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      7)
-        size="$CUSTOM_SIZE"
-        magick -- "$i" -resize "$size" "$out" >/dev/null 2>&1 || rc=$?
-        ;;
-      *)
-        rc=1
-        ;;
-    esac
-
+    input_dimensions=()
+    input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n\n' - < "$i" 2>/dev/null)" || rc=1
+    input_format=''; input_frames=0
+    while IFS= read -r record; do
+      IFS='|' read -r actual_format source_width source_height orientation _ <<< "$record"
+      [[ "$actual_format" =~ ^[A-Za-z0-9]+$ && "$source_width" =~ ^[1-9][0-9]*$ &&
+         "$source_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      [ -n "$input_format" ] || input_format="$actual_format"
+      [ "$input_format" = "$actual_format" ] || { rc=1; break; }
+      source_dimensions="${source_width}x${source_height}"
+      [ "$size" = full ] || source_dimensions="$(oriented_image_dimensions "$source_width" "$source_height" "$orientation")"
+      input_dimensions+=("$source_dimensions")
+      input_frames=$((input_frames + 1))
+    done <<< "$input_info"
+    [ "$input_frames" -gt 0 ] || rc=1
+    coder="$input_format"
+    output_ext="$(image_format_extension "$input_format")"
+    [ -n "$output_ext" ] || rc=1
+    stage_index=$((stage_index + 1))
+    out="$KIMDIR/${stem}__send_${stage_index}.${output_ext}"
+    if [ "$rc" -eq 0 ] && [ "$size" = full ]; then
+      cp -- "$i" "$out" >/dev/null 2>&1 || rc=$?
+    elif [ "$rc" -eq 0 ]; then
+      magick - -auto-orient -resize "$size" "$coder:$out" < "$i" >/dev/null 2>&1 || rc=$?
+    fi
+    if progress_cancelled "$dbusRef"; then interrupted=true; rc=1; fi
+    output_info=''
     if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
+      output_info="$(identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' - < "$out" 2>/dev/null)" || rc=1
+    else
+      rc=1
+    fi
+    output_frames=0
+    while IFS= read -r record; do
+      [ "$output_frames" -lt "$input_frames" ] || { rc=1; break; }
+      IFS='|' read -r actual_format actual_width actual_height _ _ _ <<< "$record"
+      [ "$(image_format_class "$actual_format")" = "$(image_format_class "$input_format")" ] &&
+        [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      if [ "$size" = full ]; then
+        # Full-size mode is an exact byte copy, so each frame keeps dimensions.
+        expected_dimensions="${input_dimensions[output_frames]}"
+      else
+        expected_dimensions="$(resize_fit_dimensions "${input_dimensions[output_frames]}" "$max_width" "$max_height")"
+      fi
+      [ "${actual_width}x${actual_height}" = "$expected_dimensions" ] || { rc=1; break; }
+      output_frames=$((output_frames + 1))
+    done <<< "$output_info"
+    [ "$output_frames" -eq "$input_frames" ] || rc=1
+    if [ "$rc" -eq 0 ] && [ "$interrupted" != true ]; then
+      prepared+=("$out")
       report_ok
     else
       rm -f -- "$out" >/dev/null 2>&1 || true
       report_fail "$i"
     fi
-
-    progress_value "$dbusRef" "$counter"
+    [ "$interrupted" != true ] || break
+    progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
   done
-
+  local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments"
+  if [ "${#prepared[@]}" -eq 0 ]; then
+    progress_close "$dbusRef"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
+  if progress_cancelled "$dbusRef"; then interrupted=true; fi
+  mkdir -p -- "$persistent_base" || {
+    progress_close "$dbusRef"
+    report_fail "$(gettext 'email attachment storage')"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  }
+  persistent_dir="$(mktemp -d "$persistent_base/attachments.XXXXXX")" || {
+    progress_close "$dbusRef"
+    report_fail "$(gettext 'email attachment storage')"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  }
+  for out in "${prepared[@]}"; do
+    if ! cp -- "$out" "$persistent_dir/${out##*/}" >/dev/null 2>&1; then
+      rm -rf -- "$persistent_dir"
+      progress_close "$dbusRef"
+      report_fail "$(gettext 'email attachment copy')"
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
+    attach_paths+=("$persistent_dir/${out##*/}")
+  done
+  if progress_cancelled "$dbusRef"; then interrupted=true; fi
   progress_close "$dbusRef"
-
-  local -a attach_paths=()
-  local f
-  for f in "$KIMDIR"/*; do
-    [ -f "$f" ] && attach_paths+=("$f")
-  done
-
-  if [ "${#attach_paths[@]}" -le 0 ]; then
+  if [ "$interrupted" = true ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Processing stopped. Completed attachments were kept here (not attached):') $persistent_dir"
     report_finish_dialog "$(gettext 'Kim')"
     return 1
   fi
 
   if command -v kmail >/dev/null 2>&1; then
-    kmail --attach "${attach_paths[@]}" >/dev/null 2>&1 || true
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
+    client=kmail
+    for out in "${attach_paths[@]}"; do mail_args+=(--attach "$out"); done
+    kmail "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
   elif command -v thunderbird >/dev/null 2>&1; then
-    local attachment_csv
-    attachment_csv="$(printf '%s,' "${attach_paths[@]}")"
-    attachment_csv="${attachment_csv%,}"
-    thunderbird -compose "attachment='${attachment_csv}'" >/dev/null 2>&1 || true
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
-  elif command -v xdg-email >/dev/null 2>&1; then
-    local -a xdg_args=()
-    local ap
-    for ap in "${attach_paths[@]}"; do
-      xdg_args+=(--attach "$ap")
+    client=thunderbird
+    attachment_csv=''
+    local LC_ALL=C char_index char
+    for out in "${attach_paths[@]}"; do
+      escaped=''
+      for ((char_index=0; char_index<${#out}; char_index++)); do
+        char="${out:char_index:1}"
+        case "$char" in [a-zA-Z0-9/._~-]) escaped+="$char" ;; *) printf -v byte '%02X' "'${char}"; escaped+="%${byte}" ;; esac
+      done
+      uri="file://$escaped"
+      [ -z "$attachment_csv" ] || attachment_csv+=,
+      attachment_csv+="$uri"
     done
-    xdg-email "${xdg_args[@]}" >/dev/null 2>&1 || true
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Kim - Send by mail: you can write your message!')"
-  else
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "Can't find your mail client. Attachments are in $KIMDIR/")"
+    thunderbird -compose "attachment='$attachment_csv'" >/dev/null 2>&1 || handoff=$?
+  elif command -v xdg-email >/dev/null 2>&1; then
+    client=xdg-email
+    for out in "${attach_paths[@]}"; do mail_args+=(--attach "$out"); done
+    xdg-email "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
   fi
 
+  if [ -z "$client" ]; then
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:") $persistent_dir"
+  elif [ "$handoff" -ne 0 ]; then
+    rm -rf -- "$persistent_dir"
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'The mail client could not accept the prepared attachments.')"
+    report_fail "$client"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  else
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The mail client was opened. Prepared attachments remain here until you delete them:') $persistent_dir"
+  fi
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "$interrupted" != true ] && [ "$REPORT_FAIL" -eq 0 ]
 }
 
 
@@ -2844,25 +2972,52 @@ action_stripmeta() {
 # - Uses `magick` for resize and compression.
 
 action_webexport() {
-  local outdir="${1:-}"
-  shift || true
-
+  local outdir='' size='' quality='' fmt='' explicit_dir=false
   local -a files=()
-  collect_valid_files files "$@"
+  if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --size|--quality|--format|--output-dir)
+          [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
+          case "$1" in
+            --size) size="$2" ;; --quality) quality="$2" ;; --format) fmt="$2" ;;
+            --output-dir) outdir="$2"; explicit_dir=true ;;
+          esac
+          shift 2 ;;
+        --) shift; files+=("$@"); break ;;
+        *) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: use -- before input files.')"; return 2 ;;
+      esac
+    done
+  elif [ "$#" -gt 0 ]; then
+    # Preserve the established dispatcher contract: directory first, then files.
+    outdir="$1"
+    shift
+  fi
+  if [ "${#files[@]}" -eq 0 ]; then files+=("$@"); fi
+  if ! collect_publication_inputs files "${files[@]}"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: select regular, unambiguous image files.')"
+    return 1
+  fi
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
-  local SIZE QUALITY
-  SIZE="$(kdialog --inputbox "$(gettext 'Max image size (e.g. 1600x1600):')" "1600x1600")" || return 1
-  [[ "$SIZE" =~ ^[0-9]+x[0-9]+$ ]] || die "webexport: invalid size format"
+  if [ -z "$size" ]; then
+    size="$(kdialog --inputbox "$(gettext 'Max image size (e.g. 1600x1600):')" "1600x1600")" || return 1
+  fi
+  [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: size must be positive WIDTHxHEIGHT.')"; return 1;
+  }
+  local max_width="${BASH_REMATCH[1]}" max_height="${BASH_REMATCH[2]}"
 
-  QUALITY="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-75}")" || return 1
-  [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || die "webexport: QUALITY must be a number"
-  (( QUALITY >= 1 && QUALITY <= 100 )) || die "webexport: QUALITY must be between 1 and 100"
+  if [ -z "$quality" ]; then
+    quality="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-75}")" || return 1
+  fi
+  [[ "$quality" =~ ^[0-9]{1,3}$ ]] && [ "$quality" -ge 1 ] && [ "$quality" -le 100 ] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
+  }
 
   # Export format is independent of the policy used for image-editing actions.
-  local fmt
-  fmt="${KIM_WEB_FORMAT:-jpg}"
+  fmt="${fmt:-${KIM_WEB_FORMAT:-jpg}}"
   fmt="${fmt,,}"
   case "$fmt" in
     jpeg) fmt="jpg" ;;
@@ -2874,10 +3029,19 @@ action_webexport() {
   esac
 
   # Always honor the export directory, including under KIM_POLICY=overwrite.
-  if [ -z "$outdir" ] || [ ! -d "$outdir" ]; then
+  if [ -z "$outdir" ]; then
+    outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
+    [ -n "$outdir" ] || return 1
+  elif [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; then
+    if [ "$explicit_dir" = true ]; then
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: output directory is not accessible.')"
+      return 1
+    fi
     outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
     [ -n "$outdir" ] || return 1
   fi
+
+  outdir="$(cd -P -- "$outdir" && pwd -P)" || return 1
 
   report_init
 
@@ -2885,7 +3049,12 @@ action_webexport() {
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Web exporting images ...')")"
 
   local counter=0
-  local i dir2 base stem ext out_ext OUTFILE OUTTMP n rc
+  local i dir2 base stem ext out_ext OUTFILE OUTTMP n rc input_info input_format source_frames
+  local output_records record actual_format actual_width actual_height actual_frames
+  local expected_format coder
+  local source_width source_height orientation expected_dimensions source_dimensions
+  local -a input_dimensions=()
+  local interrupted=false failures=0 published=false
 
   for i in "${files[@]}"; do
     counter=$((counter + 1))
@@ -2904,19 +3073,50 @@ action_webexport() {
     fi
 
     rc=0
+    if progress_cancelled "$dbusRef"; then interrupted=true; break; fi
+
+    input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n\n' - < "$i" 2>/dev/null)" || rc=1
+    input_format=''
+    source_frames=0
+    input_dimensions=()
+    while IFS= read -r record; do
+      IFS='|' read -r actual_format source_width source_height orientation _ <<< "$record"
+      [[ "$actual_format" =~ ^[A-Za-z0-9]+$ && "$source_width" =~ ^[1-9][0-9]*$ &&
+         "$source_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      [ -n "$input_format" ] || input_format="$actual_format"
+      [ "$input_format" = "$actual_format" ] || { rc=1; break; }
+      input_dimensions+=("$(oriented_image_dimensions "$source_width" "$source_height" "$orientation")")
+      source_frames=$((source_frames + 1))
+    done <<< "$input_info"
+    [ "$source_frames" -gt 0 ] || rc=1
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$i"
+      failures=$((failures + 1))
+      progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+      continue
+    fi
 
     # Choose the derived output extension.
     if [ "$fmt" = "keep" ]; then
-      out_ext="$ext"
-      [ -n "$out_ext" ] || out_ext="jpg"
+      coder="$input_format"
+      out_ext="$(image_format_extension "$input_format")"
+      if image_extension_matches_format "$ext" "$input_format"; then out_ext="$ext"; fi
     else
       out_ext="$fmt"
+      case "$fmt" in jpg) coder=JPEG ;; webp) coder=WEBP ;; avif) coder=AVIF ;; esac
+    fi
+    if [ -z "$coder" ] || [ -z "$out_ext" ]; then
+      report_fail "$i"
+      failures=$((failures + 1))
+      progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+      continue
     fi
 
+    OUTTMP=''
     OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext")"
 
     n=1
-    while [ -e "$OUTFILE" ]; do
+    while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
       OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
       n=$((n + 1))
     done
@@ -2929,27 +3129,72 @@ action_webexport() {
     fi
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
 
-    # Web export: normalize orientation and strip metadata by default.
-    magick -- "$i" -auto-orient -strip -resize "$SIZE" -quality "$QUALITY" "$OUTTMP" >/dev/null 2>&1 || rc=$?
-
-    if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
-      if commit_tmp_to_target "$OUTTMP" "$OUTFILE" >/dev/null 2>&1; then
-        report_ok
-      else
-        rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-        report_fail "$i"
-      fi
+    if [ -n "$OUTTMP" ] && [ "$rc" -eq 0 ]; then
+      # Keep the established web policy: normalize EXIF orientation, strip
+      # metadata, and do not convert color profiles or reinterpret pixels.
+      magick - -auto-orient -strip -resize "$size" -quality "$quality" "$coder:$OUTTMP" \
+        < "$i" >/dev/null 2>&1 || rc=$?
     else
-      rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-      report_fail "$i"
+      rc=1
     fi
 
-    progress_value "$dbusRef" "$counter"
+    output_records=''
+    if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
+      output_records="$(publication_image_records "$OUTTMP" 2>/dev/null)" || rc=1
+    else
+      rc=1
+    fi
+    actual_frames=0
+    while IFS= read -r record; do
+      [ "$actual_frames" -lt "$source_frames" ] || { rc=1; break; }
+      IFS='|' read -r actual_format actual_width actual_height _ _ _ <<< "$record"
+      expected_format="$(image_format_class "$coder")"
+      actual_format="$(image_format_class "$actual_format")"
+      expected_dimensions="$(resize_fit_dimensions "${input_dimensions[actual_frames]}" "$max_width" "$max_height")"
+      if [ "$actual_format" != "$expected_format" ] ||
+         ! [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_height" =~ ^[1-9][0-9]*$ ]] ||
+         [ "${actual_width}x${actual_height}" != "$expected_dimensions" ]; then
+        rc=1
+        break
+      fi
+      # -strip is the established web metadata policy, including ICC profiles.
+      actual_frames=$((actual_frames + 1))
+    done <<< "$output_records"
+    [ "$actual_frames" -eq "$source_frames" ] || rc=1
+
+    if progress_cancelled "$dbusRef"; then interrupted=true; rc=1; fi
+    published=false
+    while [ "$rc" -eq 0 ] && [ "$interrupted" != true ]; do
+      if progress_cancelled "$dbusRef"; then interrupted=true; rc=1; break; fi
+      if commit_tmp_to_target "$OUTTMP" "$OUTFILE" create >/dev/null 2>&1; then
+        published=true
+        break
+      fi
+      # Another KIM6 invocation may have claimed the free candidate after the
+      # preflight loop. Keep collision numbering safe and retry only when that
+      # exact entry is now occupied; other publication errors fail closed.
+      if ! { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then break; fi
+      OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
+      n=$((n + 1))
+      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
+        OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
+        n=$((n + 1))
+      done
+    done
+    if [ "$published" = true ]; then
+      report_ok
+    else
+      report_fail "$i"
+      failures=$((failures + 1))
+    fi
+    [ -z "$OUTTMP" ] || rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
+    [ "$interrupted" != true ] || break
+    progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
   done
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "$interrupted" != true ] && [ "$failures" -eq 0 ]
 }
 
 
@@ -3181,9 +3426,13 @@ Commands:
       overwrite mode modifies originals (metadata preserved best-effort).
       Create mode writes *_resized files into <dir>.
 
-  resizeandsend <files...>
+  resizeandsend [--size full|WIDTHxHEIGHT] [--] <files...>
       Resize selected images for email and open your mail client
-      with the resized copies attached.
+      with validated resized copies attached. Presets: 1600, 1200, 800,
+      600 and 300 square bounds. Omit --size to show the existing dialog.
+      Successful attachments remain in XDG_DATA_HOME/kim6/email-attachments
+      (or ~/.local/share/kim6/email-attachments when XDG_DATA_HOME is unset)
+      until you remove them, because mail clients may read them asynchronously.
 
   rotate <angle|EXIF> <files...>
       Rotate images by a fixed angle, or auto-orient using EXIF.
@@ -3205,7 +3454,11 @@ Commands:
 
   webexport <dir> <files...>
       Prepare images for web use.
-      Prompts for max size and quality.
+      Prompts for max size and quality. Existing dispatcher form remains supported.
+  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
+            [--output-dir DIR] -- <files...>
+      Action-local arguments expose presets for future Dolphin menu routing.
+      Web export always creates derived files; KIM_POLICY never replaces originals.
       Always creates distinct *_web files into <dir>, regardless of KIM_POLICY.
       Output format uses KIM_WEB_FORMAT (default: jpg).
 
@@ -3224,7 +3477,7 @@ Environment:
       Does not suppress the prompt. Fallback: 75.
 
   KIM_WEB_FORMAT=jpg|webp|avif|keep
-      Output format for webexport create mode. Default: jpg.
+      Output format for webexport. Default: jpg.
       keep uses the source file extension.
 EOF
 }

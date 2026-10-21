@@ -16,9 +16,12 @@ class AffixTests(unittest.TestCase):
 
     def run_action(self, action, sources, destination=None, payload=None):
         payload = sources[0].read_bytes() if payload is None else payload
-        self.workspace.respond("exiftool" if action == "stripmeta" else "magick",
-                               output_base64=base64.b64encode(payload).decode(),
-                               **({"stdout": "3 2\n"} if action == "resize" else {}))
+        if action == "webexport":
+            self.workspace.use_real_web_email()
+        else:
+            self.workspace.respond("exiftool" if action == "stripmeta" else "magick",
+                                   output_base64=base64.b64encode(payload).decode(),
+                                   **({"stdout": "3 2\n"} if action == "resize" else {}))
         destination = destination or sources[0].parent
         args = {"webexport": (destination,), "compress": ("75", destination),
                 "resize": ("3x2", destination), "stripmeta": ()}[action]
@@ -30,10 +33,12 @@ class AffixTests(unittest.TestCase):
 
     def test_explicit_prefix_webexport(self):
         source = self.workspace.jpeg("input/photo.jpg")
+        before = self.workspace.observe(source)
         self.workspace.env["KIM_NAME_AFFIX_POSITION"] = "prefix"
         result = self.run_action("webexport", [source])
         self.assertEqual(set(result.outputs), {"input/web_photo.jpg"})
-        self.assertEqual(result.outputs["input/web_photo.jpg"], source.read_bytes())
+        self.assertNotEqual(result.outputs["input/web_photo.jpg"], source.read_bytes())
+        self.assertEqual(self.workspace.observe(source), before)
 
 
 # Literal expected names are independent examples from the approved naming rules.
@@ -108,7 +113,10 @@ def naming_case(action, env, config, position, scenario="ordinary"):
         else:
             self.assertEqual(set(result.outputs), names)
             self.assertEqual(self.workspace.observe(source), before)
-            self.assertTrue(all(data == source.read_bytes() for data in result.outputs.values()))
+            if action != "webexport":
+                self.assertTrue(all(data == source.read_bytes() for data in result.outputs.values()))
+            else:
+                self.assertTrue(all(data != source.read_bytes() for data in result.outputs.values()))
         for path, state in protected.items():
             self.assertEqual(self.workspace.observe(path), state)
     return test
@@ -204,8 +212,8 @@ for action, position, expected in (
     ("resize", "suffix", "photo 雪_resized"),
     ("stripmeta", "prefix", "stripped_photo 雪"),
     ("stripmeta", "suffix", "photo 雪_stripped"),
-    ("webexport", "prefix", "web_photo 雪.jpg"),
-    ("webexport", "suffix", "photo 雪_web.jpg"),
+    ("webexport", "prefix", "web_photo 雪.ppm"),
+    ("webexport", "suffix", "photo 雪_web.ppm"),
 ):
     setattr(AffixTests, "test_AFF10_extensionless_" + action + "_" + position,
             extensionless_case(action, position, expected))

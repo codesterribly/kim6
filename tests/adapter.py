@@ -113,6 +113,8 @@ def main():
         return real_transform(plan["real_transform"], args)
     if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
         return real_publication_tool(plan["real_publication_tools"], tool, args)
+    if "real_web_email_tools" in plan and tool in ("magick", "identify") and response is None:
+        return real_web_email_tool(plan["real_web_email_tools"], tool, args)
     if "real_gallery_collage_tools" in plan and tool in ("magick", "identify") and response is None:
         return real_gallery_collage_tool(plan["real_gallery_collage_tools"], tool, args)
     if tool == "exiftool" and "real_stripmeta" in plan and response is None:
@@ -138,6 +140,8 @@ def main():
             return real_publication_tool(plan["real_publication_tools"], tool, args)
         if tool == "magick" and "real_gallery_collage_tools" in plan:
             return real_gallery_collage_tool(plan["real_gallery_collage_tools"], tool, args)
+        if tool in ("magick", "identify") and "real_web_email_tools" in plan:
+            return real_web_email_tool(plan["real_web_email_tools"], tool, args)
     if tool == "mv" and "real_mv" in plan and response is None:
         if args in (["--help"], ["--version"]):
             return subprocess.call([plan["real_mv"], *args])
@@ -254,6 +258,23 @@ def main():
             print(path / "publication.pdf")
         elif not any(flag in args for flag in ("--yesnocancel", "--yesno", "--error", "--msgbox", "--textbox")):
             raise ValueError("unsupported kdialog invocation")
+    elif tool == 'kmail':
+        if not args or len(args) % 2 or any(args[index] != '--attach' for index in range(0, len(args), 2)):
+            raise ValueError('kmail attachments must use repeated --attach PATH arguments')
+        for value in args[1::2]:
+            path = owned(value)
+            if not path.is_file():
+                raise ValueError('kmail attachment is missing')
+    elif tool == 'xdg-email':
+        if not args or len(args) % 2 or any(args[index] != '--attach' for index in range(0, len(args), 2)):
+            raise ValueError('xdg-email attachments must use repeated --attach PATH arguments')
+        for value in args[1::2]:
+            path = owned(value)
+            if not path.is_file():
+                raise ValueError('xdg-email attachment is missing')
+    elif tool == 'thunderbird':
+        if len(args) != 2 or args[0] != '-compose' or not args[1].startswith("attachment='file://"):
+            raise ValueError('thunderbird requires one encoded compose attachment argument')
     elif tool == "mktemp":
         directory = "-d" in args
         template = args[-1]
@@ -274,14 +295,28 @@ def main():
             print(name)
     elif tool == "identify":
         signature_format = "%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\\n"
+        image_records_format = "%m|%w|%h|%T|%n|%#\\n"
+        web_input_format = "%m|%w|%h|%[orientation]|%n\\n"
         signature = (len(args) == 5 and args[:3] == ["-regard-warnings", "+ping", "-format"]
                      and args[3] == signature_format and args[4] in ("-", "TGA:-"))
         hinted = args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "TGA:-"]
         compression = hinted or args == ["-regard-warnings", "+ping", "-format", "%m %w %h\\n", "-"]
         formatted = signature or compression or args == ["-regard-warnings", "+ping", "-format", "%m\\n", "-"]
         limit = 8388608 if signature else (8388608 if compression and "real_resize" in plan else (65536 if compression else 4096))
-        if formatted:
+        if (len(args) == 4 and args[:3] == ['-ping', '-format', web_input_format]
+                and args[3] == '-'):
             payload = sys.stdin.buffer.read(limit + 1)
+            image_format = web_input_format
+        elif (len(args) == 5 and args[:3] == ['-regard-warnings', '-format', image_records_format]
+                and args[3] == '--'):
+            fixture_path = owned(args[4])
+            if fixture_path.stat().st_size > 8388608:
+                raise ValueError('full image validation fixture exceeds test bound')
+            payload = fixture_path.read_bytes()
+            image_format = image_records_format
+        elif formatted:
+            payload = sys.stdin.buffer.read(limit + 1)
+            image_format = args[3] if signature else ("%m %w %h\\n" if compression else "%m\\n")
         elif len(args) == 4 and args[:3] == ["-regard-warnings", "+ping", "--"]:
             payload = owned(args[3]).read_bytes()
         else:
@@ -294,7 +329,7 @@ def main():
         with tempfile.TemporaryDirectory(dir=CONTROL) as folder:
             fixture = Path(folder) / "fixture"
             fixture.write_bytes(payload)
-            options = ["-format", args[3] if signature else ("%m %w %h\n" if compression else "%m\n")] if formatted else []
+            options = ["-format", image_format] if formatted or image_format in (image_records_format, web_input_format) else []
             input_name = ("TGA:" if hinted or (signature and args[4] == "TGA:-") else "") + str(fixture)
             # Decoder delegates (e.g. Ghostscript) need their normal utility
             # PATH. Input remains a bounded, private synthetic fixture.
@@ -499,6 +534,58 @@ def real_gallery_collage_tool(tools, tool, args):
             return subprocess.run([executable, *args], input=payload, timeout=30,
                                   env=dict(os.environ, PATH=os.defpath)).returncode
     raise ValueError('unsupported real gallery/collage ImageMagick command')
+
+
+def real_web_email_tool(tools, tool, args):
+    """Run only small PPM/JPEG fixtures through the web/email action grammar."""
+    executable = tools[tool]
+    if tool == 'identify':
+        if (len(args) == 5 and args[:2] == ['-regard-warnings', '-format']
+                and args[3] == '--'):
+            fixture = owned(args[4])
+            if fixture.stat().st_size > 131072:
+                raise ValueError('web/email output exceeds test bound')
+            return subprocess.run([executable, *args], timeout=20,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
+        if (len(args) == 4 and args[0] == '-ping' and args[1] == '-format'
+                and args[3] == '-'):
+            payload = sys.stdin.buffer.read(131073)
+        elif (len(args) == 4 and args[0] == '-regard-warnings'
+              and args[1] == '-format' and args[3] == '-'):
+            payload = sys.stdin.buffer.read(131073)
+        else:
+            raise ValueError('unsupported web/email identify command')
+        if len(payload) > 131072:
+            raise ValueError('web/email fixture exceeds test bound')
+        return subprocess.run([executable, *args], input=payload, timeout=20,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if not args or args[0] != '-' or len(args) < 4:
+        raise ValueError('web/email production must read one image from stdin')
+    allowed = {'-auto-orient', '-strip'}
+    index = 1
+    while index < len(args) - 1:
+        if args[index] in allowed:
+            index += 1
+        elif args[index] == '-resize' and index + 1 < len(args) - 1:
+            index += 2
+        elif args[index] == '-quality' and index + 1 < len(args) - 1:
+            index += 2
+        else:
+            break
+    if index != len(args) - 1 or ':' not in args[-1]:
+        raise ValueError('unsupported web/email ImageMagick command')
+    output = owned(args[-1].split(':', 1)[1])
+    if output.exists() or output.is_symlink():
+        raise ValueError('web/email producer requires a new owned stage')
+    payload = sys.stdin.buffer.read(131073)
+    if len(payload) > 131072 or not payload.startswith((b'P6\n', b'P3\n', b'\xff\xd8\xff',
+                                                          b'GIF87a', b'GIF89a')):
+        raise ValueError('web/email producer requires a small synthetic PPM, JPEG, or GIF')
+    if not (output.parent.name.startswith('.kim6-stage.') or
+            output.parent.resolve().is_relative_to((CONTROL / 'tmp').resolve())):
+        raise ValueError('web/email output must be in a private or destination-local stage')
+    return subprocess.run([executable, *args], input=payload, timeout=30,
+                          env=dict(os.environ, PATH=os.defpath)).returncode
 
 
 def real_conversion(executable, args):
