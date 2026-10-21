@@ -43,6 +43,11 @@ def interrupt_progress(state):
 
 def main():
     tool, args = Path(sys.argv[0]).name, sys.argv[1:]
+    if tool == "sleep":
+        if args != ["0.1"]:
+            raise ValueError("test adapter only permits the bounded process-grace delay")
+        time.sleep(0.1)
+        return 0
     with (CONTROL / "calls.jsonl").open("a") as stream:
         stream.write(json.dumps({"tool": tool, "argv": args}, ensure_ascii=True) + "\n")
     plan = json.loads((CONTROL / "plan.json").read_text())
@@ -82,6 +87,11 @@ def main():
                       or (args[4] == "value" and args[5].isdecimal()))))
         if not valid:
             raise ValueError("qdbus method argument contract mismatch")
+        if (not owner_query and method == "org.freedesktop.DBus.Properties.Set" and
+                len(args) == 6 and args[4:] == ["value", "1"] and
+                plan.get("video_interrupt_after_first_item")):
+            (CONTROL / "progress-gone").touch()
+            return 0
     # A producer can remove only this workspace's simulated dialog service.
     if tool in ("qdbus", "qdbus6") and (CONTROL / "progress-gone").exists():
         if owner_query:
@@ -111,6 +121,8 @@ def main():
         return real_resize(plan["real_resize"], args)
     if tool == "magick" and "real_transform" in plan and response is None:
         return real_transform(plan["real_transform"], args)
+    if tool in ("ffmpeg", "ffprobe") and "real_video_tools" in plan and response is None:
+        return real_video_tool(plan["real_video_tools"], tool, args, plan)
     if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
         return real_publication_tool(plan["real_publication_tools"], tool, args)
     if "real_web_email_tools" in plan and tool in ("magick", "identify") and response is None:
@@ -152,6 +164,10 @@ def main():
             owned(value)
         return subprocess.call([plan["real_mv"], *args])
     if response is not None:
+        if tool == "ffmpeg" and "-progress" in args:
+            progress_path = owned(args[args.index("-progress") + 1])
+            with progress_path.open("wb") as stream:
+                stream.write(b"out_time_ms=100000\nprogress=end\n")
         if tool == "kdialog" and any(flag in args for flag in (
                 "--getexistingdirectory", "--getsavefilename")) and response.get("stdout", "").strip():
             owned(response["stdout"].strip())
@@ -160,7 +176,7 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
         if "output_base64" in response:
-            if tool not in ("magick", "convert", "montage", "mogrify", "exiftool", "cp"):
+            if tool not in ("magick", "convert", "montage", "mogrify", "exiftool", "cp", "ffmpeg"):
                 raise ValueError("output injection unsupported for " + tool)
             output = args[args.index("-o") + 1] if tool == "exiftool" else args[-1]
             if tool == "magick":
@@ -375,13 +391,15 @@ def main():
         if tool == "tr" and args not in (["[:upper:]", "[:lower:]"], ["[:lower:]", "[:upper:]"]):
             raise ValueError("only case translation is supported")
         return subprocess.call(["/usr/bin/" + tool, *args])
+    elif tool == "awk":
+        return subprocess.call([shutil.which("awk", path=os.defpath), *args])
     elif tool == "cat":
         if not args:
             sys.stdout.buffer.write(sys.stdin.buffer.read())
         for value in args:
             if value != "--":
                 sys.stdout.buffer.write(owned(value).read_bytes())
-    elif tool in ("mkdir", "rm", "cp", "mv", "touch", "chmod", "ln"):
+    elif tool in ("mkdir", "mkfifo", "rm", "cp", "mv", "touch", "chmod", "ln"):
         filesystem(tool, args)
     else:
         raise ValueError("unconfigured external command: " + tool)
@@ -667,9 +685,92 @@ def real_transform(executable, args):
                           env=dict(os.environ, PATH=os.defpath)).returncode
 
 
+def real_video_tool(tools, tool, args, plan):
+    executable = tools[tool]
+    if tool == "ffmpeg" and args == ["-hide_banner", "-encoders"]:
+        return subprocess.run([executable, *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == "ffmpeg" and plan.get("video_fail_encoding"):
+        progress_path = Path(args[args.index("-progress") + 1])
+        progress_fd = os.open(progress_path, os.O_WRONLY)
+        os.write(progress_fd, b"out_time_ms=100000\nprogress=continue\n")
+        os.close(progress_fd)
+        return 19
+    if tool == "ffprobe":
+        if "-i" not in args:
+            raise ValueError("real ffprobe requires an explicit input")
+        source = owned(args[args.index("-i") + 1])
+        if source.stat().st_size > 2 * 1024 * 1024:
+            raise ValueError("video fixture exceeds test bound")
+        result = subprocess.run([executable, *args], timeout=10,
+                                env=dict(os.environ, PATH=os.defpath), capture_output=True)
+        if (plan.get("video_force_output_format") and
+                source.parent.name.startswith(".kim6-stage.") and
+                any(value.startswith("format=format_name") for value in args)):
+            result.stdout = result.stdout.replace(
+                b"format_name=mov,mp4,m4a,3gp,3g2,mj2",
+                plan["video_force_output_format"].encode("ascii"),
+            )
+        if plan.get("video_interrupt_on_probe_output") and source.parent.name.startswith(".kim6-stage."):
+            (CONTROL / "progress-state").write_text(plan["video_interrupt_on_probe_output"])
+        sys.stdout.buffer.write(result.stdout)
+        sys.stderr.buffer.write(result.stderr)
+        return result.returncode
+    else:
+        if "-nostdin" not in args or "-progress" not in args:
+            raise ValueError("real ffmpeg must be noninteractive and no-clobber")
+        input_paths = [owned(args[index + 1]) for index, value in enumerate(args[:-1]) if value == "-i"]
+        if not input_paths or any(path.stat().st_size > 2 * 1024 * 1024 for path in input_paths):
+            raise ValueError("real ffmpeg requires bounded test-owned inputs")
+        if args[-1] == "-" and "null" in args:
+            output = None
+        else:
+            if "-n" not in args:
+                raise ValueError("real ffmpeg output must refuse replacement")
+            output = owned(args[-1])
+            if output.exists() or output.is_symlink() or not output.parent.name.startswith(".kim6-stage."):
+                raise ValueError("real ffmpeg requires a new destination-local stage")
+        if plan.get("video_create_collision") and output is not None:
+            source = input_paths[0]
+            target = source.with_name(source.stem + "-transcoded." + output.suffix.lstrip("."))
+            target = owned(target)
+            target.write_bytes(b"created during transcode; preserve me")
+        if plan.get("video_hold_process"):
+            child = subprocess.Popen(["/bin/sleep", "20"])
+            (CONTROL / "video-child.pid").write_text(str(child.pid))
+            if plan.get("video_interrupt_during_encode"):
+                (CONTROL / "progress-state").write_text(plan["video_interrupt_during_encode"])
+            progress_path = Path(args[args.index("-progress") + 1])
+            progress_fd = os.open(progress_path, os.O_WRONLY)
+            os.write(progress_fd, b"out_time_ms=100000\nprogress=continue\n")
+
+            def stop_child(_signum, _frame):
+                child.terminate()
+                try:
+                    child.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+                os.close(progress_fd)
+                raise SystemExit(143)
+
+            signal.signal(signal.SIGTERM, stop_child)
+            os.write(1, b"out_time_ms=100000\nprogress=continue\n")
+            while True:
+                time.sleep(1)
+    command = list(args)
+    if tool == "ffmpeg" and plan.get("video_limit_output_duration") and output is not None:
+        command[-1:-1] = ["-t", plan["video_limit_output_duration"]]
+    result = subprocess.run([executable, *command], timeout=15,
+                            env=dict(os.environ, PATH=os.defpath))
+    if tool == "ffmpeg" and plan.get("video_interrupt_after_encode") and output is not None:
+        (CONTROL / "progress-state").write_text(plan["video_interrupt_after_encode"])
+    return result.returncode
+
+
 def filesystem(tool, args):
     # Only forms used by the recovered dispatcher; reject unknown options.
-    allowed = {"mkdir": {"-p", "--"}, "rm": {"-f", "-rf", "--"},
+    allowed = {"mkdir": {"-p", "--"}, "mkfifo": {"--"}, "rm": {"-f", "-rf", "--"},
                "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--"}, "mv": {"-f", "-fT", "-T", "--no-clobber", "--no-copy", "--"},
                "ln": {"-T", "--"},
                "touch": {"-r", "--"}, "chmod": set()}
@@ -687,6 +788,9 @@ def filesystem(tool, args):
     if tool == "mkdir":
         for path in paths:
             path.mkdir(parents="-p" in args, exist_ok="-p" in args)
+    elif tool == "mkfifo":
+        for path in paths:
+            os.mkfifo(path)
     elif tool == "rm":
         for path in paths:
             if path.is_symlink():

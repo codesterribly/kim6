@@ -81,8 +81,8 @@ class Workspace:
             "kdialog", "qdbus", "qdbus6", "kreadconfig6", "gettext", "magick",
             "convert", "mogrify", "montage", "identify", "exiftool", "pdfinfo", "pdftoppm", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
-            "mktemp", "rm", "cp", "mv", "mkdir", "touch", "chmod", "dirname",
-            "basename", "cat", "date", "tr", "stat", "ln", "cmp",
+            "mktemp", "rm", "cp", "mv", "mkdir", "mkfifo", "touch", "chmod", "dirname", "awk",
+            "basename", "cat", "date", "tr", "stat", "ln", "cmp", "sleep",
         }
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)
@@ -296,6 +296,15 @@ atomic_overwrite_file "$1" "$scratch"
             raise unittest.SkipTest("optional real ImageMagick magick is unavailable")
         plan = json.loads(self.plan.read_text())
         plan["real_magick"] = executable
+        self.plan.write_text(json.dumps(plan))
+
+    def use_real_video_tools(self):
+        """Run FFmpeg/ffprobe only on short, test-owned videos and stages."""
+        tools = {name: shutil.which(name) for name in ("ffmpeg", "ffprobe")}
+        if not all(tools.values()):
+            raise unittest.SkipTest("FFmpeg and ffprobe are unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_video_tools"] = tools
         self.plan.write_text(json.dumps(plan))
 
     def use_real_publication_tools(self):

@@ -3356,7 +3356,439 @@ action_multiburst()      { :; }
 action_other()           { :; }
 action_sortbydate()      { :; }
 action_treatment()       { :; }
-action_video()           { :; }
+
+# Video helpers are kept local to the video action so the shared image
+# publication and KDialog contracts remain unchanged.
+video_probe() {
+  local path="$1" video_info format_info audio_info key value record
+  video_info="$(ffprobe -v error -select_streams v:0 \
+    -show_entries stream=codec_name,width,height,duration,nb_frames,display_aspect_ratio:stream_tags=rotate:stream_side_data=rotation \
+    -of default=noprint_wrappers=1 -i "$path" 2>/dev/null)" || return 1
+  format_info="$(ffprobe -v error -show_entries format=format_name,duration \
+    -of default=noprint_wrappers=1 -i "$path" 2>/dev/null)" || return 1
+  audio_info="$(ffprobe -v error -select_streams a -show_entries stream=codec_name \
+    -of default=noprint_wrappers=1:nokey=1 -i "$path" 2>/dev/null)" || return 1
+
+  VIDEO_CODEC='' VIDEO_WIDTH='' VIDEO_HEIGHT='' VIDEO_DURATION='' VIDEO_FRAMES=''
+  VIDEO_DAR='' VIDEO_ROTATION='0' VIDEO_FORMATS='' VIDEO_FORMAT_DURATION=''
+  VIDEO_AUDIO_COUNT=0
+  while IFS='=' read -r key value; do
+    case "$key" in
+      codec_name) VIDEO_CODEC="$value" ;;
+      width) VIDEO_WIDTH="$value" ;;
+      height) VIDEO_HEIGHT="$value" ;;
+      duration) VIDEO_DURATION="$value" ;;
+      nb_frames) VIDEO_FRAMES="$value" ;;
+      display_aspect_ratio) VIDEO_DAR="$value" ;;
+      TAG:rotate|rotation) VIDEO_ROTATION="$value" ;;
+      format_name) VIDEO_FORMATS="$value" ;;
+    esac
+  done <<< "$video_info"
+  while IFS='=' read -r key value; do
+    case "$key" in
+      format_name) VIDEO_FORMATS="$value" ;;
+      duration) VIDEO_FORMAT_DURATION="$value" ;;
+    esac
+  done <<< "$format_info"
+  while IFS= read -r record; do
+    [ -n "$record" ] && VIDEO_AUDIO_COUNT=$((VIDEO_AUDIO_COUNT + 1))
+  done <<< "$audio_info"
+
+  [[ "$VIDEO_CODEC" =~ ^[A-Za-z0-9_]+$ && "$VIDEO_WIDTH" =~ ^[1-9][0-9]*$ &&
+     "$VIDEO_HEIGHT" =~ ^[1-9][0-9]*$ && -n "$VIDEO_FORMATS" ]] || return 1
+  [ -n "$VIDEO_FORMAT_DURATION" ] || VIDEO_FORMAT_DURATION="$VIDEO_DURATION"
+  [[ "$VIDEO_FORMAT_DURATION" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
+  awk -v duration="$VIDEO_FORMAT_DURATION" 'BEGIN { exit !(duration > 0) }' || return 1
+  if [ -n "$VIDEO_ROTATION" ] && [ "$VIDEO_ROTATION" != "0" ]; then
+    if ! awk -v rotation="$VIDEO_ROTATION" 'BEGIN {
+      if (rotation !~ /^-?[0-9]+([.][0-9]+)?$/) exit 1
+      nearest = int((rotation + (rotation < 0 ? -45 : 45)) / 90)
+      exit (rotation - nearest * 90 > 0.01 || rotation - nearest * 90 < -0.01)
+    }'; then
+      return 1
+    fi
+  fi
+}
+
+video_resolve_container() {
+  local path="$1" requested="$2" extension formats="${3,,}"
+  VIDEO_MUXER=''
+  extension="${path##*.}"
+  extension="${extension,,}"
+  if [ "$requested" = mp4 ]; then
+    VIDEO_MUXER=mp4
+    VIDEO_EXTENSION=mp4
+    return 0
+  fi
+  case "$extension" in
+    mp4|m4v) [[ ",$formats," == *,mp4,* ]] && VIDEO_MUXER=mp4 ;;
+    mov) [[ ",$formats," == *,mov,* ]] && VIDEO_MUXER=mov ;;
+    mkv) [[ ",$formats," == *,matroska,* ]] && VIDEO_MUXER=matroska ;;
+    webm) [[ ",$formats," == *,webm,* ]] && VIDEO_MUXER=webm ;;
+    avi) [[ ",$formats," == *,avi,* ]] && VIDEO_MUXER=avi ;;
+    flv) [[ ",$formats," == *,flv,* ]] && VIDEO_MUXER=flv ;;
+    asf|wmv) [[ ",$formats," == *,asf,* ]] && VIDEO_MUXER=asf ;;
+    ts|mts|m2ts) [[ ",$formats," == *,mpegts,* ]] && VIDEO_MUXER=mpegts ;;
+    mpg|mpeg|vob) [[ ",$formats," == *,mpeg,* ]] && VIDEO_MUXER=mpeg ;;
+    3gp|3g2) [[ ",$formats," == *,3gp,* ]] && VIDEO_MUXER=3gp ;;
+    ogg|ogv) [[ ",$formats," == *,ogg,* ]] && VIDEO_MUXER=ogg ;;
+    *) return 1 ;;
+  esac
+  [ -n "${VIDEO_MUXER:-}" ] || return 1
+  VIDEO_EXTENSION="$extension"
+  case "$VIDEO_MUXER:$VIDEO_CODEC" in
+    webm:*|ogg:*) return 2 ;;
+  esac
+  return 0
+}
+
+video_terminate_owned_process() {
+  local pid="$1" attempt
+  kill -TERM "$pid" 2>/dev/null || true
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
+
+video_cleanup_owned_process() {
+  local pid="${VIDEO_OWNED_FFMPEG_PID:-}"
+  [ -n "$pid" ] || return 0
+  video_terminate_owned_process "$pid"
+  wait "$pid" 2>/dev/null || true
+  VIDEO_OWNED_FFMPEG_PID=''
+}
+
+# Run one invocation-owned FFmpeg process while polling the shared stop
+# predicate. The background command's PID is tracked directly; cleanup never
+# searches for or signals other FFmpeg processes.
+video_run_monitored() {
+  local ref="$1" label="$2" duration="$3" error_file="$4"
+  shift 4
+  local fd pid key value rc=0 interrupted=0 percent read_rc fifo="${error_file%.stderr}.progress"
+  local argument_index
+  local -a command=("$@")
+  mkfifo -- "$fifo" || return 1
+  for ((argument_index = 0; argument_index < ${#command[@]} - 1; argument_index++)); do
+    if [ "${command[$argument_index]}" = -progress ]; then
+      command[argument_index + 1]="$fifo"
+      break
+    fi
+  done
+  ffmpeg "${command[@]}" > /dev/null 2>"$error_file" &
+  pid=$!
+  VIDEO_OWNED_FFMPEG_PID="$pid"
+  exec {fd}< "$fifo"
+  while :; do
+    if IFS='=' read -r -t 0.2 key value <&"$fd"; then
+      case "$key" in
+        out_time_ms)
+          if [[ "$value" =~ ^[0-9]+$ ]] && awk -v d="$duration" 'BEGIN { exit !(d > 0) }'; then
+            percent="$(awk -v t="$value" -v d="$duration" 'BEGIN { p = int(t / 1000000 / d * 100); if (p > 100) p = 100; print p }')"
+            if ! progress_label "$ref" "$label — ${percent}%"; then
+              interrupted=1
+              video_terminate_owned_process "$pid"
+              break
+            fi
+          fi
+          ;;
+        progress) : ;;
+      esac
+    else
+      read_rc=$?
+      if [ "$read_rc" -le 128 ]; then break; fi
+    fi
+    if progress_cancelled "$ref"; then
+      interrupted=1
+      video_terminate_owned_process "$pid"
+      break
+    fi
+  done
+  exec {fd}<&-
+  wait "$pid" || rc=$?
+  VIDEO_OWNED_FFMPEG_PID=''
+  rm -f -- "$fifo"
+  [ "$interrupted" -eq 0 ] || return 130
+  return "$rc"
+}
+
+video_count_records() {
+  local selector="$1" path="$2" records record count=0
+  records="$(ffprobe -v error -select_streams "$selector" -show_entries stream=index \
+    -of default=noprint_wrappers=1:nokey=1 -i "$path" 2>/dev/null)" || return 1
+  while IFS= read -r record; do
+    [[ "$record" =~ ^[0-9]+$ ]] && count=$((count + 1))
+  done <<< "$records"
+  printf '%s\n' "$count"
+}
+
+video_format_has_token() {
+  local token="$1" formats="${2,,}"
+  [[ ",$formats," == *",$token,"* ]]
+}
+
+video_validate_output() {
+  local output="$1" muxer="$2" codec="$3" max_width="$4" max_height="$5"
+  local input_width="$6" input_height="$7" rotation="$8" input_duration="$9"
+  local input_audio="${10}" input_dar="${11}" input_frames="${12}" output_formats output_duration
+  local output_codec='' output_width='' output_height='' output_dar='' output_frames=''
+  local video_count audio_count expected_codec output_extension="${output##*.}"
+  video_probe "$output" || return 1
+  output_codec="$VIDEO_CODEC" output_width="$VIDEO_WIDTH" output_height="$VIDEO_HEIGHT"
+  output_dar="$VIDEO_DAR" output_frames="$VIDEO_FRAMES" output_formats="$VIDEO_FORMATS"
+  output_duration="$VIDEO_FORMAT_DURATION"
+  video_count="$(video_count_records v "$output")" || return 1
+  audio_count="$(video_count_records a "$output")" || return 1
+  [ "$video_count" -eq 1 ] || return 1
+  [ "$audio_count" -eq "$input_audio" ] || return 1
+  case "$codec" in libx264) expected_codec=h264 ;; libx265) expected_codec=hevc ;; *) return 1 ;; esac
+  [ "$output_codec" = "$expected_codec" ] || return 1
+  case "$muxer" in
+    mp4|mov)
+      video_format_has_token mp4 "$output_formats" || video_format_has_token mov "$output_formats" || return 1 ;;
+    matroska|webm|avi|flv|asf|mpegts|mpeg|ogg)
+      video_format_has_token "$muxer" "$output_formats" || return 1 ;;
+    3gp)
+      video_format_has_token 3gp "$output_formats" || video_format_has_token 3g2 "$output_formats" || return 1 ;;
+    *) return 1 ;;
+  esac
+  case "$muxer:$output_extension" in
+    mp4:mp4|mov:mov|mp4:m4v|matroska:mkv|webm:webm|avi:avi|flv:flv|asf:asf|asf:wmv|mpegts:ts|mpegts:mts|mpegts:m2ts|mpeg:mpg|mpeg:mpeg|mpeg:vob|3gp:3gp|3gp:3g2|ogg:ogg|ogg:ogv) ;;
+    *) return 1 ;;
+  esac
+  [[ "$output_width" =~ ^[1-9][0-9]*$ && "$output_height" =~ ^[1-9][0-9]*$ ]] || return 1
+  (( output_width <= max_width && output_height <= max_height )) || return 1
+  (( output_width <= input_width && output_height <= input_height )) || return 1
+  (( output_width % 2 == 0 && output_height % 2 == 0 )) || return 1
+  if awk -v input="$input_dar" -v output="$output_dar" -v rotation="$rotation" \
+      -v input_width="$input_width" -v input_height="$input_height" \
+      -v output_width="$output_width" -v output_height="$output_height" 'BEGIN {
+        if (input ~ /^[0-9]+:[0-9]+$/) { split(input, a, ":"); x = a[1] / a[2] }
+        else x = input_width / input_height
+        if (output ~ /^[0-9]+:[0-9]+$/) { split(output, b, ":"); y = b[1] / b[2] }
+        else y = output_width / output_height
+        if (rotation == 90 || rotation == -90 || rotation == 270 || rotation == -270) x = 1 / x
+        difference = x > y ? x - y : y - x
+        exit !(x > 0 && difference <= x * 0.025)
+      }'; then :; else return 1; fi
+  if [[ "$output_frames" =~ ^[1-9][0-9]*$ ]] && [[ "$input_frames" =~ ^[1-9][0-9]*$ ]]; then
+    [ "$output_frames" = "$input_frames" ] || return 1
+  fi
+  awk -v input="$input_duration" -v output="$output_duration" 'BEGIN {
+    if (input !~ /^[0-9]+([.][0-9]+)?$/ || output !~ /^[0-9]+([.][0-9]+)?$/) exit 1
+    difference = input - output; if (difference < 0) difference = -difference
+    tolerance = input * 0.02; if (tolerance < 0.125) tolerance = 0.125
+    exit !(difference <= tolerance)
+  }' || return 1
+}
+
+video_item_error() {
+  local file="$1" detail="$2"
+  report_fail "$file — $detail"
+}
+
+video_ffmpeg_error_summary() {
+  local file="$1" line
+  [ -f "$file" ] || return 0
+  while IFS= read -r line; do
+    case "${line,,}" in
+      *error*|*invalid*|*failed*|*unknown*|*not\ supported*|*could\ not*)
+        printf '%s' "${line:0:240}"
+        return 0
+        ;;
+    esac
+  done < "$file"
+  return 0
+}
+
+action_video() {
+  local size='' crf='' codec='' container='' option='' mode rc=0 ref=''
+  local max_width max_height source input_ext muxer ext target stem directory stage error_file
+  local source_width source_height display_width display_height rotation duration formats dar
+  local audio_count encoder_output label index=0 retry target_number
+  local -a raw_files=() files=() ffmpeg_args=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --size|--crf|--codec|--container)
+        [ "$#" -ge 2 ] || { progress_error "$(gettext 'Video options require a value.')"; return 2; }
+        option="$1"; shift
+        case "$option" in
+          --size) [ -z "$size" ] || { progress_error "$(gettext 'Video size was specified more than once.')"; return 2; }; size="$1" ;;
+          --crf) [ -z "$crf" ] || { progress_error "$(gettext 'Video CRF was specified more than once.')"; return 2; }; crf="$1" ;;
+          --codec) [ -z "$codec" ] || { progress_error "$(gettext 'Video codec was specified more than once.')"; return 2; }; codec="$1" ;;
+          --container) [ -z "$container" ] || { progress_error "$(gettext 'Video container was specified more than once.')"; return 2; }; container="$1" ;;
+        esac
+        shift
+        ;;
+      --) shift; raw_files+=("$@"); break ;;
+      -*) progress_error "$(gettext 'Unknown video option:') $1"; return 2 ;;
+      *) raw_files+=("$@"); break ;;
+    esac
+  done
+  case "$size" in hd720) max_width=1280; max_height=720 ;; hd1080) max_width=1920; max_height=1080 ;;
+    *) progress_error "$(gettext 'Video size must be hd720 or hd1080.')"; return 2 ;; esac
+  case "$crf" in 17|23|29) : ;; *) progress_error "$(gettext 'Video CRF must be 17, 23 or 29.')"; return 2 ;; esac
+  case "$codec" in libx264|libx265) : ;; *) progress_error "$(gettext 'Video codec must be libx264 or libx265.')"; return 2 ;; esac
+  case "$container" in orig|mp4) : ;; *) progress_error "$(gettext 'Video container must be orig or mp4.')"; return 2 ;; esac
+  if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+    progress_error "$(gettext 'FFmpeg and ffprobe are required for video transcoding.')"; return 1
+  fi
+  if ! encoder_output="$(ffmpeg -hide_banner -encoders 2>/dev/null)" ||
+     ! [[ "$encoder_output" =~ [[:space:]]${codec}[[:space:]] ]]; then
+    progress_error "$(gettext 'The selected FFmpeg video encoder is unavailable:') $codec"; return 1
+  fi
+  if ! collect_publication_inputs files "${raw_files[@]}"; then
+    progress_error "$(gettext 'Video selection is empty or contains an unsafe, aliased, linked or invalid source.')"; return 1
+  fi
+  mode="$(choose_output_mode "$(gettext 'Kim — Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')")"
+  [ "$mode" != cancel ] || return 1
+  report_init
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Initialising video transcode…')")" || return 1
+  trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
+
+  for source in "${files[@]}"; do
+    index=$((index + 1))
+    label="$(gettext 'Kim — Transcoding video:') $index/${#files[@]}: ${source##*/}"
+    if ! progress_begin_item "$ref" "$label"; then
+      video_item_error "$source" "$(gettext 'interrupted before processing')"
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    if ! video_probe "$source"; then
+      video_item_error "$source" "$(gettext 'could not inspect a valid video stream and container')"
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      continue
+    fi
+    source_width="$VIDEO_WIDTH" source_height="$VIDEO_HEIGHT" rotation="$VIDEO_ROTATION"
+    duration="$VIDEO_FORMAT_DURATION" audio_count="$VIDEO_AUDIO_COUNT" formats="$VIDEO_FORMATS" dar="$VIDEO_DAR"
+    if [ "$rotation" = 90 ] || [ "$rotation" = -90 ] || [ "$rotation" = 270 ] || [ "$rotation" = -270 ]; then
+      display_width="$source_height"; display_height="$source_width"
+    else
+      display_width="$source_width"; display_height="$source_height"
+    fi
+    if video_resolve_container "$source" "$container" "$formats"; then
+      rc=0
+    else
+      rc=$?
+      if [ "$rc" -eq 2 ]; then
+        video_item_error "$source" "$(gettext 'the selected codec is incompatible with the original container; choose MP4 explicitly')"
+      else
+        video_item_error "$source" "$(gettext 'the original container cannot be identified safely from the file extension')"
+      fi
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      continue
+    fi
+    muxer="$VIDEO_MUXER"; ext="$VIDEO_EXTENSION"
+    if [ "$mode" = overwrite ] && [ "$container" = mp4 ]; then
+      input_ext="${source##*.}"
+      input_ext="${input_ext,,}"
+      if [ "$input_ext" != mp4 ] && [ "$input_ext" != m4v ]; then
+        video_item_error "$source" "$(gettext 'MP4 cannot replace a source with a different filename extension; choose Create new files')"
+        progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+        continue
+      fi
+    fi
+    directory="${source%/*}"; [ "$directory" != "$source" ] || directory="$PWD"
+    if [ "$mode" = overwrite ]; then
+      target="$source"
+    else
+      stem="${source##*/}"
+      if [[ "$stem" == *.* ]]; then stem="${stem%.*}"; fi
+      target="$directory/${stem}-transcoded.$ext"
+      target_number=1
+      while [ -e "$target" ] || [ -L "$target" ]; do
+        target="$directory/${stem}-transcoded_${target_number}.$ext"
+        target_number=$((target_number + 1))
+      done
+    fi
+    stage="$(tmp_for_target "$target")" || {
+      video_item_error "$source" "$(gettext 'could not create destination-local staging')"
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      continue
+    }
+    error_file="${stage%/*}/ffmpeg.stderr"
+    if progress_cancelled "$ref"; then
+      video_item_error "$source" "$(gettext 'interrupted before encoding')"
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    ffmpeg_args=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats -i "$source" -map 0:v:0 -map '0:a?' \
+      -map_metadata 0 -map_chapters 0 -vf "scale=w='min(iw,$max_width)':h='min(ih,$max_height)':force_original_aspect_ratio=decrease:force_divisible_by=2" \
+      -fps_mode passthrough -c:v "$codec" -crf "$crf" -c:a copy)
+    if [ "$muxer" = mp4 ]; then ffmpeg_args+=(-movflags +faststart); fi
+    ffmpeg_args+=(-f "$muxer" "$stage")
+    rc=0
+    video_run_monitored "$ref" "$label" "$duration" "$error_file" "${ffmpeg_args[@]}" || rc=$?
+    if [ "$rc" -eq 130 ]; then
+      video_item_error "$source" "$(gettext 'interrupted during encoding; no output was published')"
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
+      local ffmpeg_reason
+      ffmpeg_reason="$(video_ffmpeg_error_summary "$error_file")"
+      video_item_error "$source" "$(gettext 'FFmpeg failed or produced no complete output')${ffmpeg_reason:+: $ffmpeg_reason}"
+      rm -f -- "$stage" "$error_file"
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      continue
+    fi
+    if progress_cancelled "$ref"; then
+      video_item_error "$source" "$(gettext 'interrupted after encoding; no output was published')"
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    if video_validate_output "$stage" "$muxer" "$codec" "$max_width" "$max_height" \
+        "$display_width" "$display_height" "$rotation" "$duration" "$audio_count" "$dar" "$VIDEO_FRAMES"; then rc=0; else rc=1; fi
+    if [ "$rc" -ne 0 ]; then
+      video_item_error "$source" "$(gettext 'output validation failed: wrong container, codec, dimensions, streams, duration or incomplete decode')"
+      rm -f -- "$stage" "$error_file"
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      continue
+    fi
+    # Decode each staged stream completely before publication. The same owned
+    # process monitor enforces cancellation and targets only this child.
+    rc=0
+    video_run_monitored "$ref" "$label" "$duration" "$error_file" -hide_banner -v error -xerror -nostdin \
+      -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -map '0:a?' -f null - || rc=$?
+    if [ "$rc" -eq 130 ]; then
+      video_item_error "$source" "$(gettext 'interrupted during output validation; no output was published')"
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    if [ "$rc" -ne 0 ] || progress_cancelled "$ref"; then
+      video_item_error "$source" "$(gettext 'output did not fully decode or processing was interrupted')"
+      rm -f -- "$stage" "$error_file"
+      [ "$rc" -eq 0 ] || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    retry=0
+    while :; do
+      if progress_cancelled "$ref"; then
+        video_item_error "$source" "$(gettext 'interrupted immediately before publication')"
+        rm -f -- "$stage" "$error_file"; progress_close "$ref" || true
+        report_finish_dialog "$(gettext 'Kim')"; return 1
+      fi
+      if commit_tmp_to_target "$stage" "$target" "$mode"; then
+        rm -f -- "$error_file"
+        report_ok
+        break
+      fi
+      if [ "$mode" = create ] && { [ -e "$target" ] || [ -L "$target" ]; } && [ "$retry" -lt 1000 ]; then
+        retry=$((retry + 1))
+        while :; do
+          target="$directory/${stem}-transcoded_${target_number}.$ext"
+          target_number=$((target_number + 1))
+          [ ! -e "$target" ] && [ ! -L "$target" ] && break
+        done
+        continue
+      fi
+      video_item_error "$source" "$(gettext 'publication failed; existing files were preserved')"
+      rm -f -- "$stage" "$error_file"
+      break
+    done
+    progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+  done
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  [ "$REPORT_FAIL" -eq 0 ]
+}
 
 # ---------------------------------------------------------------------------
 # Router
@@ -3449,8 +3881,12 @@ Commands:
   treatment <mode> <files...>
       Not implemented yet.
 
-  video <files...>
-      Not implemented yet.
+  video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265
+        --container orig|mp4 -- <files...>
+      Safely transcode each selected video with FFmpeg. Original-container
+      mode fails when the chosen codec/streams are incompatible; it never
+      silently changes to MP4. KIM_POLICY or the batch-wide dialog selects
+      create versus authorized overwrite.
 
   webexport <dir> <files...>
       Prepare images for web use.
