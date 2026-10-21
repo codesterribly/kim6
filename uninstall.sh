@@ -1,66 +1,88 @@
-#!/bin/bash
-#
-# Uninstallation script.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Authors: Unknown
-#          Tomáš Hnyk <tomashnyk@gmail.com>
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Get install directory according to the XDG standard (previously qtpaths6 were used, but Ubuntu has them in development package)
-# This assumes we installed the same way (root vs normal user) as we uninstall
-NO_MESSAGE=$1
-
-if [ "$(id -u)" -eq 0 ]; then
-    # We are root, installed in system directories
-    SYSTEM_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-    for dir in $(echo "$SYSTEM_DIRS" | tr ":" "\n"); do
-        if [ -d "$dir/kio/servicemenus" ]; then
-            kim_install_dir="$dir/kio/servicemenus"
-            break
-        fi
-    done
-    message1="The KDE servicemenu install prefix could not be determined. Uninstallation was aborted. Uninstall is run as root. Didn't you install as normal user?"
-    message2="The KIM 6 executables directory not found. You are trying to uninstall as root. Did you install as normal user?"
-else
-    # We are not root, installed in user directory
-    kim_install_dir="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
-    message1="The KDE servicemenu install prefix could not be determined. Uninstallation was aborted. Uninstall is run as normal user. Didn't you install as root?"
-    message2="The KIM 6 executables directory not found. You are trying to uninstall as normal user. Did you install as root?"
+SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PREFIX=''
+quiet=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prefix) [ "$#" -ge 2 ] || { echo "uninstall.sh: --prefix needs a directory" >&2; exit 2; }; PREFIX="$2"; shift 2 ;;
+    --no_message) quiet=true; shift ;;
+    -h|--help) echo "Usage: uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]"; exit 0 ;;
+    *) echo "uninstall.sh: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+if [ -z "$PREFIX" ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    PREFIX="${data_dirs%%:*}/kio/servicemenus"
+  else
+    PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
+  fi
 fi
+[[ "$PREFIX" != *$'\n'* && "$PREFIX" != *$'\r'* ]] || { echo "uninstall.sh: invalid prefix" >&2; exit 2; }
+[ -d "$PREFIX" ] || { [ "$quiet" = true ] && exit 0; echo "KIM6 service-menu directory not found: $PREFIX"; exit 1; }
+PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 
-# This checks if we got an existing install directory
-if [[ ! -d "$kim_install_dir" || -z "$kim_install_dir" ]]; then
-    echo $message1
+menu_names=(kim_compress.desktop kim_compressandresize.desktop kim_convertandrotate.desktop kim_compressandresizevideo.desktop kim_publication.desktop)
+RUNTIME="$PREFIX/kim6"
+if [ -e "$RUNTIME" ] || [ -L "$RUNTIME" ]; then
+  [ -d "$RUNTIME" ] && [ ! -L "$RUNTIME" ] || { echo "uninstall.sh: refusing unsafe runtime path: $RUNTIME" >&2; exit 1; }
+  if find "$RUNTIME" -type l -print -quit | grep -q .; then
+    echo "uninstall.sh: refusing to remove resources from a runtime tree containing symlinks: $RUNTIME" >&2
     exit 1
+  fi
 fi
+owned_digest() {
+  local relative="$1"
+  [ -f "$RUNTIME/.kim6-manifest" ] || return 1
+  awk -F '\t' -v path="$relative" '$2 == path { print $1; found=1 } END { if (!found) exit 1 }' "$RUNTIME/.kim6-manifest"
+}
+file_digest() {
+  local value
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  value="$(sha256sum -- "$1")" || return 1
+  printf '%s\n' "${value%% *}"
+}
+for name in "${menu_names[@]}"; do
+  path="$PREFIX/$name"
+  [ -f "$path" ] && [ ! -L "$path" ] || continue
+  expected="$(owned_digest "@menu:$name" 2>/dev/null || true)"
+  if [ -n "$expected" ]; then
+    actual="$(file_digest "$path" 2>/dev/null || true)"
+    [ "$actual" != "$expected" ] || rm -f -- "$path"
+  elif grep -Eq '^X-KIM6-Managed=true$|^Exec=.*kim_(compress|convert|rotate|resize|video|galery|pelemele|other|album|print|rename|sortbydate|stripmeta|multiburst|treatment|resizeandsend|flipflop|webexport)\b|^Exec=(magick|convert|montage)\b' "$path"; then
+    # Recognize the specific pre-unification KIM command contract.
+    rm -f -- "$path"
+  fi
+done
 
-if [[ ! -d "$kim_install_dir/kim6" ]]; then
-    if [[ $NO_MESSAGE == "--no_message" ]]; then
-        : # Say nothing when called from install script
-    else
-        echo $message2
-        NO_MESSAGE="--no_message"
+if [ -d "$RUNTIME" ]; then
+  if [ -f "$RUNTIME/.kim6-manifest" ]; then
+    while IFS=$'\t' read -r expected relative; do
+      [ -n "$relative" ] || continue
+      case "$relative" in @menu:*) continue ;; esac
+      path="$RUNTIME/$relative"
+      actual="$(file_digest "$path" 2>/dev/null || true)"
+      if [ -n "$expected" ] && [ "$actual" = "$expected" ]; then
+        rm -f -- "$path"
+        case "$relative" in locale/*/LC_MESSAGES/kim6.mo)
+          messages_dir="${path%/*}"
+          language_dir="${messages_dir%/*}"
+          rmdir -- "$messages_dir" "$language_dir" "$RUNTIME/locale" 2>/dev/null || true ;;
+        esac
+      fi
+    done < "$RUNTIME/.kim6-manifest"
+    rm -f -- "$RUNTIME/.kim6-manifest" "$RUNTIME/.kim6-owned"
+  else
+    # Legacy resource ownership is ambiguous. Remove only dispatcher code that
+    # exactly matches the current repository source; leave customized files.
+    if [ -f "$RUNTIME/bin/kim_all" ] && cmp -s -- "$RUNTIME/bin/kim_all" "$SOURCE_DIR/src/bin/kim_all"; then
+      rm -f -- "$RUNTIME/bin/kim_all"
     fi
+  fi
+  rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" 2>/dev/null || true
+  rmdir -- "$RUNTIME" 2>/dev/null || true
 fi
-
-# Remove desktop files and helper directory
-rm -f "$kim_install_dir"/kim_*.desktop 2>/dev/null
-rm -rf "$kim_install_dir"/kim6 2>/dev/null
-
-if [[ $NO_MESSAGE == "--no_message" ]]; then
-    : # Say nothing when called from install script
-else
-    echo "KIM6 has been removed. Goodbye."
-fi
+if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 --noincremental >/dev/null 2>&1 || true; fi
+[ "$quiet" = true ] || echo "KIM6-owned dispatcher resources and service menus removed."

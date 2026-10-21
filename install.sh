@@ -1,176 +1,261 @@
-#!/bin/bash
-#
-# Installation script.
-#
-# Copyright (C) 2005, 2006  Charles Bouveyron <charles.bouveyron@free.fr>
-# Copyright (C) 2025  Tomáš Hnyk <tomashnyk@gmail.com>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Authors: Unknown
-#          Tomáš Hnyk <tomashnyk@gmail.com>
+#!/usr/bin/env bash
+set -euo pipefail
 
-# If there is no kdialog, create an error log and abort.
-if ! command -v kdialog >/dev/null 2>&1; then
-    touch ~/kim6_installation_failed.log
-    echo "You tried to install KDE Image Menu 6 (KIM 6) service menu for KDE's Dolphin file manager in an environment that does not have kdialog. Most of the functionality would not work and the installation was aborted. Please install KDE or kdialog and try again. This message was created by this command: $(realpath "$0")." > ~/kim6_installation_failed.log
-    exit 1
+# Install the unified KIM6 dispatcher and its owned Dolphin service menus.
+SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PREFIX=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prefix) [ "$#" -ge 2 ] || { echo "install.sh: --prefix needs a directory" >&2; exit 2; }; PREFIX="$2"; shift 2 ;;
+    -h|--help) echo "Usage: install.sh [--prefix SERVICEMENU_DIRECTORY]"; exit 0 ;;
+    *) echo "install.sh: unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+if [ -z "$PREFIX" ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    PREFIX="${data_dirs%%:*}/kio/servicemenus"
+  else
+    PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
+  fi
 fi
+[[ "$PREFIX" != *$'\n'* && "$PREFIX" != *$'\r'* ]] || { echo "install.sh: invalid prefix" >&2; exit 2; }
+command -v intltool-merge >/dev/null 2>&1 || { echo "install.sh: intltool-merge is required to render translated service menus" >&2; exit 1; }
+mkdir -p -- "$PREFIX"
+PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 
-# Function to show install errors and declare install_log variable to store the errors
-install_log=""
-spit_install_log() {
-    kdialog --title "KIM 6 Installation problems" --error="$install_log"
+STAGE="$(mktemp -d "$PREFIX/.kim6-stage.XXXXXXXX")"
+BACKUP="$STAGE/backup"
+NEW_RUNTIME="$STAGE/runtime"
+NEW_MENUS="$STAGE/menus"
+RUNTIME="$PREFIX/kim6"
+USER_BACKUP=''
+manifest_digest() {
+  local file="$1" digest
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  digest="$(sha256sum -- "$file")" || return 1
+  printf '%s\n' "${digest%% *}"
 }
+previous_manifest_digest() {
+  local relative="$1"
+  [ -f "$RUNTIME/.kim6-manifest" ] || return 1
+  awk -F '\t' -v path="$relative" '$2 == path { print $1; found=1 } END { if (!found) exit 1 }' "$RUNTIME/.kim6-manifest"
+}
+preserve_if_custom() {
+  local relative="$1" current expected backup
+  [ -e "$RUNTIME/$relative" ] || return 0
+  current="$(manifest_digest "$RUNTIME/$relative")" || { echo "install.sh: refusing unsafe managed resource: $relative" >&2; return 1; }
+  expected="$(previous_manifest_digest "$relative" 2>/dev/null || true)"
+  [ -n "$expected" ] && [ "$current" = "$expected" ] && return 0
+  if [ -z "$USER_BACKUP" ]; then
+    USER_BACKUP="$(mktemp -d "$NEW_RUNTIME/.kim6-preserved.XXXXXXXX")" || return 1
+  fi
+  backup="$USER_BACKUP/$relative"
+  mkdir -p -- "${backup%/*}"
+  cp -a -- "$RUNTIME/$relative" "$backup"
+}
+installed_runtime=false
+declare -a installed_menus=() backed_menus=()
+backed_runtime=false
+rollback() {
+  local i name
+  for ((i=${#installed_menus[@]}-1; i>=0; i--)); do rm -f -- "$PREFIX/${installed_menus[i]}"; done
+  if [ "$backed_runtime" = true ]; then
+    rm -rf -- "$RUNTIME"
+    mv -- "$BACKUP/runtime" "$RUNTIME" || true
+  elif [ "$installed_runtime" = true ]; then
+    rm -rf -- "$RUNTIME"
+  fi
+  for ((i=${#backed_menus[@]}-1; i>=0; i--)); do
+    name="${backed_menus[i]}"
+    [ -e "$BACKUP/menus/$name" ] && mv -- "$BACKUP/menus/$name" "$PREFIX/$name" || true
+  done
+  rm -rf -- "$STAGE"
+}
+on_exit() {
+  local status=$?
+  if [ "$status" -ne 0 ]; then rollback; else rm -rf -- "$STAGE"; fi
+}
+trap on_exit EXIT
+mkdir -p -- "$NEW_RUNTIME/bin" "$NEW_MENUS" "$BACKUP/menus"
 
-if ! command -v qdbus >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>qdbus</b>. Please install it. It is usually in package <b>qdbus-qt6</b> (Debian, Ubuntu etc.), <b>qt6-qttools</b> (Fedora etc.) or <b>qt6-tools</b>(Arch). Without it, almost nothing will work.<br><br>"
-fi
-# Test for presence of dependencies, if not present, a user is presented with a log after installation
-if ! command -v montage >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>montage</b>. Please install it. It is usually in package <b>imagemagick</b> (Debian etc, Arch) or <b>ImageMagick</b> (Fedora etc.). Without it, the montage feature will not work.<br><br>"
-fi
-if ! command -v mogrify >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>mogrify</b>. Please install it. It is usually in package <b>imagemagick</b> or <b>ImageMagick</b>. Without it, a lot of features like resizing and rotating and other transformations will not work.<br><br>"
-fi
-if ! magick -list format | grep -q "HEIC"; then
-    install_log="$install_log""It seems there is no support for converting and working with <b>HEIC</b> files. Please install it. It is usually in package <b>ImageMagick-heic</b> (Fedora). Without it, working with HEIC files will not work.<br><br>"
-fi
-if ! command -v convert >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>convert</b>. Please install it. It is usually in package <b>imagemagick</b> or <b>ImageMagick</b> Without it, format conversion will not work.<br><br>"
-fi
-if ! command -v ffmpeg >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>ffmpeg</b>. Please install it. It is usually in package <b>ffmpeg</b>. Without it, video resizing will not work.<br><br>"
-else
-   if ! ffmpeg -encoders 2>&1 | grep -q libx264; then
-       install_log="$install_log""Cannot find encoder <b>libx264</b> for FFmpeg. Encoding video with it will not work. Please install it.<br><br>"
-   fi
-   if ! ffmpeg -encoders 2>&1 | grep -q libx265; then
-       install_log="$install_log""Cannot find encoder <b>libx265</b> for FFmpeg. Encoding video with it will not work. Please install it.<br><br>"
-   fi
-fi
-if ! command -v kreadconfig6 >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>kreadconfig6</b>. Please install it. It is usually in package <b>kf6-kconfig</b>. Without it, user settings will not work. They are not necessary for the program to function.<br><br>"
-fi
-if ! command -v exiftool >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>exiftool</b>. Please install it. It is usually in package <b>libimage-exiftool-perl</b> (Debian, Ubuntu etc.), <b>perl-Image-ExifTool</b> (Fedora etc.) or <b>perl-image-exiftool</b>(Arch). Without it, metadata stripping will not work.<br><br>"
-fi
-if ! command -v xdg-email >/dev/null 2>&1; then
-    install_log="$install_log""Cannot find executable <b>xdg-email</b>. Please install it. It is usually in package <b>xdg-utils</b>. Without it, sending an image by e-mail will not work.<br><br>."
-fi
-if [[ -n "$install_log" ]]; then
-    install_log="$install_log""Some <b>dependencies are missing</b>. The installation continued, but some functionality might not work.<br><br>"
-fi
-
-# Get install directory according to the XDG standard (previously qtpaths6 were used, but Ubuntu has them in development package)
-if [ "$(id -u)" -eq 0 ]; then
-    # We are root, installing in system directories
-    SYSTEM_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-    for dir in $(echo "$SYSTEM_DIRS" | tr ":" "\n"); do
-        if [ -d "$dir/kio/servicemenus" ]; then
-            kim_install_dir="$dir/kio/servicemenus"
-            break
-        fi
-    done
-else
-    # We are not root, installing in user directory
-    kim_install_dir="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
-fi
-
-# This checks if we got an existing install directory
-if [[ ! -d "$kim_install_dir" ]]; then
-    install_log="<b>Error</b> fetching the KDE install prefix. Installation was aborted."
-    spit_install_log
+# Keep unknown files in the previous KIM-owned runtime tree. Known legacy
+# commands are removed only when they are byte-identical to their repository
+# reference, which establishes ownership without a broad glob deletion.
+if [ -e "$RUNTIME" ] || [ -L "$RUNTIME" ]; then
+  [ -d "$RUNTIME" ] && [ ! -L "$RUNTIME" ] || { echo "install.sh: refusing unsafe runtime path: $RUNTIME" >&2; exit 1; }
+  if find "$RUNTIME" -type l -print -quit | grep -q .; then
+    echo "install.sh: refusing to migrate a runtime tree containing symlinks: $RUNTIME" >&2
     exit 1
+  fi
+  cp -a -- "$RUNTIME/." "$NEW_RUNTIME/"
 fi
+preserve_if_custom bin/kim_all
+preserve_if_custom gallery/index.part1
+preserve_if_custom gallery/index.part2
+preserve_if_custom ABOUT
+preserve_if_custom LICENSE.md
+preserve_if_custom docs/index.html
+preserve_if_custom docs/work.css
+preserve_if_custom INSTALL.md
+install -m 0755 -- "$SOURCE_DIR/src/bin/kim_all" "$NEW_RUNTIME/bin/kim_all"
+mkdir -p -- "$NEW_RUNTIME/gallery"
+cp -a -- "$SOURCE_DIR/src/gallery/." "$NEW_RUNTIME/gallery/"
+install -m 0644 -- "$SOURCE_DIR/ABOUT" "$NEW_RUNTIME/ABOUT"
+install -m 0644 -- "$SOURCE_DIR/LICENSE.md" "$NEW_RUNTIME/LICENSE.md"
+install -m 0644 -- "$SOURCE_DIR/INSTALL.md" "$NEW_RUNTIME/INSTALL.md"
+[ ! -d "$SOURCE_DIR/docs" ] || cp -a -- "$SOURCE_DIR/docs" "$NEW_RUNTIME/docs"
+rm -f -- "$NEW_RUNTIME/.kim6-owned"
+touch "$NEW_RUNTIME/.kim6-owned"
 
-# Target directory to install helper files
-kim_helper_files="$kim_install_dir"/kim6
-# Directory from which we install
-src_folder="$(dirname "$(realpath "$0")")"
+# The dispatcher loads translations from resources beside the installed copy.
+if command -v msgfmt >/dev/null 2>&1; then
+  for po in "$SOURCE_DIR"/po/*.po; do
+    [ -f "$po" ] || continue
+    lang="$(basename -- "$po" .po)"
+    mkdir -p -- "$NEW_RUNTIME/locale/$lang/LC_MESSAGES"
+    preserve_if_custom "locale/$lang/LC_MESSAGES/kim6.mo"
+    msgfmt -o "$NEW_RUNTIME/locale/$lang/LC_MESSAGES/kim6.mo" "$po"
+  done
+fi
+bash -n "$NEW_RUNTIME/bin/kim_all"
 
-# First uninstall so we do not leave anything behind when potentially renaming, removing or moving stuff from version to version
-"$src_folder"/uninstall.sh --no_message
-
-# Test if there are pregenerated .desktop files and if not generate them (normally in a release they would be, during development not)
-if compgen -G "$src_folder"/src/kim_*.desktop >/dev/null; then
-    desktop_files_generated=false
-else
-    desktop_files_generated=true
-    if ! command -v intltool-merge >/dev/null 2>&1; then
-        install_log="$install_log""You are probably trying to install KIM6 from git and do not have pregenerated .desktop files.<br>They are generated by the tool <b>intltool-merge</b>, usually found in package <b>intltool</b>.<br>Please install it. The installation was aborted.<br><br>"
-        spit_install_log
-        exit 1
+legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
+for name in "${legacy_names[@]}"; do
+  old="$NEW_RUNTIME/bin/$name"
+  source="$SOURCE_DIR/src/bin/$name"
+  if [ -f "$old" ] && [ ! -L "$old" ]; then
+    if [ -f "$source" ] && cmp -s -- "$old" "$source"; then
+      rm -- "$old"
     else
-        for desk_ini in "$src_folder"/src/*.desktop.in
-        do
-            new_desktop_file_filename="${desk_ini%.in}"
-            intltool-merge --desktop-style "$src_folder"/po/ "$desk_ini"  "$new_desktop_file_filename" > /dev/null
-            chmod +x "$new_desktop_file_filename"
-        done
+      # The known legacy executable path establishes KIM ownership, but a
+      # modified file may contain user edits. Keep a recovery copy outside bin.
+      if [ -z "$USER_BACKUP" ]; then USER_BACKUP="$(mktemp -d "$NEW_RUNTIME/.kim6-preserved.XXXXXXXX")"; fi
+      mkdir -p -- "$USER_BACKUP/legacy/bin"
+      cp -a -- "$old" "$USER_BACKUP/legacy/bin/$name"
+      chmod a-x -- "$USER_BACKUP/legacy/bin/$name"
+      rm -- "$old"
     fi
-fi
-
-# install helper files and desktop files
-mkdir -p "$kim_helper_files"
-
-cp -pr "$src_folder"/src/gallery \
-       "$src_folder"/po \
-       "$src_folder"/src/bin \
-       "$src_folder"/src/kim_translation \
-       "$src_folder"/ABOUT \
-       "$src_folder"/LICENSE.md \
-       "$kim_helper_files"/
-
-# copy docs if present
-if [ -d "$src_folder/docs" ]; then
-    cp -pr "$src_folder"/docs "$kim_helper_files"/
-fi
-
-cp -pr "$src_folder"/src/kim_*.desktop "$kim_install_dir"
-
-# Replace the path in desktop and other files with the installed path
-for file in "$kim_install_dir"/kim_*.desktop; do
-    sed -i "s|Exec=kim|Exec=$kim_helper_files/bin/kim|g" "$file"
+  fi
 done
-for file in "$kim_helper_files"/bin/kim_*; do
-    sed -i "s|KIM_INST_TTT|kim_inst='$kim_helper_files'|g" "$file"
-    sed -i "s|SOURCE_TRANSLATION_TTT|. '$kim_helper_files/kim_translation'|g" "$file"
+
+menu_names=(kim_compress.desktop kim_compressandresize.desktop kim_convertandrotate.desktop kim_compressandresizevideo.desktop kim_publication.desktop)
+for template in "$SOURCE_DIR"/src/kim_*.desktop.in; do
+  name="$(basename -- "${template%.in}")"
+  output="$NEW_MENUS/$name"
+  intltool-merge --desktop-style "$SOURCE_DIR/po" "$template" "$output" >/dev/null
+  chmod 0755 -- "$output"
+  # Quote an absolute executable path using Desktop Entry Exec quoting rules.
+  exec_path="$RUNTIME/bin/kim_all"
+  exec_path="${exec_path//\\/\\\\}"
+  exec_path="${exec_path//\"/\\\"}"
+  exec_path="${exec_path//&/\\&}"
+  exec_path="${exec_path//#/\\#}"
+  sed -i "s#^Exec=kim_all\([[:space:]]\|$\)#Exec=\"$exec_path\"\\1#" "$output"
+  if command -v desktop-file-validate >/dev/null 2>&1; then
+    # This generic validator supports Application entries, not KDE's Type=Service
+    # action groups. KDE's own cache builder is used below when available.
+    if ! grep -q '^Type=Service$' "$output"; then
+      desktop-file-validate "$output"
+    fi
+  fi
 done
-sed -i "s|LOCALE_SOURCE_TTT|'$kim_helper_files/locale'|g" "$kim_helper_files/kim_translation"
+for name in "${menu_names[@]}"; do
+  [ -f "$NEW_MENUS/$name" ] || { echo "install.sh: required menu missing: $name" >&2; exit 1; }
+done
 
-# install translation mo files
-if ! command -v msgfmt >/dev/null 2>&1; then
-    install_log="$install_log""The <b>msgfmt</b> command was not found, translation files were not generated and KIM6 will only be available in English. The command is usually provided by the package <b>gettext</b>. Please install it and then install KIM6 again.<br><br>"
-else
-    for i in "$kim_helper_files"/po/*.po; do
-        TRANSLANG=$(basename -s .po "$i")
-        mkdir -p "$kim_helper_files/locale/$TRANSLANG/LC_MESSAGES"
-        msgfmt -o "$kim_helper_files/locale/$TRANSLANG/LC_MESSAGES/kim6.mo" "$i"
-    done
+# Verify every installed Exec points at the staged dispatcher before touching
+# the active installation. No source template or target menu is modified yet.
+for menu in "$NEW_MENUS"/*.desktop; do
+  if grep -Eq '^Exec=.*kim_(compress|convert|rotate|resize|video|galery|pelemele|other|album|print|rename|sortbydate|stripmeta|multiburst|treatment|resizeandsend|flipflop|webexport)\b|^Exec=(magick|convert|montage|ffmpeg|kdialog)\b' "$menu"; then
+    echo "install.sh: legacy or direct processing Exec found in $menu" >&2; exit 1;
+  fi
+  grep -Eq '^Exec=".*kim6/bin/kim_all"( |$)' "$menu" || {
+    echo "install.sh: menu does not target the installed dispatcher: $menu" >&2; exit 1;
+  }
+done
+
+# Existing service-menu files are replaceable only when they carry our marker
+# or match recognizable previous KIM Exec contracts. Customized unrelated
+# files at the same names are left untouched and cause a safe preflight stop.
+for name in "${menu_names[@]}"; do
+  existing="$PREFIX/$name"
+  if [ -e "$existing" ] || [ -L "$existing" ]; then
+    [ ! -L "$existing" ] || { echo "install.sh: refusing to replace a symlinked menu: $existing" >&2; exit 1; }
+    if ! grep -Eq '^X-KIM6-Managed=true$|^Exec=.*kim_(compress|convert|rotate|resize|video|galery|pelemele|other|album|print|rename|sortbydate|stripmeta|multiburst|treatment|resizeandsend|flipflop|webexport)\b|^Exec=(magick|convert|montage)\b' "$existing"; then
+      echo "install.sh: refusing to replace an unrecognized customized menu: $existing" >&2
+      exit 1
+    fi
+  fi
+done
+
+# When KDE's cache builder is present, validate staged Type=Service menus in
+# an isolated XDG data/cache area before replacing the active installation.
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+  check_data="$STAGE/check-data"
+  check_cache="$STAGE/check-cache"
+  mkdir -p -- "$check_data/kio/servicemenus" "$check_cache"
+  cp -a -- "$NEW_MENUS/." "$check_data/kio/servicemenus/"
+  XDG_DATA_HOME="$check_data" XDG_CACHE_HOME="$check_cache" \
+    XDG_CONFIG_HOME="$STAGE/check-config" kbuildsycoca6 --noincremental >/dev/null 2>&1 || {
+      echo "install.sh: KDE rejected the staged service-menu definitions" >&2
+      exit 1
+    }
 fi
 
-# po files do not need to be installed after generating locale
-rm -rf "$kim_helper_files/po"
+# Preserve customized prior menus and fingerprint every installed asset. This
+# lets uninstall leave user edits untouched and lets a later upgrade back them up.
+for name in "${menu_names[@]}"; do
+  if [ -e "$PREFIX/$name" ]; then
+    current="$(manifest_digest "$PREFIX/$name" 2>/dev/null || true)"
+    expected="$(previous_manifest_digest "@menu:$name" 2>/dev/null || true)"
+    if [ -z "$expected" ] || [ "$current" != "$expected" ]; then
+      if [ -z "$USER_BACKUP" ]; then USER_BACKUP="$(mktemp -d "$NEW_RUNTIME/.kim6-preserved.XXXXXXXX")"; fi
+      mkdir -p -- "$USER_BACKUP/menus"
+      cp -a -- "$PREFIX/$name" "$USER_BACKUP/menus/$name"
+    fi
+  fi
+done
+rm -f -- "$NEW_RUNTIME/.kim6-manifest"
+: > "$NEW_RUNTIME/.kim6-manifest"
+manifest_paths=(bin/kim_all gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md docs/index.html docs/work.css)
+for relative in "${manifest_paths[@]}"; do
+  resource="$NEW_RUNTIME/$relative"
+  [ -f "$resource" ] || continue
+  digest="$(manifest_digest "$resource")" || { echo "install.sh: cannot fingerprint $relative" >&2; exit 1; }
+  printf '%s\t%s\n' "$digest" "$relative" >> "$NEW_RUNTIME/.kim6-manifest"
+done
+if [ -d "$NEW_RUNTIME/locale" ]; then
+  while IFS= read -r -d '' resource; do
+    relative="${resource#"$NEW_RUNTIME/"}"
+    digest="$(manifest_digest "$resource")" || { echo "install.sh: cannot fingerprint $relative" >&2; exit 1; }
+    printf '%s\t%s\n' "$digest" "$relative" >> "$NEW_RUNTIME/.kim6-manifest"
+  done < <(find "$NEW_RUNTIME/locale" -type f -name kim6.mo -print0)
+fi
+for name in "${menu_names[@]}"; do
+  digest="$(manifest_digest "$NEW_MENUS/$name")"
+  printf '%s\t@menu:%s\n' "$digest" "$name" >> "$NEW_RUNTIME/.kim6-manifest"
+done
 
-# in case we generated desktop files, remove them
-if [ "$desktop_files_generated" = true ] ; then
-    rm "$src_folder"/src/*.desktop
-fi
-# if errors were encountered, display them, otherwise the success message will only be seen when installed manually from a terminal, not from GUI
-if [[ "$install_log" == "" ]]; then
-    echo "KIM6 has been successfully installed. Goodbye."
-else
-    spit_install_log
-fi
+# Swap the fully prepared runtime tree, then replace only the five owned menu
+# paths. Backups remain in the same filesystem until all replacements succeed.
+if [ -e "$RUNTIME" ]; then mv -- "$RUNTIME" "$BACKUP/runtime"; backed_runtime=true; fi
+mv -- "$NEW_RUNTIME" "$RUNTIME"
+installed_runtime=true
+for name in "${menu_names[@]}"; do
+  if [ -e "$PREFIX/$name" ] || [ -L "$PREFIX/$name" ]; then
+    mv -- "$PREFIX/$name" "$BACKUP/menus/$name"
+    backed_menus+=("$name")
+  fi
+  mv -- "$NEW_MENUS/$name" "$PREFIX/$name"
+  installed_menus+=("$name")
+done
+
+trap - EXIT
+rm -rf -- "$STAGE"
+if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 --noincremental >/dev/null 2>&1 || true; fi
+echo "KIM6 unified dispatcher installed in $PREFIX."
+[ -z "$USER_BACKUP" ] || echo "Customized pre-existing KIM resources were preserved under $RUNTIME/${USER_BACKUP##*/}."
+for dependency in kdialog qdbus magick identify exiftool ffmpeg ffprobe xdg-email xdg-open; do
+  command -v "$dependency" >/dev/null 2>&1 || echo "Optional/runtime dependency missing: $dependency"
+done

@@ -1,15 +1,16 @@
 # KDE Image Menu 6 — KIM6
-KIM6 is a service menu for the KDE Plasma desktop. It adds context-menu actions in Dolphin and Folder View so you can resize, convert and batch-process images (and some video formats) directly from the file manager.
+KIM6 is a KDE Dolphin service-menu package with one processing executable: `kim_all`. Its menus route image and video workflows through that unified dispatcher, including batch transformations, safe publication, rename, PDF albums/print layouts, galleries, collages, TIFF/GIF creation, email resize, and 24 video presets.
 
 KDE store: https://store.kde.org/p/2307290/
 
 ![Screenshot](/graphics/screenshot.png)
 
-## Dependencies, Install, Uninstall
-See [INSTALL.md](INSTALL.md).
+## Install and uninstall
+
+See [INSTALL.md](INSTALL.md) for runtime dependencies, fresh installation, safe upgrades, uninstall, configuration, timestamp behavior, and the supported feature list. The legacy `kim_*` scripts remain in source as reference implementations and are not invoked by the installed menus or dispatcher.
 
 ## Usage and Features
-See the manual: https://kim-6.github.io/kim6/
+The installed dispatcher provides `kim_all about`, `kim_all license`, and `kim_all manual`; the manual is also available at https://kim-6.github.io/kim6/.
 
 ## Development and contributing translations
 See [DEVELOPMENT.md](DEVELOPMENT.md).

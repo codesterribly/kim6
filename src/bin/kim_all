@@ -44,55 +44,20 @@
 # develop, without having to duplicate or synchronize changes across
 # many separate scripts.
 
-# ---------------------------------------------------------------------------
-# Planned work
-# ---------------------------------------------------------------------------
-# 1) Integrate with krename for advanced renaming workflows.
-#    krename is already extremely powerful, so the intent is to either:
-#      - pre-load a few common krename presets, or
-#      - simply launch krename directly when appropriate.
-#
-# 2) Improve how rename operations mark modified files.
-#    For example, controlling whether tags like "_stripped" or "_web"
-#    are prepended or appended, which is useful for workflows that
-#    prefer prefixes over suffixes (or vice versa).
-
-# ---------------------------------------------------------------------------
-# Work-in-progress notes
-# ---------------------------------------------------------------------------
-# THIS IS A WORK IN PROGRESS.
-# Suggestions are welcome, but expect rapid iteration and change.
-
-# Some scripts are intentionally not integrated at this time, either
-# because they appear unused or because their functionality is better
-# handled elsewhere:
-#
-# - kim_rotatewithexif
-#   Despite the name, this script does not actually rotate based on EXIF.
-#   It simply applies a custom rotation angle, which is already handled
-#   by action_rotate. EXIF-based auto-orientation is implemented instead
-#   in action_rotatewithexif.
-#
-# - kim_multiburst
-#   Handles legacy Sony multi-shot images by converting them into an
-#   animated GIF. This is a niche feature and is being deferred.
-#
-# - kim_sortbydate
-#   A rename script with a hard-coded EXIF date pattern. This behavior
-#   is better handled as part of action_rename (or via krename), and
-#   equivalent EXIF-based rename options have been integrated there.
-#
-# - kim_treatment
-#   Provides very basic image treatments (for example sepia) that are
-#   easily achievable, and often better handled, in dedicated graphics
-#   applications.
-
-# TODO re-enable when ready for testing
-#SOURCE_TRANSLATION_TTT
+# kim_all is the unified KIM runtime entry point used by Dolphin menus.
+# Legacy kim_* programs are not invoked or delegated to. The approved
+# exclusions are obsolete Sony multiburst, deprecated basic treatments, and
+# obsolete camera-specific download workflows.
 
 set -euo pipefail
 
 PROG="kim_all"
+DISPATCHER_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+if [ -d "$DISPATCHER_DIR/../locale" ]; then
+  KIM_LOCALE_DIR="$(cd -P -- "$DISPATCHER_DIR/../locale" && pwd -P)"
+  export TEXTDOMAINDIR="${TEXTDOMAINDIR:-$KIM_LOCALE_DIR}"
+  export TEXTDOMAIN="${TEXTDOMAIN:-kim6}"
+fi
 
 # Print an error and exit.
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -1023,9 +988,28 @@ action_album() {
 # - KIM_POLICY=overwrite   forces Overwrite mode
 
 action_compress() {
-  local QUALITY="${1:-}"
-  local outdir="${2:-}"
-  shift 2 || true
+  local QUALITY='' outdir='' custom=false
+  local -a raw_files=()
+  if [[ "${1:-}" == --* ]]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --quality) [ "$#" -ge 2 ] || die "compress: --quality needs a value"; QUALITY="$2"; shift 2 ;;
+        --output-dir) [ "$#" -ge 2 ] || die "compress: --output-dir needs a value"; outdir="$2"; shift 2 ;;
+        --custom) custom=true; shift ;;
+        --) shift; raw_files+=("$@"); break ;;
+        *) die "compress: unknown option $1" ;;
+      esac
+    done
+    if [ "$custom" = true ]; then
+      [ -z "$QUALITY" ] || die "compress: use --custom or --quality, not both"
+      QUALITY="$(kdialog --inputbox "$(gettext 'JPEG quality (1-100):')" 60)" || return 1
+    fi
+  else
+    QUALITY="${1:-}"
+    outdir="${2:-}"
+    shift 2 || true
+    raw_files+=("$@")
+  fi
 
   [[ -n "$QUALITY" ]] || die "compress: missing quality"
   [[ "$QUALITY" =~ ^[0-9]+$ ]] || die "compress: quality must be a number"
@@ -1035,9 +1019,10 @@ action_compress() {
   (( QUALITY >= 1 && QUALITY <= 100 )) || die "compress: quality must be between 1 and 100"
 
   local -a files=()
-  collect_valid_files files "$@"
+  collect_valid_files files "${raw_files[@]}"
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
+  [ -n "$outdir" ] || outdir="${files[0]%/*}"
 
   local mode
   mode="$(choose_output_mode \
@@ -1189,7 +1174,27 @@ action_compress() {
 # - Uses ImageMagick `magick` to write explicit outputs.
 
 action_convert() {
-  local FORMAT="${1:-}"
+  local FORMAT='' bmp5=false custom=false
+  local -a raw_files=()
+  if [[ "${1:-}" == --* ]]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --format) [ "$#" -ge 2 ] || die "convert: --format needs a value"; FORMAT="$2"; shift 2 ;;
+        --bmp5) bmp5=true; shift ;;
+        --custom-format) custom=true; shift ;;
+        --) shift; raw_files+=("$@"); break ;;
+        *) die "convert: unknown option $1" ;;
+      esac
+    done
+    if [ "$custom" = true ]; then
+      [ -z "$FORMAT" ] || die "convert: use --custom-format or --format, not both"
+      FORMAT="$(kdialog --inputbox "$(gettext 'Choose format to convert:')" '')" || return 1
+    fi
+  else
+    FORMAT="${1:-}"
+    shift || true
+    raw_files+=("$@")
+  fi
   if [ -z "$FORMAT" ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: missing format.')"
     return 1
@@ -1200,11 +1205,13 @@ action_convert() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: invalid format.')"
     return 1
   fi
-
-  shift || true
+  if [ "$bmp5" = true ] && [[ "${FORMAT,,}" != bmp ]]; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: --bmp5 is valid only with BMP output.')"
+    return 1
+  fi
 
   local -a files=()
-  collect_valid_files files "$@"
+  collect_valid_files files "${raw_files[@]}"
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
@@ -1332,7 +1339,11 @@ action_convert() {
         break
       fi
       rc=0
-      magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+      if [ "$bmp5" = true ]; then
+        magick -- "$i" -define bmp:format=bmp5 "$OUTTMP" >/dev/null 2>&1 || rc=$?
+      else
+        magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+      fi
       # Decode every frame from bytes, without trusting the requested suffix.
       expected="${FORMAT^^}"
       case "$expected" in
@@ -1396,6 +1407,8 @@ action_flipflop() {
   [ "$#" -ge 2 ] || die "flipflop: missing mode or files"
   local operation="${1#-}"
   shift
+  [ "${1:-}" != -- ] || shift
+  [ "$#" -gt 0 ] || die "flipflop: missing files"
   case "$operation" in flip|flop) ;; *) die "flipflop: expected flip or flop" ;; esac
   action_transform_in_place fresh "-$operation" "$@"
 }
@@ -2182,9 +2195,28 @@ action_rename() {
 #   $@  FILES   Input files
 # ---------------------------------------------------------------------------
 action_resize() {
-  local SCALE="${1:-}"
-  local outdir="${2:-}"
-  shift 2 || true
+  local SCALE='' outdir='' custom=false
+  local -a raw_files=()
+  if [[ "${1:-}" == --* ]]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --size) [ "$#" -ge 2 ] || die "resize: --size needs a value"; SCALE="$2"; shift 2 ;;
+        --output-dir) [ "$#" -ge 2 ] || die "resize: --output-dir needs a value"; outdir="$2"; shift 2 ;;
+        --custom) custom=true; shift ;;
+        --) shift; raw_files+=("$@"); break ;;
+        *) die "resize: unknown option $1" ;;
+      esac
+    done
+    if [ "$custom" = true ]; then
+      [ -z "$SCALE" ] || die "resize: use --custom or --size, not both"
+      SCALE="$(kdialog --inputbox "$(gettext 'Resize dimension (maximum width x height):')" '1600x1600')" || return 1
+    fi
+  else
+    SCALE="${1:-}"
+    outdir="${2:-}"
+    shift 2 || true
+    raw_files+=("$@")
+  fi
 
   if [ -z "$SCALE" ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: missing scale.')"
@@ -2192,9 +2224,10 @@ action_resize() {
   fi
 
   local -a files=()
-  collect_valid_files files "$@"
+  collect_valid_files files "${raw_files[@]}"
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
+  [ -n "$outdir" ] || outdir="${files[0]%/*}"
 
 
   local mode
@@ -2755,15 +2788,35 @@ action_transform_in_place() {
 }
 
 action_rotate() {
-  [ "$#" -ge 2 ] || die "rotate: missing angle or files"
-  local angle="$1"
-  shift
+  local angle='' custom=false exif=false
+  local -a files=()
+  if [[ "${1:-}" == --* ]]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --angle) [ "$#" -ge 2 ] || die "rotate: --angle needs a value"; angle="$2"; shift 2 ;;
+        --exif) exif=true; shift ;;
+        --custom) custom=true; shift ;;
+        --) shift; files+=("$@"); break ;;
+        *) die "rotate: unknown option $1" ;;
+      esac
+    done
+    if [ "$custom" = true ]; then
+      [ -z "$angle" ] && [ "$exif" = false ] || die "rotate: --custom cannot be combined with another angle"
+      angle="$(kdialog --inputbox "$(gettext 'Rotate by how many degrees?')" 45)" || return 1
+    fi
+    [ "$exif" = false ] || { [ -z "$angle" ] || die "rotate: --exif cannot be combined with --angle"; angle=EXIF; }
+  else
+    angle="${1:-}"
+    shift || true
+    files+=("$@")
+  fi
+  [ -n "$angle" ] && [ "${#files[@]}" -gt 0 ] || die "rotate: missing angle or files"
   if [ "$angle" = EXIF ]; then
-    action_transform_in_place preserve -auto-orient "$@"
+    action_transform_in_place preserve -auto-orient "${files[@]}"
   else
     # ImageMagick's useful decimal, signed and conditional-angle grammar.
     [[ "$angle" =~ ^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[\<\>]?$ ]] || die "rotate: invalid angle"
-    action_transform_in_place preserve -rotate "$angle" "$@"
+    action_transform_in_place preserve -rotate "$angle" "${files[@]}"
   fi
 }
 
@@ -2805,6 +2858,7 @@ action_rotatewithexif() {
 # - Uses `exiftool` for metadata stripping, keeping ICC profile and Orientation.
 
 action_stripmeta() {
+  [ "${1:-}" != -- ] || shift
   local -a files=()
   collect_valid_files files "$@"
   local nbfiles="${#files[@]}"
@@ -3352,10 +3406,44 @@ action_pelemele() {
 # Actions outside the current consolidation packages
 # ---------------------------------------------------------------------------
 
-action_multiburst()      { :; }
-action_other()           { :; }
-action_sortbydate()      { :; }
-action_treatment()       { :; }
+dispatcher_resource() {
+  local script_dir
+  script_dir="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || return 1
+  printf '%s/../%s\n' "$script_dir" "$1"
+}
+
+action_about() {
+  local about_file
+  about_file="$(dispatcher_resource ABOUT)" || return 1
+  [ -r "$about_file" ] || { kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed About resource is missing.')"; return 1; }
+  kdialog --title "$(gettext 'About KIM6')" --msgbox "$(<"$about_file")"
+}
+
+action_license() {
+  local license_file
+  license_file="$(dispatcher_resource LICENSE.md)" || return 1
+  if [ ! -r "$license_file" ] || ! command -v xdg-open >/dev/null 2>&1; then
+    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed license or xdg-open is unavailable.')"
+    return 1
+  fi
+  xdg-open "$license_file" >/dev/null 2>&1 || {
+    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'Could not open the KIM6 license.')"
+    return 1
+  }
+}
+
+action_manual() {
+  local manual_file
+  manual_file="$(dispatcher_resource docs/index.html)" || return 1
+  if [ ! -r "$manual_file" ] || ! command -v xdg-open >/dev/null 2>&1; then
+    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed manual or xdg-open is unavailable.')"
+    return 1
+  fi
+  xdg-open "$manual_file" >/dev/null 2>&1 || {
+    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'Could not open the KIM6 manual.')"
+    return 1
+  }
+}
 
 # Video helpers are kept local to the video action so the shared image
 # publication and KDialog contracts remain unchanged.
@@ -3800,35 +3888,30 @@ Usage: $PROG <command> [arguments...]
 
 Commands:
 
-  album <dir> <files...>
+  album -- <files...>
       Build a validated multi-page PDF from selected images on A4 pages.
       Offers eight portrait/landscape album layouts.
 
-  compress <quality> <dir> <files...>
-      Compress images to the given quality (1-100).
-      overwrite mode modifies originals.
-      Create mode writes *_compressed files into <dir>.
+  compress --quality 1..100 [--output-dir DIR] -- <files...>
+  compress --custom -- <files...>
+      Compress JPEG images at the selected quality. Create mode writes
+      *_compressed files beside the first selected file by default.
 
-  convert <format> <files...>
-      Convert images to another format.
+  convert --format FORMAT [--bmp5] -- <files...>
+  convert --custom-format -- <files...>
+      Convert images to another format; BMP menus select BMP5 explicitly.
       overwrite mode overwrites existing converted outputs
       but never deletes original source files.
 
-  flipflop <mode> <files...>
+  flipflop <flip|flop> -- <files...>
       Flip or flop images.
 
-  gallery <dir> <files...>
+  gallery -- <files...>
       Create an HTML image gallery.
       Prompts for an output directory and generates:
         images/   resized images (800x800)
         thumbs/   thumbnails (200x200)
         index.html
-
-  multiburst <files...>
-      Not implemented yet.
-
-  other <files...>
-      Not implemented yet.
 
   pelemele <files...>
       Build a validated PNG collage. Options: --size WxH, --tile CxR,
@@ -3836,7 +3919,7 @@ Commands:
       --rotation DEGREES, --random-rotation DEGREES, --seed INTEGER,
       --shadow|--no-shadow, --output FILE, then -- and image files.
 
-  print <dir> <files...>
+  print -- <files...>
       Create a validated multi-page print PDF with seven layouts.
       Uses A3 portrait pages for the 10x15, 11.5x15 and 13x18 cm presets;
       other presets use A4 pages.
@@ -3853,10 +3936,11 @@ Commands:
       Rename images using filename rules.
       Supports EXIF-based renaming and safety checks.
 
-  resize <scale> <dir> <files...>
+  resize --size GEOMETRY [--output-dir DIR] -- <files...>
+  resize --custom -- <files...>
       Resize images to the given scale (e.g. 800x800, 50%).
-      overwrite mode modifies originals (metadata preserved best-effort).
-      Create mode writes *_resized files into <dir>.
+      Overwrite mode replaces the selected original only after validation.
+      Create mode writes *_resized files beside each input by default.
 
   resizeandsend [--size full|WIDTHxHEIGHT] [--] <files...>
       Resize selected images for email and open your mail client
@@ -3866,20 +3950,16 @@ Commands:
       (or ~/.local/share/kim6/email-attachments when XDG_DATA_HOME is unset)
       until you remove them, because mail clients may read them asynchronously.
 
-  rotate <angle|EXIF> <files...>
-      Rotate images by a fixed angle, or auto-orient using EXIF.
+  rotate --angle DEGREES -- <files...>
+  rotate --exif -- <files...>
+  rotate --custom -- <files...>
+      Rotate images by a fixed/custom angle, or auto-orient using EXIF.
 
   rotatewithexif <files...>
       Rotate images using EXIF orientation.
 
-  sortbydate <files...>
-      Not implemented yet.
-
-  stripmeta <files...>
+  stripmeta [--] <files...>
       Strip metadata while preserving ICC profile and orientation.
-
-  treatment <mode> <files...>
-      Not implemented yet.
 
   video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265
         --container orig|mp4 -- <files...>
@@ -3888,15 +3968,18 @@ Commands:
       silently changes to MP4. KIM_POLICY or the batch-wide dialog selects
       create versus authorized overwrite.
 
-  webexport <dir> <files...>
+  webexport [<dir>] <files...>
       Prepare images for web use.
       Prompts for max size and quality. Existing dispatcher form remains supported.
   webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
             [--output-dir DIR] -- <files...>
-      Action-local arguments expose presets for future Dolphin menu routing.
+      Action-local arguments expose size, quality, format, and output choices.
       Web export always creates derived files; KIM_POLICY never replaces originals.
-      Always creates distinct *_web files into <dir>, regardless of KIM_POLICY.
+      Always creates distinct *_web files into the chosen output directory.
       Output format uses KIM_WEB_FORMAT (default: jpg).
+
+  about | license | manual
+      Show About information or open the installed License and Manual.
 
 Environment:
   KIM_POLICY=create
@@ -3931,8 +4014,6 @@ main() {
     convert)         mk_workdir; action_convert "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
     gallery)         mk_workdir; action_gallery "$@" ;;
-    multiburst)      mk_workdir; action_multiburst "$@" ;;
-    other)           mk_workdir; action_other "$@" ;;
     pelemele)        mk_workdir; action_pelemele "$@" ;;
     print)           mk_workdir; action_print "$@" ;;
     rename)          mk_workdir; action_rename "$@" ;;
@@ -3940,12 +4021,13 @@ main() {
     resizeandsend)   mk_workdir; action_resizeandsend "$@" ;;
     rotate)          mk_workdir; action_rotate "$@" ;;
     rotatewithexif)  mk_workdir; action_rotatewithexif "$@" ;;
-    sortbydate)      mk_workdir; action_sortbydate "$@" ;;
     stripmeta)       mk_workdir; action_stripmeta "$@" ;;
     tiffjoin)        mk_workdir; action_tiffjoin "$@" ;;
-    treatment)       mk_workdir; action_treatment "$@" ;;
     video)           mk_workdir; action_video "$@" ;;
     webexport)       mk_workdir; action_webexport "$@" ;;
+    about)           action_about "$@" ;;
+    license)         action_license "$@" ;;
+    manual)          action_manual "$@" ;;
     help|-h|--help)  usage ;;
     *) die "Unknown command: $cmd" ;;
   esac

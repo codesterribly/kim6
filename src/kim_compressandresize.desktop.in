@@ -1,141 +1,105 @@
-# Servicemenu — Compress and resize images
-#
-# Copyright (C) 2005, 2006  Charles Bouveyron <charles.bouveyron@free.fr>
-# Copyright (C) 2025  Tomáš Hnyk <tomashnyk@gmail.com>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 [Desktop Entry]
 Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
-Actions=aRcprs10;bRcprs30;cRcprs50;dRcprs70;eRcprs90;fRcprsCustom;_SEPARATOR_;aRsize0300;bRsize0600;cRsize0800;dRsize1024;eRsize1280;fRsize1400;gRsize1600;hRsize1920;iRsize2560;jRsize3440;kRsize3840;lRsizeCustom;_SEPARATOR_;aWebThumb75120;bWebExp75640;cWebExp75800;dWebExp751024;eWebExp751600;
-Encoding=UTF-8
-_X-KDE-Submenu=Kim — Compress and Resize
+X-KDE-Protocol=file
+Actions=Resize300;Resize600;Resize800;Resize1024;Resize1280;Resize1400;Resize1600;Resize1920;Resize2560;Resize3440;Resize3840;ResizeCustom;Web128;Web600;Web800;Web1024;Web1600;WebKeep;Emailfull;Email1600x1600;Email1200x1200;Email800x800;Email600x600;Email300x300;
+_X-KDE-Submenu=KIM6 — Compress, resize and web export
+X-KIM6-Managed=true
 
-[Desktop Action aRcprs10]
-_Name=Compress at 10 %
-Icon=application-x-compress
-Exec=kim_compress 10 %D %U
-
-[Desktop Action bRcprs30]
-_Name=Compress at 30 %
-Icon=application-x-compress
-Exec=kim_compress 30 %D %U
-
-[Desktop Action cRcprs50]
-_Name=Compress at 50 %
-Icon=application-x-compress
-Exec=kim_compress 50 %D %U
-
-[Desktop Action dRcprs70]
-_Name=Compress at 70 %
-Icon=application-x-compress
-Exec=kim_compress 70 %D %U
-
-[Desktop Action eRcprs90]
-_Name=Compress at 90 %
-Icon=application-x-compress
-Exec=kim_compress 90 %D %U
-
-[Desktop Action fRcprsCustom]
-_Name=Compress Custom...
-Icon=application-x-compress
-Exec=kim_compress `kdialog --inputbox "Compression rate:" 60` %D %U
-
-[Desktop Action aRsize0300]
+[Desktop Action Resize300]
 _Name=Resize (300x300 pixels)
-Icon=transform-scale
-Exec=kim_resize 300x300 %D %U
+Exec=kim_all resize --size 300x300 -- %F
 
-[Desktop Action bRsize0600]
+[Desktop Action Resize600]
 _Name=Resize (600x600 pixels)
-Icon=transform-scale
-Exec=kim_resize 600x600 %D %U
+Exec=kim_all resize --size 600x600 -- %F
 
-[Desktop Action cRsize0800]
+[Desktop Action Resize800]
 _Name=Resize (800x800 pixels)
-Icon=transform-scale
-Exec=kim_resize 800x800 %D %U
+Exec=kim_all resize --size 800x800 -- %F
 
-[Desktop Action dRsize1024]
+[Desktop Action Resize1024]
 _Name=Resize (1024x1024 pixels)
-Icon=transform-scale
-Exec=kim_resize 1024x1024 %D %U
+Exec=kim_all resize --size 1024x1024 -- %F
 
-[Desktop Action eRsize1280]
+[Desktop Action Resize1280]
 _Name=Resize (1280x1280 pixels)
-Icon=transform-scale
-Exec=kim_resize 1280x1280 %D %U
+Exec=kim_all resize --size 1280x1280 -- %F
 
-[Desktop Action fRsize1400]
+[Desktop Action Resize1400]
 _Name=Resize (1400x1400 pixels)
-Icon=transform-scale
-Exec=kim_resize 1400x1400 %D %U
+Exec=kim_all resize --size 1400x1400 -- %F
 
-[Desktop Action gRsize1600]
+[Desktop Action Resize1600]
 _Name=Resize (1600x1600 pixels)
-Icon=transform-scale
-Exec=kim_resize 1600x1600 %D %U
+Exec=kim_all resize --size 1600x1600 -- %F
 
-[Desktop Action hRsize1920]
+[Desktop Action Resize1920]
 _Name=Resize (1920x1920 pixels)
-Icon=transform-scale
-Exec=kim_resize 1920x1920 %D %U
+Exec=kim_all resize --size 1920x1920 -- %F
 
-[Desktop Action iRsize2560]
+[Desktop Action Resize2560]
 _Name=Resize (2560x2560 pixels)
-Icon=transform-scale
-Exec=kim_resize 2560x2560 %D %U
+Exec=kim_all resize --size 2560x2560 -- %F
 
-[Desktop Action jRsize3440]
+[Desktop Action Resize3440]
 _Name=Resize (3440x3440 pixels)
-Icon=transform-scale
-Exec=kim_resize 3440x3440 %D %U
+Exec=kim_all resize --size 3440x3440 -- %F
 
-[Desktop Action kRsize3840]
+[Desktop Action Resize3840]
 _Name=Resize (3840x3840 pixels)
-Icon=transform-scale
-Exec=kim_resize 3840x3840 %D %U
+Exec=kim_all resize --size 3840x3840 -- %F
 
-[Desktop Action lRsizeCustom]
-_Name=Resize Custom...
-Icon=transform-scale
-Exec=kim_resize `kdialog --inputbox "Resize dimension (max width x max height):" 300x300` %D %U
+[Desktop Action ResizeCustom]
+_Name=Resize custom…
+Exec=kim_all resize --custom -- %F
 
-[Desktop Action aWebThumb75120]
-_Name=WebThumbnail: 128x128 at 75 %
-Icon=applications-development-web
-Exec=kim_webexport 128x128 %D %U
+[Desktop Action Web128]
+_Name=Web thumbnail: 128x128 at 75 %
+Exec=kim_all webexport --size 128x128 --quality 75 -- %F
 
-[Desktop Action bWebExp75640]
-_Name=WebExport: 600x600 at 75 %
-Icon=applications-development-web
-Exec=kim_webexport 600x600 %D %U
+[Desktop Action Web600]
+_Name=Web export: 600x600 at 75 %
+Exec=kim_all webexport --size 600x600 --quality 75 -- %F
 
-[Desktop Action cWebExp75800]
-_Name=WebExport: 800x800 at 75 %
-Icon=applications-development-web
-Exec=kim_webexport 800x800 %D %U
+[Desktop Action Web800]
+_Name=Web export: 800x800 at 75 %
+Exec=kim_all webexport --size 800x800 --quality 75 -- %F
 
-[Desktop Action dWebExp751024]
-_Name=WebExport: 1024x1024 at 75 %
-Icon=applications-development-web
-Exec=kim_webexport 1024x1024 %D %U
+[Desktop Action Web1024]
+_Name=Web export: 1024x1024 at 75 %
+Exec=kim_all webexport --size 1024x1024 --quality 75 -- %F
 
-[Desktop Action eWebExp751600]
-_Name=WebExport: 1600x1600 at 75 %
-Icon=applications-development-web
-Exec=kim_webexport 1600x1600 %D %U
+[Desktop Action Web1600]
+_Name=Web export: 1600x1600 at 75 %
+Exec=kim_all webexport --size 1600x1600 --quality 75 -- %F
 
+[Desktop Action WebKeep]
+_Name=Web export, keep input format…
+Exec=kim_all webexport --size 1600x1600 --quality 75 --format keep -- %F
 
+[Desktop Action Emailfull]
+_Name=Send by mail: Send original by mail
+Exec=kim_all resizeandsend --size full -- %F
+
+[Desktop Action Email1600x1600]
+_Name=Send by mail: Resize to 1600px and email
+Exec=kim_all resizeandsend --size 1600x1600 -- %F
+
+[Desktop Action Email1200x1200]
+_Name=Send by mail: Resize to 1200px and email
+Exec=kim_all resizeandsend --size 1200x1200 -- %F
+
+[Desktop Action Email800x800]
+_Name=Send by mail: Resize to 800px and email
+Exec=kim_all resizeandsend --size 800x800 -- %F
+
+[Desktop Action Email600x600]
+_Name=Send by mail: Resize to 600px and email
+Exec=kim_all resizeandsend --size 600x600 -- %F
+
+[Desktop Action Email300x300]
+_Name=Send by mail: Resize to 300px and email
+Exec=kim_all resizeandsend --size 300x300 -- %F

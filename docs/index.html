@@ -30,22 +30,19 @@
                     <p>This menu allows you to compress and resize images. Compression can significantly reduce the size of images in exchange for some loss of detail. Resizing changes the size of images but keeps scale. Each action defines a maximum size of the resulting image.</p>
                     <p>So if your image is 2000x1000 (landscape orientation) and you resize it to 500x500, your resulting image will be 500x250 (so the limit will be applied to horizontal length of the image).</p>
                     <p>If your image is 1000x2000 (portrait orientation) and you resize it to 500x500, your resulting image will be 250x500 (so the limit will be applied to vertical height of the image).</p>
-                    <p>Webexport combines compression and resizing. In each case, you will be asked whether you want to create a new image or overwrite existing. Pressing enter will select to create new images.</p>
+                    <p>Web export combines resizing and encoding, always creates a separate derived image, and never replaces its source. JPEG compression is available from a JPEG-only submenu. Outputs use safe staging and collision handling.</p>
                 </li>
                 <li>
                     <b>Convert and rotate</b>
-                    <p>This menu allows to convert the images to several other formats, change its colours to a pale shade or to black and white and rotate and flip images.</p>
+                    <p>This menu converts images to JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, or AVIF; it also provides custom format selection, EXIF auto-orientation, fixed/custom rotation, and horizontal/vertical flips.</p>
                 </li>
                 <li>
                     <b>Treatment and publication</b>
-                    <p>This menu contains various actions. You can rename images (they will then share the name and will be differentiated by a suffix, so it will be for example: Picture_001.jpg, Picture_002.jpg. and so on).</p>
-                    <p>If you use Kmail or Thunderbird, you should be able to resize pictures and open a message with them attached in one go.</p>
-                    <p>Sort by date will rename pictures based on their EXIF dates so they should be then sorted by date in the file manager.</p>
-                    <p>You can add black text (annotation) to the bottom right corner of your image and add white or black border to your images.</p>
-                    <p>You can also strip metadata from a picture. Note that currently, its timestamps will be reset. Only ICC profile and orientation (landscape or portrait) info is preserved.</p>
-                    <p>You can also create a HTML gallery or a funky collage of (photo montage) from your pictures.</p>
-                    <p>You can combine several images into one file in the TIFF format (graphical programs like GIMP or Krita should be able to retrieve all the images from such a file.</p>
-                    <p>You can create a gif animation. That can be also done from a so-called multiburst image, but the current authors are not sure what that is supposed to do.</p>
+                    <p>Rename selected images interactively, number a batch from a custom base, or rename from EXIF dates using supported date formats.</p>
+                    <p>Resize images for email and open a supported mail client with successfully prepared attachments.</p>
+                    <p>Metadata stripping removes the configured EXIF, GPS, XMP, and IPTC metadata while retaining image pixels, color profile, orientation behavior, permissions, and the original modification timestamp.</p>
+                    <p>Create an HTML gallery, a photo collage, a multi-page TIFF, an animated GIF, a PDF album, or a print-layout PDF.</p>
+                    <p>Basic treatment effects and obsolete Sony multiburst processing are excluded from the unified menus.</p>
                     <p>You can also display a license, the names of authors and this help.</p>
                 </li>
                 <li>
@@ -57,13 +54,15 @@
             <p> KIM6 is used via the file manager context menu. Select one or more image or video files, right-click, and choose the desired action from the KIM6 submenu. </p>
             <p> Most actions will prompt for confirmation before overwriting existing files. Pressing Enter will usually select the default option, which is to create new files rather than overwrite existing ones. </p>
             <p> Some behavior can be customized using environment variables. These variables can be set in the environment where your file manager is launched. </p>
-            <p>You can also run the scripts (usually stored in <span id="code">~/.local/share/kio/servicemenus/kim6/bin/</span>) directly: <span id="code">./kim_resize ~/example.jpg 300x300 </span>
+                    <p>All installed Dolphin processing entries launch the unified <span id="code">kim_all</span> dispatcher and pass local selections as individual arguments. The historical <span id="code">kim_*</span> source scripts are references and are not installed as active commands.</p>
             </p>
-            <h1>Configuration — Web export quality</h1>
-            <p>When using the <b>Webexport</b> actions in the <b>Compress and resize</b> menu, KIM6 allows control over the JPEG compression quality via a configuration file. </p>
-            <p>Unless you have set <span id="code">$XDG_CONFIG_HOME</span>, in which case you know where your configurations live, run <span id="code">kwriteconfig6 --file ~/.config/kim_kdeimagemenu --group "<default>" --key WEB_EXPORT_QUALITY 80</span> to set it to 80. Possible values are between <b>1</b> and <b>100</b>. Note that in the UI, it will always say 75 %, which is the default value.</p>
-            <p>Note that for other formats but JPEG, this is unreliable, especially for PNG. Under the hood, this passes your value to the <span id="code">-quality</span> <a href="https://imagemagick.org/script/command-line-options.php#quality">parameter</a> to ImageMagick, which interprets it differently for different formats.</p>
-            <h1>Installation</h1> See <a href="https://github.com/KIM-6/kim6?tab=readme-ov-file#install">here.</a>
+            <h1>Configuration</h1>
+            <p>Set <span id="code">KIM_POLICY=create</span> to create new outputs or <span id="code">KIM_POLICY=overwrite</span> to authorize replacement for actions that support it. Unset or other values show the action's create/overwrite choice. Web export always creates derived images and never overwrites a source.</p>
+            <p><span id="code">KIM_NAME_AFFIX_POSITION=prefix|suffix</span> controls the placement of web, compressed, resized, and stripped tags. Its KConfig key is <span id="code">NAME_AFFIX_POSITION</span>; the default is suffix and the environment takes precedence.</p>
+            <p>Web-export defaults use <span id="code">KIM_WEB_FORMAT=jpg|webp|avif|keep</span> and <span id="code">KIM_WEB_QUALITY=1..100</span>. The quality setting supplies the dialog default. Format support depends on ImageMagick encoders.</p>
+            <h1>File behavior</h1>
+            <p>Rotation and metadata stripping preserve modification timestamps; rename/move operations preserve file metadata. Compression, conversion, resize, and flip/flop create changed content with fresh modification timestamps. Other output files are derived artifacts. Successful mail-resize attachments remain in <span id="code">${XDG_DATA_HOME:-~/.local/share}/kim6/email-attachments</span> after mail-client handoff so asynchronous clients can read them; remove the prepared files when finished.</p>
+            <p>Menus are restricted to local files. Remote URLs are not processed. See <a href="../INSTALL.md">installation and dependency notes</a> for upgrade, uninstall, and runtime details.</p>
         </div>
         <!-- The footer information -->
         <div id="footer"> KIM6 — Kde Image Menu 6 | Copyleft 2004–2026 </div>
