@@ -113,6 +113,8 @@ def main():
         return real_transform(plan["real_transform"], args)
     if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
         return real_publication_tool(plan["real_publication_tools"], tool, args)
+    if "real_gallery_collage_tools" in plan and tool in ("magick", "identify") and response is None:
+        return real_gallery_collage_tool(plan["real_gallery_collage_tools"], tool, args)
     if tool == "exiftool" and "real_stripmeta" in plan and response is None:
         return real_stripmeta(plan["real_stripmeta"], args)
     if isinstance(response, list):
@@ -125,11 +127,17 @@ def main():
     if response and response.get("passthrough"):
         if "interrupt" in response:
             interrupt_progress(response["interrupt"])
+        for name, content in response.get("writes", {}).items():
+            path = owned(ROOT / name)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
         response = None
         if tool == "magick" and "real_transform" in plan:
             return real_transform(plan["real_transform"], args)
         if tool == "magick" and "real_publication_tools" in plan:
             return real_publication_tool(plan["real_publication_tools"], tool, args)
+        if tool == "magick" and "real_gallery_collage_tools" in plan:
+            return real_gallery_collage_tool(plan["real_gallery_collage_tools"], tool, args)
     if tool == "mv" and "real_mv" in plan and response is None:
         if args in (["--help"], ["--version"]):
             return subprocess.call([plan["real_mv"], *args])
@@ -152,8 +160,7 @@ def main():
                 raise ValueError("output injection unsupported for " + tool)
             output = args[args.index("-o") + 1] if tool == "exiftool" else args[-1]
             if tool == "magick":
-                output = output.removeprefix("JPEG:")
-                if "real_transform" in plan and ":" in output:
+                if ":" in output:
                     output = output.split(":", 1)[1]
             path = owned(output)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -431,6 +438,69 @@ def real_publication_tool(tools, tool, args):
     raise ValueError('unsupported real publication tool')
 
 
+def real_gallery_collage_tool(tools, tool, args):
+    """Use real ImageMagick only on small owned PPMs and private PNG/PPM stages."""
+    executable = tools[tool]
+    def is_private_stage(path):
+        return any(parent.name.startswith('.kim6-stage.') for parent in path.parents)
+    if tool == 'identify':
+        valid = (len(args) == 5 and args[:3] == ['-regard-warnings', '-format', '%m|%w|%h|%T|%n|%#\\n']
+                 and args[3] == '--')
+        ping = (len(args) == 5 and args[:2] == ['-ping', '-format']
+                and args[2] == '%m|%w|%h|%n\\n' and args[3] == '--')
+        pixels = (len(args) == 5 and args[:2] == ['-regard-warnings', '-format']
+                  and args[2] == '%[pixel:p{5,5}]|%[pixel:p{17,5}]' and args[3] == '--')
+        if not (valid or ping or pixels):
+            raise ValueError('unsupported gallery/collage image inspection')
+        path = owned(args[-1])
+        if not path.is_file() or path.stat().st_size > 8388608:
+            raise ValueError('gallery/collage inspection requires a small owned image')
+        return subprocess.run([executable, *args], timeout=20,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if args[:1] == ['montage']:
+        if len(args) < 10 or args[1] != '-background' or args[3] != '-tile' or args[5] != '-geometry' or args[7] != '--':
+            raise ValueError('unsupported real collage montage')
+        output = owned(args[-1].removeprefix('PNG:'))
+        inputs = [owned(value) for value in args[8:-1]]
+        if (not inputs or output.exists() or output.is_symlink() or not is_private_stage(output)):
+            raise ValueError('montage output must be a new private stage')
+        if any(not path.is_file() or path.stat().st_size > 131072 or path.suffix != '.png'
+               for path in inputs):
+            raise ValueError('montage inputs must be small private PNG tiles')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    # Gallery main image producer consumes stdin; all collage producers consume
+    # one test-owned PPM source and write one private PNG tile.
+    if args[:1] == ['-']:
+        if len(args) != 4 or args[1:3] != ['-resize', '800x800']:
+            raise ValueError('unsupported real gallery image producer')
+        output = owned(args[-1].split(':', 1)[1])
+        if output.suffix != '.ppm' or not output.parent.name == 'images':
+            raise ValueError('gallery image must be a private PPM asset')
+        return subprocess.run([executable, *args], stdin=sys.stdin.buffer, timeout=20,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if args[:1] == ['--']:
+        if len(args) == 5 and args[1].endswith('[0]') and args[2:4] == ['-resize', '200x200']:
+            source = owned(args[1][:-3])
+            output = owned(args[-1].removeprefix('PNG:'))
+            if (source.suffix not in ('.ppm', '.png') or source.stat().st_size > 8388608
+                    or output.suffix != '.png'):
+                raise ValueError('unsupported gallery thumbnail')
+            return subprocess.run([executable, *args], timeout=20,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
+        if args[:2] == ['--', '-[0]']:
+            output = owned(args[-1].removeprefix('PNG:'))
+            payload = sys.stdin.buffer.read(131073)
+            if (args[2] != '-resize' or len(payload) > 131072
+                    or not payload.startswith((b'P6\n', b'P3\n'))
+                    or not is_private_stage(output)
+                    or output.exists() or output.is_symlink()):
+                raise ValueError('collage tile requires a tiny PPM and private stage')
+            return subprocess.run([executable, *args], input=payload, timeout=30,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
+    raise ValueError('unsupported real gallery/collage ImageMagick command')
+
+
 def real_conversion(executable, args):
     if len(args) != 3 or args[0] != "--":
         raise ValueError("real conversion requires explicit source and output")
@@ -513,7 +583,7 @@ def real_transform(executable, args):
 def filesystem(tool, args):
     # Only forms used by the recovered dispatcher; reject unknown options.
     allowed = {"mkdir": {"-p", "--"}, "rm": {"-f", "-rf", "--"},
-               "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--"}, "mv": {"-f", "-fT", "--no-copy", "--"},
+               "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--"}, "mv": {"-f", "-fT", "-T", "--no-clobber", "--no-copy", "--"},
                "ln": {"-T", "--"},
                "touch": {"-r", "--"}, "chmod": set()}
     values = []
@@ -545,6 +615,15 @@ def filesystem(tool, args):
             raise ValueError("unsupported link invocation")
         os.link(*paths, follow_symlinks=False)
     elif tool in ("cp", "mv"):
+        if tool == 'mv' and args[:3] == ['--no-clobber', '-T', '--'] and len(args) == 5:
+            source, destination = map(owned, args[3:])
+            executable = shutil.which('mv', path=os.defpath)
+            if not executable:
+                raise ValueError('installed mv unavailable')
+            return_code = subprocess.run([executable, *args], timeout=10).returncode
+            if return_code != 0:
+                raise ValueError('directory publication refused')
+            return
         if len(paths) != 2 or paths[1].is_dir():
             raise ValueError("only explicit single-file destinations are supported")
         if tool == "cp":

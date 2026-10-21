@@ -309,6 +309,17 @@ atomic_overwrite_file "$1" "$scratch"
         self.env['MAGICK_TEMPORARY_PATH'] = str(self.control / 'tmp')
         self.env['MAGICK_THREAD_LIMIT'] = '1'
 
+    def use_real_gallery_collage(self):
+        """Run gallery and collage encoders on bounded owned PPM fixtures."""
+        tools = {name: shutil.which(name) for name in ('magick', 'identify')}
+        if not all(tools.values()):
+            raise unittest.SkipTest('real gallery/collage image tools are unavailable')
+        plan = json.loads(self.plan.read_text())
+        plan['real_gallery_collage_tools'] = tools
+        self.plan.write_text(json.dumps(plan))
+        self.env['MAGICK_TEMPORARY_PATH'] = str(self.control / 'tmp')
+        self.env['MAGICK_THREAD_LIMIT'] = '1'
+
     def use_real_mv(self):
         """Exercise only installed rename-only forms on test-owned paths."""
         executable = shutil.which("mv")

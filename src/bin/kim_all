@@ -823,6 +823,43 @@ validate_publication_gif() {
   fi
 }
 
+# Escape all five HTML-sensitive characters without interpreting user text.
+html_escape() {
+  local value="$1" escaped='' character index
+  for ((index = 0; index < ${#value}; index++)); do
+    character="${value:index:1}"
+    case "$character" in
+      '&') escaped+='&amp;' ;;
+      '<') escaped+='&lt;' ;;
+      '>') escaped+='&gt;' ;;
+      '"') escaped+='&quot;' ;;
+      "'") escaped+='&#39;' ;;
+      *) escaped+="$character" ;;
+    esac
+  done
+  printf '%s' "$escaped"
+}
+
+# Publish a completely staged gallery as one directory rename. The cooperative
+# lock serializes KIM6 publishers; mv's no-clobber option refuses an occupied
+# target. This is atomic visibility on a local filesystem, not crash durability.
+publish_gallery_directory() {
+  local staged_directory="$1" target_directory="$2" parent lock
+  parent="$(cd -P -- "$(dirname -- "$target_directory")" && pwd -P)" || return 1
+  target_directory="$parent/${target_directory##*/}"
+  lock="$parent/.kim6-publish.lock"
+  if (umask 077; mkdir -- "$lock") 2>/dev/null; then
+    if ! register_stage_dir "$lock"; then
+      rm -rf -- "$lock"
+      return 1
+    fi
+  else
+    owned_stage_dir "$lock" || return 1
+  fi
+  mv --no-clobber -T -- "$staged_directory" "$target_directory" || return 1
+  [ ! -e "$staged_directory" ] && [ -d "$target_directory" ] && [ ! -L "$target_directory" ]
+}
+
 # Build a photo album PDF from selected images using ImageMagick montage.
 #
 # Usage: album <dir> <files...>
@@ -839,7 +876,7 @@ validate_publication_gif() {
 action_album() {
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
   local file frame_count
-  local -a files=()
+  local -a files=() image_assets=() thumb_assets=()
   dir="${1:-}"
   shift || true
   if ! collect_publication_inputs files "$@"; then
@@ -1341,79 +1378,71 @@ action_flipflop() {
 # - Uses `identify` to adjust displayed dimensions based on orientation.
 
 action_gallery() {
-  local start_dir="${1:-}"
+  local start_dir="${1:-}" base_dir target_dir base_name timestamp number=1
   shift || true
-
   local -a files=()
-  collect_valid_files files "$@"
-  local nbfiles="${#files[@]}"
-  [ "$nbfiles" -le 0 ] && return 0
-
-  local TITLE AUTHOR COLUMNS
+  collect_publication_inputs files "$@" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
+    return 1
+  }
+  local nbfiles="${#files[@]}" TITLE AUTHOR COLUMNS
   TITLE="$(kdialog --inputbox "$(gettext 'Kim - Title:')" "$(gettext 'My title ...')")" || return 1
   AUTHOR="$(kdialog --inputbox "$(gettext 'Kim - Author:')" "${USER:-}")" || return 1
   COLUMNS="$(kdialog --inputbox "$(gettext 'Kim - Number of columns:')" "4")" || return 1
 
-  if ! [[ "$COLUMNS" =~ ^[0-9]+$ ]] || [ "$COLUMNS" -le 0 ]; then
+  if ! [[ "$COLUMNS" =~ ^[0-9]{1,4}$ ]] || [ "$COLUMNS" -le 0 ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: columns must be a positive number.')"
     return 1
   fi
-
   if [ -z "$start_dir" ] || [ ! -d "$start_dir" ]; then
     start_dir="$PWD"
   fi
-
-  local OUTDIR
-  OUTDIR="$(kdialog --getexistingdirectory "$start_dir")" || return 1
-  [ -n "$OUTDIR" ] || return 1
-
-  # If gallery artifacts already exist, confirm before overwriting index.html or reusing folders.
-  if [ -e "$OUTDIR/index.html" ] || [ -d "$OUTDIR/images" ] || [ -d "$OUTDIR/thumbs" ]; then
-    kdialog --title "$(gettext 'Kim')" --yesno \
-      "$(gettext 'Gallery output already exists in this folder (index.html and/or images/thumbs). Continue and overwrite index.html?')" \
-      || return 1
-  fi
-
-  mkdir -p -- "$OUTDIR/images" "$OUTDIR/thumbs" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: failed to create output directories.')"
+  base_dir="$(kdialog --getexistingdirectory "$start_dir")" || return 1
+  [ -n "$base_dir" ] || return 1
+  base_dir="$(cd -P -- "$base_dir" && pwd -P)" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: selected output folder is unavailable.')"
     return 1
   }
+  timestamp="$(date +%Y%m%d-%H%M%S)" || return 1
+  base_name="kim-gallery-$timestamp"
+  target_dir="$base_dir/$base_name"
+  while [ -e "$target_dir" ] || [ -L "$target_dir" ]; do
+    target_dir="$base_dir/${base_name}_$number"
+    number=$((number + 1))
+  done
 
-  local SCALE_1="800x800"
-  local SCALE_2="200x200"
-  local W="200"
-  local H="150"
-  local DATE_STR
-  DATE_STR="$(date +%Y%m%d)"
-
-  # HTML escape helper
-  _html_escape() {
-    local s="$1"
-    s="${s//&/&amp;}"
-    s="${s//</&lt;}"
-    s="${s//>/&gt;}"
-    s="${s//\"/&quot;}"
-    s="${s//\'/&#39;}"
-    printf '%s' "$s"
+  local ref tmp='' stage_dir gallery_dir index_file script_dir resource_dir tpl1 tpl2
+  ref="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  # Anchor the owned stage in the existing output parent; the final gallery
+  # directory must not exist until its complete tree is atomically renamed.
+  tmp="$(tmp_for_target "$base_dir/index.html")" || {
+    publication_fail "$ref" '' "$(gettext 'Gallery: cannot create destination-local staging.')"
+    return 1
   }
+  stage_dir="${tmp%/*}"
+  gallery_dir="$stage_dir/gallery"
+  index_file="$gallery_dir/index.html"
+  if ! mkdir -p -- "$gallery_dir/images" "$gallery_dir/thumbs"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Gallery: failed to create owned staging directories.')"
+    return 1
+  fi
 
-  local etitle eauthor
-  etitle="$(_html_escape "$TITLE")"
-  eauthor="$(_html_escape "$AUTHOR")"
-
-  local INDEX
-  INDEX="$OUTDIR/index.html"
-
-  local script_dir tpl1 tpl2
-  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  tpl1="$script_dir/index.part1"
-  tpl2="$script_dir/index.part2"
-
-  # Start HTML
-  if [ -f "$tpl1" ]; then
-    cp -- "$tpl1" "$INDEX"
+  local DATE_STR etitle eauthor
+  DATE_STR="$(date +%Y%m%d)" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the current date.')"; return 1; }
+  etitle="$(html_escape "$TITLE")"
+  eauthor="$(html_escape "$AUTHOR")"
+  script_dir="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || {
+    publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot locate the dispatcher resources.')"
+    return 1
+  }
+  resource_dir="$script_dir/../gallery"
+  tpl1="$resource_dir/index.part1"
+  tpl2="$resource_dir/index.part2"
+  if [ -f "$tpl1" ] && [ -f "$tpl2" ]; then
+    cat -- "$tpl1" > "$index_file" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the HTML template.')"; return 1; }
   else
-    cat >"$INDEX" <<EOF
+    cat > "$index_file" <<EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -1428,112 +1457,151 @@ img.photo { display: block; margin: 0 auto; }
 </head>
 <body>
 EOF
-  fi
+  fi || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot initialize the HTML page.')"; return 1; }
 
-  {
+  if ! {
     printf '<h1>%s</h1>\n' "$etitle"
     printf '<h5>Author: %s<br>Date: %s</h5>\n' "$eauthor" "$DATE_STR"
     printf '<table><tr>\n'
-  } >>"$INDEX"
+  } >> "$index_file"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot write the HTML page.')"
+    return 1
+  fi
 
   report_init
-
-  local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
-
-  local counter=0
-  local col=0
-  local i dir base stem ext dest_base n
-  local img_path thumb_path rc W2 H2
-
-  for i in "${files[@]}"; do
+  local counter=0 col=0 file base info record format width height scenes
+  local image_path thumb_path image_records thumb_records image_count thumb_width thumb_height
+  local asset_name='' source_format image_url thumb_url escaped_name rc=0 n=0 source_frames
+  for file in "${files[@]}"; do
     counter=$((counter + 1))
-
-    {
-      read -r dir
-      read -r base
-      read -r stem
-      read -r ext
-    } < <(split_path "$i")
-
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Processing file: ')$base"; then
-      progress_close "$dbusRef"
+    asset_name=''
+    base="${file##*/}"
+    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')$base" || progress_cancelled "$ref"; then
+      report_fail "$file"
+      progress_close "$ref"
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
-
-    # Avoid basename collisions inside the gallery folder.
-    dest_base="$base"
-    n=1
-    while [ -e "$OUTDIR/images/$dest_base" ] || [ -e "$OUTDIR/thumbs/$dest_base" ]; do
-      if [ -n "$ext" ]; then
-        dest_base="${stem}-${n}.${ext}"
-      else
-        dest_base="${stem}-${n}"
-      fi
-      n=$((n + 1))
-    done
-
-    img_path="$OUTDIR/images/$dest_base"
-    thumb_path="$OUTDIR/thumbs/$dest_base"
-
-    rc=0
-    magick -- "$i" -resize "$SCALE_1" "$img_path" >/dev/null 2>&1 || rc=$?
-    if [ "$rc" -ne 0 ] || [ ! -s "$img_path" ]; then
-      report_fail "$i"
-      progress_value "$dbusRef" "$counter"
-      continue
+    info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || rc=1
+    source_frames=0
+    if [ "$rc" -eq 0 ]; then
+      while IFS= read -r record; do
+        IFS='|' read -r format width height scenes <<< "$record"
+        [[ "$format" =~ ^[A-Za-z][A-Za-z0-9]{0,11}$ && "$width" =~ ^[1-9][0-9]*$ &&
+           "$height" =~ ^[1-9][0-9]*$ && "$scenes" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+        if [ "$source_frames" -eq 0 ]; then source_format="$format"; asset_name="${format,,}"; fi
+        [ "$format" = "$source_format" ] || { rc=1; break; }
+        source_frames=$((source_frames + 1))
+      done <<< "$info"
+      [ "$source_frames" -gt 0 ] || rc=1
     fi
-
-    rc=0
-    magick -- "$i" -resize "$SCALE_2" "$thumb_path" >/dev/null 2>&1 || rc=$?
-    if [ "$rc" -ne 0 ] || [ ! -s "$thumb_path" ]; then
-      # Fallback to avoid broken <img> links
-      cp -- "$img_path" "$thumb_path" >/dev/null 2>&1 || true
+    n=$((n + 1))
+    image_path="$gallery_dir/images/image_$n.$asset_name"
+    thumb_path="$gallery_dir/thumbs/image_$n.png"
+    if [ "$rc" -eq 0 ]; then
+      magick - -resize 800x800 "$asset_name:$image_path" < "$file" >/dev/null 2>&1 || rc=$?
     fi
-
-    W2="$(identify -format "%w" -- "$img_path" 2>/dev/null || echo 0)"
-    H2="$(identify -format "%h" -- "$img_path" 2>/dev/null || echo 0)"
-
-    {
-      printf "<td align='center'>\n"
-      if [ "${H2:-0}" -lt "${W2:-0}" ]; then
-        printf '<a href="images/%s"><img class="photo" src="thumbs/%s" width="%s" height="%s" alt="thumbs/%s" title="%s"></a>\n' \
-          "$dest_base" "$dest_base" "$W" "$H" "$dest_base" "$dest_base"
-      else
-        printf '<a href="images/%s"><img class="photo" src="thumbs/%s" width="%s" height="%s" alt="thumbs/%s" title="%s"></a>\n' \
-          "$dest_base" "$dest_base" "$H" "$W" "$dest_base" "$dest_base"
-      fi
-      printf '<p>%s</p>\n' "$dest_base"
-      printf "</td>\n"
-    } >>"$INDEX"
-
+    if progress_cancelled "$ref"; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: publication interrupted; no gallery was published.')"
+      return 1
+    fi
+    image_records="$(publication_image_records "$image_path" 2>/dev/null)" || rc=1
+    image_count=0
+    while IFS= read -r record; do
+      IFS='|' read -r format width height _ <<< "$record"
+      [ "$format" = "${asset_name^^}" ] && [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      [ "$width" -le 800 ] && [ "$height" -le 800 ] || { rc=1; break; }
+      image_count=$((image_count + 1))
+    done <<< "$image_records"
+    [ "$image_count" -eq "$source_frames" ] || rc=1
+    if [ "$rc" -eq 0 ]; then
+      magick -- "${image_path}[0]" -resize 200x200 "PNG:$thumb_path" >/dev/null 2>&1 || rc=$?
+    fi
+    if progress_cancelled "$ref"; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: publication interrupted; no gallery was published.')"
+      return 1
+    fi
+    thumb_records="$(publication_image_records "$thumb_path" 2>/dev/null)" || rc=1
+    image_count=0 thumb_width=0 thumb_height=0
+    while IFS= read -r record; do
+      IFS='|' read -r format width height _ <<< "$record"
+      [ "$format" = PNG ] && [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      [ "$width" -le 200 ] && [ "$height" -le 200 ] || { rc=1; break; }
+      thumb_width="$width" thumb_height="$height"
+      image_count=$((image_count + 1))
+    done <<< "$thumb_records"
+    [ "$image_count" -eq 1 ] || rc=1
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: an image or thumbnail could not be generated and validated.')"
+      return 1
+    fi
+    asset_name="image_$n.$asset_name"
+    image_url="images/$asset_name"
+    thumb_url="thumbs/image_$n.png"
+    image_assets+=("$gallery_dir/$image_url")
+    thumb_assets+=("$gallery_dir/$thumb_url")
+    escaped_name="$(html_escape "$base")"
+    if ! {
+      printf '<td align="center"><a href="%s"><img class="photo" src="%s" width="%s" height="%s" alt="%s" title="%s"></a><p>%s</p></td>\n' \
+        "$(html_escape "$image_url")" "$(html_escape "$thumb_url")" "$thumb_width" "$thumb_height" \
+        "$escaped_name" "$escaped_name" "$escaped_name"
+    } >> "$index_file"; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot write the HTML gallery.')"
+      return 1
+    fi
     report_ok
-
     col=$((col + 1))
     if [ "$col" -ge "$COLUMNS" ]; then
-      echo "</tr><tr>" >>"$INDEX"
+      printf '</tr><tr>\n' >> "$index_file"
       col=0
     fi
-
-    progress_value "$dbusRef" "$counter"
+    progress_value "$ref" "$counter"
+    if progress_cancelled "$ref"; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      progress_close "$ref"
+      return 1
+    fi
   done
 
-  progress_close "$dbusRef"
-
-  echo "</tr></table>" >>"$INDEX"
-
   if [ -f "$tpl2" ]; then
-    cat -- "$tpl2" >>"$INDEX"
+    cat -- "$tpl2" >> "$index_file" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot finish the HTML template.')"; return 1; }
   else
-    cat >>"$INDEX" <<EOF
+    cat >> "$index_file" <<EOF
 </body>
 </html>
 EOF
   fi
-
-  xdg-open "$INDEX" >/dev/null 2>&1 || true
-
+  [ -s "$index_file" ] || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: generated HTML is empty.')"; return 1; }
+  local asset
+  for asset in "${image_assets[@]}" "${thumb_assets[@]}"; do
+    [ -f "$asset" ] && [ ! -L "$asset" ] && [ -s "$asset" ] || {
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: a staged resource is missing or unsafe.')"
+      return 1
+    }
+  done
+  rm -f -- "$tmp" || { publication_fail "$ref" '' "$(gettext 'Gallery: cannot finalize the staged output.')"; return 1; }
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
+  if ! publish_gallery_directory "$gallery_dir" "$target_dir"; then
+    report_finish_dialog "$(gettext 'Kim')"
+    publication_fail "$ref" '' "$(gettext 'Gallery: publication failed; existing directories were preserved.')"
+    return 1
+  fi
+  progress_value "$ref" "$nbfiles"
+  progress_close "$ref"
+  xdg-open "$target_dir/index.html" >/dev/null 2>&1 || true
   report_finish_dialog "$(gettext 'Kim')"
   true
 }
@@ -2887,13 +2955,160 @@ action_webexport() {
 
 
 
+# Create a safe, validated ImageMagick collage from the selected images.
+#
+# Options are action-local so the eventual Dolphin menu can expose presets
+# without changing the dispatcher-wide argument contract.
+action_pelemele() {
+  local size='' tile='' overlap_percent='' color='' border_ratio='' rotation='' random_rotation=15
+  local seed='' shadow=true requested='' mode='' output='' tmp='' ref='' tile_dir=''
+  local width height columns rows overlap border angle file index=0 rc=0 record
+  local -a files=() tiles=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --size|--tile|--overlap|--background|--border|--rotation|--random-rotation|--seed|--output)
+        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: missing option value.')"; return 2; }
+        case "$1" in
+          --size) size="$2" ;; --tile) tile="$2" ;; --overlap) overlap_percent="$2" ;;
+          --background) color="$2" ;; --border) border_ratio="$2" ;; --rotation) rotation="$2" ;;
+          --random-rotation) random_rotation="$2" ;; --seed) seed="$2" ;; --output) requested="$2" ;;
+        esac
+        shift 2 ;;
+      --shadow) shadow=true; shift ;;
+      --no-shadow) shadow=false; shift ;;
+      --) shift; files+=("$@"); break ;;
+      -*) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: unknown option.')"; return 2 ;;
+      *) files+=("$@"); break ;;
+    esac
+  done
+  if ! collect_publication_inputs files "${files[@]}"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
+    return 1
+  fi
+  [ -n "$size" ] || size="$(kdialog --inputbox "$(gettext 'Size of small images:')" '400x400')" || return 1
+  [ -n "$tile" ] || tile="$(kdialog --inputbox "$(gettext 'Number of rows and columns:')" '5x4')" || return 1
+  [ -n "$overlap_percent" ] || overlap_percent="$(kdialog --inputbox "$(gettext 'Overlapping ratio in percent:')" '15')" || return 1
+  [ -n "$color" ] || color="$(kdialog --inputbox "$(gettext 'Background color:')" 'grey')" || return 1
+  [ -n "$border_ratio" ] || border_ratio=2
+  [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: size must be WIDTHxHEIGHT.')"; return 1;
+  }
+  width="${BASH_REMATCH[1]}"; height="${BASH_REMATCH[2]}"
+  [[ "$tile" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: tile layout must be COLUMNSxROWS.')"; return 1;
+  }
+  columns="${BASH_REMATCH[1]}"; rows="${BASH_REMATCH[2]}"
+  [[ "$overlap_percent" =~ ^[0-9]{1,2}$ && "$overlap_percent" -le 90 ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: overlap must be from 0 to 90 percent.')"; return 1;
+  }
+  [[ "$border_ratio" =~ ^[0-9]{1,2}$ && "$border_ratio" -le 50 ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: border must be from 0 to 50 percent.')"; return 1;
+  }
+  [[ "$random_rotation" =~ ^[0-9]{1,3}$ && "$random_rotation" -le 180 ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: random rotation must be from 0 to 180 degrees.')"; return 1;
+  }
+  if [ -n "$rotation" ]; then
+    [[ "$rotation" =~ ^-?[0-9]{1,3}$ ]] && [ "$rotation" -ge -180 ] && [ "$rotation" -le 180 ] || {
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: rotation must be from -180 to 180 degrees.')"; return 1;
+    }
+  fi
+  if [ -n "$seed" ]; then
+    [[ "$seed" =~ ^[0-9]{1,9}$ ]] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: seed must be an integer.')"; return 1; }
+    RANDOM=$((seed % 32768))
+  fi
+  [[ "$color" != *$'\n'* && "$color" != *$'\r'* &&
+     "$color" =~ ^[A-Za-z0-9#(),._%+[:blank:]-]{1,64}$ && "$color" != *'..'* ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid background color.')"; return 1;
+  }
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
+  fi
+  [ -n "$requested" ] || return 1
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')")" || return 1
+  case "$mode" in create|overwrite) ;; *) return 1 ;; esac
+  if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: output destination is invalid or aliases a selected image.')"
+    return 1
+  fi
+  output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'Collage: cannot create destination-local staging.')"; return 1; }
+  tile_dir="${tmp%/*}/tiles"
+  mkdir -p -- "$tile_dir" || { publication_fail "$ref" "$tmp" "$(gettext 'Collage: cannot create private staging.')"; return 1; }
+  report_init
+  overlap=$((width * overlap_percent / 100))
+  border=$((width * border_ratio / 100))
+  for file in "${files[@]}"; do
+    index=$((index + 1))
+    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
+      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+    fi
+    if [ -n "$rotation" ]; then angle="$rotation"
+    else angle=$((RANDOM % (random_rotation * 2 + 1) - random_rotation)); fi
+    local tile_path="$tile_dir/tile_$index.png"
+    if [ "$shadow" = true ]; then
+      magick -- -[0] -resize "$size" -bordercolor white -border "$border" \
+        -bordercolor grey60 -border 1 -background none -rotate "$angle" -background black \
+        '(' +clone -shadow 60x4+4+4 ')' +swap -background none -flatten -depth 8 -quality 95 "PNG:$tile_path" \
+        < "$file" >/dev/null 2>&1 || rc=$?
+    else
+      magick -- -[0] -resize "$size" -bordercolor white -border "$border" \
+        -bordercolor grey60 -border 1 -background none -rotate "$angle" -depth 8 -quality 95 "PNG:$tile_path" \
+        < "$file" >/dev/null 2>&1 || rc=$?
+    fi
+    if progress_cancelled "$ref"; then
+      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+    fi
+    local tile_records tile_frames=0 tile_format tile_width tile_height
+    tile_records="$(publication_image_records "$tile_path" 2>/dev/null)" || rc=1
+    while IFS= read -r record; do
+      IFS='|' read -r tile_format tile_width tile_height _ <<< "$record"
+      [ "$tile_format" = PNG ] && [[ "$tile_width" =~ ^[1-9][0-9]*$ && "$tile_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+      tile_frames=$((tile_frames + 1))
+    done <<< "$tile_records"
+    [ "$tile_frames" -eq 1 ] || rc=1
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: ImageMagick failed or produced an invalid tile.')"; return 1
+    fi
+    tiles+=("$tile_path")
+    dimensions+=("$tile_width|$tile_height")
+    report_ok
+    progress_value "$ref" "$index"
+  done
+  if progress_cancelled "$ref"; then
+    report_fail "${files[-1]}"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+  fi
+  magick montage -background "$color" -tile "${columns}x${rows}" \
+    -geometry "-${overlap}-${overlap}" -- "${tiles[@]}" "PNG:$tmp" >/dev/null 2>&1 || rc=$?
+  local output_records output_frames=0 output_format output_width output_height
+  output_records="$(publication_image_records "$tmp" 2>/dev/null)" || rc=1
+  while IFS= read -r record; do
+    IFS='|' read -r output_format output_width output_height _ <<< "$record"
+    [ "$output_format" = PNG ] && [[ "$output_width" =~ ^[1-9][0-9]*$ && "$output_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+    output_frames=$((output_frames + 1))
+  done <<< "$output_records"
+  [ "$output_frames" -eq 1 ] && [ -s "$tmp" ] || rc=1
+  if [ "$rc" -ne 0 ]; then
+    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: generated output failed validation.')"; return 1
+  fi
+  if progress_cancelled "$ref"; then
+    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+  fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
+    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: publication failed; existing files were preserved.')"; return 1
+  fi
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  true
+}
+
 # ---------------------------------------------------------------------------
-# Action stubs
+# Actions outside the current consolidation packages
 # ---------------------------------------------------------------------------
 
 action_multiburst()      { :; }
 action_other()           { :; }
-action_pelemele()        { :; }
 action_sortbydate()      { :; }
 action_treatment()       { :; }
 action_video()           { :; }
@@ -2939,7 +3154,10 @@ Commands:
       Not implemented yet.
 
   pelemele <files...>
-      Not implemented yet.
+      Build a validated PNG collage. Options: --size WxH, --tile CxR,
+      --overlap PERCENT, --background COLOR, --border PERCENT,
+      --rotation DEGREES, --random-rotation DEGREES, --seed INTEGER,
+      --shadow|--no-shadow, --output FILE, then -- and image files.
 
   print <dir> <files...>
       Create a validated multi-page print PDF with seven layouts.
