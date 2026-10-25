@@ -289,9 +289,8 @@ msgid "Kim — Compress and Resize"
 msgstr "Kim — Compresser et redimensionner"
 
 #: ../src/kim_compressandresize.desktop.in.h:3
-#, fuzzy
-msgid "Compress at 10 %"
-msgstr "Compresser à 10 %"
+msgid "JPEG quality: 10%"
+msgstr "Qualité JPEG : 10 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:5
 #, fuzzy
@@ -299,9 +298,8 @@ msgid "Compress at 20 %"
 msgstr "Compresser à 20 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:7
-#, fuzzy
-msgid "Compress at 30 %"
-msgstr "Compresser à 30 %"
+msgid "JPEG quality: 30%"
+msgstr "Qualité JPEG : 30 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:9
 #, fuzzy
@@ -309,9 +307,8 @@ msgid "Compress at 40 %"
 msgstr "Compresser à 40 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:11
-#, fuzzy
-msgid "Compress at 50 %"
-msgstr "Compresser à 50 %"
+msgid "JPEG quality: 50%"
+msgstr "Qualité JPEG : 50 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:13
 #, fuzzy
@@ -319,17 +316,16 @@ msgid "Compress at 60 %"
 msgstr "Compresser à 60 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:15
-#, fuzzy
-msgid "Compress at 70 %"
-msgstr "Compresser à 70 %"
+msgid "JPEG quality: 70%"
+msgstr "Qualité JPEG : 70 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:17
 msgid "Compress at 80 %"
 msgstr "Compresser à 80 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:19
-msgid "Compress at 90 %"
-msgstr "Compresser à 90 %"
+msgid "JPEG quality: 90%"
+msgstr "Qualité JPEG : 90 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:20
 msgid "Compress Custom..."

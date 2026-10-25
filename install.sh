@@ -144,7 +144,7 @@ for template in "$SOURCE_DIR"/src/kim_*.desktop.in; do
   name="$(basename -- "${template%.in}")"
   output="$NEW_MENUS/$name"
   intltool-merge --desktop-style "$SOURCE_DIR/po" "$template" "$output" >/dev/null
-  chmod 0755 -- "$output"
+  chmod 0644 -- "$output"
   # Quote an absolute executable path using Desktop Entry Exec quoting rules.
   exec_path="$RUNTIME/bin/kim_all"
   exec_path="${exec_path//\\/\\\\}"

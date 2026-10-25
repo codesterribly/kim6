@@ -293,9 +293,8 @@ msgid "Kim — Compress and Resize"
 msgstr "Kim — 壓縮與調整大小"
 
 #: ../src/kim_compressandresize.desktop.in.h:3
-#, fuzzy
-msgid "Compress at 10 %"
-msgstr "壓縮到 10%"
+msgid "JPEG quality: 10%"
+msgstr "JPEG 品質：10 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:5
 #, fuzzy
@@ -303,9 +302,8 @@ msgid "Compress at 20 %"
 msgstr "壓縮到 20%"
 
 #: ../src/kim_compressandresize.desktop.in.h:7
-#, fuzzy
-msgid "Compress at 30 %"
-msgstr "壓縮到 30%"
+msgid "JPEG quality: 30%"
+msgstr "JPEG 品質：30 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:9
 #, fuzzy
@@ -314,9 +312,8 @@ msgstr "壓縮到 40%"
 
 # Compress and resize actions
 #: ../src/kim_compressandresize.desktop.in.h:11
-#, fuzzy
-msgid "Compress at 50 %"
-msgstr "壓縮到 50%"
+msgid "JPEG quality: 50%"
+msgstr "JPEG 品質：50 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:13
 #, fuzzy
@@ -325,17 +322,16 @@ msgstr "壓縮到 60%"
 
 # Compress and resize actions
 #: ../src/kim_compressandresize.desktop.in.h:15
-#, fuzzy
-msgid "Compress at 70 %"
-msgstr "壓縮到 70%"
+msgid "JPEG quality: 70%"
+msgstr "JPEG 品質：70 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:17
 msgid "Compress at 80 %"
 msgstr "壓縮到 80%"
 
 #: ../src/kim_compressandresize.desktop.in.h:19
-msgid "Compress at 90 %"
-msgstr "壓縮到 90%"
+msgid "JPEG quality: 90%"
+msgstr "JPEG 品質：90 %"
 
 #: ../src/kim_compressandresize.desktop.in.h:20
 msgid "Compress Custom..."

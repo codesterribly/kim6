@@ -279,7 +279,7 @@ msgid "Kim — Compress and Resize"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:3
-msgid "Compress at 10 %"
+msgid "JPEG quality: 10%"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:5
@@ -287,7 +287,7 @@ msgid "Compress at 20 %"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:7
-msgid "Compress at 30 %"
+msgid "JPEG quality: 30%"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:9
@@ -295,7 +295,7 @@ msgid "Compress at 40 %"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:11
-msgid "Compress at 50 %"
+msgid "JPEG quality: 50%"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:13
@@ -303,7 +303,7 @@ msgid "Compress at 60 %"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:15
-msgid "Compress at 70 %"
+msgid "JPEG quality: 70%"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:17
@@ -311,7 +311,7 @@ msgid "Compress at 80 %"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:19
-msgid "Compress at 90 %"
+msgid "JPEG quality: 90%"
 msgstr ""
 
 #: ../src/kim_compressandresize.desktop.in.h:20

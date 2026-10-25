@@ -9,23 +9,23 @@ _X-KDE-Submenu=KIM6 — JPEG compression
 X-KIM6-Managed=true
 
 [Desktop Action Compress10]
-_Name=Compress at 10 %
+_Name=JPEG quality: 10%
 Exec=kim_all compress --quality 10 -- %F
 
 [Desktop Action Compress30]
-_Name=Compress at 30 %
+_Name=JPEG quality: 30%
 Exec=kim_all compress --quality 30 -- %F
 
 [Desktop Action Compress50]
-_Name=Compress at 50 %
+_Name=JPEG quality: 50%
 Exec=kim_all compress --quality 50 -- %F
 
 [Desktop Action Compress70]
-_Name=Compress at 70 %
+_Name=JPEG quality: 70%
 Exec=kim_all compress --quality 70 -- %F
 
 [Desktop Action Compress90]
-_Name=Compress at 90 %
+_Name=JPEG quality: 90%
 Exec=kim_all compress --quality 90 -- %F
 
 [Desktop Action CompressCustom]

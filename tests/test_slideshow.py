@@ -20,6 +20,17 @@ class SlideshowTests(unittest.TestCase):
         subprocess.run([shutil.which('magick'), '-size', '8x8', 'xc:blue', str(self.images[1])], check=True)
         self.source_bytes = [path.read_bytes() for path in self.images]
 
+    def test_missing_h264_encoder_is_reported_before_photo_processing(self):
+        self.w.respond_to("ffmpeg", "-encoders", {"stdout": "", "status": 0})
+        result = self.w.dispatch('slideshow', '--seconds-per-photo', '1', '--size', '160x120',
+                                 '--fps', '1', '--', *self.images)
+        self.assertNotEqual(0, result.returncode)
+        errors = [call for call in result.calls if call["tool"] == "kdialog" and "--error" in call["argv"]]
+        self.assertTrue(errors, result.calls)
+        self.assertIn("libx264", " ".join(errors[-1]["argv"]))
+        self.assertFalse(any(call["tool"] == "identify" for call in result.calls))
+        self.assertFalse(self.images[0].with_name('slide 2 [test]_slideshow.mp4').exists())
+
     def test_creates_h264_mp4_in_natural_name_order_even_when_policy_is_overwrite(self):
         result = self.w.dispatch('slideshow', '--seconds-per-photo', '1', '--size', '160x120',
                                  '--fps', '2', '--', *self.images)

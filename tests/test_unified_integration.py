@@ -118,6 +118,16 @@ class MenuContractTests(unittest.TestCase):
                             (ROOT / "src/kim_compress.desktop.in").read_text().splitlines()[:8]))
         self.assertIn("MimeType=image/jpeg;", (ROOT / "src/kim_compress.desktop.in").read_text())
 
+    def test_compression_preset_labels_describe_jpeg_quality(self):
+        entries = dict((action_id, (command, label)) for action_id, command, label in
+                       action_entries(ROOT / "src/kim_compress.desktop.in"))
+        for action_id, quality in (("Compress10", 10), ("Compress30", 30), ("Compress50", 50),
+                                   ("Compress70", 70), ("Compress90", 90)):
+            command, label = entries[action_id]
+            self.assertIn(f"--quality {quality}", command)
+            self.assertIn(f"JPEG quality: {quality}%", label)
+        self.assertIn("quality", entries["CompressCustom"][1].lower())
+
     def test_kde_service_menu_actions_have_valid_structure(self):
         validator = shutil.which("desktop-file-validate")
         merge = shutil.which("intltool-merge")
@@ -194,6 +204,15 @@ class InstallWorkflowTests(unittest.TestCase):
             cache = subprocess.run([cache_builder, "--noincremental"], env=self.env,
                                    text=True, capture_output=True, timeout=30)
             self.assertEqual(0, cache.returncode, cache.stdout + cache.stderr)
+
+    def test_installed_service_menus_are_data_files_not_executables(self):
+        result = self.run_install()
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        for menu in self.prefix.glob("kim_*.desktop"):
+            with self.subTest(menu=menu.name):
+                self.assertFalse(menu.stat().st_mode & 0o111, f"service menu should not be executable: {menu}")
+        dispatcher = self.prefix / "kim6/bin/kim_all"
+        self.assertTrue(dispatcher.stat().st_mode & 0o111, "the unified dispatcher must remain executable")
 
     def test_installed_about_license_and_manual_use_installed_resources(self):
         result = self.run_install()
@@ -322,6 +341,64 @@ class InstallWorkflowTests(unittest.TestCase):
 
 
 class MenuArgumentExecutionTests(unittest.TestCase):
+    def test_missing_image_stack_dependencies_fail_before_processing_with_specific_message(self):
+        for missing_tool in ("magick", "identify"):
+            with self.subTest(missing_tool=missing_tool):
+                w = Workspace()
+                self.addCleanup(w.close)
+                source = w.jpeg("input/photo.jpg")
+                w.env["KIM_POLICY"] = "create"
+                (w.bin / missing_tool).unlink()
+                result = w.dispatch("compress", "--quality", "75", "--", source)
+                self.assertNotEqual(0, result.returncode)
+                error_dialogs = [call for call in result.calls if call["tool"] == "kdialog"
+                                 and "--error" in call["argv"]]
+                self.assertTrue(error_dialogs, result.calls)
+                self.assertIn("ImageMagick", " ".join(error_dialogs[0]["argv"]))
+                self.assertFalse(any(call["tool"] in {"magick", "identify"} for call in result.calls))
+                self.assertEqual(source.read_bytes(),
+                                 (w.root / "input/photo.jpg").read_bytes())
+
+    def test_missing_exiftool_is_not_reported_as_an_exif_date_failure(self):
+        w = Workspace()
+        self.addCleanup(w.close)
+        source = w.jpeg("input/photo.jpg")
+        (w.bin / "exiftool").unlink()
+        w.respond("kdialog", stdout="1")
+        result = w.dispatch("rename", "exifdate", "--", source)
+        self.assertNotEqual(0, result.returncode)
+        errors = [call for call in result.calls if call["tool"] == "kdialog" and "--error" in call["argv"]]
+        self.assertTrue(errors, result.calls)
+        self.assertIn("ExifTool", " ".join(errors[-1]["argv"]))
+        self.assertTrue(source.is_file())
+        self.assertFalse((w.root / "input/20260101_000000.jpg").exists())
+
+    def test_newline_filename_is_rejected_before_line_record_path_mapping(self):
+        w = Workspace()
+        self.addCleanup(w.close)
+        source = w.jpeg("input/line\nbreak.jpg")
+        original = source.read_bytes()
+        result = w.dispatch("resize", "--size", "2x2", "--", source)
+        self.assertNotEqual(0, result.returncode)
+        errors = [call for call in result.calls if call["tool"] == "kdialog" and "--error" in call["argv"]]
+        self.assertTrue(errors, result.calls)
+        self.assertIn("line break", " ".join(errors[-1]["argv"]).lower())
+        self.assertFalse(any(call["tool"] in {"magick", "identify"} for call in result.calls))
+        self.assertEqual(original, source.read_bytes())
+        self.assertEqual([source], list(source.parent.iterdir()))
+
+    def test_newline_filename_rejects_the_entire_mixed_batch(self):
+        w = Workspace()
+        self.addCleanup(w.close)
+        valid = w.jpeg("input/valid.jpg")
+        invalid = w.jpeg("input/line\nbreak.jpg")
+        originals = {path: path.read_bytes() for path in (valid, invalid)}
+        result = w.dispatch("resize", "--size", "2x2", "--", valid, invalid)
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(any(call["tool"] in {"magick", "identify"} for call in result.calls))
+        self.assertEqual(originals, {path: path.read_bytes() for path in originals})
+        self.assertEqual({valid, invalid}, set(valid.parent.iterdir()))
+
     def test_image_menu_option_contracts_reach_real_dispatcher_actions(self):
         w = Workspace()
         self.addCleanup(w.close)

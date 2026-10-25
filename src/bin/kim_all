@@ -196,7 +196,13 @@ collect_valid_files() {
 
   local i
   for i in "$@"; do
-    [ -f "$i" ] && out_arr+=("$i")
+    if [ -f "$i" ]; then
+      if [[ "$i" == *$'\n'* || "$i" == *$'\r'* ]]; then
+        progress_error "$(gettext 'Selected filenames containing line breaks cannot be processed safely.')"
+        return 1
+      fi
+      out_arr+=("$i")
+    fi
   done
 }
 
@@ -626,6 +632,25 @@ progress_service_present() {
 progress_error() {
   local message="$1"
   kdialog --title "$(gettext 'Kim')" --error "$message" 2>/dev/null || printf '%s\n' "$message" >&2
+}
+
+# Fail before prompting or starting a batch when a required runtime command is
+# unavailable. This keeps missing-tool failures distinct from corrupt inputs.
+require_action_tools() {
+  local action="$1" tool dependency
+  shift
+  for tool in "$@"; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      case "$tool" in
+        magick|identify) dependency='ImageMagick 7' ;;
+        exiftool) dependency='ExifTool' ;;
+        ffmpeg|ffprobe) dependency='FFmpeg' ;;
+        *) dependency="$tool" ;;
+      esac
+      progress_error "$action: $(gettext 'required dependency is unavailable:') $dependency ($tool)"
+      return 1
+    fi
+  done
 }
 
 progress_registered() {
@@ -2308,6 +2333,10 @@ action_rename() {
     lowercase|uppercase|spacestodash|dashestospace) ;;
     *) rename_abort "rename: unknown mode" ;;
   esac
+  if [ "$mode" = exifdate ] && ! command -v exiftool >/dev/null 2>&1; then
+    progress_error "$(gettext 'ExifTool is required for EXIF-date renaming.')"
+    return 1
+  fi
   action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"
   [ "$action_mode" != cancel ] || return 1
   if [ -z "$output_dir" ] && { [ "$interactive" = true ] || [ "$mode" = sequential ]; }; then
@@ -3855,6 +3884,9 @@ action_datesync() {
   fi
   case "$direction" in exif-to-file|file-to-exif) ;; *) die "datesync: direction must be exif-to-file or file-to-exif" ;; esac
   case "$fields" in capture|all) ;; *) die "datesync: fields must be capture or all" ;; esac
+  if [ "$direction" = file-to-exif ]; then
+    require_action_tools datesync magick identify || return 1
+  fi
   policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')")"
   [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
@@ -5301,7 +5333,7 @@ action_slideshow() {
   local seconds=3 size=1280x720 fps=25 background=black output='' interactive=false option
   local source record format width height orientation colorspace frames target stage source_icc
   local ref error_file rc=0 index=0 total duration srgb_profile rec709_profile profile_path codec actual_width actual_height actual_fps actual_frames actual_duration actual_format audio_count
-  local source_parent filter_chain record_key
+  local source_parent filter_chain record_key ffmpeg_encoders
   local -a files=() ordered=() sorted_records=() sort_pairs=() frames_out=() args=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -5335,6 +5367,14 @@ action_slideshow() {
     *) [[ "$background" =~ ^#[0-9A-Fa-f]{6}$ ]] || { progress_error "$(gettext 'Slideshow background must be a supported color name or #RRGGBB.')"; return 2; } ;;
   esac
   video_utility_init || return 1
+  if ! ffmpeg_encoders="$(ffmpeg -hide_banner -encoders 2>/dev/null)"; then
+    progress_error "$(gettext 'FFmpeg encoder capabilities could not be queried for slideshow creation.')"
+    return 1
+  fi
+  if ! [[ "$ffmpeg_encoders" =~ [[:space:]]libx264[[:space:]] ]]; then
+    progress_error "$(gettext 'The FFmpeg libx264 encoder is required to create an H.264 slideshow.')"
+    return 1
+  fi
   if ! command -v magick >/dev/null 2>&1 || ! command -v identify >/dev/null 2>&1 || ! command -v exiftool >/dev/null 2>&1 || ! command -v setsid >/dev/null 2>&1; then
     progress_error "$(gettext 'ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames.')"; return 1
   fi
@@ -5666,6 +5706,17 @@ main() {
   load_kim_config
   cmd="$1"
   shift || true
+
+  case "$cmd" in
+    album|animate|compress|gallery|pelemele|print|resize|tiffjoin)
+      require_action_tools "$cmd" magick identify || exit 1 ;;
+    convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend)
+      require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
+    copyright|timeshift)
+      require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
+    datesync)
+      require_action_tools "$cmd" exiftool || exit 1 ;;
+  esac
 
   case "$cmd" in
     album)           mk_workdir; action_album "$@" ;;
