@@ -82,7 +82,7 @@ class Workspace:
             "convert", "mogrify", "montage", "identify", "exiftool", "pdfinfo", "pdftoppm", "ffmpeg",
             "ffprobe", "kmail", "thunderbird", "xdg-email", "xdg-open", "okular",
             "mktemp", "rm", "cp", "mv", "mkdir", "mkfifo", "touch", "chmod", "dirname", "awk",
-            "basename", "cat", "date", "tr", "stat", "ln", "cmp", "sleep", "head", "grep", "cut", "od",
+            "basename", "cat", "date", "tr", "stat", "ln", "cmp", "sleep", "head", "grep", "cut", "od", "sort", "setsid",
         }
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)
@@ -313,6 +313,16 @@ atomic_overwrite_file "$1" "$scratch"
         plan["real_video_tools"] = tools
         self.plan.write_text(json.dumps(plan))
 
+    def use_real_slideshow_tools(self):
+        self.use_real_video_tools()
+        self.use_real_metadata_tools()
+        executable = shutil.which("magick")
+        if not executable:
+            raise unittest.SkipTest("ImageMagick is unavailable")
+        plan = json.loads(self.plan.read_text())
+        plan["real_slideshow_magick"] = executable
+        self.plan.write_text(json.dumps(plan))
+
     def use_real_publication_tools(self):
         """Run real PDF/TIFF/GIF producers and validators on tiny owned fixtures."""
         tools = {name: shutil.which(name) for name in ('magick', 'identify', 'pdfinfo', 'pdftoppm')}
@@ -377,14 +387,24 @@ atomic_overwrite_file "$1" "$scratch"
             raise unittest.SkipTest('ExifTool unavailable')
         self.plan.write_text(json.dumps(plan))
 
+    @staticmethod
+    def _read_without_atime(path):
+        try:
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOATIME", 0))
+        except OSError:
+            return path.read_bytes()
+        with os.fdopen(descriptor, "rb") as source:
+            return source.read()
+
     def _snapshot(self):
-        return {
-            str(path.relative_to(self.root)): path.read_bytes()
-            for path in self.root.rglob("*")
-            if path.relative_to(self.root).parts[0] != ".control"
-            and not path.is_symlink() and path.is_file()
-            and path.resolve().is_relative_to(self.root)
-        }
+        snapshot = {}
+        for path in self.root.rglob("*"):
+            if (path.relative_to(self.root).parts[0] == ".control" or path.is_symlink()
+                    or not path.is_file() or not path.resolve().is_relative_to(self.root)):
+                continue
+            payload = self._read_without_atime(path)
+            snapshot[str(path.relative_to(self.root))] = payload
+        return snapshot
 
     def observe(self, relative):
         """lstat an owned entry, including dangling links; never hash a referent.
@@ -407,7 +427,7 @@ atomic_overwrite_file "$1" "$scratch"
         return EntryState(
             True, kind, info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
             stat.S_IMODE(info.st_mode),
-            hashlib.sha256(path.read_bytes()).hexdigest() if kind == "file" else None,
+            hashlib.sha256(self._read_without_atime(path)).hexdigest() if kind == "file" else None,
             os.readlink(path) if kind == "symlink" else None,
         )
 

@@ -43,6 +43,11 @@ def interrupt_progress(state):
 
 def main():
     tool, args = Path(sys.argv[0]).name, sys.argv[1:]
+    if tool == "setsid":
+        executable = shutil.which("setsid", path=os.defpath)
+        if not executable:
+            return 127
+        os.execv(executable, [executable, *args])
     if tool == "sleep":
         if args != ["0.1"]:
             raise ValueError("test adapter only permits the bounded process-grace delay")
@@ -121,10 +126,49 @@ def main():
         if args[2] == "wasCancelled":
             print("true" if state == "cancelled" else "unexpected")
             return 0
+    if (tool in ("qdbus", "qdbus6") and len(args) >= 3 and args[2] == "wasCancelled"
+            and plan.get("slideshow_interrupt_during_frame")
+            and (CONTROL / "slideshow-magick.pid").exists()):
+        (CONTROL / "progress-gone").touch()
     if tool in ("qdbus", "qdbus6") and args[2] == "wasCancelled" and plan.get("metadata_cancel_after_stage"):
         if any(ROOT.rglob(".kim6-stage.*")):
             print("true")
             return 0
+    if tool == "magick" and "real_slideshow_magick" in plan and response is None:
+        if plan.get("slideshow_hold_magick"):
+            (CONTROL / "slideshow-magick.pid").write_text(str(os.getpid()))
+            time.sleep(10)
+            return 1
+        command = list(args)
+        if (len(command) != 15 or command[0] != "-" or command[1] != "-auto-orient"
+                or command[2] != "-profile" or command[4] != "-profile" or command[6] != "-resize"):
+            raise ValueError("unsupported slideshow frame command")
+        profiles, output = (command[3], command[5]), command[-1]
+        if any(not profile.startswith("/usr/share/color/icc/") or not Path(profile).is_file()
+               for profile in profiles):
+            raise ValueError("slideshow requires an installed ICC profile")
+        if command[8] != "-background" or command[10:13] != ["-gravity", "center", "-extent"]:
+            raise ValueError("invalid slideshow padding command")
+        payload = sys.stdin.buffer.read(1048577)
+        if len(payload) > 1048576 or not payload.startswith((b'\x89PNG\r\n\x1a\n', b'P6\n', b'P3\n', b'\xff\xd8\xff')) or output != "PNG:-":
+            raise ValueError("slideshow requires a bounded supported image stream")
+        result = subprocess.run([plan["real_slideshow_magick"], *command], input=payload,
+                                timeout=10, capture_output=True,
+                                env=dict(os.environ, PATH=os.defpath, MAGICK_THREAD_LIMIT="1"))
+        sys.stdout.buffer.write(result.stdout)
+        sys.stderr.buffer.write(result.stderr)
+        return result.returncode
+    if tool == "identify" and "real_slideshow_magick" in plan and response is None:
+        if len(args) != 5 or args[:3] != ["-regard-warnings", "+ping", "-format"] or args[-1] != "-":
+            raise ValueError("unsupported slideshow image inspection")
+        payload = sys.stdin.buffer.read(1048577)
+        if len(payload) > 1048576:
+            raise ValueError("slideshow image exceeds test bound")
+        result = subprocess.run([shutil.which("identify", path=os.defpath), *args], input=payload,
+                                capture_output=True, env=dict(os.environ, PATH=os.defpath))
+        sys.stdout.buffer.write(result.stdout)
+        sys.stderr.buffer.write(result.stderr)
+        return result.returncode
     if tool == "magick" and "real_magick" in plan and response is None:
         return real_magick(plan["real_magick"], args)
     if (tool == "magick" and "real_conversion" in plan and response is None
@@ -320,6 +364,10 @@ def main():
                     raise ValueError("metadata output must be an unused owned stage")
                 if plan.get("metadata_fail_output"):
                     return int(plan["metadata_fail_output"])
+        elif tool == "touch" and args[:1] in (["-m"], ["-a"]) and len(args) == 5 and args[1] == "-d" and args[3] == "--":
+            owned(args[4])
+        elif tool == "touch" and args[:1] == ["-m"] and len(args) == 5 and args[1] == "-r" and args[3] == "--":
+            owned(args[2]); owned(args[4])
         elif tool == "touch" and len(args) == 4 and args[0] == "-r" and args[2] == "--":
             owned(args[1]); owned(args[3])
         elif tool == "chmod" and len(args) == 2 and args[0].startswith("--reference="):
@@ -364,6 +412,9 @@ def main():
                     break
             else:
                 raise ValueError("radiolist has no selected default")
+        elif "--menu" in args:
+            index = args.index("--menu") + 2
+            print(args[index])
         elif "--getexistingdirectory" in args:
             path = owned(ROOT / "out")
             path.mkdir(exist_ok=True)
@@ -484,15 +535,26 @@ def main():
         if args[1] == '%x:%y':
             print(f'{info.st_atime_ns}:{info.st_mtime_ns}')
             return 0
+        if args[1] in ('%x', '%y', '%Y'):
+            return subprocess.run([shutil.which('stat', path=os.defpath), *args], timeout=10,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
         if args[1] not in formats:
             raise ValueError("unsupported stat format")
         print(formats[args[1]])
+    elif tool == "sort":
+        if len(args) != 5 or args[:2] != ["-z", "-t"] or args[3:] != ["-k1,1V", "-k2,2V"] or args[2] != "\t":
+            raise ValueError("unsupported sort operation")
+        result = subprocess.run([shutil.which("sort", path=os.defpath), *args], input=sys.stdin.buffer.read(),
+                                capture_output=True, timeout=5)
+        sys.stdout.buffer.write(result.stdout)
+        return result.returncode
     elif tool in ("basename", "dirname"):
         value = args[-1]
         print(os.path.basename(value) if tool == "basename" else os.path.dirname(value) or ".")
     elif tool in ("date", "tr"):
-        if tool == "date" and (len(args) != 1 or not args[0].startswith("+")):
-            raise ValueError("only date format output is supported")
+        if tool == "date" and not (len(args) == 1 and args[0].startswith("+") or
+                                    len(args) == 3 and args[0] == "-d" and args[2].startswith("+")):
+            raise ValueError("unsupported date conversion")
         if tool == "tr" and args not in (["[:upper:]", "[:lower:]"], ["[:lower:]", "[:upper:]"]):
             raise ValueError("only case translation is supported")
         return subprocess.call(["/usr/bin/" + tool, *args])
@@ -705,6 +767,10 @@ def real_web_email_tool(tools, tool, args):
             index += 2
         elif args[index] == '-quality' and index + 1 < len(args) - 1:
             index += 2
+        elif args[index] == '-interlace' and index + 1 < len(args) - 1 and args[index + 1] in ('Plane', 'None'):
+            index += 2
+        elif args[index] == '-define' and index + 1 < len(args) - 1 and args[index + 1] == 'jpeg:optimize-coding=true':
+            index += 2
         elif args[index] == '-profile' and index + 1 < len(args) - 1:
             profile = Path(args[index + 1])
             if not profile.is_relative_to(Path('/usr/share/color/icc')):
@@ -740,6 +806,8 @@ def real_conversion(executable, args):
     destination = owned(destination_name)
     if len(args) == 3:
         pass
+    elif len(args) == 5 and args[2:4] == ["-interlace", "None"] and args[-1].lower().endswith((".jpg", ".jpeg", ".jpe", ".jfif")):
+        pass
     elif (len(args) == 5 and args[2:4] == ["-define", "jp2:rate=1"]
           and args[-1].startswith("JP2:")):
         pass
@@ -761,11 +829,26 @@ def real_conversion(executable, args):
 
 
 def real_compression(executable, args):
-    if args[:1] != ["--"] or args[2:-1] not in (
-            ["-strip", "-interlace", "Plane", "-quality", args[-2]],
-            ["+profile", "!{icc,exif}", "+set", "comment", "-interlace", "Plane", "-quality", args[-2]]):
+    if args[:1] != ["--"] or args[2:6] != ["+profile", "!{icc,exif}", "+set", "comment"]:
         raise ValueError("real compression requires approved JPEG options")
-    if not args[-2].isdigit() or not 1 <= int(args[-2]) <= 100:
+    options = args[6:-1]
+    if not options or options[0] != "-interlace" or options[1] not in ("Plane", "None"):
+        raise ValueError("real compression requires an explicit supported scan mode")
+    options = options[2:]
+    quality_seen = False
+    optimize_seen = False
+    quality_value = None
+    while options:
+        if options[:1] == ["-quality"] and not quality_seen and len(options) >= 2:
+            quality_seen = True
+            quality_value = options[1]
+            options = options[2:]
+        elif options[:2] == ["-define", "jpeg:optimize-coding=true"] and not optimize_seen:
+            optimize_seen = True
+            options = options[2:]
+        else:
+            raise ValueError("unsupported compression options")
+    if not quality_seen or not str(quality_value).isdigit() or not 1 <= int(quality_value) <= 100:
         raise ValueError("invalid real compression quality")
     source, destination = owned(args[1]), owned(args[-1].removeprefix("JPEG:"))
     if source.stat().st_size > 65536 or destination.exists() or destination.is_symlink():
@@ -790,8 +873,13 @@ def real_stripmeta(executable, args):
 
 
 def real_resize(executable, args):
-    if (len(args) != 9 or args[0] != "--" or args[2] != "-resize"
-            or args[4:8] != ["-format", "%w %h\\n", "-write", "info:"]):
+    offset = 1
+    if args[:1] == ["--"]:
+        offset = 2
+    if args[offset:offset + 1] == ["-auto-orient"]:
+        offset += 1
+    if (len(args) != offset + 7 or args[0] != "--" or args[offset] != "-resize"
+            or args[offset + 2:offset + 6] != ["-format", "%w %h\\n", "-write", "info:"]):
         raise ValueError("real resize requires explicit source, geometry and output")
     source, destination = owned(args[1]), owned(args[-1])
     if source.stat().st_size > 65536 or destination.exists() or destination.is_symlink():
@@ -918,8 +1006,16 @@ def real_video_tool(tools, tool, args, plan):
 
 def filesystem(tool, args):
     # Only forms used by the recovered dispatcher; reject unknown options.
+    if tool == "touch" and args[:1] in (["-m"], ["-a"]) and len(args) == 5 and args[1] == "-d" and args[3] == "--":
+        owned(args[4])
+        return subprocess.run([shutil.which("touch", path=os.defpath), *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == "touch" and args[:1] == ["-m"] and len(args) == 5 and args[1] == "-r" and args[3] == "--":
+        owned(args[2]); owned(args[4])
+        return subprocess.run([shutil.which("touch", path=os.defpath), *args], timeout=10,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
     allowed = {"mkdir": {"-p", "--"}, "mkfifo": {"--"}, "rm": {"-f", "-rf", "--"},
-               "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--"}, "mv": {"-f", "-fT", "-T", "--no-clobber", "--no-copy", "--"},
+               "cp": {"-f", "-p", "--preserve=mode,ownership,timestamps,xattr", "--preserve=mode,timestamps", "--"}, "mv": {"-f", "-fT", "-T", "--no-clobber", "--no-copy", "--"},
                "ln": {"-T", "--"},
                "touch": {"-r", "--"}, "chmod": set()}
     values = []
@@ -966,7 +1062,7 @@ def filesystem(tool, args):
         if len(paths) != 2 or paths[1].is_dir():
             raise ValueError("only explicit single-file destinations are supported")
         if tool == "cp":
-            (shutil.copy2 if '-p' in args or '--preserve=mode,ownership,timestamps,xattr' in args else shutil.copyfile)(*paths)
+            (shutil.copy2 if '-p' in args or any(value.startswith('--preserve=') for value in args) else shutil.copyfile)(*paths)
         elif "--no-copy" in args:
             os.rename(*paths)
         else:

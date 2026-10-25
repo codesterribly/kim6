@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;Album;Print;TiffJoin;Animation;Manual;License;About;
+Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;DateSync;Slideshow;Album;Print;TiffJoin;Animation;Manual;License;About;
 _X-KDE-Submenu=KIM6 — Publish and organize
 X-KIM6-Managed=true
 
@@ -43,6 +43,14 @@ Exec=kim_all copyright --interactive -- %F
 [Desktop Action AdjustCaptureTime]
 _Name=Adjust camera timestamps…
 Exec=kim_all timeshift --interactive -- %F
+
+[Desktop Action DateSync]
+_Name=Synchronize photo/file dates…
+Exec=kim_all datesync --interactive -- %F
+
+[Desktop Action Slideshow]
+_Name=Create MP4 slideshow…
+Exec=kim_all slideshow --interactive -- %F
 
 [Desktop Action Album]
 _Name=Create a PDF album…

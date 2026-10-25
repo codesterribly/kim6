@@ -164,12 +164,55 @@ class CompressionTests(unittest.TestCase):
         self.assertEqual(decoded.stdout, b'JPEG')
         self.assert_clean()
 
+    def test_explicit_baseline_jpeg_disables_progressive_scan(self):
+        self.workspace.use_real_compression()
+        result = self.workspace.dispatch('compress', '--quality', '85', '--jpeg-baseline', '--', str(self.source))
+        self.assertEqual(0, result.returncode, result.stderr)
+        output = self.source.with_name('photo 雪_compressed.jpg')
+        verbose = subprocess.run([shutil.which('identify'), '-verbose', str(output)],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertRegex(verbose, r'Interlace:\s+None')
+
+    def test_progressive_jpeg_option_remains_decodable(self):
+        self.workspace.use_real_compression()
+        result = self.workspace.dispatch('compress', '--quality', '85', '--jpeg-progressive', '--', str(self.source))
+        self.assertEqual(0, result.returncode, result.stderr)
+        output = self.source.with_name('photo 雪_compressed.jpg')
+        verbose = subprocess.run([shutil.which('identify'), '-verbose', str(output)],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertRegex(verbose, r'Interlace:\s+(JPEG|Plane)')
+        self.assertEqual(0, subprocess.run([shutil.which('identify'), str(output)],
+                                            capture_output=True).returncode)
+
+    def test_custom_quality_dialog_exposes_scan_and_huffman_optimization_choices(self):
+        self.workspace.use_real_compression()
+        result = self.workspace.dispatch('compress', '--custom', '--', str(self.source))
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(self.source.with_name('photo 雪_compressed.jpg').is_file())
+        menus = [c['argv'] for c in result.calls if c['tool'] == 'kdialog' and '--menu' in c['argv']]
+        self.assertEqual(2, len(menus))
+        self.assertIn('progressive', menus[0])
+        self.assertIn('yes', menus[1])
+
     def test_newly_occupied_destination_is_never_deleted(self):
         self.workspace.respond('magick', output_base64=base64.b64encode(self.source.read_bytes()).decode(),
                                writes={'input/photo 雪_compressed.jpg': 'other invocation'})
         result = self.dispatch()
         self.assertEqual(self.source.with_name('photo 雪_compressed.jpg').read_bytes(), b'other invocation')
         self.assertTrue(any(e['tool'] == 'ln' and e['status'] != 0 for e in result.events))
+        self.assert_clean()
+
+    def test_jpeg_huffman_optimization_option_reaches_real_encoder(self):
+        source = self.workspace.jpeg("input/optimized.jpg")
+        self.workspace.env["KIM_POLICY"] = "create"
+        self.workspace.use_real_compression()
+        result = self.workspace.dispatch("compress", "--quality", "82", "--jpeg-optimize", "--", source)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(any(call["tool"] == "magick" and "jpeg:optimize-coding=true" in call["argv"]
+                            for call in result.calls))
+        output = source.with_name("optimized_compressed.jpg")
+        self.assertEqual(0, subprocess.run([shutil.which("identify"), "-regard-warnings", str(output)],
+                                           capture_output=True).returncode)
         self.assert_clean()
 
     def test_cancel_before_prompt_prevents_production(self):

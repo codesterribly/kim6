@@ -1059,12 +1059,15 @@ action_album() {
 # - KIM_POLICY=overwrite   forces Overwrite mode
 
 action_compress() {
-  local QUALITY='' outdir='' custom=false
+  local QUALITY='' outdir='' custom=false jpeg_scan='' jpeg_optimize=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --quality) [ "$#" -ge 2 ] || die "compress: --quality needs a value"; QUALITY="$2"; shift 2 ;;
+        --jpeg-progressive) [ -z "$jpeg_scan" ] || die "compress: select one JPEG scan mode"; jpeg_scan=Plane; shift ;;
+        --jpeg-baseline) [ -z "$jpeg_scan" ] || die "compress: select one JPEG scan mode"; jpeg_scan=None; shift ;;
+        --jpeg-optimize) jpeg_optimize=true; shift ;;
         --output-dir) [ "$#" -ge 2 ] || die "compress: --output-dir needs a value"; outdir="$2"; shift 2 ;;
         --custom) custom=true; shift ;;
         --) shift; raw_files+=("$@"); break ;;
@@ -1074,6 +1077,16 @@ action_compress() {
     if [ "$custom" = true ]; then
       [ -z "$QUALITY" ] || die "compress: use --custom or --quality, not both"
       QUALITY="$(kdialog --inputbox "$(gettext 'JPEG quality (1-100):')" 60)" || return 1
+      if [ -z "$jpeg_scan" ]; then
+        local scan_choice
+        scan_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'JPEG scan mode:')" progressive "$(gettext 'Progressive (current default)')" baseline "$(gettext 'Baseline')")" || return 1
+        [ "$scan_choice" != baseline ] || jpeg_scan=None
+      fi
+      if [ "$jpeg_optimize" != true ]; then
+        local optimize_choice
+        optimize_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Optimize JPEG Huffman coding?')" no "$(gettext 'No additional optimization')" yes "$(gettext 'Optimize coding tables; file-size reduction is not guaranteed')")" || return 1
+        [ "$optimize_choice" != yes ] || jpeg_optimize=true
+      fi
     fi
   else
     QUALITY="${1:-}"
@@ -1176,7 +1189,9 @@ action_compress() {
     rc=0
     # Retain EXIF orientation and ICC interpretation without rotating pixels.
     # EXIF is a container: finer-grained EXIF removal remains a policy decision.
-    magick -- "$f" +profile '!{icc,exif}' +set comment -interlace Plane -quality "$QUALITY" "JPEG:$OUTTMP" >/dev/null 2>&1 || rc=$?
+    local -a jpeg_options=(-interlace "${jpeg_scan:-Plane}" -quality "$QUALITY")
+    [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
+    magick -- "$f" +profile '!{icc,exif}' +set comment "${jpeg_options[@]}" "JPEG:$OUTTMP" >/dev/null 2>&1 || rc=$?
     actual=""
     if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
       actual="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$OUTTMP" 2>/dev/null)" || rc=$?
@@ -1245,7 +1260,7 @@ action_compress() {
 # - Uses ImageMagick `magick` to write explicit outputs.
 
 action_convert() {
-  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75
+  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -1253,6 +1268,9 @@ action_convert() {
         --format) [ "$#" -ge 2 ] || die "convert: --format needs a value"; FORMAT="$2"; shift 2 ;;
         --jp2-mode) [ "$#" -ge 2 ] || die "convert: --jp2-mode needs lossless or lossy"; jp2_mode="$2"; shift 2 ;;
         --jp2-quality) [ "$#" -ge 2 ] || die "convert: --jp2-quality needs a value"; jp2_quality="$2"; shift 2 ;;
+        --jpeg-progressive) [ -z "$jpeg_scan" ] || die "convert: select one JPEG scan mode"; jpeg_scan=Plane; shift ;;
+        --jpeg-baseline) [ -z "$jpeg_scan" ] || die "convert: select one JPEG scan mode"; jpeg_scan=None; shift ;;
+        --jpeg-optimize) jpeg_optimize=true; shift ;;
         --bmp5) bmp5=true; shift ;;
         --custom-format) custom=true; shift ;;
         --) shift; raw_files+=("$@"); break ;;
@@ -1262,6 +1280,17 @@ action_convert() {
     if [ "$custom" = true ]; then
       [ -z "$FORMAT" ] || die "convert: use --custom-format or --format, not both"
       FORMAT="$(kdialog --inputbox "$(gettext 'Choose format to convert:')" '')" || return 1
+      if [[ "${FORMAT,,}" == jpg || "${FORMAT,,}" == jpeg || "${FORMAT,,}" == jfif ]]; then
+        if [ -z "$jpeg_scan" ]; then
+          local scan_choice optimize_choice
+          scan_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'JPEG scan mode:')" baseline "$(gettext 'Baseline')" progressive "$(gettext 'Progressive')")" || return 1
+          [ "$scan_choice" != progressive ] || jpeg_scan=Plane
+        fi
+        if [ "$jpeg_optimize" != true ]; then
+          optimize_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Optimize JPEG Huffman coding?')" no "$(gettext 'No additional optimization')" yes "$(gettext 'Optimize coding tables; file-size reduction is not guaranteed')")" || return 1
+          [ "$optimize_choice" != yes ] || jpeg_optimize=true
+        fi
+      fi
     fi
   else
     FORMAT="${1:-}"
@@ -1283,6 +1312,11 @@ action_convert() {
     return 1
   fi
   FORMAT="${FORMAT,,}"
+  case "$FORMAT" in jpg|jpeg|jpe|jfif) : ;; *)
+    { [ -z "$jpeg_scan" ] && [ "$jpeg_optimize" != true ]; } || {
+      progress_error "$(gettext 'JPEG scan and optimization options require JPEG output.')"; return 2;
+    } ;;
+  esac
   case "$jp2_mode" in ''|lossless|lossy) ;; *) progress_error "$(gettext 'JPEG 2000 mode must be lossless or lossy.')"; return 2 ;; esac
   if ! [[ "$jp2_quality" =~ ^[0-9]{1,3}$ ]] || [ "$jp2_quality" -lt 1 ] || [ "$jp2_quality" -gt 100 ]; then
     progress_error "$(gettext 'JPEG 2000 lossy quality must be between 1 and 100.')"; return 2
@@ -1480,16 +1514,18 @@ action_convert() {
     # If user "converts" to the same extension, do not try to write input to itself.
     # Create mode will create a copy with suffix, overwrite mode treats as no-op success.
     if [ -n "$ext" ] && [[ "${ext,,}" == "${FORMAT,,}" ]]; then
-      if [ "$mode" = "overwrite" ]; then
+      if [ "$mode" = "overwrite" ] && [ -z "$jpeg_scan" ] && [ "$jpeg_optimize" != true ]; then
         report_ok
         progress_value "$dbusRef" "$counter"
         continue
       fi
-      n=1
-      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="$dir/${stem}_${n}.${FORMAT}"
-        n=$((n + 1))
-      done
+      if [ "$mode" = "create" ]; then
+        n=1
+        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
+          OUTFILE="$dir/${stem}_${n}.${FORMAT}"
+          n=$((n + 1))
+        done
+      fi
     fi
 
     if [ "$mode" = "create" ]; then
@@ -1591,7 +1627,19 @@ action_convert() {
         fi
       else
         if [ -n "$format_coder" ]; then
-          magick -- "$i" "$format_coder:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          if [ "$format_coder" = JPEG ]; then
+            local -a jpeg_options=()
+            [ -z "$jpeg_scan" ] || jpeg_options+=(-interlace "$jpeg_scan")
+            [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
+            magick -- "$i" "${jpeg_options[@]}" "JPEG:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          else
+            magick -- "$i" "$format_coder:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          fi
+        elif [[ "$FORMAT" == jpg || "$FORMAT" == jpeg || "$FORMAT" == jpe || "$FORMAT" == jfif ]]; then
+          local -a jpeg_options=()
+          [ -z "$jpeg_scan" ] || jpeg_options+=(-interlace "$jpeg_scan")
+          [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
+          magick -- "$i" "${jpeg_options[@]}" "$OUTTMP" >/dev/null 2>&1 || rc=$?
         else
           magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
         fi
@@ -2466,21 +2514,35 @@ action_rename() {
 #   $@  FILES   Input files
 # ---------------------------------------------------------------------------
 action_resize() {
-  local SCALE='' outdir='' custom=false
+  local SCALE='' outdir='' custom=false percent='' custom_percent=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --size) [ "$#" -ge 2 ] || die "resize: --size needs a value"; SCALE="$2"; shift 2 ;;
+        --percent) [ "$#" -ge 2 ] || die "resize: --percent needs a value"; percent="$2"; shift 2 ;;
         --output-dir) [ "$#" -ge 2 ] || die "resize: --output-dir needs a value"; outdir="$2"; shift 2 ;;
         --custom) custom=true; shift ;;
+        --custom-percent) custom_percent=true; shift ;;
         --) shift; raw_files+=("$@"); break ;;
         *) die "resize: unknown option $1" ;;
       esac
     done
     if [ "$custom" = true ]; then
       [ -z "$SCALE" ] || die "resize: use --custom or --size, not both"
+      [ -z "$percent" ] && [ "$custom_percent" != true ] || die "resize: choose only one size option"
       SCALE="$(kdialog --inputbox "$(gettext 'Resize dimension (maximum width x height):')" '1600x1600')" || return 1
+    fi
+    if [ "$custom_percent" = true ]; then
+      [ -z "$SCALE" ] && [ -z "$percent" ] || die "resize: choose only one size option"
+      percent="$(kdialog --inputbox "$(gettext 'Resize percentage (1-1000):')" 50)" || return 1
+    fi
+    if [ -n "$percent" ]; then
+      [ -z "$SCALE" ] || die "resize: use either --size or --percent"
+      [[ "$percent" =~ ^[0-9]{1,4}$ ]] && [ "$percent" -ge 1 ] && [ "$percent" -le 1000 ] || {
+        progress_error "$(gettext 'Resize percentage must be an integer from 1 to 1000.')"; return 2;
+      }
+      SCALE="${percent}%"
     fi
   else
     SCALE="${1:-}"
@@ -2621,7 +2683,9 @@ action_resize() {
     # Record dimensions from the sole resize, before encoding. ImageMagick
     # remains responsible for geometry parsing/rounding; no pixel-sized probe
     # or second resize is needed. Validate the encoded file against this stream.
-    expected_dimensions="$(magick -- "$i" -resize "$SCALE" -format '%w %h\n' -write info: "$OUTTMP" 2>/dev/null)" || rc=$?
+    local -a resize_options=()
+    [ -z "$percent" ] || resize_options+=(-auto-orient)
+    expected_dimensions="$(magick -- "$i" "${resize_options[@]}" -resize "$SCALE" -format '%w %h\n' -write info: "$OUTTMP" 2>/dev/null)" || rc=$?
     produced_frames=0
     while IFS= read -r dimensions; do
       if [[ "$dimensions" =~ ^[1-9][0-9]*\ [1-9][0-9]*$ ]]; then
@@ -3662,6 +3726,233 @@ action_timeshift() {
   progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
+# Convert a camera-local EXIF timestamp into a filesystem epoch. EXIF values
+# without OffsetTimeOriginal are interpreted in the system local timezone,
+# never as UTC. DST gaps and repeated fall-back times are rejected because a
+# timezone-free camera value cannot disambiguate those wall-clock readings.
+datesync_exif_epoch() {
+  local file="$1" stamp subsec offset iso epoch normalized fraction delta alternate
+  stamp="$(metadata_query "$file" -DateTimeOriginal)" || return 1
+  [[ "$stamp" =~ ^([0-9]{4}):([0-9]{2}):([0-9]{2})\ ([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]] || return 1
+  iso="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]} ${BASH_REMATCH[4]}:${BASH_REMATCH[5]}:${BASH_REMATCH[6]}"
+  subsec="$(metadata_query "$file" -SubSecTimeOriginal)" || return 1
+  offset="$(metadata_query "$file" -OffsetTimeOriginal)" || return 1
+  fraction=000000000
+  if [ -n "$subsec" ]; then
+    [[ "$subsec" =~ ^[0-9]{1,9}$ ]] || return 1
+    fraction="${subsec}000000000"; fraction="${fraction:0:9}"
+  fi
+  if [ -n "$offset" ]; then
+    [[ "$offset" =~ ^([+-])([0-9]{2}):([0-9]{2})$ ]] || return 1
+    epoch="$(date -d "$iso ${BASH_REMATCH[1]}${BASH_REMATCH[2]}:${BASH_REMATCH[3]}" +%s 2>/dev/null)" || return 1
+  else
+    epoch="$(date -d "$iso" +%s 2>/dev/null)" || return 1
+    normalized="$(date -d "@$epoch" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
+    [ "$normalized" = "$iso" ] || return 1
+    for delta in -7200 -5400 -3600 -1800 1800 3600 5400 7200; do
+      alternate="$(date -d "@$((epoch + delta))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
+      [ "$alternate" != "$iso" ] || return 1
+    done
+  fi
+  [[ "$epoch" =~ ^-?[0-9]+$ ]] || return 1
+  printf '@%s.%s\n' "$epoch" "$fraction"
+}
+
+datesync_epoch_to_wall_time() {
+  local epoch="$1" offset="${2:-}" hour minute posix_offset
+  if [ -n "$offset" ]; then
+    [[ "$offset" =~ ^([+-])([0-9]{2}):([0-9]{2})$ ]] || return 1
+    hour="${BASH_REMATCH[2]}"; minute="${BASH_REMATCH[3]}"
+    (( 10#$hour <= 23 && 10#$minute <= 59 )) || return 1
+    if [ "${BASH_REMATCH[1]}" = + ]; then posix_offset="-$hour:$minute"; else posix_offset="+$hour:$minute"; fi
+    TZ="UTC$posix_offset" date -d "@$epoch" '+%Y:%m:%d %H:%M:%S' 2>/dev/null
+  else
+    date -d "@$epoch" '+%Y:%m:%d %H:%M:%S' 2>/dev/null
+  fi
+}
+
+datesync_collect_files() {
+  # result_ref is intentionally a nameref to the caller's output array.
+  # shellcheck disable=SC2178
+  local -n result_ref="$1"
+  shift
+  local raw parent path identity
+  local -A seen=()
+  result_ref=()
+  for raw in "$@"; do
+    [[ "$raw" != *$'\n'* && "$raw" != *$'\r'* ]] || return 1
+    [[ "$raw" = /* ]] || raw="$PWD/$raw"
+    parent="$(cd -P -- "$(dirname -- "$raw")" && pwd -P)" || return 1
+    path="$parent/${raw##*/}"
+    [ ! -L "$path" ] && [ -f "$path" ] && [ "$(stat -c '%h' -- "$path")" = 1 ] || return 1
+    identity="$(stat -c '%d:%i' -- "$path")" || return 1
+    [ -n "${seen[$identity]:-}" ] && continue
+    seen[$identity]=1
+    result_ref+=("$path")
+  done
+  [ "${#result_ref[@]}" -gt 0 ]
+}
+
+action_datesync() {
+  local direction='' fields=capture interactive=false source target ref policy rc counter=0
+  local stamp epoch fraction atime_before mtime_before current_date current_subsec wanted_date wanted_subsec
+  local seconds fraction_field name key value offset_original offset_create offset_modify
+  local create_date modify_date create_subsec modify_subsec
+  local -a files=() args=() expected=() atime_sources=() atime_values=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --direction|--fields)
+        [ "$#" -ge 2 ] || die "datesync: $1 requires a value"
+        if [ "$1" = --direction ]; then direction="$2"; else fields="$2"; fi
+        shift 2 ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      --*) die "datesync: unknown option $1" ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Date sync: select local, unambiguous regular files.')"; return 1; }
+  [ "${#files[@]}" -gt 0 ] || return 0
+  command -v exiftool >/dev/null 2>&1 || { progress_error "$(gettext 'ExifTool is required for date synchronization.')"; return 1; }
+  if [ "$interactive" = true ] || [ -z "$direction" ]; then
+    direction="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose date synchronization direction:')" \
+      exif-to-file "$(gettext 'Set file modification time from DateTimeOriginal')" \
+      file-to-exif "$(gettext 'Set EXIF capture time from file modification time')")" || return 1
+    if [ "$direction" = file-to-exif ]; then
+      fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'EXIF fields to update:')" \
+        capture "$(gettext 'DateTimeOriginal only')" all "$(gettext 'DateTimeOriginal, CreateDate and ModifyDate')")" || return 1
+    else
+      fields=capture
+    fi
+    stamp="$(metadata_query "${files[0]}" -DateTimeOriginal)"
+    local first_fs first_seconds proposed_date preview_epoch preview_offset
+    first_fs="$(stat -c '%y' -- "${files[0]}")"
+    first_seconds="$(stat -c '%Y' -- "${files[0]}")"
+    if [ "$direction" = exif-to-file ]; then
+      preview_offset="$(metadata_query "${files[0]}" -OffsetTimeOriginal)"
+      preview_epoch="$(datesync_exif_epoch "${files[0]}")" || preview_epoch=''
+      proposed_date=''
+      if [ -n "$preview_epoch" ]; then
+        proposed_date="$(datesync_epoch_to_wall_time "${preview_epoch#@}" "")"
+      fi
+    else
+      preview_offset="$(metadata_query "${files[0]}" -OffsetTimeOriginal)"
+      proposed_date="$(datesync_epoch_to_wall_time "$first_seconds" "$preview_offset" 2>/dev/null)"
+    fi
+    if [ "$direction" = exif-to-file ]; then
+      kdialog --title "$(gettext 'Kim — Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
+        "$(gettext 'Filesystem modification time preview')" "$(gettext 'Camera capture time:')" "${stamp:-$(gettext 'missing or invalid')}" \
+        "$(gettext 'Proposed local filesystem time:')" "${proposed_date:-$(gettext 'missing or invalid')}" \
+        "$(gettext 'Current file time:')" "$first_fs" \
+        "$(gettext 'Camera offset:')" "${preview_offset:-$(gettext 'none; interpreted in system local time')}" \
+        "$(gettext 'A timezone-less camera value is not assumed to be UTC.')")" || return 1
+    else
+      kdialog --title "$(gettext 'Kim — Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s' \
+        "$(gettext 'EXIF timestamp preview')" "$(gettext 'Current file time:')" "$first_fs" \
+        "$(gettext 'Proposed DateTimeOriginal:')" "$proposed_date" \
+        "$(gettext 'Fields:')" "$fields")" || return 1
+    fi
+  fi
+  case "$direction" in exif-to-file|file-to-exif) ;; *) die "datesync: direction must be exif-to-file or file-to-exif" ;; esac
+  case "$fields" in capture|all) ;; *) die "datesync: fields must be capture or all" ;; esac
+  policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')")"
+  [ "$policy" != cancel ] || return 1
+  METADATA_INTERRUPTED=false
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Synchronizing photo dates ...')")" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter + 1))
+    atime_sources+=("$source")
+    atime_values+=("$(stat -c '%x' -- "$source" 2>/dev/null)")
+    if ! progress_begin_item "$ref" "$(gettext 'Kim - Synchronizing date: ')${source##*/}" || progress_cancelled "$ref"; then
+      report_fail "$source"; METADATA_INTERRUPTED=true; break
+    fi
+    if [ "$direction" = exif-to-file ]; then
+      epoch="$(datesync_exif_epoch "$source")" || { report_fail "$source — $(gettext 'missing or invalid capture date')"; progress_value "$ref" "$counter"; continue; }
+      atime_before="${atime_values[${#atime_values[@]}-1]}"
+      mtime_before="$(stat -c '%y' -- "$source")" || { report_fail "$source"; continue; }
+      current_date="$(stat -c '%Y' -- "$source")" || { report_fail "$source"; continue; }
+      seconds="${epoch#@}"; seconds="${seconds%%.*}"
+      fraction="${epoch##*.}"
+      fraction_field="${mtime_before#*.}"; fraction_field="${fraction_field%% *}"
+      [[ "$fraction_field" =~ ^[0-9]{1,9}$ ]] || fraction_field=000000000
+      fraction_field="${fraction_field}000000000"; fraction_field="${fraction_field:0:9}"
+      if [ "$current_date" = "$seconds" ] && [ "$fraction_field" = "$fraction" ]; then
+        report_ok; progress_value "$ref" "$counter"; continue
+      fi
+      if [ "$policy" = create ]; then
+        target="$(metadata_output_path "$source" datesync create)"
+        local stage
+        stage="$(tmp_for_target "$target")" || { report_fail "$source — $(gettext 'staging failed')"; progress_value "$ref" "$counter"; continue; }
+        if ! cp --preserve=mode,timestamps -- "$source" "$stage" || ! cmp -s -- "$source" "$stage" ||
+           ! touch -m -d "$epoch" -- "$stage"; then
+          rm -f -- "$stage"; report_fail "$source — $(gettext 'date copy preparation failed')"; progress_value "$ref" "$counter"; continue
+        fi
+        if progress_cancelled "$ref" || ! commit_tmp_to_target "$stage" "$target" create; then
+          rm -f -- "$stage"; report_fail "$source — $(gettext 'interrupted or publication failed')"
+          if progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; break; fi
+          progress_value "$ref" "$counter"; continue
+        fi
+      else
+        if progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; report_fail "$source"; break; fi
+        if ! touch -m -d "$epoch" -- "$source"; then
+          touch -m -d "$mtime_before" -- "$source" >/dev/null 2>&1 || true
+          touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1 || true
+          report_fail "$source — $(gettext 'could not set modification time')"; progress_value "$ref" "$counter"; continue
+        fi
+        if ! touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1; then
+          touch -m -d "$mtime_before" -- "$source" >/dev/null 2>&1 || true
+          touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1 || true
+          report_fail "$source — $(gettext 'timestamp changed but original access time could not be restored')"
+          progress_value "$ref" "$counter"; continue
+        fi
+      fi
+      report_ok
+    else
+      metadata_is_raw "$source" && { report_fail "$source — $(gettext 'RAW metadata editing is unsupported')"; progress_value "$ref" "$counter"; continue; }
+      stamp="$(stat -c '%y' -- "$source")" || { report_fail "$source"; continue; }
+      seconds="$(stat -c '%Y' -- "$source")" || { report_fail "$source"; continue; }
+      offset_original="$(metadata_query "$source" -OffsetTimeOriginal)" || { report_fail "$source"; continue; }
+      wanted_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_original")" || { report_fail "$source — $(gettext 'invalid timezone offset')"; progress_value "$ref" "$counter"; continue; }
+      fraction_field="${stamp#*.}"; fraction_field="${fraction_field%% *}"
+      [[ "$fraction_field" =~ ^[0-9]{1,9}$ ]] || fraction_field=000000000
+      wanted_subsec="$fraction_field"
+      current_date="$(metadata_query "$source" -DateTimeOriginal)" || { report_fail "$source"; continue; }
+      current_subsec="$(metadata_query "$source" -SubSecTimeOriginal)" || current_subsec=''
+      args=("-DateTimeOriginal=$wanted_date" "-SubSecTimeOriginal=$wanted_subsec")
+      expected=("-DateTimeOriginal"$'\034'"$wanted_date" "-SubSecTimeOriginal"$'\034'"$wanted_subsec")
+      rc=0
+      [ "$current_date" = "$wanted_date" ] && [ "$current_subsec" = "$wanted_subsec" ] || rc=1
+      if [ "$fields" = all ]; then
+        offset_create="$(metadata_query "$source" -OffsetTimeDigitized)" || { report_fail "$source"; continue; }
+        offset_modify="$(metadata_query "$source" -OffsetTime)" || { report_fail "$source"; continue; }
+        create_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_create")" || { report_fail "$source — $(gettext 'invalid CreateDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
+        modify_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_modify")" || { report_fail "$source — $(gettext 'invalid ModifyDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
+        create_subsec="$(metadata_query "$source" -SubSecTimeDigitized)" || create_subsec=''
+        modify_subsec="$(metadata_query "$source" -SubSecTime)" || modify_subsec=''
+        args+=("-CreateDate=$create_date" "-SubSecTimeDigitized=$wanted_subsec" "-ModifyDate=$modify_date" "-SubSecTime=$wanted_subsec")
+        expected+=("-CreateDate"$'\034'"$create_date" "-SubSecTimeDigitized"$'\034'"$wanted_subsec" "-ModifyDate"$'\034'"$modify_date" "-SubSecTime"$'\034'"$wanted_subsec")
+        current_date="$(metadata_query "$source" -CreateDate)" || { report_fail "$source"; continue; }
+        [ "$current_date" = "$create_date" ] && [ "$create_subsec" = "$wanted_subsec" ] || rc=1
+        current_date="$(metadata_query "$source" -ModifyDate)" || { report_fail "$source"; continue; }
+        [ "$current_date" = "$modify_date" ] && [ "$modify_subsec" = "$wanted_subsec" ] || rc=1
+      fi
+      if [ "$rc" -eq 0 ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+      target="$(metadata_output_path "$source" datesync "$policy")"
+      if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+      [ "$METADATA_INTERRUPTED" != true ] || break
+    fi
+    progress_value "$ref" "$counter" || { METADATA_INTERRUPTED=true; break; }
+  done
+  local atime_index current_atime
+  for ((atime_index=0; atime_index<${#atime_sources[@]}; atime_index++)); do
+    current_atime="$(stat -c '%x' -- "${atime_sources[$atime_index]}" 2>/dev/null)" || continue
+    if [ "$current_atime" != "${atime_values[$atime_index]}" ]; then
+      touch -a -d "${atime_values[$atime_index]}" -- "${atime_sources[$atime_index]}" 2>/dev/null || true
+    fi
+  done
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
+}
+
 ####################
 # Export images for web use by resizing and compressing.
 #
@@ -3683,11 +3974,14 @@ action_timeshift() {
 # - Uses `magick` for resize and compression.
 
 action_webexport() {
-  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false
+  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false jpeg_scan='' jpeg_optimize=false
   local -a files=()
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --jpeg-progressive) [ -z "$jpeg_scan" ] || { progress_error "$(gettext 'Select only one JPEG scan mode.')"; return 2; }; jpeg_scan=Plane; shift ;;
+        --jpeg-baseline) [ -z "$jpeg_scan" ] || { progress_error "$(gettext 'Select only one JPEG scan mode.')"; return 2; }; jpeg_scan=None; shift ;;
+        --jpeg-optimize) jpeg_optimize=true; shift ;;
         --size|--quality|--format|--output-dir|--color)
           [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
           case "$1" in
@@ -3734,6 +4028,9 @@ action_webexport() {
   case "$fmt" in
     jpeg) fmt="jpg" ;;
   esac
+  if { [ -n "$jpeg_scan" ] || [ "$jpeg_optimize" = true ]; } && [ "$fmt" != jpg ] && [ "$fmt" != keep ]; then
+    progress_error "$(gettext 'JPEG scan and optimization options require JPEG output.')"; return 2
+  fi
 
   color_mode="${color_mode:-${KIM_WEB_COLOR_MODE:-srgb}}"
   case "$color_mode" in srgb|preserve) ;; *)
@@ -3875,6 +4172,10 @@ action_webexport() {
       progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
       continue
     fi
+    if { [ -n "$jpeg_scan" ] || [ "$jpeg_optimize" = true ]; } && [ "$(image_format_class "$coder")" != JPEG ]; then
+      progress_error "$(gettext 'JPEG-specific options cannot be used with this keep-format input:') $base"
+      report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
+    fi
 
     OUTTMP=''
     OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext")"
@@ -3894,18 +4195,23 @@ action_webexport() {
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
 
     if [ -n "$OUTTMP" ] && [ "$rc" -eq 0 ]; then
+      local -a jpeg_options=()
+      if [ "$(image_format_class "$coder")" = JPEG ]; then
+        [ -z "$jpeg_scan" ] || jpeg_options+=(-interlace "$jpeg_scan")
+        [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
+      fi
       if [ "$color_mode" = srgb ]; then
         # With an embedded profile ImageMagick performs an ICC transform;
         # without one, applying the sRGB profile records the documented RGB
         # working-space assumption without changing sample values.
-        magick - -auto-orient -profile "$srgb_profile" -resize "$size" \
+        magick - -auto-orient -profile "$srgb_profile" -resize "$size" "${jpeg_options[@]}" \
           -quality "$quality" -strip -profile "$srgb_profile" "$coder:$OUTTMP" \
           < "$i" >/dev/null 2>&1 || rc=$?
       elif [ -n "$profile_path" ]; then
-        magick - -auto-orient -resize "$size" -quality "$quality" -strip \
+        magick - -auto-orient -resize "$size" -quality "$quality" "${jpeg_options[@]}" -strip \
           -profile "$profile_path" "$coder:$OUTTMP" < "$i" >/dev/null 2>&1 || rc=$?
       else
-        magick - -auto-orient -strip -resize "$size" -quality "$quality" "$coder:$OUTTMP" \
+        magick - -auto-orient -strip -resize "$size" -quality "$quality" "${jpeg_options[@]}" "$coder:$OUTTMP" \
           < "$i" >/dev/null 2>&1 || rc=$?
       fi
     else
@@ -4958,6 +5264,201 @@ action_videogif() {
   progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
 }
 
+SLIDESHOW_OWNED_MAGICK_PID=''
+
+slideshow_stop_owned_magick() {
+  local pid="${SLIDESHOW_OWNED_MAGICK_PID:-}" attempt
+  [ -n "$pid" ] || return 0
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  SLIDESHOW_OWNED_MAGICK_PID=''
+}
+
+slideshow_run_magick_monitored() {
+  local ref="$1" input="$2" output="$3"; shift 3
+  local pid rc=0
+  setsid "$@" < "$input" > "$output" 2>/dev/null &
+  pid=$!
+  SLIDESHOW_OWNED_MAGICK_PID="$pid"
+  while kill -0 "$pid" 2>/dev/null; do
+    if progress_cancelled "$ref"; then
+      slideshow_stop_owned_magick
+      return 130
+    fi
+    sleep 0.1
+  done
+  wait "$pid" || rc=$?
+  SLIDESHOW_OWNED_MAGICK_PID=''
+  return "$rc"
+}
+
+action_slideshow() {
+  local seconds=3 size=1280x720 fps=25 background=black output='' interactive=false option
+  local source record format width height orientation colorspace frames target stage source_icc
+  local ref error_file rc=0 index=0 total duration srgb_profile rec709_profile profile_path codec actual_width actual_height actual_fps actual_frames actual_duration actual_format audio_count
+  local source_parent filter_chain record_key
+  local -a files=() ordered=() sorted_records=() sort_pairs=() frames_out=() args=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --seconds-per-photo|--size|--fps|--background|--output)
+        [ "$#" -ge 2 ] || { progress_error "$(gettext 'Slideshow options require a value.')"; return 2; }
+        option="$1"; shift
+        case "$option" in --seconds-per-photo) seconds="$1" ;; --size) size="$1" ;; --fps) fps="$1" ;; --background) background="$1" ;; --output) output="$1" ;; esac
+        shift ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      --*) progress_error "$(gettext 'Unknown slideshow option:') $1"; return 2 ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+  if [ "$interactive" = true ]; then
+    seconds="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --inputbox "$(gettext 'Seconds per photo (1-30):')" "$seconds")" || return 1
+    size="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --menu "$(gettext 'Output frame size:')" 1280x720 '1280 × 720' 1920x1080 '1920 × 1080' 854x480 '854 × 480')" || return 1
+    fps="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --inputbox "$(gettext 'Frame rate (1-30 fps):')" "$fps")" || return 1
+    output="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --getsavefilename "${PWD}/slideshow.mp4" 'video/mp4')" || return 1
+    [ -n "$output" ] || return 1
+  fi
+  [[ "$seconds" =~ ^[0-9]{1,2}$ ]] && [ "$seconds" -ge 1 ] && [ "$seconds" -le 30 ] || { progress_error "$(gettext 'Slideshow seconds per photo must be 1-30.')"; return 2; }
+  [[ "$fps" =~ ^[0-9]{1,2}$ ]] && [ "$fps" -ge 1 ] && [ "$fps" -le 30 ] || { progress_error "$(gettext 'Slideshow frame rate must be 1-30 fps.')"; return 2; }
+  [[ "$size" =~ ^([0-9]{2,4})x([0-9]{2,4})$ ]] || { progress_error "$(gettext 'Slideshow size must be WIDTHxHEIGHT.')"; return 2; }
+  width="${BASH_REMATCH[1]}"; height="${BASH_REMATCH[2]}"
+  (( width >= 160 && height >= 120 && width <= 1920 && height <= 1080 && width % 2 == 0 && height % 2 == 0 )) || {
+    progress_error "$(gettext 'Slideshow dimensions must be even and no larger than 1920x1080.')"; return 2;
+  }
+  (( width * height <= 2073600 )) || { progress_error "$(gettext 'Slideshow frame size exceeds the 1080p resource limit.')"; return 2; }
+  case "$background" in black|white|gray|grey|navy|red|green|blue|yellow|orange|purple) : ;;
+    *) [[ "$background" =~ ^#[0-9A-Fa-f]{6}$ ]] || { progress_error "$(gettext 'Slideshow background must be a supported color name or #RRGGBB.')"; return 2; } ;;
+  esac
+  video_utility_init || return 1
+  if ! command -v magick >/dev/null 2>&1 || ! command -v identify >/dev/null 2>&1 || ! command -v exiftool >/dev/null 2>&1 || ! command -v setsid >/dev/null 2>&1; then
+    progress_error "$(gettext 'ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames.')"; return 1
+  fi
+  if ! collect_publication_inputs files "${files[@]}" || [ "${#files[@]}" -eq 0 ]; then
+    progress_error "$(gettext 'Select local, unambiguous photograph files for the slideshow.')"; return 1
+  fi
+  (( ${#files[@]} <= 200 )) || { progress_error "$(gettext 'A slideshow can contain at most 200 photographs.')"; return 2; }
+  total=$((seconds * ${#files[@]}))
+  (( total <= 600 && total * fps <= 18000 )) || { progress_error "$(gettext 'Slideshow duration is limited to 600 seconds and 18,000 frames.')"; return 2; }
+  for source in "${files[@]}"; do
+    [[ "$source" != *$'\n'* ]] || { progress_error "$(gettext 'Slideshow filenames cannot contain newlines.')"; return 2; }
+  done
+  for source in "${files[@]}"; do
+    record_key="${source##*/}"
+    record_key="${record_key//%/%25}"
+    record_key="${record_key//$'\t'/%09}"
+    sort_pairs+=("$record_key"$'\t'"$source")
+  done
+  mapfile -d '' sorted_records < <(printf '%s\0' "${sort_pairs[@]}" | LC_ALL=C sort -z -t $'\t' -k1,1V -k2,2V)
+  for record_key in "${sorted_records[@]}"; do ordered+=("${record_key#*$'\t'}"); done
+  [ "${#ordered[@]}" -eq "${#files[@]}" ] || return 1
+  if [ -n "$output" ]; then
+    [[ "${output,,}" == *.mp4 ]] || { progress_error "$(gettext 'Slideshow output must use the .mp4 extension.')"; return 2; }
+    source_parent="$(cd -P -- "$(dirname -- "$output")" 2>/dev/null && pwd -P)" || { progress_error "$(gettext 'Slideshow output directory is unavailable.')"; return 1; }
+    output="$source_parent/${output##*/}"
+    [ -d "$source_parent" ] && [ -w "$source_parent" ] && [ -x "$source_parent" ] || { progress_error "$(gettext 'Slideshow output directory is unavailable.')"; return 1; }
+    for source in "${ordered[@]}"; do
+      [ "$source" != "$output" ] || { progress_error "$(gettext 'Slideshow output cannot alias a selected source.')"; return 1; }
+    done
+    [ ! -e "$output" ] && [ ! -L "$output" ] || { progress_error "$(gettext 'Slideshow destination is occupied; choose a new path.')"; return 1; }
+    target="$output"
+  else
+    target="$(video_utility_target "${ordered[0]}" slideshow mp4)"
+  fi
+  srgb_profile=''
+  for profile_path in /usr/share/color/icc/sRGB.icc /usr/share/color/icc/ghostscript/srgb.icc /usr/share/color/icc/colord/sRGB.icc /usr/share/color/icc/sRGB-v2-micro.icc; do
+    if [ -s "$profile_path" ]; then srgb_profile="$profile_path"; break; fi
+  done
+  [ -n "$srgb_profile" ] || { progress_error "$(gettext 'An installed sRGB ICC profile is required for slideshow color conversion.')"; return 1; }
+  for profile_path in /usr/share/color/icc/Rec709.icc /usr/share/color/icc/Rec709-v4.icc /usr/share/color/icc/Rec709-v2-micro.icc; do
+    if [ -s "$profile_path" ]; then rec709_profile="$profile_path"; break; fi
+  done
+  [ -n "$rec709_profile" ] || { progress_error "$(gettext 'An installed Rec. 709 ICC profile is required for slideshow color conversion.')"; return 1; }
+  report_init; ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'Kim — Preparing slideshow…')")" || return 1
+  trap 'slideshow_stop_owned_magick; video_cleanup_owned_process; exit 130' INT TERM HUP
+  stage="$(tmp_for_target "$target")" || { progress_close "$ref" || true; progress_error "$(gettext 'Slideshow staging failed.')"; return 1; }
+  for source in "${ordered[@]}"; do
+    index=$((index + 1))
+    if ! progress_begin_item "$ref" "$(gettext 'Kim — Preparing photo:') ${source##*/}" || progress_cancelled "$ref"; then
+      report_fail "$source — $(gettext 'interrupted before frame preparation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][dD]|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
+      report_fail "$source — $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
+    record="$(identify -regard-warnings +ping -format '%m|%w|%h|%[orientation]|%[colorspace]|%n\n' - < "$source" 2>/dev/null)" || rc=1
+    [[ "$record" != *$'\n'* && -n "$record" ]] || rc=1
+    IFS='|' read -r format source_width source_height orientation colorspace frames <<< "$record"
+    [[ "$source_width" =~ ^[1-9][0-9]*$ && "$source_height" =~ ^[1-9][0-9]*$ && "$frames" == 1 ]] || rc=1
+    source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
+    if [[ "${colorspace,,}" == *cmyk* && -z "$source_icc" ]]; then rc=1; fi
+    if [ "$rc" -ne 0 ]; then report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame photograph')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    local frame_path
+    printf -v frame_path '%s/slide_%04d.png' "${stage%/*}" "$index"
+    if slideshow_run_magick_monitored "$ref" "$source" "$frame_path" magick - -auto-orient -profile "$srgb_profile" -profile "$rec709_profile" -resize "${width}x${height}>" \
+        -background "$background" -gravity center -extent "$size" PNG:-; then
+      :
+    else
+      rc=$?
+      if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
+        report_fail "$source — $(gettext 'interrupted during frame preparation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      fi
+      report_fail "$source — $(gettext 'frame preparation failed')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    fi
+    local frame_check
+    frame_check="$(identify -regard-warnings +ping -format '%m|%w|%h|%n\n' - < "$frame_path" 2>/dev/null)" || rc=1
+    [ "$frame_check" = "PNG|$width|$height|1" ] || rc=1
+    if [ "$rc" -ne 0 ]; then report_fail "$source — $(gettext 'prepared frame failed validation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    frames_out+=("$frame_path")
+    progress_value "$ref" "$index" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
+  done
+  [ "${#frames_out[@]}" -gt 0 ] || { report_fail "$(gettext 'No slideshow frames prepared.')"; return 1; }
+  if progress_cancelled "$ref"; then report_fail "$(gettext 'Slideshow interrupted before encoding.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+  error_file="${stage%/*}/ffmpeg.stderr"
+  local -a ffargs=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats)
+  filter_chain=''
+  for ((index=0; index<${#frames_out[@]}; index++)); do
+    ffargs+=(-loop 1 -framerate "$fps" -t "$seconds" -f image2 -pattern_type none -i "${frames_out[$index]}")
+    filter_chain+="[$index:v]setpts=PTS-STARTPTS[v$index];"
+  done
+  for ((index=0; index<${#frames_out[@]}; index++)); do filter_chain+="[v$index]"; done
+  filter_chain+="concat=n=${#frames_out[@]}:v=1:a=0[vout]"
+  ffargs+=(-filter_complex "$filter_chain" -map '[vout]' -an -sn -dn -fps_mode cfr -r "$fps"
+    -t "$total" -c:v libx264 -pix_fmt yuv420p -color_primaries bt709 -color_trc bt709 -colorspace bt709
+    -x264-params colorprim=bt709:transfer=bt709:colormatrix=bt709 -movflags +faststart -f mp4 "$stage")
+  if video_run_monitored "$ref" "$(gettext 'Encoding MP4 slideshow')" "$total" "$error_file" "${ffargs[@]}"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then report_fail "$(gettext 'Slideshow interrupted during encoding.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+  if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then report_fail "$(gettext 'Slideshow encoder failed or produced no output.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+  local probe format_line
+  probe="$(ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=codec_name,width,height,r_frame_rate,nb_read_frames -of csv=p=0 -i "$stage" 2>/dev/null)" || rc=1
+  IFS=, read -r codec actual_width actual_height actual_fps actual_frames <<< "$probe"
+  format_line="$(ffprobe -v error -show_entries format=format_name,duration -of default=noprint_wrappers=1 -i "$stage" 2>/dev/null)" || rc=1
+  actual_format=''; actual_duration=''
+  while IFS='=' read -r option value; do case "$option" in format_name) actual_format="$value" ;; duration) actual_duration="$value" ;; esac; done <<< "$format_line"
+  audio_count="$(video_count_records a "$stage")" || rc=1
+  [[ "$codec" == h264 && "$actual_width" == "$width" && "$actual_height" == "$height" && "$actual_fps" == "$fps/1" && "$actual_frames" =~ ^[0-9]+$ ]] || rc=1
+  [[ ",$actual_format," == *,mp4,* && "$audio_count" == 0 ]] || rc=1
+  local color_tags
+  color_tags="$(ffprobe -v error -select_streams v:0 -show_entries stream=color_primaries,color_transfer,color_space -of default=noprint_wrappers=1 -i "$stage" 2>/dev/null)" || rc=1
+  [[ "$color_tags" == *$'color_primaries=bt709'* && "$color_tags" == *$'color_transfer=bt709'* && "$color_tags" == *$'color_space=bt709'* ]] || rc=1
+  [ "$actual_frames" -eq "$((total * fps))" ] || rc=1
+  awk -v expected="$total" -v actual="$actual_duration" -v fps="$fps" 'BEGIN { if(actual!~/^[0-9]+([.][0-9]+)?$/)exit 1; d=expected-actual;if(d<0)d=-d;exit !(d<=1/fps) }' || rc=1
+  if [ "$rc" -eq 0 ]; then
+    video_run_monitored "$ref" "$(gettext 'Validating slideshow decode')" "$total" "$error_file" \
+      -hide_banner -v error -xerror -nostdin -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -an -f null - || rc=$?
+  fi
+  if [ "$rc" -ne 0 ] || progress_cancelled "$ref"; then
+    report_fail "$(gettext 'Slideshow failed container, frame, duration or full-decode validation.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+  fi
+  if [ -n "$output" ]; then
+    if ! commit_tmp_to_target "$stage" "$target" create; then report_fail "$(gettext 'Slideshow publication failed; destination was preserved.')"; rc=1; else report_ok; fi
+  elif video_utility_publish "$ref" "$stage" "${ordered[0]}" slideshow mp4; then report_ok; else report_fail "$(gettext 'Slideshow publication failed or was interrupted.')"; rc=1; fi
+  rm -f -- "$error_file" "${frames_out[@]}" 2>/dev/null || true
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -4972,13 +5473,17 @@ Commands:
       Build a validated multi-page PDF from selected images on A4 pages.
       Offers eight portrait/landscape album layouts.
 
-  compress --quality 1..100 [--output-dir DIR] -- <files...>
+  compress --quality 1..100 [--output-dir DIR] [--jpeg-progressive|--jpeg-baseline]
+           [--jpeg-optimize] -- <files...>
   compress --custom -- <files...>
       Compress JPEG images at the selected quality. Create mode writes
-      *_compressed files beside the first selected file by default.
+      *_compressed files beside each input by default. Progressive is the
+      established default; baseline selects sequential JPEG. Huffman coding
+      optimization may reduce size, but does not guarantee a smaller file.
 
   convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy]
-          [--jp2-quality 1..100] -- <files...>
+          [--jp2-quality 1..100] [--jpeg-progressive|--jpeg-baseline]
+          [--jpeg-optimize] -- <files...>
   convert --custom-format -- <files...>
       Convert to JPEG, PNG, APNG, GIF, BMP, TIFF, PDF, WebP, AVIF, HEIC/HEIF,
       JPEG XL or JPEG 2000 where the installed encoder is available. APNG
@@ -5023,10 +5528,30 @@ Commands:
       Supports EXIF-based renaming and safety checks.
 
   resize --size GEOMETRY [--output-dir DIR] -- <files...>
-  resize --custom -- <files...>
-      Resize images to the given scale (e.g. 800x800, 50%).
+  resize --percent 1..1000 [--output-dir DIR] -- <files...>
+  resize --custom|--custom-percent -- <files...>
+      Resize images to geometry or percentage. Percentage ranges from 1% to
+      1000%, uses ImageMagick rounding and preserves aspect ratio. Custom
+      percentage opens a numeric prompt.
       Overwrite mode replaces the selected original only after validation.
       Create mode writes *_resized files beside each input by default.
+
+  datesync --direction exif-to-file|file-to-exif [--fields capture|all] -- <files...>
+  datesync --interactive -- <files...>
+      Synchronize DateTimeOriginal and filesystem mtime. Timezone-less camera
+      values use system local time, never UTC; explicit offsets are honored.
+      DST-gap local times reject. Metadata updates preserve pixels, ICC and mtime.
+
+  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
+            [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- <files...>
+      JPEG scan and Huffman options apply only when the selected output is JPEG.
+
+  slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30]
+            [--background COLOR] [--output FILE] [--interactive] -- <photos...>
+      Build an H.264/yuv420p MP4. Photos are naturally filename-sorted, fitted
+      without upscaling, and padded. It has no audio. Limits: 200 photos,
+      600 seconds, 18,000 frames and 1920x1080. RAW, layered, vector, HDR and
+      animated sources reject.
 
   resizeandsend [--size full|WIDTHxHEIGHT] [--] <files...>
       Resize selected images for email and open your mail client
@@ -5148,6 +5673,7 @@ main() {
     compress)        mk_workdir; action_compress "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
     copyright)       mk_workdir; action_copyright "$@" ;;
+    datesync)        mk_workdir; action_datesync "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
     gallery)         mk_workdir; action_gallery "$@" ;;
     pelemele)        mk_workdir; action_pelemele "$@" ;;
@@ -5157,6 +5683,7 @@ main() {
     resizeandsend)   mk_workdir; action_resizeandsend "$@" ;;
     rotate)          mk_workdir; action_rotate "$@" ;;
     rotatewithexif)  mk_workdir; action_rotatewithexif "$@" ;;
+    slideshow)       mk_workdir; action_slideshow "$@" ;;
     stripmeta)       mk_workdir; action_stripmeta "$@" ;;
     timeshift)       mk_workdir; action_timeshift "$@" ;;
     tiffjoin)        mk_workdir; action_tiffjoin "$@" ;;

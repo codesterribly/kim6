@@ -125,6 +125,29 @@ class ResizeTests(unittest.TestCase):
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
+    def test_percent_option_resizes_without_changing_aspect_ratio(self):
+        source = self.workspace.png('input/percent.png')
+        subprocess.run([shutil.which('magick'), '-size', '8x4', 'xc:red', str(source)], check=True)
+        self.workspace.use_real_resize()
+        result = self.workspace.dispatch('resize', '--percent', '50', '--', str(source))
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(self.decoded(source.with_name('percent_resized.png')), 'PNG 4 2')
+
+    def test_percent_option_rejects_out_of_range_values_before_production(self):
+        for value in ('0', '1001', '1.5', '-25'):
+            with self.subTest(value=value):
+                result = self.workspace.dispatch('resize', '--percent', value, '--', str(self.source))
+                self.assertNotEqual(0, result.returncode)
+                self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))
+
+    def test_percent_enlargement_is_explicit_and_keeps_aspect_ratio(self):
+        source = self.workspace.png('input/enlarge.png')
+        subprocess.run([shutil.which('magick'), '-size', '8x4', 'xc:blue', str(source)], check=True)
+        self.workspace.use_real_resize()
+        result = self.workspace.dispatch('resize', '--percent', '150', '--', str(source))
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(self.decoded(source.with_name('enlarge_resized.png')), 'PNG 12 6')
+
     def test_invalid_explicit_destination_does_not_fall_back(self):
         self.workspace.use_real_resize()
         before = self.workspace.observe(self.source)

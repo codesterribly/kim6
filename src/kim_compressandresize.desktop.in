@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Resize300;Resize600;Resize800;Resize1024;Resize1280;Resize1400;Resize1600;Resize1920;Resize2560;Resize3440;Resize3840;ResizeCustom;Web128;Web600;Web800;Web1024;Web1600;WebKeep;Emailfull;Email1600x1600;Email1200x1200;Email800x800;Email600x600;Email300x300;
+Actions=Resize300;Resize600;Resize800;Resize1024;Resize1280;Resize1400;Resize1600;Resize1920;Resize2560;Resize3440;Resize3840;ResizeCustom;ResizePercent;Web128;Web600;Web800;Web1024;Web1600;WebKeep;Emailfull;Email1600x1600;Email1200x1200;Email800x800;Email600x600;Email300x300;
 _X-KDE-Submenu=KIM6 — Compress, resize and web export
 X-KIM6-Managed=true
 
@@ -55,6 +55,10 @@ Exec=kim_all resize --size 3840x3840 -- %F
 [Desktop Action ResizeCustom]
 _Name=Resize custom…
 Exec=kim_all resize --custom -- %F
+
+[Desktop Action ResizePercent]
+_Name=Resize by percentage…
+Exec=kim_all resize --custom-percent -- %F
 
 [Desktop Action Web128]
 _Name=Web thumbnail: 128x128 at 75 %

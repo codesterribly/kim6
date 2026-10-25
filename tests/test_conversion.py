@@ -163,6 +163,35 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
+    def test_same_format_overwrite_reencodes_when_a_jpeg_scan_option_is_requested(self):
+        source = self.workspace.jpeg("input/same.jpg")
+        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.use_real_conversion()
+        self.workspace.use_real_mv()
+        before = self.workspace.observe(source)
+        result = self.workspace.dispatch("convert", "--format", "jpg", "--jpeg-baseline", "--", source)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(any(call["tool"] == "magick" for call in result.calls))
+        self.assertNotEqual(before.inode, self.workspace.observe(source).inode)
+        details = subprocess.run([shutil.which("identify"), "-verbose", str(source)],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertRegex(details, r"Interlace:\s+None")
+        self.assert_clean()
+
+    def test_jfif_alias_applies_jpeg_scan_options(self):
+        source = self.workspace.jpeg("input/jfif-alias.jpg")
+        self.workspace.env["KIM_POLICY"] = "create"
+        self.workspace.use_real_conversion()
+        result = self.workspace.dispatch("convert", "--format", "jfif", "--jpeg-baseline", "--", source)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(any(call["tool"] == "magick" and "-interlace" in call["argv"]
+                            for call in result.calls))
+        output = source.with_name("jfif-alias.jfif")
+        details = subprocess.run([shutil.which("identify"), "-verbose", str(output)],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertRegex(details, r"Interlace:\s+None")
+        self.assert_clean()
+
     def test_real_apng_conversion_preserves_all_animation_frames(self):
         self.workspace.use_real_conversion()
         self.workspace.use_real_video_tools()

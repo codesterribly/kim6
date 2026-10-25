@@ -1,5 +1,7 @@
 """K11: web exports are distinct outputs, independent of edit policy."""
 import base64
+import shutil
+import subprocess
 import unittest
 
 from support import Workspace
@@ -76,6 +78,38 @@ class WebExportTests(unittest.TestCase):
 
     def test_unset_policy_exports_without_overwrite_original_prompt(self):
         self.export_into_source_directory(None)
+
+    def test_jpeg_scan_and_optimization_options_produce_valid_progressive_export(self):
+        source = self.workspace.ppm("images/web source.ppm")
+        original = source.read_bytes()
+        output_dir = self.workspace.path("exports")
+        output_dir.mkdir()
+        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.use_real_web_email()
+        result = self.workspace.dispatch("webexport", "--output-dir", output_dir, "--size", "32x32",
+                                         "--quality", "82", "--format", "jpg", "--jpeg-progressive",
+                                         "--jpeg-optimize", "--", source)
+        self.assertEqual(0, result.returncode, result.stderr)
+        output = output_dir / "web source_web.jpg"
+        self.assertTrue(output.is_file())
+        details = subprocess.run([shutil.which("identify"), "-verbose", str(output)],
+                                 check=True, capture_output=True, text=True).stdout
+        self.assertRegex(details, r"Interlace:\s+(JPEG|Plane)")
+        self.assertEqual(0, subprocess.run([shutil.which("identify"), "-regard-warnings", str(output)],
+                                           capture_output=True).returncode)
+        self.assertEqual(original, source.read_bytes())
+        self.assertTrue(any(call["tool"] == "magick" and
+                            "jpeg:optimize-coding=true" in call["argv"] for call in result.calls))
+
+    def test_jpeg_options_are_rejected_for_non_jpeg_output(self):
+        source = self.workspace.ppm("images/source.ppm")
+        output_dir = self.workspace.path("exports")
+        output_dir.mkdir()
+        result = self.workspace.dispatch("webexport", "--output-dir", output_dir, "--size", "32x32",
+                                         "--quality", "80", "--format", "webp", "--jpeg-baseline",
+                                         "--", source)
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(any(call["tool"] == "magick" for call in result.calls))
 
 
 if __name__ == "__main__":
