@@ -3,110 +3,252 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A short guide to image and video tools in KIM6 for KDE Dolphin.">
-  <title>KIM6 User Manual</title>
+  <meta name="description" content="Learn to resize, convert, share, and organize photos and videos directly from KDE Dolphin with KIM6.">
+  <meta name="color-scheme" content="light dark">
+  <title>User Guide · KIM6</title>
   <link rel="stylesheet" href="work.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
-    <div class="wrap">
-      <p class="eyebrow">KDE Plasma 6 · Dolphin</p>
-      <h1>KIM6</h1>
-      <p class="lede">Image and video tools from the right-click menu</p>
-      <p>Select files in Dolphin, right-click, and choose a task. KIM6 is for quick jobs that do not need a full photo or video editor.</p>
-      <nav class="primary-nav" aria-label="Main navigation">
-        <a href="#photos">Photos</a>
-        <a href="#sharing">Sharing</a>
-        <a href="#metadata">Metadata and dates</a>
-        <a href="#collections">Albums</a>
-        <a href="#video">Video</a>
-        <a href="#screenshots">Screenshots</a>
-        <a href="#troubleshooting">Help</a>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="#top" aria-label="KIM6 user guide home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3.5" y="5" width="29" height="26" rx="6" stroke="currentColor" stroke-width="2.5"/>
+            <circle cx="12" cy="13" r="3" fill="currentColor"/>
+            <path d="M7.5 26L15.5 17.5L21 23L25 19L29 25" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="brand-name">KIM<span>6</span></span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-description">User guide</span>
+      </a>
+      <nav class="top-actions" aria-label="Quick links">
+        <a href="../INSTALL.md">Installation</a>
+        <a href="ACTIONS.md">All menu actions</a>
+        <a class="top-action-primary" href="../README.md">Project overview <span aria-hidden="true">↗</span></a>
       </nav>
     </div>
   </header>
 
-  <main id="main" class="wrap">
-    <section id="start" aria-labelledby="start-title">
-      <h2 id="start-title">Using KIM6</h2>
-      <p>Install KIM6, restart Dolphin, then select one or more local images or videos. Right-click and choose an action from a KIM6 menu. The five menus group photo compression, resizing and sharing, conversion and rotation, video tools, and publishing tasks.</p>
-      <p>Many actions let you create a new file or replace the selected one. Choose <strong>Create new</strong> to keep the original. If your saved preference selects overwrite, use a disposable copy when trying an action. Web export, email copies, video frames and audio, GIF exports, and slideshows always create separate results.</p>
-      <p>See <a href="../INSTALL.md">Install KIM6</a> or try the <a href="../README.md">everyday examples</a>.</p>
-    </section>
+  <div id="top" class="hero">
+    <div class="hero-inner page-width">
+      <div class="hero-copy">
+        <div class="hero-kicker"><span class="kicker-dot" aria-hidden="true"></span> Made for KDE Plasma 6 &amp; Dolphin</div>
+        <h1>Photo work,<br><em>one right-click away.</em></h1>
+        <p class="hero-lede">Resize, convert, prepare, and organize your images and videos without opening a full editor. This guide shows you where to start and what happens to your files.</p>
+        <div class="hero-actions">
+          <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
+          <a class="hero-secondary" href="#photos">Explore what KIM6 can do <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="hero-facts" aria-label="Key facts">
+          <span><span class="fact-check" aria-hidden="true">✓</span> Works from Dolphin</span>
+          <span><span class="fact-check" aria-hidden="true">✓</span> Batch-friendly</span>
+          <span><span class="fact-check" aria-hidden="true">✓</span> Create-new option</span>
+        </div>
+      </div>
+      <div class="hero-art" aria-label="Example showing a photograph and its resized copy">
+        <div class="art-label">A simple example</div>
+        <div class="art-file art-original">
+          <div class="art-thumbnail" aria-hidden="true">
+            <div class="art-sun"></div><div class="art-hill art-hill-back"></div><div class="art-hill art-hill-front"></div>
+          </div>
+          <div class="art-filename">lake.jpg</div>
+          <div class="art-filetype">Selected photo</div>
+        </div>
+        <div class="art-process" aria-hidden="true"><span>Resize to 1600 × 1600</span><span class="art-arrow">→</span></div>
+        <div class="art-file art-result">
+          <div class="result-top"><span class="result-icon" aria-hidden="true">✓</span><span>New file created</span></div>
+          <div class="result-name">lake_resized.jpg</div>
+          <div class="result-detail">Original stays untouched in Create new mode.</div>
+        </div>
+        <div class="art-caption">Illustration of an output example, not a Dolphin screenshot.</div>
+      </div>
+    </div>
+  </div>
 
-    <section id="photos" aria-labelledby="photos-title">
-      <h2 id="photos-title">Photos</h2>
-      <article>
-        <h3>Resize or compress</h3>
-        <p>Choose a maximum size or resize by percentage. A 600 × 600 size keeps the photo's proportions and fits it inside that box; it does not crop the image into a square. JPEG compression changes encoding quality, not pixel dimensions. Lower quality can lose detail.</p>
-      </article>
-      <article>
-        <h3>Convert, rotate, or flip</h3>
-        <p>Convert images to formats such as JPEG, PNG, TIFF, WebP, AVIF, HEIC/HEIF, JPEG XL, or JPEG 2000 when your installed tools support them. Some formats lose transparency, layers, animation, or image detail. Rotation and flipping change the selected image only when you choose an authorized replacement.</p>
-      </article>
-    </section>
+  <div class="layout page-width">
+    <aside class="side-nav" aria-label="Guide contents">
+      <nav class="side-nav-inner" aria-label="Main navigation">
+        <p class="nav-heading">ON THIS PAGE</p>
+        <a href="#start">Start here</a>
+        <a href="#photos">Everyday photo tasks</a>
+        <a href="#sharing">Share and export</a>
+        <a href="#metadata">Metadata and dates</a>
+        <a href="#collections">Albums and collections</a>
+        <a href="#video">Video tools</a>
+        <a href="#file-handling">Keeping originals safe</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#references">More information</a>
+        <div class="nav-separator"></div>
+        <p class="nav-heading">REFERENCE</p>
+        <a class="nav-external" href="ACTIONS.md">Full action list <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="commandconfig.md">Commands &amp; settings <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="FORMATS.md">Supported formats <span aria-hidden="true">↗</span></a>
+      </nav>
+    </aside>
 
-    <section id="sharing" aria-labelledby="sharing-title">
-      <h2 id="sharing-title">Sharing photos</h2>
-      <p>Web export makes a resized JPEG, WebP, or AVIF copy in a folder you select. It never replaces the source photo. Its default color option converts a usable embedded profile to sRGB; you can choose to keep the source profile instead.</p>
-      <p>Email actions can prepare smaller copies or attach selected originals at full size. They do not change the selected files. Do not send a test draft unless you intend to send it.</p>
-    </section>
+    <main id="main" class="main-content">
+      <section id="start" class="content-section" aria-labelledby="start-title">
+        <p class="section-eyebrow"><span class="section-index">01</span> FIRST STEPS</p>
+        <h2 id="start-title">Start with a single photo.</h2>
+        <p class="section-intro">No new application to learn. KIM6 adds actions to the context menu you already use in Dolphin.</p>
+        <div class="steps" aria-label="Three steps to use KIM6">
+          <div class="step"><span class="step-number">1</span><div><h3>Select</h3><p>Choose one or more local photos or videos in Dolphin.</p></div></div>
+          <div class="step"><span class="step-number">2</span><div><h3>Right-click</h3><p>Open a KIM6 submenu and choose the task you want.</p></div></div>
+          <div class="step"><span class="step-number">3</span><div><h3>Save</h3><p>For actions that offer a choice, select <strong>Create new</strong> to keep the original file.</p></div></div>
+        </div>
+        <div class="notice notice-info">
+          <span class="notice-symbol" aria-hidden="true">i</span>
+          <p>New to KIM6? Start with <strong>Create new</strong>. A saved <code>KIM_POLICY=overwrite</code> setting can skip the prompt; change it to <code>create</code> before experimenting. Rotation and flips are exceptions: they operate <strong>in place</strong>. <a href="#file-handling">How file handling works</a>.</p>
+        </div>
+      </section>
 
-    <section id="metadata" aria-labelledby="metadata-title">
-      <h2 id="metadata-title">Metadata and photo dates</h2>
-      <p>You can remove all metadata or remove recognized GPS coordinates while leaving other information in place. GPS-only removal does not guarantee that every possible location clue is gone. You can also add creator and copyright details or adjust camera capture times.</p>
-      <p>Date tools distinguish the time written inside a photo from the file's modification time. A time shift changes the recorded capture time by a fixed amount; it is not a time-zone conversion.</p>
-    </section>
+      <section id="photos" class="content-section" aria-labelledby="photos-title">
+        <p class="section-eyebrow"><span class="section-index">02</span> EVERYDAY EDITS</p>
+        <h2 id="photos-title">Your most useful photo actions.</h2>
+        <p class="section-intro">These are actual menu examples. Output names assume the default suffix naming convention and <strong>Create new</strong> mode when that choice is offered.</p>
+        <div class="task-grid">
+          <article class="task-card">
+            <div class="task-card-top"><span class="task-icon icon-resize" aria-hidden="true">↗</span><span class="task-type">SIZE</span></div>
+            <h3>Resize a photo</h3>
+            <p>Fit a photo inside a maximum width and height without cropping its proportions. This preset can enlarge smaller images.</p>
+            <p class="menu-label">MENU PATH</p>
+            <div class="menu-path">Compress, resize and web export <span aria-hidden="true">›</span> <strong>Resize (1600x1600 pixels)</strong></div>
+            <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_resized.jpg</strong></div>
+          </article>
+          <article class="task-card">
+            <div class="task-card-top"><span class="task-icon icon-compress" aria-hidden="true">≋</span><span class="task-type">QUALITY</span></div>
+            <h3>Compress a JPEG</h3>
+            <p>Create a JPEG using a chosen quality setting. Lower quality may reduce file size, but can lose detail.</p>
+            <p class="menu-label">MENU PATH</p>
+            <div class="menu-path">JPEG compression <span aria-hidden="true">›</span> <strong>JPEG quality: 70%</strong></div>
+            <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.jpg</strong></div>
+          </article>
+          <article class="task-card">
+            <div class="task-card-top"><span class="task-icon icon-convert" aria-hidden="true">⇄</span><span class="task-type">FORMAT</span></div>
+            <h3>Convert an image</h3>
+            <p>Convert between supported formats. JPEG is lossy and cannot preserve transparent PNG areas.</p>
+            <p class="menu-label">MENU PATH</p>
+            <div class="menu-path">Convert and transform <span aria-hidden="true">›</span> <strong>Convert to JPEG</strong></div>
+            <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.jpg</strong></div>
+          </article>
+          <article class="task-card">
+            <div class="task-card-top"><span class="task-icon icon-batch" aria-hidden="true">▦</span><span class="task-type">BATCH</span></div>
+            <h3>Process several files</h3>
+            <p>Select several photos and apply the same action. Finished outputs remain available if a later item fails.</p>
+            <p class="menu-label">MENU PATH</p>
+            <div class="menu-path">Compress, resize and web export <span aria-hidden="true">›</span> <strong>Resize (800x800 pixels)</strong></div>
+            <div class="output"><span>3 selected photos</span><span class="output-arrow" aria-hidden="true">→</span><strong>3 resized files</strong></div>
+          </article>
+        </div>
+        <p class="section-footnote">If an output filename is already taken, KIM6 creates a numbered name. Prefix naming can be configured instead of the default suffix format. <a href="commandconfig.md">Naming and command options <span aria-hidden="true">↗</span></a></p>
+      </section>
 
-    <section id="collections" aria-labelledby="collections-title">
-      <h2 id="collections-title">Albums and collections</h2>
-      <p>Create an HTML gallery, a photo collage, a PDF album, a print-layout PDF, a multi-page TIFF, or an animated GIF from selected images. These actions create new results; choose the destination or filename shown by the dialog.</p>
-      <p>An MP4 slideshow is a simple video of selected photographs in natural filename order. It has a fixed display time for each photo and no music or transitions.</p>
-    </section>
+      <section id="sharing" class="content-section" aria-labelledby="sharing-title">
+        <p class="section-eyebrow"><span class="section-index">03</span> READY TO SEND</p>
+        <h2 id="sharing-title">Share without changing the source.</h2>
+        <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
+        <div class="feature-pair">
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the source, even if the general output policy is set to overwrite.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare resized attachments or attach selected files at full size, depending on the action. Prepared copies remain in a persistent attachment folder because mail applications may read them later.</p><p>Review attachments before sending and clean up prepared copies when you no longer need them.</p></article>
+        </div>
+      </section>
 
-    <section id="video" aria-labelledby="video-title">
-      <h2 id="video-title">Video</h2>
-      <p>Video tools can resize and encode a copy using H.264, H.265, or an available AV1 encoder. Other actions extract a frame, make a contact sheet, save an audio track, remove audio without re-encoding the video stream, or make an animated GIF from a short segment.</p>
-      <p>Video format and encoder availability depend on your system. An action reports when a requested codec or container is unavailable rather than silently choosing a different one.</p>
-    </section>
+      <section id="metadata" class="content-section" aria-labelledby="metadata-title">
+        <p class="section-eyebrow"><span class="section-index">04</span> INFORMATION INSIDE YOUR FILES</p>
+        <h2 id="metadata-title">Control metadata and dates.</h2>
+        <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIM6 gives you targeted ways to work with it.</p>
+        <div class="split-panel">
+          <div>
+            <h3>Remove GPS coordinates</h3>
+            <p>Select <strong>Publish and organize › Remove GPS coordinates…</strong> to target recognized GPS fields without removing all other metadata.</p>
+            <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
+            <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
+          </div>
+          <div>
+            <h3>Copyright and capture times</h3>
+            <p>Add creator and copyright information, shift recorded capture times, or synchronize embedded timestamps with filesystem modification times.</p>
+            <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
+          </div>
+        </div>
+        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p>GPS-only removal does <strong>not</strong> guarantee complete location anonymization. Other metadata or visible scene details may still reveal a location. Metadata removal also cannot guarantee complete removal of signed provenance records.</p></div>
+      </section>
 
-    <section id="screenshots" aria-labelledby="screenshots-title">
-      <h2 id="screenshots-title">Screenshots</h2>
-      <p>Authentic screenshots will be added after the KIM6 menus have been captured on a KDE Plasma 6 system with working submenus. No interface mockups are used here.</p>
-    </section>
+      <section id="collections" class="content-section" aria-labelledby="collections-title">
+        <p class="section-eyebrow"><span class="section-index">05</span> MAKE SOMETHING NEW</p>
+        <h2 id="collections-title">From pictures to collections.</h2>
+        <p class="section-intro">Combine selected photos into a finished file or collection. These workflows create derivatives rather than replacing your originals.</p>
+        <div class="collection-grid">
+          <div><span class="collection-symbol" aria-hidden="true">▤</span><strong>HTML gallery</strong><span>A browsable photo gallery.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">▦</span><strong>Collage</strong><span>Several pictures in one image.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">▧</span><strong>PDF album &amp; print</strong><span>Multi-page albums or print layouts.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">▥</span><strong>Multi-page TIFF</strong><span>Combine images into one TIFF.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">◉</span><strong>Animated GIF</strong><span>Animation from selected frames.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Photos in natural filename order.</span></div>
+        </div>
+        <p class="section-footnote">Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects.</p>
+      </section>
 
-    <section id="troubleshooting" aria-labelledby="troubleshooting-title">
-      <h2 id="troubleshooting-title">Troubleshooting</h2>
-      <details>
-        <summary>The menus do not appear</summary>
-        <p>Restart Dolphin and check that the five service-menu files were installed in the expected folder. KDE Frameworks/KIO 6.29 has a known upstream issue affecting submenu display. KIM6 keeps its submenus; do not remove them as a workaround. See <a href="../INSTALL.md">installation help</a>.</p>
-      </details>
-      <details>
-        <summary>A format or codec is unavailable</summary>
-        <p>KIM6 uses the image and video tools installed on your system. Optional codecs and format support vary. See <a href="FORMATS.md">format and codec notes</a>.</p>
-      </details>
-      <details>
-        <summary>Where can I find more help?</summary>
-        <p>Read the <a href="../README.md">Getting Started guide</a>, the <a href="commandconfig.md">safe handling guide</a>, or the <a href="../INSTALL.md">installation instructions</a>. Include the menu action and a short description of the problem when reporting an issue. Do not send private photographs unless you have permission.</p>
-      </details>
-    </section>
+      <section id="video" class="content-section" aria-labelledby="video-title">
+        <p class="section-eyebrow"><span class="section-index">06</span> VIDEO WORKFLOWS</p>
+        <h2 id="video-title">Useful video tools, right in Dolphin.</h2>
+        <p class="section-intro">Re-encode video, extract useful parts, or generate previews using the codecs available on your system.</p>
+        <div class="video-list">
+          <div><span class="video-num">01</span><div><h3>Resize or re-encode</h3><p>Create a video using H.264, H.265, or an available AV1 encoder. Container and codec compatibility are checked.</p></div></div>
+          <div><span class="video-num">02</span><div><h3>Extract frames and contact sheets</h3><p>Save a frame or generate a grid of representative images from a video.</p></div></div>
+          <div><span class="video-num">03</span><div><h3>Work with audio</h3><p>Extract supported audio formats or remove audio while copying the compatible video stream.</p></div></div>
+          <div><span class="video-num">04</span><div><h3>Create a GIF</h3><p>Turn a short video segment into an animated GIF.</p></div></div>
+        </div>
+        <p class="section-footnote">Encoder and container availability depend on FFmpeg and the libraries installed on your computer. <a href="FORMATS.md">Read the format compatibility notes <span aria-hidden="true">↗</span></a></p>
+      </section>
 
-    <section id="references" aria-labelledby="references-title">
-      <h2 id="references-title">More information</h2>
-      <ul>
-        <li><a href="ACTIONS.md">Complete menu list</a></li>
-        <li><a href="FORMATS.md">Image and video formats</a></li>
-        <li><a href="commandconfig.md">Preferences</a></li>
-        <li><a href="commandconfig.md">Original files and troubleshooting</a></li>
-        <li><a href="../ABOUT">Project history and credits</a> · <a href="../LICENSE.md">License</a></li>
-      </ul>
-    </section>
-  </main>
+      <section id="file-handling" class="content-section" aria-labelledby="handling-title">
+        <p class="section-eyebrow"><span class="section-index">07</span> BEFORE YOU CLICK</p>
+        <h2 id="handling-title">Know what happens to the original.</h2>
+        <p class="section-intro">Not every action has the same output policy. These are the distinctions that matter most.</p>
+        <div class="policy-grid">
+          <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>Where the action offers this choice, the result gets a separate filename and your original remains unchanged.</p></article>
+          <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Some image actions offer replacement after validation. Check the selected destination before agreeing.</p></article>
+          <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Always in place</h3><p>Rotation and flips modify the selected image. Work on a copy if you want to keep its current orientation.</p></article>
+        </div>
+        <p class="section-footnote">Web exports, prepared email copies, galleries, albums, slideshows, and video-derived outputs do not replace selected source files. KIM6 stages and validates supported outputs before publishing them; see <a href="commandconfig.md">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
+      </section>
+
+      <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
+        <p class="section-eyebrow"><span class="section-index">08</span> WHEN SOMETHING GOES WRONG</p>
+        <h2 id="troubleshooting-title">Find a fix.</h2>
+        <p class="section-intro">Check these common causes first. No need to test a failing action by overwriting a valuable photograph.</p>
+        <div class="faq-list">
+          <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="../INSTALL.md">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Check the format reference for inspection commands.</p><p><a href="FORMATS.md">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>An action failed partway through a batch.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Read the final error report, confirm the source is readable and the destination is writable, and check that the requested encoder is available. Successfully completed outputs remain in place. Test uncertain inputs using copies.</p><p><a href="commandconfig.md">Command reference and troubleshooting <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>Where are my files, and what if a filename already exists?<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Many Create new actions save a derivative beside the input and add a number when the requested filename is occupied. Other actions prompt for a destination, use a configured output folder, or place email attachments in a persistent directory. Read the action's result dialog for the exact location.</p><p><a href="commandconfig.md">Output policies and naming <span aria-hidden="true">↗</span></a></p></div></details>
+        </div>
+      </section>
+
+      <section id="references" class="content-section references-section" aria-labelledby="references-title">
+        <p class="section-eyebrow"><span class="section-index">09</span> GO DEEPER</p>
+        <h2 id="references-title">Everything else is documented.</h2>
+        <p class="section-intro">This page covers everyday use. For specific actions, detailed arguments, or developer information, use the focused references.</p>
+        <div class="reference-list">
+          <a href="../README.md"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="../INSTALL.md"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="ACTIONS.md"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 107 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="commandconfig.md"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="FORMATS.md"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="../DEVELOPMENT.md"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+    </main>
+  </div>
+
   <footer class="site-footer">
-    <div class="wrap">
-      <p>KIM6 continues the KIM project for KDE Plasma 6. Historical contributor credits are retained in the project.</p>
-      <p>Free software under the GNU General Public License, version 3 or later. <a href="https://github.com/KIM-6/kim6">KIM6 on GitHub</a>.</p>
+    <div class="page-width footer-inner">
+      <div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Image and video tools for KDE Dolphin.</p></div>
+      <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="../ABOUT">Credits</a><span aria-hidden="true">·</span><a href="../LICENSE.md">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/KIM-6/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
     </div>
   </footer>
 </body>

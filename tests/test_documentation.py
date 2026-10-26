@@ -67,8 +67,8 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertNotIn(".kim6-owned", install)
         self.assertNotIn("manifest", install.lower())
 
-        self.assertIn('id="screenshots"', manual)
-        self.assertIn("Authentic screenshots will be added", manual)
+        self.assertIn('id="file-handling"', manual)
+        self.assertIn("Illustration of an output example, not a Dolphin screenshot.", manual)
         self.assertNotRegex(manual, r"<img\b")
 
         for private_detail in ("/home/coolian", "natacha", "/mnt/"):
