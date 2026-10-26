@@ -1,16 +1,125 @@
-# `kim_all` command reference
 
-The dispatcher is normally launched by Dolphin. In examples, `kim_all` means the installed `.../kim6/bin/kim_all` path, or `./src/bin/kim_all` from a checkout. Quote paths normally and pass selected files after `--` so option-looking filenames remain file arguments, except where an action documents a positional output-directory argument. Commands may prompt through KDialog unless their documented flags supply the setting. See [CONFIGURATION.md](CONFIGURATION.md) for output policy and defaults; see [ACTIONS.md](ACTIONS.md) for all 107 menu entries and their exact calls.
+# KIM6 Command and Configuration Reference
+
+`kim_all` is KIM6's main executable. Dolphin normally runs it through the service menus, but it can also be called directly from a terminal.
+
+When working from the source directory, use:
+
+```sh
+./src/bin/kim_all --help
+```
+
+To run a command from the source directory:
+
+```sh
+./src/bin/kim_all compress --quality 70 -- photo.jpg
+```
+
+The examples below use `kim_all` for readability. Replace it with `./src/bin/kim_all` or the full path to the installed executable when running commands directly.
+
+Separate command options from filenames with `--`. Quote filenames containing spaces or special characters.
+
+Some commands display KDialog prompts when options are omitted. Configuration settings and environment variables can supply defaults; see [Configuration and Defaults](#configuration-and-defaults) below.
+
+For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 
 ## Contents
 
+- [Command Syntax](#command-syntax)
+- [Output and File Handling](#output-and-file-handling)
+- [Configuration and Defaults](#configuration-and-defaults)
 - [Still-image actions](#still-image-actions): album, animate, compress, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
 - [Video actions](#video-actions): slideshow, video, videoframes, videoaudio, videogif
 - [Information actions](#information-actions): about, license, manual
 
+## Command Syntax
+
+Most processing commands follow this structure:
+
 ```text
-kim_all <command> [options] -- FILE...
+kim_all COMMAND [OPTIONS] -- FILE...
 ```
+
+- `COMMAND` selects the operation.
+- `[OPTIONS]` represents optional or required settings.
+- `--` separates command options from filenames.
+- `FILE...` represents one or more selected files.
+
+Some commands also accept a destination directory as a positional argument. Those forms are documented under the relevant commands.
+
+The `about`, `license`, and `manual` commands do not require files.
+
+The command blocks below show syntax patterns. Values separated by `|` are alternatives, not literal shell pipelines.
+
+## Output and File Handling
+
+KIM6 uses different file-handling rules depending on the operation.
+
+- **Create new:** Generates a separate file, normally using an action-specific filename suffix. Existing filenames are handled without silently replacing them.
+- **Overwrite:** Replaces an existing file only when the operation supports it and replacement is authorized.
+- **Derived output:** Always creates a separate result, regardless of `KIM_POLICY`.
+- **In-place operation:** Modifies the selected file directly. Rotation and flipping use this behavior.
+
+Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.
+
+See [SAFETY.md](SAFETY.md) for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.
+
+## Configuration and Defaults
+
+KIM6 reads optional defaults from a KConfig file and environment variables. When an action accepts an explicit command-line option, that option takes precedence for the invocation. Otherwise, an environment variable takes precedence over the corresponding KConfig key, followed by the built-in default.
+
+The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu`. Set `KIM_CONFIG_FILE` to use a different file. The KConfig group is literally named `<default>`. The dispatcher reads supported KConfig values when it starts, so changes to the file apply to subsequent invocations. If the file is unavailable or unreadable, the dispatcher uses environment values and action defaults.
+
+### Settings
+
+| Environment variable | KConfig key | Default | Accepted values and purpose |
+|---|---|---|---|
+| `KIM_CONFIG_FILE` | — | `${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu` | Path to the KConfig file; environment-only setting. |
+| `KIM_POLICY` | `KIM_POLICY` | Prompt | `create` or `overwrite` for actions offering a file-handling choice. |
+| `KIM_NAME_AFFIX_POSITION` | `NAME_AFFIX_POSITION` | `suffix` | `prefix` or `suffix` for generated filename tags. |
+| `KIM_WEB_QUALITY` | `WEB_EXPORT_QUALITY` | `75` | Integer 1–100 for web export quality. |
+| `KIM_WEB_FORMAT` | `WEB_EXPORT_FORMAT` | `jpg` | `jpg`, `jpeg`, `webp`, `avif`, or `keep` for web export. |
+| `KIM_WEB_COLOR_MODE` | `WEB_COLOR_MODE` | `srgb` | `srgb` or `preserve` for web export color handling. |
+| `KIM_COPYRIGHT_CREATOR` | `COPYRIGHT_CREATOR` | Empty | Default creator or artist text. |
+| `KIM_COPYRIGHT_NOTICE` | `COPYRIGHT_NOTICE` | Empty | Default copyright notice; supports `{YEAR}`. |
+| `KIM_COPYRIGHT_USAGE_RIGHTS` | `COPYRIGHT_USAGE_RIGHTS` | Empty | Default usage-rights text. |
+| `KIM_GIF_DELAY` | — | `100` | Default animation delay in centiseconds (0–65535), used by the interactive `animate` dialog. |
+
+`KIM_CONFIG_FILE` is an environment-only setting; it chooses the file containing the KConfig keys above. `KIM_GIF_DELAY` is also environment-only and is range-checked when the animation is requested. KIM6 uses `KIM_POLICY` alone for output policy; it does not support `KIM_MODE` as an alias.
+
+### Validation and behavior
+
+- **Output policy:** An unset or unsupported `KIM_POLICY` leaves the normal create/overwrite prompt available. `create` uses collision-safe output names; `overwrite` authorizes replacement only when the action supports it. Derived-only actions never replace selected originals merely because `KIM_POLICY=overwrite` is set.
+- **Filename tags:** `prefix` places a generated tag before the complete filename stem; `suffix` places it after the stem. The extension stays at the end, and collision numbering remains before the extension. This setting applies to compression, resize, web export, and full metadata stripping, not to rename. Only the exact value `prefix` selects prefix mode; otherwise suffix behavior is used. KConfig accepts the two documented values.
+- **Web quality:** Invalid KConfig values fall back to `75`. An invalid `KIM_WEB_QUALITY` environment value can appear as the dialog default but is rejected if submitted; an explicit `--quality` argument is validated for that invocation.
+- **Web format and color:** Invalid KConfig entries fall back to `jpg` and `srgb`, respectively. Unsupported environment or command-line values cause the action to fail rather than silently choosing another format or color mode. `keep` retains the source format when supported.
+- **Copyright fields:** Empty defaults mean no value is supplied. An empty field in the interactive dialog leaves that metadata field unchanged rather than clearing it. `{YEAR}` in a copyright notice is resolved as described under [`copyright`](#copyright).
+
+### Example KConfig file
+
+Create or edit `~/.config/kim_kdeimagemenu`:
+
+```ini
+[<default>]
+KIM_POLICY=create
+NAME_AFFIX_POSITION=suffix
+WEB_EXPORT_QUALITY=75
+WEB_EXPORT_FORMAT=jpg
+WEB_COLOR_MODE=srgb
+COPYRIGHT_CREATOR=Example Photographer
+COPYRIGHT_NOTICE=Copyright © {YEAR} Example Photographer
+COPYRIGHT_USAGE_RIGHTS=
+```
+
+Environment overrides must be present in the environment that launches Dolphin, or can be set for an individual terminal command. For example:
+
+```sh
+KIM_POLICY=create KIM_NAME_AFFIX_POSITION=prefix kim_all resize --size 1600x1600 -- photo.jpg
+KIM_WEB_COLOR_MODE=preserve kim_all webexport --size 1600x1600 -- photo.jpg
+```
+
+When running from a source checkout, replace `kim_all` in those examples with `./src/bin/kim_all`. See [SAFETY.md](SAFETY.md) for action-specific metadata and timestamp rules.
+
 ## Still-image actions
 
 ### `album`
@@ -65,7 +174,7 @@ kim_all datesync --direction file-to-exif [--fields capture|all] -- FILE...
 kim_all datesync --interactive -- FILE...
 ```
 
-`exif-to-file` sets filesystem modification time from `DateTimeOriginal`; camera times without a zone use system local time, not UTC. `file-to-exif` writes capture time from filesystem mtime; `capture` writes `DateTimeOriginal`, while `all` also writes `CreateDate` and `ModifyDate`. The dialog previews the first selected file and confirms direction. Metadata updates preserve image bytes and file mtime. Filesystem creation time is not changed.
+`exif-to-file` sets filesystem modification time from `DateTimeOriginal`; camera times without a zone use system local time, not UTC. `file-to-exif` writes capture time from filesystem mtime; `capture` writes `DateTimeOriginal`, while `all` also writes `CreateDate` and `ModifyDate`. The dialog previews the first selected file and confirms direction. Writing EXIF dates preserves image pixels without recompression and retains filesystem modification time. Filesystem creation time is not changed.
 
 ### `flipflop`
 
@@ -108,14 +217,34 @@ kim_all rename MODE [--output-dir DIR] -- FILE...
 kim_all rename interactive -- FILE...
 ```
 
-Modes: `lowercase`, `uppercase`, `spacestodash`, `dashestospace`, `addprefix`, `addsuffix`, `overwrite` (literal text replacement), `exifdate`, `sequential`, and `interactive`. Interactive mode selects the operation and asks for needed values. EXIF-date formats are `YYYYMMDD_HHMMSS`, `YYYY-MM-DD_HH-MM-SS`, `YYYY-DD-MM_HH-MM-SS`, and `IMG-YYYYMMDD_HHMMSS`. Sequential mode prompts for base, start and minimum number width (1–18). An output directory can be chosen for supported modes. The complete batch is preflighted; occupied paths are never blindly overwritten. Cross-device moves copy, validate metadata/bytes, publish without clobbering, then remove the unchanged source.
+The following rename modes are available:
+
+| Mode | Description |
+|---|---|
+| `lowercase` | Convert filenames to lowercase. |
+| `uppercase` | Convert filenames to uppercase. |
+| `spacestodash` | Replace spaces with dashes. |
+| `dashestospace` | Replace dashes with spaces. |
+| `addprefix` | Add text to the beginning of filenames. |
+| `addsuffix` | Add text to the end of filenames. |
+| `overwrite` | Replace specified text within filenames, not overwrite image contents. |
+| `exifdate` | Rename images using their EXIF capture dates. |
+| `sequential` | Rename files using a numbered sequence. |
+| `interactive` | Display a dialog to choose a rename operation. |
+
+EXIF-date formats include `YYYYMMDD_HHMMSS`, `YYYY-MM-DD_HH-MM-SS`, `YYYY-DD-MM_HH-MM-SS`, and `IMG-YYYYMMDD_HHMMSS`.
+
+Sequential mode prompts for a base name, starting number, and minimum number width (1–18). Supported modes allow a separate output directory.
+
+KIM6 checks the complete batch for naming conflicts before making changes. Occupied paths are not overwritten. Cross-device moves copy and validate the bytes and metadata before publishing without clobbering and removing the unchanged source.
 
 ### `resize`
 
 ```sh
 kim_all resize --size GEOMETRY [--output-dir DIR] -- IMAGE...
-kim_all resize --percent 1..1000 [--output-dir DIR] -- IMAGE...
-kim_all resize --custom|--custom-percent -- IMAGE...
+kim_all resize --percent PERCENT [--output-dir DIR] -- IMAGE...
+kim_all resize --custom -- IMAGE...
+kim_all resize --custom-percent -- IMAGE...
 ```
 
 Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses `_resized`; authorized overwrite replaces only after validation.
@@ -161,7 +290,7 @@ kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
 kim_all timeshift --interactive -- IMAGE...
 ```
 
-Adds or subtracts the fixed offset from camera date tags. `all` (default) shifts `DateTimeOriginal`, `CreateDate`, and `ModifyDate`; `capture` shifts only `DateTimeOriginal`. Subsecond and timezone-offset tags are handled for consistency. This shifts a camera’s wall-clock values; it does not convert time zones or reinterpret local time as UTC.
+Adds or subtracts the fixed offset from camera date tags. `all` (default) shifts `DateTimeOriginal`, `CreateDate`, and `ModifyDate`; `capture` shifts only `DateTimeOriginal`. Subsecond and timezone-offset tags remain unchanged, as do GPS timestamps and filesystem modification time. This shifts a camera’s wall-clock values; it does not convert time zones or reinterpret local time as UTC.
 
 ### `tiffjoin`
 
@@ -196,7 +325,7 @@ kim_all video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265 --conta
 kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|custom --container orig|mp4 -- VIDEO...
 ```
 
-H.264/H.265 uses the existing 24 presets. AV1 prefers `libsvtav1`, falling back to `libaom-av1` only when SVT-AV1 is unavailable; it never falls back to H.264/H.265. AV1 High uses CRF 28, Balanced CRF 35, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
+H.264/H.265 uses the existing 24 presets. For AV1 encoding, KIM6 uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
 
 ### `videoframes`
 
@@ -215,7 +344,7 @@ kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
 kim_all videoaudio --mode mute -- VIDEO...
 ```
 
-Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute remuxes video without re-encoding and removes audio streams; already silent input is a no-op.
+Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.
 
 ### `videogif`
 

@@ -1,6 +1,6 @@
 # KIM6 features
 
-KIM6 provides short, batch-friendly operations in Dolphin’s context menus. This guide describes what the current dispatcher does; it does not promise that every ImageMagick format or optional codec exists on every system. The [complete 107-entry menu inventory](ACTIONS.md) is authoritative for visible labels and arguments. Exact options are in [CLI.md](CLI.md).
+KIM6 provides short, batch-friendly operations in Dolphin’s context menus. This guide describes what the current dispatcher does; it does not promise that every ImageMagick format or optional codec exists on every system. The [complete 107-entry menu inventory](ACTIONS.md) is authoritative for visible labels and arguments. Exact options are in [commandconfig.md](commandconfig.md).
 
 ## Image preparation
 
@@ -34,7 +34,7 @@ Email resize can attach full-size copies, 1600/1200/800/600/300 square-bounded d
 - Date synchronization can set file mtime from `DateTimeOriginal`, or write EXIF dates from filesystem mtime. Time-zone-less camera time is treated as local, not UTC. Filesystem creation/birth time is not changed.
 - Rename supports sequential numbering, text replacement, case and spacing changes, prefixes/suffixes, and EXIF-date formats. Cross-filesystem moves are validated byte copies followed by safe source removal; conflicts are preflighted.
 
-Metadata-only operations preserve image pixels and filesystem mtime, including available nanosecond precision. This differs intentionally from transformations and transcoding. Read [CONFIGURATION.md](CONFIGURATION.md) and [SAFETY.md](SAFETY.md) before changing output policy.
+Metadata-only operations preserve image pixels and filesystem mtime, including available nanosecond precision. This differs intentionally from transformations and transcoding. Read [commandconfig.md](commandconfig.md) and [SAFETY.md](SAFETY.md) before changing output policy.
 
 ## Albums, galleries, and animation
 

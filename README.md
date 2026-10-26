@@ -81,7 +81,7 @@ To uninstall KIM6, run `./uninstall.sh` from the source directory. See [Installa
 - [User Manual](docs/index.html) — Using KIM6's image and video tools.
 - [Complete Action List](docs/ACTIONS.md) — Available Dolphin menu actions.
 - [Supported Formats](docs/FORMATS.md) — Image and video format support.
-- [Configuration](docs/CONFIGURATION.md) — Customizing KIM6's behavior.
+- [Configuration](docs/commandconfig.md) — Customizing KIM6's behavior.
 - [Development](DEVELOPMENT.md) — Technical information and contributing.
 
 You can also report bugs or suggest improvements through the project's [GitHub Issues](https://github.com/KIM-6/kim6/issues).

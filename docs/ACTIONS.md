@@ -5,7 +5,7 @@ KIM6 provides 107 Dolphin menu entries across five service-menu files. This docu
 
 The tables reflect the menu definitions in `src/`. Some commands, such as Manual, License, and About, appear in more than one menu.
 
-For command-line options beyond those available through Dolphin, see [CLI.md](CLI.md).
+For command-line options beyond those available through Dolphin, see [commandconfig.md](commandconfig.md).
 
 ## Menu Behavior
 
@@ -26,7 +26,7 @@ File handling depends on the operation:
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
 
-For detailed command options, dependencies, and output behavior, see [CLI.md](CLI.md). For file preservation and overwrite protections, see [SAFETY.md](SAFETY.md).
+For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [SAFETY.md](SAFETY.md).
 
 ## Complete Menu Action Reference
 

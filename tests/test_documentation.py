@@ -163,13 +163,13 @@ class DocumentationContractTests(unittest.TestCase):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")
         main = dispatcher.split("\nmain() {", 1)[1].split("\n}\n\nif", 1)[0]
         routes = set(re.findall(r"^    ([a-z][a-z0-9]*)\)\s+", main, re.M))
-        cli = (ROOT / "docs/CLI.md").read_text(encoding="utf-8")
+        cli = (ROOT / "docs/commandconfig.md").read_text(encoding="utf-8")
         for route in routes:
             with self.subTest(route=route):
                 self.assertRegex(cli, rf"(?m)^#{{1,6}} `{re.escape(route)}`$")
 
     def test_configuration_reference_covers_dispatcher_settings(self):
-        config = (ROOT / "docs/CONFIGURATION.md").read_text(encoding="utf-8")
+        config = (ROOT / "docs/commandconfig.md").read_text(encoding="utf-8")
         documented = set(re.findall(r"^\| `(KIM_[A-Z0-9_]+)` \|", config, re.M))
         self.assertEqual({
             "KIM_CONFIG_FILE", "KIM_POLICY", "KIM_NAME_AFFIX_POSITION",

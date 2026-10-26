@@ -27,10 +27,10 @@ This document covers the project structure, development conventions, testing, an
 The `docs/` directory contains additional references:
 
 - `ACTIONS.md` — Complete Dolphin menu and action inventory.
-- `CLI.md` — Command-line options and dispatcher arguments.
+- `commandconfig.md` — Command-line options and dispatcher arguments.
 - `FEATURES.md` — Detailed descriptions of KIM6 functionality.
 - `FORMATS.md` — Supported image and video formats.
-- `CONFIGURATION.md` — Configuration options and defaults.
+- `commandconfig.md` — Configuration options and defaults.
 - `SAFETY.md` — File handling, preservation, and overwrite behavior.
 - `index.html` — HTML user manual.
 
@@ -59,7 +59,7 @@ The installer replaces the `kim_all` command in each menu with the absolute path
 
 The dispatcher's command-line help is maintained in `src/bin/kim_all` and should remain consistent with the documented options.
 
-See [ACTIONS.md](docs/ACTIONS.md) for the complete menu definitions and [CLI.md](docs/CLI.md) for command-line arguments.
+See [ACTIONS.md](docs/ACTIONS.md) for the complete menu definitions and [commandconfig.md](docs/commandconfig.md) for command-line arguments.
 
 ## Runtime Dependencies and Format Support
 
@@ -94,7 +94,7 @@ Invalid KConfig values fall back to defaults where a setting has a constrained v
 
 `KIM_POLICY` is the output-policy setting.
 
-See [CONFIGURATION.md](docs/CONFIGURATION.md) for the available keys, defaults, and affected actions.
+See [commandconfig.md](docs/commandconfig.md) for the available keys, defaults, and affected actions.
 
 ## File Safety and Error Handling
 
@@ -210,7 +210,7 @@ When adding or changing an action:
 
 Test changes against temporary files rather than personal photographs or videos.
 
-See [ACTIONS.md](docs/ACTIONS.md) for the menu-action inventory and [CLI.md](docs/CLI.md) for dispatcher arguments.
+See [ACTIONS.md](docs/ACTIONS.md) for the menu-action inventory and [commandconfig.md](docs/commandconfig.md) for dispatcher arguments.
 
 ## Testing
 

@@ -1,6 +1,6 @@
 # Safety, preservation and troubleshooting
 
-KIM6 is designed to create useful derivatives from Dolphin. Some actions explicitly replace a selected original after the user authorizes that operation. The behavior is action-specific; `KIM_POLICY` does not turn every action into an overwrite operation. See [Actions](ACTIONS.md), [Configuration](CONFIGURATION.md), and [Formats](FORMATS.md).
+KIM6 is designed to create useful derivatives from Dolphin. Some actions explicitly replace a selected original after the user authorizes that operation. The behavior is action-specific; `KIM_POLICY` does not turn every action into an overwrite operation. See [Actions](ACTIONS.md), [Configuration](commandconfig.md), and [Formats](FORMATS.md).
 
 ## What happens to the selected files
 
