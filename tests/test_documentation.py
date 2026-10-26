@@ -44,6 +44,31 @@ def markdown_slug(heading):
 
 
 class DocumentationContractTests(unittest.TestCase):
+    def test_user_documents_are_short_and_describe_current_distribution_status(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        install = (ROOT / "INSTALL.md").read_text(encoding="utf-8")
+        manual = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+        self.assertLessEqual(len(readme.splitlines()), 45)
+        for phrase in ("KDE Dolphin", "resize", "convert", "compress", "right-click"):
+            self.assertIn(phrase.lower(), readme.lower())
+        for phrase in ("Download New Services", "substantial rewrite", "may not yet be available",
+                       "./install.sh", "./uninstall.sh", "--prefix", "intltool-merge"):
+            self.assertIn(phrase, install)
+        self.assertIn("may still offer an earlier version", install)
+        self.assertNotIn(".kim6-owned", install)
+        self.assertNotIn("manifest", install.lower())
+        self.assertIn('id="screenshots"', manual)
+        self.assertIn("Authentic screenshots will be added", manual)
+        self.assertNotRegex(manual, r"<img\b")
+        logo_paths = re.findall(r'<img\b[^>]*\bsrc="([^"]+)"', readme)
+        self.assertEqual(["graphics/Logo_1280x640_white_background.png"], logo_paths)
+        self.assertTrue((ROOT / logo_paths[0]).is_file())
+        self.assertIn("authentic screenshot", readme.lower())
+        self.assertIn("no interface mockup", readme.lower())
+        self.assertNotIn("graphics/screenshot.png", readme)
+        for private_detail in ("/home/coolian", "natacha", "/mnt/"):
+            self.assertNotIn(private_detail, readme + install + manual)
+
     def test_getting_started_examples_match_real_menu_actions_and_output_names(self):
         entries = {action_id: (menu_name, label, command)
                    for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
@@ -116,7 +141,7 @@ class DocumentationContractTests(unittest.TestCase):
                 self.assertIn(href[1:], parser.ids, href)
                 continue
             target = (ROOT / "docs" / href.split("#", 1)[0]).resolve()
-            self.assertTrue(target.is_relative_to((ROOT / "docs").resolve()), href)
+            self.assertTrue(target.is_relative_to(ROOT.resolve()), href)
             self.assertTrue(target.exists(), href)
             if "#" in href:
                 linked = AnchorParser()
