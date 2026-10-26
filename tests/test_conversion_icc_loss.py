@@ -90,5 +90,12 @@ class ConversionICCLossTests(unittest.TestCase):
         self.verify_rejection("webp", "WEBP")
 
 
+    def test_jpeg_encoder_dropping_icc_fails_closed(self):
+        self.verify_rejection("jpg", "JPEG")
+
+    def test_tiff_encoder_dropping_icc_fails_closed(self):
+        self.verify_rejection("tiff", "TIFF")
+
+
 if __name__ == "__main__":
     unittest.main()

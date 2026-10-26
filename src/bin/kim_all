@@ -1654,10 +1654,10 @@ action_convert() {
       rc=0
       convert_source_icc=''
       convert_output_icc=''
-      # Profile-bearing AVIF, HEIC, HEIF, PNG and WebP outputs must retain the input ICC exactly.
+      # Profile-bearing outputs must retain the input ICC exactly.
       # JP2 retains its existing explicit profile-restoration behavior.
       case "$FORMAT" in
-        jp2|avif|heic|heif|png|webp)
+        jp2|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
           convert_source_icc="$KIMDIR/convert-source.icc"
           if ! exiftool -b -ICC_Profile -- "$i" > "$convert_source_icc" 2>/dev/null; then
             rc=1
@@ -1757,7 +1757,7 @@ action_convert() {
       # Do not publish conversions that silently lose or substitute an ICC profile.
       if [ "$rc" -eq 0 ] && [ -s "$convert_source_icc" ]; then
         case "$FORMAT" in
-          avif|heic|heif|png|webp)
+          avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
             convert_output_icc="$KIMDIR/convert-output.icc"
             exiftool -b -ICC_Profile -- "$OUTTMP" > "$convert_output_icc" 2>/dev/null || rc=$?
             if [ "$rc" -eq 0 ] && ! cmp -s -- "$convert_source_icc" "$convert_output_icc"; then
