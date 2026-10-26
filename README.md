@@ -1,40 +1,100 @@
-<p align="center">
-  <img src="graphics/Logo_1280x640_white_background.png" alt="KIM6 project logo" width="320">
-</p>
+# KIM6
 
-<h1 align="center">KIM6</h1>
+**Image and Video Tools for KDE Dolphin**
 
-<p align="center">Image and video tools in KDE Dolphin</p>
+KIM6 adds image and video tools directly to KDE Dolphin's right-click menus. Resize photographs, convert file formats, compress images, remove metadata, create galleries, and process videos without opening a separate editing application.
 
-Right-click one or more files to resize, convert, compress, rotate, prepare photos for sharing, remove metadata, and handle other common tasks. KIM6 is for everyday jobs that do not need a full image or video editor.
+Select one file or an entire group of files, right-click, and choose what you want to do.
 
-## Common tasks
+KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
-| Photos | Albums and video |
-| --- | --- |
-| Resize by dimensions or percentage, compress JPEGs, convert formats, rotate and flip images. | Make galleries, collages, PDF albums, TIFFs and GIFs. Encode videos, extract frames or audio, and create simple MP4 slideshows. |
-| Prepare web and email copies, manage photo dates, and edit or remove metadata. | Process several selected files together where the action supports batches. |
+## Features
 
-Some actions can replace a selected file after you authorize it. Others always make a separate result. Choose **Create new** to keep the selected original when an action offers that choice. See [Safe handling](docs/SAFETY.md) for details.
+### Resize, compress, and convert images
 
-## Dolphin screenshot
+- **Resize images:** Choose common resolutions, enter custom dimensions, or resize by percentage. Process multiple photographs together.
+- **Compress JPEGs:** Select a JPEG quality level to reduce file sizes for sharing or storage.
+- **Prepare images for the web:** Resize and optimize photographs, with options for output quality and color profiles.
+- **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 when supported by your system.
+- **Rotate and flip:** Rotate images manually or use their EXIF orientation information.
 
-*An authentic screenshot using anonymous demonstration files will be added after capture on a KDE system with working submenus. The development system has a KDE submenu issue, so no interface mockup is shown here.*
+### Organize photographs and manage metadata
 
-## Install
+- **Remove private information:** Strip GPS coordinates or other embedded metadata.
+- **Manage photo dates:** Rename photographs using their EXIF dates, adjust timestamps, and synchronize image dates with file timestamps.
+- **Update copyright information:** Add or modify copyright metadata across multiple photographs.
+- **Control what gets preserved:** Choose appropriate metadata and output behavior for different operations.
 
-KIM6 is designed for KDE Plasma 6 and Dolphin. This rewrite may not yet be available through Dolphin's **Download New Services** catalog; the KDE Store may still show an earlier version. To install this rewrite from a source checkout:
+### Create and share
 
-```sh
-git clone https://github.com/KIM-6/kim6.git
-cd kim6
-./install.sh
-```
+- **Email photographs:** Send original images or create smaller copies suitable for email attachments.
+- **Build photo galleries:** Generate HTML galleries from selected photographs.
+- **Create collages:** Arrange multiple images into a single composition.
+- **Create PDF albums and print layouts:** Prepare photographs for viewing or printing.
+- **Work with TIFF and GIF:** Combine images into multipage TIFF files or animated GIFs.
 
-Restart Dolphin, select an image or video, and right-click to find the KIM6 menus. See [Install KIM6](INSTALL.md) for requirements, upgrades, and uninstall instructions.
+### Video tools
 
-## Help and project history
+KIM6 also includes video operations directly in Dolphin:
 
-Start with the [Getting Started guide](docs/GETTING_STARTED.md), the [HTML manual](https://kim-6.github.io/kim6/), or the [complete action list](docs/ACTIONS.md). Technical references cover [formats](docs/FORMATS.md), [configuration](docs/CONFIGURATION.md), and [safe handling](docs/SAFETY.md).
+- Resize and convert videos using H.264, H.265, and supported additional encoders.
+- Choose from predefined output resolutions and quality settings.
+- Extract individual frames or create contact sheets.
+- Save audio from video files.
+- Convert short video clips into animated GIFs.
+- Create MP4 slideshows from photographs.
 
-KIM began as a KDE image menu project and has been continued by contributors across later KDE releases. Historical credits are in [ABOUT](ABOUT) and the [archive index](docs/archive/upstream/ARCHIVE.md). KIM6 is licensed under the [GNU General Public License, version 3 or later](LICENSE.md).
+Available video codecs depend on FFmpeg and the encoders installed on your system.
+
+## How KIM6 works
+
+KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
+
+Many actions let you choose whether to create a separate result or replace an existing file. **Choose Create new to preserve the original** when that option is offered. Some operations, including certain rename, metadata, and rotation actions, have different file-handling behavior.
+
+See [Getting Started](docs/GETTING_STARTED.md) for examples and [Safe Handling](docs/SAFETY.md) for details.
+
+## Installation
+
+KIM6 is designed for KDE Plasma 6 and Dolphin.
+
+Dolphin includes a **Download New Services** feature under its configuration settings, which can install service-menu extensions from KDE's online catalog. You can also find the existing project on the [KDE Store](https://store.kde.org/p/2307290/).
+
+**Important:** This version of KIM6 is a substantial rewrite. The version currently available through Dolphin or the KDE Store may still be an earlier release. To use the rewrite, download the corresponding source version and install it manually.
+
+From a checkout containing the rewrite:
+
+    ./install.sh
+
+Restart Dolphin after installing, then right-click a supported image or video to find the KIM6 menus.
+
+To uninstall KIM6, run `./uninstall.sh` from the source directory. See [Installation Instructions](INSTALL.md) for dependencies, upgrades, system-wide installation, custom directories, and uninstall options.
+
+## Documentation
+
+- [Getting Started](docs/GETTING_STARTED.md) — Common tasks and examples.
+- [User Manual](docs/index.html) — Using KIM6's image and video tools.
+- [Complete Action List](docs/ACTIONS.md) — Available Dolphin menu actions.
+- [Supported Formats](docs/FORMATS.md) — Image and video format support.
+- [Configuration](docs/CONFIGURATION.md) — Customizing KIM6's behavior.
+- [Development](DEVELOPMENT.md) — Technical information and contributing.
+
+You can also report bugs or suggest improvements through the project's [GitHub Issues](https://github.com/KIM-6/kim6/issues).
+
+## Project history
+
+KIM, the KDE Image Menu, began during the KDE 3 era in the mid-2000s. Its goal was simple: provide useful image-processing tools from the file manager without requiring users to open a separate application.
+
+The project continued through KDE 4, KDE 5, and KDE 6, with contributions from multiple developers and maintainers.
+
+- [Original KIM project](http://bouveyron.free.fr/kim/index.html)
+- [KIM5 for KDE Plasma 5](https://github.com/caco3/kim5)
+- [KIM6 project](https://github.com/KIM-6/kim6)
+
+This rewrite preserves the original idea while consolidating the processing tools, adding modern image and video formats, and expanding metadata and batch-processing capabilities.
+
+Credit belongs to the original developers, including Charles Bouveyron and Tomáš Hnyk, along with the contributors who maintained and adapted KIM for later KDE versions. See [ABOUT](ABOUT) for project credits.
+
+## License
+
+KIM6 is free and open-source software licensed under the [GNU General Public License, version 3 or later](LICENSE.md).
