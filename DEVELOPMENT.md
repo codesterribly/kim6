@@ -309,3 +309,26 @@ Include the KIM6 version or commit, distribution/KDE and tool versions, exact ac
 The installer recognizes a runtime from the `kim_all` dispatcher, a recognized KIM menu, or an older `.kim6-owned` marker left by a previous release. It also accepts an otherwise empty runtime directory, which can remain after an interrupted first install. New installs do not create ownership markers or manifests. The uninstaller uses the same recognizable dispatcher/menu checks and accepts the old marker only for compatibility; it does not require one. Both scripts refuse unrelated same-name menu files and symlinked runtime/menu paths. The installer replaces listed files through temporary sibling files and does not select unrelated filenames through broad globs. Unknown runtime files are preserved and prevent removal of their parent directory.
 
 Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
+
+## Local Smoke Test
+
+Test web export with a synthetic JPEG rather than a personal photograph. Run from the repository root:
+
+```sh
+work=$(mktemp -d)
+mkdir -- "$work/output"
+
+magick -size 640x480 xc:gray80 "$work/input.jpg"
+
+KIM_POLICY=create ./src/bin/kim_all webexport \
+  --output-dir "$work/output" \
+  --size 600x600 \
+  --quality 75 \
+  -- "$work/input.jpg"
+
+find "$work/output" -maxdepth 1 -type f -print
+```
+
+Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.
+
+See [Command and Configuration Reference](docs/commandconfig.md) for additional options.

@@ -393,3 +393,11 @@ kim_all manual
 ```
 
 Opens the installed static manual using `xdg-open`.
+
+## Troubleshooting
+
+If an action fails, check the final KDialog report. Confirm that the source is readable, the destination is writable, and the required ImageMagick coder, FFmpeg encoder, or other dependency is installed.
+
+When running `kim_all` directly, inspect the terminal output for diagnostics. Previously completed outputs remain available if a later batch item fails.
+
+Test uncertain operations using disposable copies and `KIM_POLICY=create`, not important originals. See [FORMATS.md](FORMATS.md) for codec support and [INSTALL.md](../INSTALL.md) for missing Dolphin menus or installation problems.

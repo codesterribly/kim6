@@ -8,6 +8,24 @@ Select one file or an entire group of files, right-click, and choose what you wa
 
 KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
+## Quick Start
+
+Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose **Create new** to keep the selected originals unchanged. If `KIM_POLICY=overwrite` is configured, switch to `create` before trying these examples.
+
+| Task | Dolphin menu action | Example output |
+|---|---|---|
+| Resize a photograph | KIM6 — Compress, resize and web export → Resize (1600x1600 pixels) | `lake_resized.jpg` |
+| Compress a JPEG | KIM6 — JPEG compression → JPEG quality: 70% | `lake_compressed.jpg` |
+| Convert PNG to JPEG | KIM6 — Convert and transform → Convert to JPEG | `garden.jpg` |
+| Remove GPS coordinates | KIM6 — Publish and organize → Remove GPS coordinates… | `trip_gps.jpg` |
+| Resize several photographs | KIM6 — Compress, resize and web export → Resize (800x800 pixels) | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
+
+These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
+
+GPS removal targets recognized coordinate fields but does not guarantee complete location anonymization. If no matching fields are present, no new copy is created. Completed batch outputs remain available even if a later item fails.
+
+See [Command and Configuration Reference](docs/commandconfig.md#configuration-and-defaults) for filename and output-policy settings.
+
 ## Features
 
 ### Resize, compress, and convert images
@@ -55,7 +73,7 @@ Most resizing, compression, and conversion actions let you choose whether to cre
 
 Some operations, including rotation, flipping, and metadata editing, modify the selected files directly. Rename operations have their own file-handling options.
 
-See [Getting Started](docs/GETTING_STARTED.md) for examples and [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details.
+See [Getting Started](#quick-start) for examples and [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details.
 
 ## Installation
 
@@ -77,7 +95,7 @@ To uninstall KIM6, run `./uninstall.sh` from the source directory. See [Installa
 
 ## Documentation
 
-- [Getting Started](docs/GETTING_STARTED.md) — Common tasks and examples.
+- [Getting Started](#quick-start) — Common tasks and examples.
 - [User Manual](docs/index.html) — Using KIM6's image and video tools.
 - [Complete Action List](docs/ACTIONS.md) — Available Dolphin menu actions.
 - [Supported Formats](docs/FORMATS.md) — Image and video format support.
