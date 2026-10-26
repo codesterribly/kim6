@@ -16,7 +16,7 @@ KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A re
 | WebP | ImageMagick WebP decoder when installed | Runtime-probed WebP encoder | May contain animation; frame and ICC handling depend on the coder and operation. |
 | AVIF | ImageMagick AVIF coder/delegate when installed | Runtime-probed AVIF encoder | Support depends on the installed AV1 delegate. Multi-frame and ICC handling are checked where applicable. |
 | HEIC/HEIF | ImageMagick HEIC/HEIF decoder when installed | Runtime-probed HEIC encoder | May contain multiple images. No silent substitution with AVIF or JPEG. |
-| JPEG XL (JXL) | Optional JXL decoder | Optional JXL encoder | Read and write capabilities are separate. The project's development environment lacks the optional encoder, so its real-encoder test skips there. |
+| JPEG XL (JXL) | Optional JXL decoder | Optional JXL encoder | Reading and writing require separately available codec support. KIM6 checks encoder availability at runtime and rejects unsupported conversions without publishing an output. |
 | JPEG 2000 (JP2/J2K/JPC/J2C) | ImageMagick JPEG 2000 coder/delegate | Runtime-probed JPEG 2000 encoder | JP2 offers lossless/lossy modes; lossless uses delegate `rate=1`. Lossy quality is codec-specific, not equivalent to JPEG quality. |
 | ICO/CUR | ImageMagick icon decoder when installed | Custom conversion if writing is supported | Files may contain several icon sizes or images. Do not assume a lossless single-image round trip. |
 | PNM family (PBM/PGM/PPM/PAM/PNM) | ImageMagick decoder | Available PNM coders | Typically still images with limited profile and metadata support. |

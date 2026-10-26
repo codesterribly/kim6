@@ -100,7 +100,7 @@
 <td>JPEG XL (JXL)</td>
 <td>Optional JXL decoder</td>
 <td>Optional JXL encoder</td>
-<td>Read and write capabilities are separate. The project's development environment lacks the optional encoder, so its real-encoder test skips there.</td>
+<td>Reading and writing require separately available codec support. KIM6 checks encoder availability at runtime and rejects unsupported conversions without publishing an output.</td>
 </tr>
 <tr>
 <td>JPEG 2000 (JP2/J2K/JPC/J2C)</td>
