@@ -83,5 +83,12 @@ class ConversionICCLossTests(unittest.TestCase):
         self.verify_rejection("heif", "HEIC")
 
 
+    def test_png_encoder_dropping_icc_fails_closed(self):
+        self.verify_rejection("png", "PNG")
+
+    def test_webp_encoder_dropping_icc_fails_closed(self):
+        self.verify_rejection("webp", "WEBP")
+
+
 if __name__ == "__main__":
     unittest.main()
