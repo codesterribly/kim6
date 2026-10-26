@@ -33,7 +33,7 @@ Do not infer “animation supported” from a format name alone. The action’s 
 
 ## Color profiles and metadata
 
-ICC profiles are transformed or retained only when a usable profile and output coder are available and the action’s policy requires it. Web export defaults to an actual ICC conversion to sRGB; it does not merely relabel pixels. `--color preserve` attempts to retain an embedded profile when the destination format supports one. Untagged RGB is assumed to be sRGB for web export; untagged CMYK is rejected. Other actions retain their established per-action behavior; this is not a global metadata promise. See [FEATURES.md](FEATURES.md) and [SAFETY.md](SAFETY.md).
+ICC profiles are transformed or retained only when a usable profile and output coder are available and the action’s policy requires it. Web export defaults to an actual ICC conversion to sRGB; it does not merely relabel pixels. `--color preserve` attempts to retain an embedded profile when the destination format supports one. Untagged RGB is assumed to be sRGB for web export; untagged CMYK is rejected. Other actions retain their established per-action behavior; this is not a global metadata promise. See [commandconfig.md](commandconfig.md) and [SAFETY.md](SAFETY.md).
 
 ## Video formats and encoders
 

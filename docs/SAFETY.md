@@ -35,7 +35,7 @@ A KDE service-menu action accepts local files. Remote URL workflows are not sile
 Metadata policy is not global:
 
 - `stripmeta --mode all` requests the established full removal behavior; `--mode gps` targets supported location fields; optional AI metadata removal is best-effort and does not prove that an image is no longer identifiable as AI-generated.
-- C2PA/Content Credentials are structured or signed provenance records. KIM6 does not promise their complete removal; see the action result and [Feature reference](FEATURES.md).
+- C2PA/Content Credentials are structured or signed provenance records. KIM6 does not promise their complete removal; see the action result and [Feature reference](commandconfig.md).
 - Copyright, timestamp shifting and file-to-EXIF date synchronization are metadata edits. They preserve image pixels and filesystem mtime where the action’s contract says so.
 - EXIF-to-filesystem date synchronization changes filesystem modification time from the camera capture time, which may have no timezone. KIM6 does not reinterpret that local capture value as UTC.
 - Web export defaults to an ICC transform to sRGB. Preserve-profile mode retains a usable embedded profile when the selected encoder supports it. Untagged RGB is treated as sRGB; ambiguous untagged CMYK is not silently guessed.

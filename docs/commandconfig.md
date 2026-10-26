@@ -257,6 +257,8 @@ kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 
 Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [SAFETY.md](SAFETY.md).
 
+KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.
+
 ### `rotate`
 
 ```sh
@@ -308,6 +310,8 @@ kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|av
 
 Options can also be prompted. The legacy `webexport OUTPUT_DIRECTORY FILE...` dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to `KIM_WEB_FORMAT` (normally JPEG), and color defaults to ICC-managed sRGB. `keep` retains source format when supported. Web export always creates a distinct derivative, including under `KIM_POLICY=overwrite`. JPEG scan/optimization options apply only to JPEG output.
 
+With `--color srgb` (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. `--color preserve` retains embedded color profiles where supported.
+
 ## Video actions
 
 ### `slideshow`
@@ -317,6 +321,8 @@ kim_all slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30] [--back
 ```
 
 Creates a derived, silent H.264/yuv420p MP4. Photos are sorted in natural filename order, fitted without upscaling, and padded. Defaults are 3 seconds per photo, 1280×720, 25 fps, black background. Interactive size choices are 1280×720, 1920×1080, and 854×480. Limits: 200 photos, 600 seconds total, 18,000 frames and 1920×1080. RAW, layered, vector, HDR, and animated sources are rejected. H.264 encoder `libx264` is required.
+
+Slideshows do not include titles, transitions, pan, or zoom effects. They are intended for straightforward photo-to-video conversion, not video editing.
 
 ### `video`
 

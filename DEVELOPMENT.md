@@ -28,7 +28,7 @@ The `docs/` directory contains additional references:
 
 - `ACTIONS.md` — Complete Dolphin menu and action inventory.
 - `commandconfig.md` — Command-line options and dispatcher arguments.
-- `FEATURES.md` — Detailed descriptions of KIM6 functionality.
+- `commandconfig.md` — Detailed descriptions of KIM6 functionality.
 - `FORMATS.md` — Supported image and video formats.
 - `commandconfig.md` — Configuration options and defaults.
 - `SAFETY.md` — File handling, preservation, and overwrite behavior.
