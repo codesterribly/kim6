@@ -185,6 +185,17 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertTrue((runtime / "gallery/index.part1").is_file())
         self.assertTrue((runtime / "ABOUT").is_file())
         self.assertTrue((runtime / "INSTALL.md").is_file())
+        self.assertTrue((runtime / "docs/index.html").is_file())
+        self.assertTrue((runtime / "docs/work.css").is_file())
+        self.assertTrue((runtime / ".kim6-owned").is_file())
+        self.assertFalse((runtime / ".kim6-manifest").exists())
+        self.assertFalse(list(runtime.glob(".kim6-preserved.*")))
+        self.assertFalse(list(self.prefix.glob(".kim6-stage.*")))
+        if shutil.which("msgfmt"):
+            for language in ("de", "es", "fr", "hu", "it", "nl", "zh_TW"):
+                translation = runtime / f"locale/{language}/LC_MESSAGES/kim6.mo"
+                self.assertTrue(translation.is_file(), translation)
+                self.assertEqual(0o644, translation.stat().st_mode & 0o777)
         self.assertFalse(any(path.name != "kim_all" for path in (runtime / "bin").iterdir()))
         menu_files = list(self.prefix.glob("kim_*.desktop"))
         self.assertEqual(5, len(menu_files))
@@ -204,6 +215,34 @@ class InstallWorkflowTests(unittest.TestCase):
             cache = subprocess.run([cache_builder, "--noincremental"], env=self.env,
                                    text=True, capture_output=True, timeout=30)
             self.assertEqual(0, cache.returncode, cache.stdout + cache.stderr)
+
+    def test_default_user_install_uses_xdg_data_home(self):
+        tools = self.root / "user id tool"
+        tools.mkdir()
+        fake_id = tools / "id"
+        fake_id.write_text("#!/bin/sh\nprintf '1000\\n'\n")
+        fake_id.chmod(0o755)
+        result = subprocess.run(["bash", str(ROOT / "install.sh")], cwd=ROOT,
+                                env={**self.env, "PATH": f"{tools}:{os.environ['PATH']}"},
+                                text=True, capture_output=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue((self.data_home / "kio/servicemenus/kim6/bin/kim_all").is_file())
+
+    def test_default_system_install_uses_first_xdg_data_dir(self):
+        tools = self.root / "root id tool"
+        tools.mkdir()
+        fake_id = tools / "id"
+        fake_id.write_text("#!/bin/sh\nprintf '0\\n'\n")
+        fake_id.chmod(0o755)
+        first_data = self.root / "first system data"
+        second_data = self.root / "second system data"
+        result = subprocess.run(["bash", str(ROOT / "install.sh")], cwd=ROOT,
+                                env={**self.env, "PATH": f"{tools}:{os.environ['PATH']}",
+                                     "XDG_DATA_DIRS": f"{first_data}:{second_data}"},
+                                text=True, capture_output=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue((first_data / "kio/servicemenus/kim6/bin/kim_all").is_file())
+        self.assertFalse((second_data / "kio/servicemenus").exists())
 
     def test_installed_service_menus_are_data_files_not_executables(self):
         result = self.run_install()
@@ -258,14 +297,78 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertFalse((self.prefix / "kim6").exists())
         self.assertEqual([unrelated], list(self.prefix.glob("kim_*.desktop")))
 
-    def test_upgrade_replaces_legacy_menus_and_removes_identical_legacy_commands(self):
+    def test_upgrade_replaces_resources_in_marked_runtime(self):
+        installed = self.run_install()
+        self.assertEqual(0, installed.returncode, installed.stdout + installed.stderr)
+        customized = self.prefix / "kim6/ABOUT"
+        customized.write_text("locally customized About text\n")
+
+        upgraded = self.run_install()
+        self.assertEqual(0, upgraded.returncode, upgraded.stdout + upgraded.stderr)
+        self.assertEqual((ROOT / "ABOUT").read_bytes(), customized.read_bytes())
+        self.assertFalse(list((self.prefix / "kim6").glob(".kim6-preserved.*")))
+
+    def test_install_refuses_symlinked_runtime_without_touching_referent(self):
+        external = self.root / "external runtime"
+        external.mkdir()
+        sentinel = external / "keep.txt"
+        sentinel.write_text("outside KIM6\n")
+        (self.prefix / "kim6").symlink_to(external, target_is_directory=True)
+
+        result = self.run_install()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("refusing unsafe runtime path", result.stderr)
+        self.assertEqual("outside KIM6\n", sentinel.read_text())
+        self.assertTrue((self.prefix / "kim6").is_symlink())
+        self.assertFalse(list(self.prefix.glob(".kim6-menu.*")))
+        self.assertFalse(list(self.prefix.rglob("*.kim6-tmp.*")))
+
+    def test_uninstall_refuses_symlinked_runtime_without_removing_menus(self):
+        external = self.root / "external runtime"
+        external.mkdir()
+        sentinel = external / "keep.txt"
+        sentinel.write_text("outside KIM6\n")
+        (self.prefix / "kim6").symlink_to(external, target_is_directory=True)
+        menu = self.prefix / "kim_compress.desktop"
+        menu.write_text("[Desktop Entry]\nX-KIM6-Managed=true\n")
+
+        result = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
+                                cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("refusing unsafe runtime path", result.stderr)
+        self.assertEqual("outside KIM6\n", sentinel.read_text())
+        self.assertEqual("[Desktop Entry]\nX-KIM6-Managed=true\n", menu.read_text())
+
+    def test_uninstall_refuses_nested_runtime_symlink_without_following_it(self):
+        runtime = self.prefix / "kim6"
+        (runtime / "bin").mkdir(parents=True)
+        (runtime / ".kim6-owned").write_text("KIM6 unified runtime\n")
+        external = self.root / "external resource"
+        external.write_text("outside KIM6\n")
+        (runtime / "user-link").symlink_to(external)
+
+        result = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
+                                cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("runtime tree containing symlinks", result.stderr)
+        self.assertTrue((runtime / "user-link").is_symlink())
+        self.assertEqual("outside KIM6\n", external.read_text())
+
+    def test_uninstall_is_idempotent_for_an_existing_empty_prefix(self):
+        first = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix), "--no_message"],
+                               cwd=ROOT, env=self.env, text=True, capture_output=True)
+        second = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix), "--no_message"],
+                                cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertEqual(0, first.returncode, first.stdout + first.stderr)
+        self.assertEqual(0, second.returncode, second.stdout + second.stderr)
+
+    def test_upgrade_replaces_owned_legacy_menus_and_removes_known_legacy_commands(self):
         runtime_bin = self.prefix / "kim6/bin"
         runtime_bin.mkdir(parents=True)
+        (self.prefix / "kim6/.kim6-owned").write_text("KIM6 unified runtime\n")
         shutil.copyfile(ROOT / "src/bin/kim_compress", runtime_bin / "kim_compress")
         shutil.copyfile(ROOT / "src/bin/kim_video", runtime_bin / "kim_video")
-        customized_legacy = runtime_bin / "kim_rename"
-        customized_legacy.write_bytes((ROOT / "src/bin/kim_rename").read_bytes() + b"\n# local edit\n")
-        customized_legacy.chmod(0o755)
+        shutil.copyfile(ROOT / "src/bin/kim_rename", runtime_bin / "kim_rename")
         legacy_menu = self.prefix / "kim_compressandresize.desktop"
         legacy_menu_text = "[Desktop Entry]\nType=Service\nActions=Compress;\n[Desktop Action Compress]\nExec=kim_compress 50 %D %U\n"
         legacy_menu.write_text(legacy_menu_text)
@@ -273,18 +376,11 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertFalse((runtime_bin / "kim_compress").exists())
         self.assertFalse((runtime_bin / "kim_video").exists())
-        self.assertFalse(customized_legacy.exists())
-        preserved_scripts = list((self.prefix / "kim6").glob(".kim6-preserved.*/legacy/bin/kim_rename"))
-        self.assertEqual(1, len(preserved_scripts))
-        self.assertEqual((ROOT / "src/bin/kim_rename").read_bytes() + b"\n# local edit\n",
-                         preserved_scripts[0].read_bytes())
-        self.assertFalse(os.access(preserved_scripts[0], os.X_OK))
+        self.assertFalse((runtime_bin / "kim_rename").exists())
         installed_menu = legacy_menu.read_text()
         self.assertIn("kim6/bin/kim_all", installed_menu)
         self.assertNotRegex(installed_menu, r"Exec=.*\bkim_(?!all\b)[A-Za-z0-9_]*")
-        preserved_menus = list((self.prefix / "kim6").glob(".kim6-preserved.*/menus/kim_compressandresize.desktop"))
-        self.assertEqual(1, len(preserved_menus))
-        self.assertEqual(legacy_menu_text, preserved_menus[0].read_text())
+        self.assertFalse(any(path.name.startswith(".kim6-preserved.") for path in (self.prefix / "kim6").iterdir()))
 
     def test_failed_preflight_keeps_existing_install_untouched(self):
         runtime = self.prefix / "kim6"
@@ -301,36 +397,99 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertEqual("[Desktop Entry]\nExec=kim_galery %U\n", old_menu.read_text())
 
 
-    def test_failure_during_menu_swap_restores_previous_runtime_and_menus(self):
+    def test_interrupted_install_is_repaired_by_rerunning(self):
         runtime = self.prefix / "kim6"
         (runtime / "bin").mkdir(parents=True)
+        (runtime / ".kim6-owned").write_text("KIM6 unified runtime\n")
         (runtime / "user-state").write_text("old runtime\n")
+        shutil.copyfile(ROOT / "src/bin/kim_compress", runtime / "bin/kim_compress")
         old_menu = self.prefix / "kim_publication.desktop"
-        old_menu.write_text("[Desktop Entry]\nType=Service\nExec=kim_galery %U\n")
+        old_menu.write_text("[Desktop Entry]\nX-KIM6-Managed=true\nName=old owned menu\n")
         tools = self.root / "mv shim"
         tools.mkdir()
         shim = tools / "mv"
         shim.write_text("#!/usr/bin/env bash\n"
-                        "for arg in \"$@\"; do\n"
-                        "  case \"$arg\" in */menus/kim_convertandrotate.desktop) exit 71 ;; esac\n"
-                        "done\nexec /bin/mv \"$@\"\n")
+                        "if [[ \"${@: -1}\" == */kim_publication.desktop && \"$*\" == *.kim6-menu.* ]]; then exit 71; fi\n"
+                        "exec /bin/mv \"$@\"\n")
         shim.chmod(0o755)
         result = subprocess.run(["bash", str(ROOT / "install.sh"), "--prefix", str(self.prefix)],
                                 cwd=ROOT, env={**self.env, "PATH": f"{tools}:{os.environ['PATH']}"},
                                 text=True, capture_output=True)
         self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn("kim_publication.desktop", result.stderr)
         self.assertEqual("old runtime\n", (runtime / "user-state").read_text())
-        self.assertEqual("[Desktop Entry]\nType=Service\nExec=kim_galery %U\n", old_menu.read_text())
-        self.assertFalse(list(self.prefix.glob(".kim6-stage.*")))
+        self.assertEqual("[Desktop Entry]\nX-KIM6-Managed=true\nName=old owned menu\n", old_menu.read_text())
+        self.assertTrue((runtime / "bin/kim_all").is_file())
+        self.assertTrue((runtime / "bin/kim_compress").is_file(),
+                        "legacy commands remain until every menu points to kim_all")
+        self.assertFalse((runtime / ".kim6-manifest").exists())
+        updated_menus = [path for path in self.prefix.glob("kim_*.desktop")
+                         if path.name != "kim_publication.desktop"]
+        self.assertEqual(4, len(updated_menus))
+        self.assertTrue(all('Exec="' in path.read_text() and "kim6/bin/kim_all" in path.read_text()
+                            for path in updated_menus))
+        self.assertFalse(list(self.prefix.glob(".kim6-menu.*")))
+        self.assertFalse(list(self.prefix.rglob("*.kim6-tmp.*")))
+
         recovered = self.run_install()
         self.assertEqual(0, recovered.returncode, recovered.stdout + recovered.stderr)
         self.assertTrue((runtime / "bin/kim_all").is_file())
+        self.assertFalse((runtime / "bin/kim_compress").exists())
+        self.assertNotIn("old owned menu", old_menu.read_text())
+
+    def test_unmarked_menu_collision_is_refused_without_modification(self):
+        runtime = self.prefix / "kim6"
+        old_menu = self.prefix / "kim_compress.desktop"
+        old_content = "[Desktop Entry]\nType=Service\nName=unrelated\nExec=custom-launcher %F\n"
+        old_menu.write_text(old_content)
+        result = self.run_install()
+        self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn("not recognized as KIM6-owned", result.stderr)
+        self.assertEqual(old_content, old_menu.read_text())
+        self.assertFalse(runtime.exists())
+        removed = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
+                                 cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertEqual(0, removed.returncode, removed.stdout + removed.stderr)
+        self.assertEqual(old_content, old_menu.read_text())
+
+    def test_symlinked_menu_is_refused_by_install_and_uninstall(self):
+        external = self.root / "external menu.desktop"
+        content = "[Desktop Entry]\nName=not KIM\nExec=some-launcher\n"
+        external.write_text(content)
+        menu = self.prefix / "kim_compress.desktop"
+        menu.symlink_to(external)
+
+        installed = self.run_install()
+        self.assertNotEqual(0, installed.returncode)
+        self.assertIn("refusing symlinked menu", installed.stderr)
+        removed = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
+                                 cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(0, removed.returncode)
+        self.assertIn("refusing symlinked menu", removed.stderr)
+        self.assertTrue(menu.is_symlink())
+        self.assertEqual(content, external.read_text())
+
+    def test_modified_legacy_command_is_refused_before_upgrade_changes(self):
+        runtime = self.prefix / "kim6"
+        (runtime / "bin").mkdir(parents=True)
+        (runtime / ".kim6-owned").write_text("KIM6 unified runtime\n")
+        edited = runtime / "bin/kim_compress"
+        edited.write_text("#!/bin/sh\n# local change\n")
+
+        result = self.run_install()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("refusing to remove modified legacy command", result.stderr)
+        self.assertEqual("#!/bin/sh\n# local change\n", edited.read_text())
+        self.assertFalse((runtime / "bin/kim_all").exists())
 
     def test_partial_owned_uninstall_preserves_unrelated_runtime_files(self):
         runtime = self.prefix / "kim6"
         (runtime / "bin").mkdir(parents=True)
         (runtime / ".kim6-owned").touch()
         shutil.copyfile(ROOT / "src/bin/kim_all", runtime / "bin/kim_all")
+        shutil.copyfile(ROOT / "src/bin/kim_compress", runtime / "bin/kim_compress")
+        edited_legacy = runtime / "bin/kim_rename"
+        edited_legacy.write_text("#!/bin/sh\n# user edit\n")
         (runtime / "my-notes.txt").write_text("user data\n")
         (self.prefix / "kim_publication.desktop").write_text("[Desktop Entry]\nX-KIM6-Managed=true\n")
         result = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
@@ -338,6 +497,30 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual("user data\n", (runtime / "my-notes.txt").read_text())
         self.assertFalse((runtime / "bin/kim_all").exists())
+        self.assertFalse((runtime / "bin/kim_compress").exists())
+        self.assertEqual("#!/bin/sh\n# user edit\n", edited_legacy.read_text())
+
+    def test_install_and_uninstall_refuse_markerless_runtime_without_modification(self):
+        runtime = self.prefix / "kim6"
+        (runtime / "bin").mkdir(parents=True)
+        shutil.copyfile(ROOT / "src/bin/kim_all", runtime / "bin/kim_all")
+        (runtime / "user-data.txt").write_text("keep me\n")
+        menu = self.prefix / "kim_publication.desktop"
+        menu.write_text("[Desktop Entry]\nX-KIM6-Managed=true\n")
+
+        installed = self.run_install()
+        self.assertNotEqual(0, installed.returncode)
+        self.assertIn("runtime is not identified as KIM6-owned or empty", installed.stderr)
+        self.assertEqual((ROOT / "src/bin/kim_all").read_bytes(), (runtime / "bin/kim_all").read_bytes())
+
+        removed = subprocess.run(["bash", str(ROOT / "uninstall.sh"), "--prefix", str(self.prefix)],
+                                 cwd=ROOT, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(0, removed.returncode)
+        self.assertIn("runtime is not identified as KIM6-owned", removed.stderr)
+        self.assertTrue((runtime / "bin/kim_all").is_file())
+        self.assertEqual("keep me\n", (runtime / "user-data.txt").read_text())
+        self.assertFalse((runtime / ".kim6-owned").exists())
+        self.assertTrue(menu.is_file())
 
 
 class MenuArgumentExecutionTests(unittest.TestCase):

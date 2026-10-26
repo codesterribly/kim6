@@ -12,7 +12,7 @@ This guide describes the checked-in Plasma 6 implementation. KIM6 has one proces
 | `tests/run.py` | Canonical unittest discovery and runner. |
 | `tests/support.py`, `tests/adapter.py` | Disposable workspaces, synthetic fixtures and command adapters used by action tests. |
 | `tests/test_*.py` | Action, preservation, cancellation, publication and integration regressions. |
-| `install.sh`, `uninstall.sh` | Manifest-aware Plasma 6 installation, migration, rollback and owned-resource removal. |
+| `install.sh`, `uninstall.sh` | Explicit-inventory Plasma 6 installation, upgrade and safe owned-resource removal. |
 | `po/` | gettext translations and desktop-entry catalogs. |
 | `docs/` | User references and the GitHub Pages manual. |
 | `docs/archive/upstream/` | Byte-preserved upstream and pre-overhaul documentation snapshots. |
@@ -106,7 +106,7 @@ KDE service menus are `Type=Service`; generic desktop-entry validation may not u
 
 ## Installer and release checks
 
-Use disposable prefixes for installation tests. The installer stages resources, renders menus, validates dispatcher routes, backs up the previous runtime/menu files, swaps them, and attempts rollback on failure. The manifest stores hashes for owned resources. Uninstall removes only paths whose ownership can be established and preserves customized/unknown files.
+Use disposable prefixes for installation tests. The installer requires `.kim6-owned` to recognize a populated runtime (an empty directory can be adopted after an interrupted first install); the uninstaller requires the marker and does not infer runtime ownership from a matching dispatcher. Menus are recognized through their KIM marker or a recognized old KIM command. The installer preflights collisions and symlinks, then replaces each listed file through a temporary sibling rename. There is no whole-install transaction, digest manifest, customization backup, or rollback: a failed upgrade can leave a mixed version, and rerunning the installer completes it. A hard kill can leave a hidden temporary sibling, which the installer does not sweep because it cannot prove ownership of a leftover path. Edits at listed KIM-owned paths are replaced; unlisted runtime data remains. Uninstall removes the same explicit inventory and leaves its ownership marker when unknown runtime data remains.
 
 Release verification should include the canonical suite, shell/Python checks, all five KDE templates and 107 action mappings, isolated fresh/repeated/upgrade/failure/uninstall tests, installation modes, and manual review of the documentation. Do not run upgrade/uninstall tests against the live desktop. Follow actual installer options documented in [INSTALL.md](INSTALL.md).
 
