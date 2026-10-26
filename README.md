@@ -95,6 +95,10 @@ This rewrite preserves the original idea while consolidating the processing tool
 
 Credit belongs to the original developers, including Charles Bouveyron and Tomáš Hnyk, along with the contributors who maintained and adapted KIM for later KDE versions. See [ABOUT](ABOUT) for project credits.
 
+## AI Attribution
+
+KIM6's rewrite code was rewritten by hand. Much of the unit testing and portions of the documentation were generated with the assistance of a self-trained, locally hosted AI model specializing in unit testing and technical documentation.
+
 ## License
 
 KIM6 is free and open-source software licensed under the [GNU General Public License, version 3 or later](LICENSE.md).
