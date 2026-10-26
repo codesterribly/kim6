@@ -342,6 +342,26 @@ pages under `docs/reference/` are generated from Markdown.
 Pandoc is required to build the reference pages, but is not required
 for users viewing the installed manual.
 
+During a normal non-root installation from a writable checkout,
+`./install.sh` automatically regenerates the HTML reference pages when
+Python 3 and Pandoc are available. This happens before the files are
+installed, so a separate documentation build command is not normally
+necessary.
+
+If both tools are available but the installer is running as root or the
+reference directory is not writable, the installer checks the generated
+pages without modifying the checkout. Stale pages cause installation
+to stop with an error.
+
+If Python 3 or Pandoc is unavailable, installation uses the generated
+HTML already included in the repository. Release builds must therefore
+include current generated pages.
+
+The landing page (`docs/index.html`) is intentionally maintained by hand.
+Automatic regeneration covers the Markdown-derived reference pages, not
+the landing page's examples, illustrations, or layout.
+
+
 After editing Markdown, run:
 
     python3 tools/build_manual.py

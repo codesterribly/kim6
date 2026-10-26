@@ -81,6 +81,12 @@
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
 <p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
 <p>For older-installation compatibility and implementation details, see <a href="DEVELOPMENT.html#installer-compatibility-and-recovery">Installer compatibility and recovery</a>.</p>
+<h2 id="offline-manual-and-documentation-updates">Offline manual and documentation updates</h2>
+<p>KIM6 installs a complete offline user manual, including its stylesheet, illustrations, and HTML reference pages. The manual is available through the KIM6 User Manual action in Dolphin.</p>
+<p>When Python 3 and Pandoc are installed, running <code>./install.sh</code> from a writable, non-root development checkout automatically regenerates the HTML references from the project's Markdown documentation.</p>
+<p>For root installations or checkouts where the reference directory is not writable, the installer verifies the generated HTML rather than modifying the source files, provided both tools are available. If the generated pages are outdated, installation stops.</p>
+<p>Python 3 and Pandoc are not required to view the manual. If either build tool is unavailable during installation, KIM6 uses the prebuilt HTML pages supplied with the repository.</p>
+<p>Contributors should commit regenerated HTML reference pages alongside their Markdown changes. The illustrated landing page is maintained separately and is not automatically generated.</p>
 
       </article>
     </main>

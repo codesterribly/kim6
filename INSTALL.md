@@ -115,3 +115,26 @@ containing directory from being removed.
 
 For older-installation compatibility and implementation details, see
 [Installer compatibility and recovery](DEVELOPMENT.md#installer-compatibility-and-recovery).
+
+## Offline manual and documentation updates
+
+KIM6 installs a complete offline user manual, including its stylesheet,
+illustrations, and HTML reference pages. The manual is available through
+the KIM6 User Manual action in Dolphin.
+
+When Python 3 and Pandoc are installed, running `./install.sh` from a
+writable, non-root development checkout automatically regenerates the
+HTML references from the project's Markdown documentation.
+
+For root installations or checkouts where the reference directory is
+not writable, the installer verifies the generated HTML rather than
+modifying the source files, provided both tools are available. If the
+generated pages are outdated, installation stops.
+
+Python 3 and Pandoc are not required to view the manual. If either
+build tool is unavailable during installation, KIM6 uses the prebuilt
+HTML pages supplied with the repository.
+
+Contributors should commit regenerated HTML reference pages alongside
+their Markdown changes. The illustrated landing page is maintained
+separately and is not automatically generated.
