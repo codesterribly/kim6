@@ -40,7 +40,7 @@ For a specific case, add its stable ID after the command. `status --filter pendi
 
 `install-isolated` explicitly runs this checkout's installer with `--prefix qa/generated/gui-data/kio/servicemenus`, plus QA-only `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. It does not use sudo or write to normal per-user/system service-menu locations. It is still an installation command, so you choose when to run it. If it is interrupted, rerun it after checking the error; the installer is designed to be rerun. `check-install` compares the installed dispatcher, resources, permissions, menu IDs and argument contracts with this checkout. It also reports same-name service menus found in checked system XDG data roots. It does not prove that Dolphin displayed or launched an entry.
 
-The isolated Dolphin session may still show system-wide menus. If duplicate or unidentified KIM6 entries appear, stop rather than guessing. The development host `natacha` has a KDE Frameworks/KIO 6.29 submenu issue. Do not flatten or alter the menus to work around it. Actual GUI acceptance should be done on a KDE Plasma 6 machine with working submenus, such as `homebase` if its current environment check is suitable.
+The isolated Dolphin session may still show system-wide menus. If duplicate or unidentified KIM6 entries appear, stop rather than guessing. KDE Frameworks/KIO 6.29 can prevent Dolphin service submenus from appearing. Do not flatten or alter the menus to work around it. Actual GUI acceptance should be done on a KDE Plasma 6 machine with working submenus after confirming the target environment is suitable.
 
 ## Test the first-run smoke sequence
 
@@ -70,22 +70,22 @@ Those options resolve every conflicting case in that file. Export again after re
 
 Two records for the same case are treated as a conflict when the stored result record differs, including provenance, note, mode or timestamp. This conservative rule asks you to decide which observation should be the case's current result; each exported JSON remains available as a record of the other machine's observation.
 
-To test the same code revision on `homebase`, record the full revision on the source machine with `git rev-parse HEAD`. A Git bundle contains committed files only. If the working tree is dirty and you need to test those exact edits, transfer the patch and intended untracked source files too. Review the untracked-file list first; do not include ignored `qa/generated/`, `qa/state/` or `qa/reports/` data in the source archive.
+To test the same code revision on another machine, record the full revision on the source machine with `git rev-parse HEAD`. A Git bundle contains committed files only. If the working tree is dirty and you need to test those exact edits, transfer the patch and intended untracked source files too. Review the untracked-file list first; do not include ignored `qa/generated/`, `qa/state/` or `qa/reports/` data in the source archive.
 
 ```sh
-# On natacha, from the checkout:
+# On the source machine, from the checkout:
 git bundle create ../kim6-acceptance.bundle HEAD
 git diff --binary HEAD > ../kim6-working.patch
 git ls-files --others --exclude-standard -z > ../kim6-untracked.list
 if [ -s ../kim6-untracked.list ]; then tar --create --gzip --file ../kim6-untracked.tar.gz --null --files-from=../kim6-untracked.list; fi
 ```
 
-Copy the bundle, patch, untracked archive and list to `homebase` using a removable drive or another method you choose. On `homebase`, after placing them at a convenient path:
+Copy the bundle, patch, untracked archive and list to the destination machine using a removable drive or another method you choose. On that machine, after placing them at a convenient path:
 
 ```sh
 git clone /path/to/kim6-acceptance.bundle kim6-acceptance
 cd kim6-acceptance
-git checkout --detach FULL_REVISION_FROM_NATACHA
+git checkout --detach FULL_REVISION_FROM_SOURCE
 git apply --binary /path/to/kim6-working.patch
 if [ -f /path/to/kim6-untracked.tar.gz ]; then tar --extract --gzip --file /path/to/kim6-untracked.tar.gz --directory .; fi
 git status --short
@@ -95,7 +95,7 @@ python3 -B qa/acceptance.py check-install
 python3 -B qa/acceptance.py next --isolated
 ```
 
-Use the actual full revision, inspect the untracked-file list and `git status --short`, and confirm that the intended source changes were applied before testing. If testing only a committed release, omit the patch/archive steps. Do not assume `homebase` has a particular KDE or Qt release; the result record captures versions when the commands are available. Copy/export progress manually as above.
+Use the actual full revision, inspect the untracked-file list and `git status --short`, and confirm that the intended source changes were applied before testing. If testing only a committed release, omit the patch/archive steps. Do not assume the destination machine has a particular KDE or Qt release; the result record captures versions when the commands are available. Copy/export progress manually as above.
 
 ## Progress and reports
 

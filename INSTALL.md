@@ -97,7 +97,7 @@ The installer creates the chosen folder if needed. It does not install system pa
 
 ### Dolphin does not show an action
 
-First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. On the development system, KDE Frameworks/KIO 6.29 has a known upstream `X-KDE-Submenu` issue; KIM6 keeps its submenus intact and does not recommend flattening them as a workaround. Installation can be verified without relying on submenu display; see the installation instructions above.
+First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
 
 ### Installation or removal reports a conflict
 The installer identifies existing KIM6 installations from recognized program

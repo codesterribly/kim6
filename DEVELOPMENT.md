@@ -113,7 +113,7 @@ KIM6 processes files that may be irreplaceable. Changes to image and video actio
 
 8. **Metadata and timestamps:** Preserve each action's documented behavior. Rotation preserves the original modification time; other transformations and metadata operations have their own rules. Do not apply metadata or timestamp restoration indiscriminately.
 
-See [File publication and cancellation](DEVELOPMENT.md#file-publication-and-cancellation) for the user-facing explanation of file handling and its limitations.
+See [File Publication and Cancellation](#file-publication-and-cancellation) below for the implementation details and limitations.
 
 ## Shared Helper Functions
 
