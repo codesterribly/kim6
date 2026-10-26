@@ -72,6 +72,8 @@ Metadata-only edits do not recompress image pixels. Rotation preserves source mo
 
 Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see [File publication and cancellation](../DEVELOPMENT.md#file-publication-and-cancellation).
 
+For compression, conversion, resizing, metadata stripping and copyright editing, duplicate file identities (including aliases to the same file) cause the entire selection to be rejected before processing. Rotation and flipping instead report a repeated source as a failed item without transforming it again; camera-time shifting skips repeated paths and canonical-parent aliases after a successful update. All these actions reject filenames containing line breaks before processing. A processing failure returns a nonzero exit status even when other files in that batch were completed successfully; already published outputs are retained.
+
 ## Configuration and Defaults
 
 KIM6 reads optional defaults from a KConfig file and environment variables. When an action accepts an explicit command-line option, that option takes precedence for the invocation. Otherwise, an environment variable takes precedence over the corresponding KConfig key, followed by the built-in default.

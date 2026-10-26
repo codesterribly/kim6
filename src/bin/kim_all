@@ -60,7 +60,15 @@ if [ -d "$DISPATCHER_DIR/../locale" ]; then
 fi
 
 # Print an error and exit.
-die() { echo "ERROR: $*" >&2; exit 1; }
+die() {
+  local message="$*"
+  printf 'ERROR: %s\n' "$message" >&2
+  if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] &&
+     command -v kdialog >/dev/null 2>&1; then
+    kdialog --title "$(gettext 'Kim')" --error "$message" >/dev/null 2>&1 || true
+  fi
+  exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Temp workspace
@@ -184,26 +192,51 @@ count_valid_files() {
   echo "$n"
 }
 
-# Build an array of only real files from the Dolphin selection.
-# Usage: collect_valid_files <arrayname> <args...>
-collect_valid_files() {
-  local outvar="$1"
-  shift || true
+# Collect valid selection paths, rejecting line breaks for every action.
+# Most actions reject repeated file identities before any processing.
+# In-place transforms and time shifting retain their existing per-action
+# duplicate handling, while still requiring complete selection preflight.
+_collect_valid_files() {
+  local outvar="$1" duplicates="$2"
+  shift 2
 
-  # Bash nameref to fill caller-provided array
+  # Bash nameref to fill caller-provided array.
   local -n out_arr="$outvar"
   out_arr=()
 
-  local i
+  local i previous
   for i in "$@"; do
     if [ -f "$i" ]; then
       if [[ "$i" == *$'\n'* || "$i" == *$'\r'* ]]; then
+        out_arr=()
         progress_error "$(gettext 'Selected filenames containing line breaks cannot be processed safely.')"
         return 1
+      fi
+      if [ "$duplicates" = reject ]; then
+        # Detect inode aliases as well as repeated path strings.
+        for previous in "${out_arr[@]}"; do
+          if [[ "$i" -ef "$previous" ]]; then
+            out_arr=()
+            progress_error "$(gettext 'The same file was selected more than once. Nothing was changed.')"
+            return 1
+          fi
+        done
       fi
       out_arr+=("$i")
     fi
   done
+}
+
+collect_valid_files() {
+  local outvar="$1"
+  shift || true
+  _collect_valid_files "$outvar" reject "$@"
+}
+
+collect_valid_files_with_repeats() {
+  local outvar="$1"
+  shift || true
+  _collect_valid_files "$outvar" allow "$@"
 }
 
 
@@ -1128,7 +1161,7 @@ action_compress() {
   (( QUALITY >= 1 && QUALITY <= 100 )) || die "compress: quality must be between 1 and 100"
 
   local -a files=()
-  collect_valid_files files "${raw_files[@]}"
+  collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
   [ -n "$outdir" ] || outdir="${files[0]%/*}"
@@ -1241,7 +1274,7 @@ action_compress() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 
@@ -1373,7 +1406,7 @@ action_convert() {
   case "$FORMAT" in dib) format_coder=BMP ;; jfif) format_coder=JPEG ;; esac
 
   local -a files=()
-  collect_valid_files files "${raw_files[@]}"
+  collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
@@ -1729,7 +1762,7 @@ action_convert() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 
@@ -2586,7 +2619,7 @@ action_resize() {
   fi
 
   local -a files=()
-  collect_valid_files files "${raw_files[@]}"
+  collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
   [ -n "$outdir" ] || outdir="${files[0]%/*}"
@@ -2769,7 +2802,7 @@ action_resize() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -2820,12 +2853,12 @@ action_resizeandsend() {
       4 "$(gettext '800x800 px')" off \
       5 "$(gettext '600x600 px')" off \
       6 "$(gettext '300x300 px')" off \
-      7 "$(gettext 'Custom size...')" off)" || return 0
+      7 "$(gettext 'Custom size...')" off)" || return 130
     case "$choice" in
       1) size=full ;; 2) size=1600x1600 ;; 3) size=1200x1200 ;; 4) size=800x800 ;;
       5) size=600x600 ;; 6) size=300x300 ;;
-      7) size="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT):')" '1600x1600')" || return 0 ;;
-      *) return 0 ;;
+      7) size="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT):')" '1600x1600')" || return 130 ;;
+      *) return 130 ;;
     esac
   fi
   if [ "$size" != full ] && ! [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]]; then
@@ -3026,7 +3059,9 @@ action_transform_in_place() {
   shift 2
   local -a transform=("$operation") files=()
   if [ "$operation" = -rotate ]; then transform+=("$1"); shift; fi
-  collect_valid_files files "$@"
+  # The existing per-file identity check reports duplicate transforms as failed
+  # items without performing a second in-place modification.
+  collect_valid_files_with_repeats files "$@" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
   report_init
   local ref i tmp rc interrupted counter=0 source_info actual expected frame format count produced
@@ -3148,7 +3183,7 @@ action_transform_in_place() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 action_rotate() {
@@ -3237,7 +3272,7 @@ action_stripmeta() {
   done
   case "$strip_mode" in gps|ai|all) : ;; *) die "stripmeta: mode must be gps, ai or all" ;; esac
   local -a files=()
-  collect_valid_files files "$@"
+  collect_valid_files files "$@" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
@@ -3393,7 +3428,7 @@ action_stripmeta() {
   done
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  true
+  [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
 # Read-only metadata probes, plus pixel/ICC fingerprints used by every
@@ -3498,7 +3533,7 @@ action_stripmeta_selective() {
     XMP-iptcExt:LocationCreatedGPSAltitude XMP-iptcExt:LocationCreatedGPSAltitudeRef
     XMP-iptcExt:RatingRegionGPSLatitude XMP-iptcExt:RatingRegionGPSLongitude
     XMP-iptcExt:RatingRegionGPSAltitude XMP-iptcExt:RatingRegionGPSAltitudeRef)
-  collect_valid_files files "$@"
+  collect_valid_files files "$@" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
   if ! command -v exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for selective metadata removal.')"
@@ -3518,6 +3553,9 @@ action_stripmeta_selective() {
   report_init
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
+    # Metadata eligibility belongs to this file, never an earlier batch item.
+    ai_remove=false
+    ai_source=''
     counter=$((counter + 1)); tag="$strip_mode"
     [ "$remove_ai" != true ] || tag="${tag}_ai"
     progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
@@ -3616,7 +3654,7 @@ action_copyright() {
       *) files+=("$1"); shift ;;
     esac
   done
-  collect_valid_files files "${files[@]}"; [ "${#files[@]}" -gt 0 ] || return 0
+  collect_valid_files files "${files[@]}" || return 1; [ "${#files[@]}" -gt 0 ] || return 0
   if ! command -v exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for copyright metadata editing.')"
     return 1
@@ -3678,7 +3716,10 @@ action_timeshift() {
       *) files+=("$1"); shift ;;
     esac
   done
-  collect_valid_files files "${files[@]}"; [ "${#files[@]}" -gt 0 ] || return 0
+  # Time shifting already skips repeated paths and canonical-parent aliases
+  # after the first successful update. Preserve that established behavior.
+  collect_valid_files_with_repeats files "${files[@]}" || return 1
+  [ "${#files[@]}" -gt 0 ] || return 0
   if ! command -v exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for camera timestamp editing.')"
     return 1
