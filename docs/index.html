@@ -26,9 +26,9 @@
         <span class="brand-description">User guide</span>
       </a>
       <nav class="top-actions" aria-label="Quick links">
-        <a href="../INSTALL.md">Installation</a>
-        <a href="ACTIONS.md">All menu actions</a>
-        <a class="top-action-primary" href="../README.md">Project overview <span aria-hidden="true">↗</span></a>
+        <a href="reference/INSTALL.html">Installation</a>
+        <a href="reference/ACTIONS.html">All menu actions</a>
+        <a class="top-action-primary" href="reference/README.html">Project overview <span aria-hidden="true">↗</span></a>
       </nav>
     </div>
   </header>
@@ -74,6 +74,7 @@
       <nav class="side-nav-inner" aria-label="Main navigation">
         <p class="nav-heading">ON THIS PAGE</p>
         <a href="#start">Start here</a>
+        <a href="#visual-guide">Illustrated walkthrough</a>
         <a href="#photos">Everyday photo tasks</a>
         <a href="#sharing">Share and export</a>
         <a href="#metadata">Metadata and dates</a>
@@ -84,9 +85,9 @@
         <a href="#references">More information</a>
         <div class="nav-separator"></div>
         <p class="nav-heading">REFERENCE</p>
-        <a class="nav-external" href="ACTIONS.md">Full action list <span aria-hidden="true">↗</span></a>
-        <a class="nav-external" href="commandconfig.md">Commands &amp; settings <span aria-hidden="true">↗</span></a>
-        <a class="nav-external" href="FORMATS.md">Supported formats <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="reference/ACTIONS.html">Full action list <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="reference/commandconfig.html">Commands &amp; settings <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="reference/FORMATS.html">Supported formats <span aria-hidden="true">↗</span></a>
       </nav>
     </aside>
 
@@ -103,6 +104,26 @@
         <div class="notice notice-info">
           <span class="notice-symbol" aria-hidden="true">i</span>
           <p>New to KIM6? Start with <strong>Create new</strong>. A saved <code>KIM_POLICY=overwrite</code> setting can skip the prompt; change it to <code>create</code> before experimenting. Rotation and flips are exceptions: they operate <strong>in place</strong>. <a href="#file-handling">How file handling works</a>.</p>
+        </div>
+      </section>
+
+      <section id="visual-guide" class="content-section" aria-labelledby="visual-guide-title">
+        <p class="section-eyebrow">SEE HOW IT WORKS</p>
+        <h2 id="visual-guide-title">KIM6 in Dolphin.</h2>
+        <p class="section-intro">These generated illustrations show the general workflow and style of the Dolphin context menu and dialogs. They are <strong>conceptual examples, not actual application screenshots</strong>; the real prompts and controls may differ.</p>
+        <div class="screen-gallery">
+          <figure class="manual-shot manual-shot-wide">
+            <img src="images/kim6-context-menu-illustration.png" alt="Illustration of Dolphin with an image selected and KIM6 image-action submenus open." loading="lazy" decoding="async" width="1440" height="1024">
+            <figcaption><strong>1. Find KIM6 in the right-click menu.</strong> Select a local photo in Dolphin to see compatible menu actions.</figcaption>
+          </figure>
+          <figure class="manual-shot">
+            <img src="images/kim6-web-export-illustration.png" alt="Illustration of a web export settings dialog over the Dolphin file browser." loading="lazy" decoding="async" width="1440" height="1024">
+            <figcaption><strong>2. Choose export settings.</strong> Web export creates a separate result. Shown controls are illustrative.</figcaption>
+          </figure>
+          <figure class="manual-shot">
+            <img src="images/kim6-metadata-illustration.png" alt="Illustration of a metadata cleanup dialog over Dolphin." loading="lazy" decoding="async" width="1440" height="1024">
+            <figcaption><strong>3. Control metadata.</strong> GPS removal targets recognized location fields; actual dialogs may differ.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -144,7 +165,7 @@
             <div class="output"><span>3 selected photos</span><span class="output-arrow" aria-hidden="true">→</span><strong>3 resized files</strong></div>
           </article>
         </div>
-        <p class="section-footnote">If an output filename is already taken, KIM6 creates a numbered name. Prefix naming can be configured instead of the default suffix format. <a href="commandconfig.md">Naming and command options <span aria-hidden="true">↗</span></a></p>
+        <p class="section-footnote">If an output filename is already taken, KIM6 creates a numbered name. Prefix naming can be configured instead of the default suffix format. <a href="reference/commandconfig.html">Naming and command options <span aria-hidden="true">↗</span></a></p>
       </section>
 
       <section id="sharing" class="content-section" aria-labelledby="sharing-title">
@@ -202,7 +223,7 @@
           <div><span class="video-num">03</span><div><h3>Work with audio</h3><p>Extract supported audio formats or remove audio while copying the compatible video stream.</p></div></div>
           <div><span class="video-num">04</span><div><h3>Create a GIF</h3><p>Turn a short video segment into an animated GIF.</p></div></div>
         </div>
-        <p class="section-footnote">Encoder and container availability depend on FFmpeg and the libraries installed on your computer. <a href="FORMATS.md">Read the format compatibility notes <span aria-hidden="true">↗</span></a></p>
+        <p class="section-footnote">Encoder and container availability depend on FFmpeg and the libraries installed on your computer. <a href="reference/FORMATS.html">Read the format compatibility notes <span aria-hidden="true">↗</span></a></p>
       </section>
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
@@ -214,7 +235,7 @@
           <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Some image actions offer replacement after validation. Check the selected destination before agreeing.</p></article>
           <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Always in place</h3><p>Rotation and flips modify the selected image. Work on a copy if you want to keep its current orientation.</p></article>
         </div>
-        <p class="section-footnote">Web exports, prepared email copies, galleries, albums, slideshows, and video-derived outputs do not replace selected source files. KIM6 stages and validates supported outputs before publishing them; see <a href="commandconfig.md">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
+        <p class="section-footnote">Web exports, prepared email copies, galleries, albums, slideshows, and video-derived outputs do not replace selected source files. KIM6 stages and validates supported outputs before publishing them; see <a href="reference/commandconfig.html">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
@@ -222,10 +243,10 @@
         <h2 id="troubleshooting-title">Find a fix.</h2>
         <p class="section-intro">Check these common causes first. No need to test a failing action by overwriting a valuable photograph.</p>
         <div class="faq-list">
-          <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="../INSTALL.md">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
-          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Check the format reference for inspection commands.</p><p><a href="FORMATS.md">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
-          <details><summary>An action failed partway through a batch.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Read the final error report, confirm the source is readable and the destination is writable, and check that the requested encoder is available. Successfully completed outputs remain in place. Test uncertain inputs using copies.</p><p><a href="commandconfig.md">Command reference and troubleshooting <span aria-hidden="true">↗</span></a></p></div></details>
-          <details><summary>Where are my files, and what if a filename already exists?<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Many Create new actions save a derivative beside the input and add a number when the requested filename is occupied. Other actions prompt for a destination, use a configured output folder, or place email attachments in a persistent directory. Read the action's result dialog for the exact location.</p><p><a href="commandconfig.md">Output policies and naming <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="reference/INSTALL.html">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>An action failed partway through a batch.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Read the final error report, confirm the source is readable and the destination is writable, and check that the requested encoder is available. Successfully completed outputs remain in place. Test uncertain inputs using copies.</p><p><a href="reference/commandconfig.html">Command reference and troubleshooting <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>Where are my files, and what if a filename already exists?<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Many Create new actions save a derivative beside the input and add a number when the requested filename is occupied. Other actions prompt for a destination, use a configured output folder, or place email attachments in a persistent directory. Read the action's result dialog for the exact location.</p><p><a href="reference/commandconfig.html">Output policies and naming <span aria-hidden="true">↗</span></a></p></div></details>
         </div>
       </section>
 
@@ -234,12 +255,12 @@
         <h2 id="references-title">Everything else is documented.</h2>
         <p class="section-intro">This page covers everyday use. For specific actions, detailed arguments, or developer information, use the focused references.</p>
         <div class="reference-list">
-          <a href="../README.md"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="../INSTALL.md"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="ACTIONS.md"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 107 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="commandconfig.md"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="FORMATS.md"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="../DEVELOPMENT.md"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 107 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/commandconfig.html"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/FORMATS.html"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/DEVELOPMENT.html"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>
         </div>
       </section>
     </main>
@@ -248,7 +269,7 @@
   <footer class="site-footer">
     <div class="page-width footer-inner">
       <div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Image and video tools for KDE Dolphin.</p></div>
-      <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="../ABOUT">Credits</a><span aria-hidden="true">·</span><a href="../LICENSE.md">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/KIM-6/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
+      <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="reference/ABOUT.html">Credits</a><span aria-hidden="true">·</span><a href="reference/LICENSE.html">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/KIM-6/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
     </div>
   </footer>
 </body>

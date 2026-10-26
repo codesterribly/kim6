@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>commandconfig · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · docs/commandconfig.md</div>
+      <article class="markdown-body">
+<h1 id="kim6-command-and-configuration-reference">KIM6 Command and Configuration Reference</h1>
+<p><code>kim_all</code> is KIM6's main executable. Dolphin normally runs it through the service menus, but it can also be called directly from a terminal.</p>
+<p>When working from the source directory, use:</p>
+<pre class="sh"><code>./src/bin/kim_all --help</code></pre>
+<p>To run a command from the source directory:</p>
+<pre class="sh"><code>./src/bin/kim_all compress --quality 70 -- photo.jpg</code></pre>
+<p>The examples below use <code>kim_all</code> for readability. Replace it with <code>./src/bin/kim_all</code> or the full path to the installed executable when running commands directly.</p>
+<p>Separate command options from filenames with <code>--</code>. Quote filenames containing spaces or special characters.</p>
+<p>Some commands display KDialog prompts when options are omitted. Configuration settings and environment variables can supply defaults; see <a href="#configuration-and-defaults">Configuration and Defaults</a> below.</p>
+<p>For the complete list of Dolphin menu entries, see <a href="ACTIONS.html">ACTIONS.md</a>.</p>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#command-syntax">Command Syntax</a></li>
+<li><a href="#output-and-file-handling">Output and File Handling</a></li>
+<li><a href="#configuration-and-defaults">Configuration and Defaults</a></li>
+<li><a href="#still-image-actions">Still-image actions</a>: album, animate, compress, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport</li>
+<li><a href="#video-actions">Video actions</a>: slideshow, video, videoframes, videoaudio, videogif</li>
+<li><a href="#information-actions">Information actions</a>: about, license, manual</li>
+</ul>
+<h2 id="command-syntax">Command Syntax</h2>
+<p>Most processing commands follow this structure:</p>
+<pre class="text"><code>kim_all COMMAND [OPTIONS] -- FILE...</code></pre>
+<ul>
+<li><code>COMMAND</code> selects the operation.</li>
+<li><code>[OPTIONS]</code> represents optional or required settings.</li>
+<li><code>--</code> separates command options from filenames.</li>
+<li><code>FILE...</code> represents one or more selected files.</li>
+</ul>
+<p>Some commands also accept a destination directory as a positional argument. Those forms are documented under the relevant commands.</p>
+<p>The <code>about</code>, <code>license</code>, and <code>manual</code> commands do not require files.</p>
+<p>The command blocks below show syntax patterns. Values separated by <code>|</code> are alternatives, not literal shell pipelines.</p>
+<h2 id="output-and-file-handling">Output and File Handling</h2>
+<p>KIM6 uses different file-handling rules depending on the operation.</p>
+<ul>
+<li><strong>Create new:</strong> Generates a separate file, normally using an action-specific filename suffix. Existing filenames are handled without silently replacing them.</li>
+<li><strong>Overwrite:</strong> Replaces an existing file only when the operation supports it and replacement is authorized.</li>
+<li><strong>Derived output:</strong> Always creates a separate result, regardless of <code>KIM_POLICY</code>.</li>
+<li><strong>In-place operation:</strong> Modifies the selected file directly. Rotation and flipping use this behavior.</li>
+</ul>
+<p>Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.</p>
+<p>See <a href="commandconfig.html#output-and-file-handling">File handling</a> for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.</p>
+<h3 id="file-preservation-details">File preservation details</h3>
+<p>Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation and flipping are always in-place. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.</p>
+<p>Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.</p>
+<p>Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a>.</p>
+<h2 id="configuration-and-defaults">Configuration and Defaults</h2>
+<p>KIM6 reads optional defaults from a KConfig file and environment variables. When an action accepts an explicit command-line option, that option takes precedence for the invocation. Otherwise, an environment variable takes precedence over the corresponding KConfig key, followed by the built-in default.</p>
+<p>The default configuration file is <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu</code>. Set <code>KIM_CONFIG_FILE</code> to use a different file. The KConfig group is literally named <code>&lt;default&gt;</code>. The dispatcher reads supported KConfig values when it starts, so changes to the file apply to subsequent invocations. If the file is unavailable or unreadable, the dispatcher uses environment values and action defaults.</p>
+<h3 id="settings">Settings</h3>
+<table>
+<thead>
+<tr>
+<th>Environment variable</th>
+<th>KConfig key</th>
+<th>Default</th>
+<th>Accepted values and purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KIM_CONFIG_FILE</code></td>
+<td>—</td>
+<td><code>${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu</code></td>
+<td>Path to the KConfig file; environment-only setting.</td>
+</tr>
+<tr>
+<td><code>KIM_POLICY</code></td>
+<td><code>KIM_POLICY</code></td>
+<td>Prompt</td>
+<td><code>create</code> or <code>overwrite</code> for actions offering a file-handling choice.</td>
+</tr>
+<tr>
+<td><code>KIM_NAME_AFFIX_POSITION</code></td>
+<td><code>NAME_AFFIX_POSITION</code></td>
+<td><code>suffix</code></td>
+<td><code>prefix</code> or <code>suffix</code> for generated filename tags.</td>
+</tr>
+<tr>
+<td><code>KIM_WEB_QUALITY</code></td>
+<td><code>WEB_EXPORT_QUALITY</code></td>
+<td><code>75</code></td>
+<td>Integer 1–100 for web export quality.</td>
+</tr>
+<tr>
+<td><code>KIM_WEB_FORMAT</code></td>
+<td><code>WEB_EXPORT_FORMAT</code></td>
+<td><code>jpg</code></td>
+<td><code>jpg</code>, <code>jpeg</code>, <code>webp</code>, <code>avif</code>, or <code>keep</code> for web export.</td>
+</tr>
+<tr>
+<td><code>KIM_WEB_COLOR_MODE</code></td>
+<td><code>WEB_COLOR_MODE</code></td>
+<td><code>srgb</code></td>
+<td><code>srgb</code> or <code>preserve</code> for web export color handling.</td>
+</tr>
+<tr>
+<td><code>KIM_COPYRIGHT_CREATOR</code></td>
+<td><code>COPYRIGHT_CREATOR</code></td>
+<td>Empty</td>
+<td>Default creator or artist text.</td>
+</tr>
+<tr>
+<td><code>KIM_COPYRIGHT_NOTICE</code></td>
+<td><code>COPYRIGHT_NOTICE</code></td>
+<td>Empty</td>
+<td>Default copyright notice; supports <code>{YEAR}</code>.</td>
+</tr>
+<tr>
+<td><code>KIM_COPYRIGHT_USAGE_RIGHTS</code></td>
+<td><code>COPYRIGHT_USAGE_RIGHTS</code></td>
+<td>Empty</td>
+<td>Default usage-rights text.</td>
+</tr>
+<tr>
+<td><code>KIM_GIF_DELAY</code></td>
+<td>—</td>
+<td><code>100</code></td>
+<td>Default animation delay in centiseconds (0–65535), used by the interactive <code>animate</code> dialog.</td>
+</tr>
+</tbody>
+</table>
+<p><code>KIM_CONFIG_FILE</code> is an environment-only setting; it chooses the file containing the KConfig keys above. <code>KIM_GIF_DELAY</code> is also environment-only and is range-checked when the animation is requested. KIM6 uses <code>KIM_POLICY</code> alone for output policy; it does not support <code>KIM_MODE</code> as an alias.</p>
+<h3 id="validation-and-behavior">Validation and behavior</h3>
+<ul>
+<li><strong>Output policy:</strong> An unset or unsupported <code>KIM_POLICY</code> leaves the normal create/overwrite prompt available. <code>create</code> uses collision-safe output names; <code>overwrite</code> authorizes replacement only when the action supports it. Derived-only actions never replace selected originals merely because <code>KIM_POLICY=overwrite</code> is set.</li>
+<li><strong>Filename tags:</strong> <code>prefix</code> places a generated tag before the complete filename stem; <code>suffix</code> places it after the stem. The extension stays at the end, and collision numbering remains before the extension. This setting applies to compression, resize, web export, and full metadata stripping, not to rename. Only the exact value <code>prefix</code> selects prefix mode; otherwise suffix behavior is used. KConfig accepts the two documented values.</li>
+<li><strong>Web quality:</strong> Invalid KConfig values fall back to <code>75</code>. An invalid <code>KIM_WEB_QUALITY</code> environment value can appear as the dialog default but is rejected if submitted; an explicit <code>--quality</code> argument is validated for that invocation.</li>
+<li><strong>Web format and color:</strong> Invalid KConfig entries fall back to <code>jpg</code> and <code>srgb</code>, respectively. Unsupported environment or command-line values cause the action to fail rather than silently choosing another format or color mode. <code>keep</code> retains the source format when supported.</li>
+<li><strong>Copyright fields:</strong> Empty defaults mean no value is supplied. An empty field in the interactive dialog leaves that metadata field unchanged rather than clearing it. <code>{YEAR}</code> in a copyright notice is resolved as described under <a href="#copyright"><code>copyright</code></a>.</li>
+</ul>
+<h3 id="example-kconfig-file">Example KConfig file</h3>
+<p>Create or edit <code>~/.config/kim_kdeimagemenu</code>:</p>
+<pre class="ini"><code>[&lt;default&gt;]
+KIM_POLICY=create
+NAME_AFFIX_POSITION=suffix
+WEB_EXPORT_QUALITY=75
+WEB_EXPORT_FORMAT=jpg
+WEB_COLOR_MODE=srgb
+COPYRIGHT_CREATOR=Example Photographer
+COPYRIGHT_NOTICE=Copyright © {YEAR} Example Photographer
+COPYRIGHT_USAGE_RIGHTS=</code></pre>
+<p>Environment overrides must be present in the environment that launches Dolphin, or can be set for an individual terminal command. For example:</p>
+<pre class="sh"><code>KIM_POLICY=create KIM_NAME_AFFIX_POSITION=prefix kim_all resize --size 1600x1600 -- photo.jpg
+KIM_WEB_COLOR_MODE=preserve kim_all webexport --size 1600x1600 -- photo.jpg</code></pre>
+<p>When running from a source checkout, replace <code>kim_all</code> in those examples with <code>./src/bin/kim_all</code>. See <a href="commandconfig.html#output-and-file-handling">File handling</a> for action-specific metadata and timestamp rules.</p>
+<h2 id="still-image-actions">Still-image actions</h2>
+<h3 id="album"><code>album</code></h3>
+<pre class="sh"><code>kim_all album -- FILE...
+kim_all album OUTPUT_DIRECTORY FILE...</code></pre>
+<p>Prompts for one of eight PDF album layouts and a PDF destination. The optional first argument chooses the initial output directory. Produces an ordered, validated multi-page A4 PDF (portrait or landscape according to the chosen preset). Existing targets require the configured create/overwrite choice.</p>
+<h3 id="animate"><code>animate</code></h3>
+<pre class="sh"><code>kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...</code></pre>
+<p>Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from <code>videogif</code>, which samples a video segment.</p>
+<h3 id="compress"><code>compress</code></h3>
+<pre class="sh"><code>kim_all compress --quality 1..100 [--output-dir DIR] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- JPEG...
+kim_all compress --custom -- JPEG...</code></pre>
+<p>Accepts JPEG image content only. Quality is a decimal integer 1–100. Custom mode asks for quality and may ask for progressive/baseline scan and Huffman-table optimization. Progressive is the established default; baseline explicitly selects sequential scans. Optimization is an encoding option; a smaller file is not guaranteed. Create mode uses the configured <code>_compressed</code> affix and collision numbering. Authorized overwrite replaces the selected JPEG only after validation.</p>
+<h3 id="convert"><code>convert</code></h3>
+<pre class="sh"><code>kim_all convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy] [--jp2-quality 1..100] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- FILE...
+kim_all convert --custom-format -- FILE...</code></pre>
+<p>Dedicated menu formats include JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL and JPEG 2000. Output depends on the installed coder/delegate; missing encoders fail rather than changing format. APNG is supported for animated PNG when FFmpeg/ffprobe are available. Animated sources are not silently flattened by a conversion that cannot preserve frames. <code>--bmp5</code> is valid only with BMP output. JP2 defaults to lossy; <code>--jp2-mode lossless</code> uses the installed JPEG 2000 delegate’s lossless rate setting. <code>--jp2-quality</code> is JPEG-2000-specific, not equivalent to JPEG quality. JPEG scan/optimization flags apply only to JPEG output. Create or overwrite follows the output policy; source bytes remain protected.</p>
+<h3 id="copyright"><code>copyright</code></h3>
+<pre class="sh"><code>kim_all copyright [--creator TEXT] [--notice TEXT] [--usage-rights TEXT] [--year YYYY] -- FILE...
+kim_all copyright --interactive -- FILE...</code></pre>
+<p>Updates only supplied nonempty fields. With no values or with <code>--interactive</code>, shows a form. <code>{YEAR}</code> in a notice expands to the capture year when available, otherwise the current year; <code>--year</code> supplies a fixed year. Writes the defined EXIF/IPTC/XMP fields without recompressing pixels. No-op updates do not publish a copy.</p>
+<h3 id="datesync"><code>datesync</code></h3>
+<pre class="sh"><code>kim_all datesync --direction exif-to-file -- FILE...
+kim_all datesync --direction file-to-exif [--fields capture|all] -- FILE...
+kim_all datesync --interactive -- FILE...</code></pre>
+<p><code>exif-to-file</code> sets filesystem modification time from <code>DateTimeOriginal</code>; camera times without a zone use system local time, not UTC. <code>file-to-exif</code> writes capture time from filesystem mtime; <code>capture</code> writes <code>DateTimeOriginal</code>, while <code>all</code> also writes <code>CreateDate</code> and <code>ModifyDate</code>. The dialog previews the first selected file and confirms direction. Writing EXIF dates preserves image pixels without recompression and retains filesystem modification time. Filesystem creation time is not changed.</p>
+<h3 id="flipflop"><code>flipflop</code></h3>
+<pre class="sh"><code>kim_all flipflop flip -- FILE...
+kim_all flipflop flop -- FILE...</code></pre>
+<p><code>flip</code> mirrors vertically; <code>flop</code> mirrors horizontally. These are explicitly in-place transformations, independent of <code>KIM_POLICY</code>; the staged result replaces the selected image only after validation.</p>
+<h3 id="gallery"><code>gallery</code></h3>
+<pre class="sh"><code>kim_all gallery -- IMAGE...</code></pre>
+<p>Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting <code>index.html</code> with <code>xdg-open</code> when available.</p>
+<h3 id="pelemele"><code>pelemele</code></h3>
+<pre class="sh"><code>kim_all pelemele [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...</code></pre>
+<p>Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are <code>5x4</code>, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.</p>
+<h3 id="print"><code>print</code></h3>
+<pre class="sh"><code>kim_all print -- IMAGE...
+kim_all print OUTPUT_DIRECTORY IMAGE...</code></pre>
+<p>Prompts for one of seven print layouts and an output PDF. Layouts specify paper orientation, physical print dimensions or thumbnail grid. The optional first argument chooses the initial destination directory. Result is validated as an ordered, multi-page PDF.</p>
+<h3 id="rename"><code>rename</code></h3>
+<pre class="sh"><code>kim_all rename MODE [--output-dir DIR] -- FILE...
+kim_all rename interactive -- FILE...</code></pre>
+<p>The following rename modes are available:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lowercase</code></td>
+<td>Convert filenames to lowercase.</td>
+</tr>
+<tr>
+<td><code>uppercase</code></td>
+<td>Convert filenames to uppercase.</td>
+</tr>
+<tr>
+<td><code>spacestodash</code></td>
+<td>Replace spaces with dashes.</td>
+</tr>
+<tr>
+<td><code>dashestospace</code></td>
+<td>Replace dashes with spaces.</td>
+</tr>
+<tr>
+<td><code>addprefix</code></td>
+<td>Add text to the beginning of filenames.</td>
+</tr>
+<tr>
+<td><code>addsuffix</code></td>
+<td>Add text to the end of filenames.</td>
+</tr>
+<tr>
+<td><code>overwrite</code></td>
+<td>Replace specified text within filenames, not overwrite image contents.</td>
+</tr>
+<tr>
+<td><code>exifdate</code></td>
+<td>Rename images using their EXIF capture dates.</td>
+</tr>
+<tr>
+<td><code>sequential</code></td>
+<td>Rename files using a numbered sequence.</td>
+</tr>
+<tr>
+<td><code>interactive</code></td>
+<td>Display a dialog to choose a rename operation.</td>
+</tr>
+</tbody>
+</table>
+<p>EXIF-date formats include <code>YYYYMMDD_HHMMSS</code>, <code>YYYY-MM-DD_HH-MM-SS</code>, <code>YYYY-DD-MM_HH-MM-SS</code>, and <code>IMG-YYYYMMDD_HHMMSS</code>.</p>
+<p>Sequential mode prompts for a base name, starting number, and minimum number width (1–18). Supported modes allow a separate output directory.</p>
+<p>KIM6 checks the complete batch for naming conflicts before making changes. Occupied paths are not overwritten. Cross-device moves copy and validate the bytes and metadata before publishing without clobbering and removing the unchanged source.</p>
+<h3 id="resize"><code>resize</code></h3>
+<pre class="sh"><code>kim_all resize --size GEOMETRY [--output-dir DIR] -- IMAGE...
+kim_all resize --percent PERCENT [--output-dir DIR] -- IMAGE...
+kim_all resize --custom -- IMAGE...
+kim_all resize --custom-percent -- IMAGE...</code></pre>
+<p>Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses <code>_resized</code>; authorized overwrite replaces only after validation.</p>
+<h3 id="resizeandsend"><code>resizeandsend</code></h3>
+<pre class="sh"><code>kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...</code></pre>
+<p>Without <code>--size</code>, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or <code>xdg-email</code> is used if available. Attachments are retained in <code>${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments</code> because clients may read asynchronously; see <a href="commandconfig.html#output-and-file-handling">File handling</a>.</p>
+<p>KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.</p>
+<h3 id="rotate"><code>rotate</code></h3>
+<pre class="sh"><code>kim_all rotate --angle DEGREES -- IMAGE...
+kim_all rotate --exif -- IMAGE...
+kim_all rotate --custom -- IMAGE...</code></pre>
+<p>Rotates by a supported signed decimal angle, auto-orients using EXIF, or prompts for a custom angle. This is an explicitly in-place transformation, independent of <code>KIM_POLICY</code>. It keeps image profiles and validated frame content; rotation preserves source mtime including nanoseconds where supported.</p>
+<h3 id="rotatewithexif"><code>rotatewithexif</code></h3>
+<pre class="sh"><code>kim_all rotatewithexif IMAGE...</code></pre>
+<p>Retained dispatcher alias for EXIF-based orientation. The Dolphin menu uses <code>rotate --exif</code>.</p>
+<h3 id="stripmeta"><code>stripmeta</code></h3>
+<pre class="sh"><code>kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...</code></pre>
+<p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.</p>
+<h3 id="timeshift"><code>timeshift</code></h3>
+<pre class="sh"><code>kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
+kim_all timeshift --interactive -- IMAGE...</code></pre>
+<p>Adds or subtracts the fixed offset from camera date tags. <code>all</code> (default) shifts <code>DateTimeOriginal</code>, <code>CreateDate</code>, and <code>ModifyDate</code>; <code>capture</code> shifts only <code>DateTimeOriginal</code>. Subsecond and timezone-offset tags remain unchanged, as do GPS timestamps and filesystem modification time. This shifts a camera’s wall-clock values; it does not convert time zones or reinterpret local time as UTC.</p>
+<h3 id="tiffjoin"><code>tiffjoin</code></h3>
+<pre class="sh"><code>kim_all tiffjoin [--output PATH] [--] IMAGE...</code></pre>
+<p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
+<h3 id="webexport"><code>webexport</code></h3>
+<pre class="sh"><code>kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...</code></pre>
+<p>Options can also be prompted. The legacy <code>webexport OUTPUT_DIRECTORY FILE...</code> dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web export always creates a distinct derivative, including under <code>KIM_POLICY=overwrite</code>. JPEG scan/optimization options apply only to JPEG output.</p>
+<p>With <code>--color srgb</code> (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. <code>--color preserve</code> retains embedded color profiles where supported.</p>
+<h2 id="video-actions">Video actions</h2>
+<h3 id="slideshow"><code>slideshow</code></h3>
+<pre class="sh"><code>kim_all slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30] [--background COLOR] [--output FILE] [--interactive] -- PHOTO...</code></pre>
+<p>Creates a derived, silent H.264/yuv420p MP4. Photos are sorted in natural filename order, fitted without upscaling, and padded. Defaults are 3 seconds per photo, 1280×720, 25 fps, black background. Interactive size choices are 1280×720, 1920×1080, and 854×480. Limits: 200 photos, 600 seconds total, 18,000 frames and 1920×1080. RAW, layered, vector, HDR, and animated sources are rejected. H.264 encoder <code>libx264</code> is required.</p>
+<p>Slideshows do not include titles, transitions, pan, or zoom effects. They are intended for straightforward photo-to-video conversion, not video editing.</p>
+<h3 id="video"><code>video</code></h3>
+<pre class="sh"><code>kim_all video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265 --container orig|mp4 -- VIDEO...
+kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|custom --container orig|mp4 -- VIDEO...</code></pre>
+<p>H.264/H.265 uses the existing 24 presets. For AV1 encoding, KIM6 uses <code>libsvtav1</code> when available or <code>libaom-av1</code> otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. <code>custom</code> prompts for AV1 quality and speed. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.</p>
+<h3 id="videoframes"><code>videoframes</code></h3>
+<pre class="sh"><code>kim_all videoframes --mode single --at HH:MM:SS[.sss] [--format png|jpg] -- VIDEO...
+kim_all videoframes --mode thumbnail [--format png|jpg] -- VIDEO...
+kim_all videoframes --mode contact [--grid 3x3|4x4|5x5] [--format png|jpg] -- VIDEO...</code></pre>
+<p>Extracts one frame, a representative midpoint thumbnail (not frame zero), or one labeled contact sheet. Contact sheets use 320×180 fit/pad tiles, sample evenly over duration, and may repeat positions for short videos. Display rotation is applied. Interactive menu entries ask for needed options.</p>
+<h3 id="videoaudio"><code>videoaudio</code></h3>
+<pre class="sh"><code>kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
+kim_all videoaudio --mode mute -- VIDEO...</code></pre>
+<p>Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.</p>
+<h3 id="videogif"><code>videogif</code></h3>
+<pre class="sh"><code>kim_all videogif --start HH:MM:SS[.sss] --duration SECONDS --fps 10|12|15|24 --width 320|480|640|800 --loop infinite|once -- VIDEO...</code></pre>
+<p>Creates a palette-optimized GIF for the requested interval. Duration is greater than zero and at most 60 seconds, with at most 1440 nominal frames and a 200-million output pixel-frame work bound. Width is a maximum and does not upscale; height follows aspect ratio. At least two output frames are required. Infinite uses GIF loop extension 0; once omits looping.</p>
+<h2 id="information-actions">Information actions</h2>
+<h3 id="about"><code>about</code></h3>
+<pre class="sh"><code>kim_all about</code></pre>
+<p>Shows the installed About text in KDialog.</p>
+<h3 id="license"><code>license</code></h3>
+<pre class="sh"><code>kim_all license</code></pre>
+<p>Opens the installed <code>LICENSE.md</code> using <code>xdg-open</code>.</p>
+<h3 id="manual"><code>manual</code></h3>
+<pre class="sh"><code>kim_all manual</code></pre>
+<p>Opens the installed static manual using <code>xdg-open</code>.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>If an action fails, check the final KDialog report. Confirm that the source is readable, the destination is writable, and the required ImageMagick coder, FFmpeg encoder, or other dependency is installed.</p>
+<p>When running <code>kim_all</code> directly, inspect the terminal output for diagnostics. Previously completed outputs remain available if a later batch item fails.</p>
+<p>Test uncertain operations using disposable copies and <code>KIM_POLICY=create</code>, not important originals. See <a href="FORMATS.html">FORMATS.md</a> for codec support and <a href="INSTALL.html">INSTALL.md</a> for missing Dolphin menus or installation problems.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+</body>
+</html>

@@ -74,8 +74,21 @@ languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
   kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
   kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
+manual_files=(
+  docs/reference/ABOUT.html
+  docs/reference/ACTIONS.html
+  docs/reference/commandconfig.html
+  docs/reference/DEVELOPMENT.html
+  docs/reference/FORMATS.html
+  docs/reference/INSTALL.html
+  docs/reference/LICENSE.html
+  docs/reference/README.html
+  docs/images/kim6-context-menu-illustration.png
+  docs/images/kim6-metadata-illustration.png
+  docs/images/kim6-web-export-illustration.png
+)
 runtime_files=(bin/kim_all gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
-  docs/index.html docs/work.css .kim6-owned .kim6-manifest)
+  docs/index.html docs/work.css "${manual_files[@]}" .kim6-owned .kim6-manifest)
 die() { echo "uninstall.sh: $*" >&2; exit 1; }
 check_dir() {
   [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] || die "refusing unsafe directory: $1"
@@ -111,7 +124,7 @@ if [ -L "$RUNTIME" ] || { [ -e "$RUNTIME" ] && [ ! -d "$RUNTIME" ]; }; then
   exit 1
 fi
 if [ -d "$RUNTIME" ]; then
-  for directory in "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/locale"; do
+  for directory in "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
     check_dir "$directory"
   done
   for relative in "${runtime_files[@]}"; do
@@ -159,7 +172,8 @@ if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
     if [ -f "$path" ]; then rm -f -- "$path"; fi
     rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" "$RUNTIME/locale/$language" 2>/dev/null || true
   done
-  rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME" 2>/dev/null || true
+  rmdir -- "$RUNTIME/docs/images" "$RUNTIME/docs/reference" 2>/dev/null || true
+    rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME" 2>/dev/null || true
 fi
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then

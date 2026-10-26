@@ -63,8 +63,21 @@ languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
   kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
   kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
+manual_files=(
+  docs/reference/ABOUT.html
+  docs/reference/ACTIONS.html
+  docs/reference/commandconfig.html
+  docs/reference/DEVELOPMENT.html
+  docs/reference/FORMATS.html
+  docs/reference/INSTALL.html
+  docs/reference/LICENSE.html
+  docs/reference/README.html
+  docs/images/kim6-context-menu-illustration.png
+  docs/images/kim6-metadata-illustration.png
+  docs/images/kim6-web-export-illustration.png
+)
 runtime_files=(bin/kim_all gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
-  docs/index.html docs/work.css)
+  docs/index.html docs/work.css "${manual_files[@]}")
 temporary=''
 die() { echo "install.sh: $*" >&2; exit 1; }
 check_dir() { [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] || die "refusing unsafe directory: $1"; }
@@ -110,7 +123,7 @@ fi
 
 # Check every path we will touch before copying. Unknown files elsewhere in the
 # runtime stay in place; known destinations must be ordinary files/directories.
-for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/locale"; do
+for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
   check_dir "$directory"
 done
 for relative in "${runtime_files[@]}" .kim6-owned .kim6-manifest; do
@@ -138,7 +151,7 @@ done
 
 # Check the source checkout before creating or replacing runtime files.
 for relative in src/bin/kim_all src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
-    INSTALL.md docs/index.html docs/work.css; do
+    INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
 for name in "${menu_names[@]}"; do
@@ -173,7 +186,7 @@ compile_translation() {
   temporary=''
 }
 
-mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs"
+mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
 install_file "$SOURCE_DIR/src/bin/kim_all" "$RUNTIME/bin/kim_all" 0755
 install_file "$SOURCE_DIR/src/gallery/index.part1" "$RUNTIME/gallery/index.part1" 0644
 install_file "$SOURCE_DIR/src/gallery/index.part2" "$RUNTIME/gallery/index.part2" 0644
@@ -182,6 +195,9 @@ install_file "$SOURCE_DIR/LICENSE.md" "$RUNTIME/LICENSE.md" 0644
 install_file "$SOURCE_DIR/INSTALL.md" "$RUNTIME/INSTALL.md" 0644
 install_file "$SOURCE_DIR/docs/index.html" "$RUNTIME/docs/index.html" 0644
 install_file "$SOURCE_DIR/docs/work.css" "$RUNTIME/docs/work.css" 0644
+for relative in "${manual_files[@]}"; do
+  install_file "$SOURCE_DIR/$relative" "$RUNTIME/$relative" 0644
+done
 
 if command -v msgfmt >/dev/null 2>&1; then
   for language in "${languages[@]}"; do

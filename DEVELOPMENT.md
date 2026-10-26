@@ -332,3 +332,31 @@ find "$work/output" -maxdepth 1 -type f -print
 Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.
 
 See [Command and Configuration Reference](docs/commandconfig.md) for additional options.
+
+## Building the offline HTML manual
+
+Markdown is the authoritative documentation source. The illustrated
+landing page is maintained in `docs/index.html`, and the reference
+pages under `docs/reference/` are generated from Markdown.
+
+Pandoc is required to build the reference pages, but is not required
+for users viewing the installed manual.
+
+After editing Markdown, run:
+
+    python3 tools/build_manual.py
+
+Check that the generated reference pages are up to date:
+
+    python3 tools/build_manual.py --check
+
+Run the documentation tests:
+
+    python3 -B tests/run.py --pattern test_documentation.py
+
+Commit generated HTML alongside its Markdown source changes.
+Do not edit `docs/reference/` directly.
+
+The landing page, stylesheet and illustrations are maintained
+separately. Their content and presentation must be reviewed when
+corresponding user-facing functionality changes.

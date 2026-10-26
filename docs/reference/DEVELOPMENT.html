@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>DEVELOPMENT · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · DEVELOPMENT.md</div>
+      <article class="markdown-body">
+<h1 id="kim6-development-guide">KIM6 Development Guide</h1>
+<p>KIM6 is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, <code>src/bin/kim_all</code>.</p>
+<p>The original scripts are retained in the repository for historical reference. All current Dolphin menu actions use <code>kim_all</code>.</p>
+<p>This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIM6.</p>
+<h2 id="repository-structure">Repository Structure</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/bin/kim_all</code></td>
+<td>Main executable containing image and video processing functions.</td>
+</tr>
+<tr>
+<td><code>src/kim_*.desktop.in</code></td>
+<td>Five KDE Dolphin service-menu definitions containing 107 actions.</td>
+</tr>
+<tr>
+<td><code>src/gallery/</code></td>
+<td>Templates used to generate HTML photo galleries.</td>
+</tr>
+<tr>
+<td><code>tests/run.py</code></td>
+<td>Test runner.</td>
+</tr>
+<tr>
+<td><code>tests/support.py</code>, <code>tests/adapter.py</code></td>
+<td>Shared test fixtures and helpers.</td>
+</tr>
+<tr>
+<td><code>tests/test_*.py</code></td>
+<td>Unit and integration tests.</td>
+</tr>
+<tr>
+<td><code>install.sh</code>, <code>uninstall.sh</code></td>
+<td>Installation and removal scripts.</td>
+</tr>
+<tr>
+<td><code>po/</code></td>
+<td>Translation files.</td>
+</tr>
+<tr>
+<td><code>docs/</code></td>
+<td>User documentation and HTML manual.</td>
+</tr>
+<tr>
+<td><code>docs/archive/upstream/</code></td>
+<td>Archived documentation from earlier versions.</td>
+</tr>
+</tbody>
+</table>
+<p><code>README.md</code> provides the project overview, and <code>INSTALL.md</code> covers installation and removal.</p>
+<p>The <code>docs/</code> directory contains additional references:</p>
+<ul>
+<li><code>ACTIONS.md</code> — Complete Dolphin menu and action inventory.</li>
+<li><code>commandconfig.md</code> — Command-line options and dispatcher arguments.</li>
+<li><code>commandconfig.md</code> — Detailed descriptions of KIM6 functionality.</li>
+<li><code>FORMATS.md</code> — Supported image and video formats.</li>
+<li><code>commandconfig.md</code> — Configuration options and defaults.</li>
+<li><code>commandconfig.md</code> — File handling, preservation, and overwrite behavior.</li>
+<li><code>index.html</code> — HTML user manual.</li>
+</ul>
+<h2 id="dolphin-service-menus">Dolphin Service Menus</h2>
+<p>KIM6 uses five KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
+<p>For example:</p>
+<pre class="sh"><code>kim_all compress --quality 70 -- %F</code></pre>
+<p>The <code>%F</code> placeholder supplies the selected file paths. The <code>--</code> separator marks the end of command options so filenames beginning with a hyphen are handled correctly.</p>
+<p>The service-menu definitions use KDE's <code>Type=Service</code>, <code>X-KDE-ServiceTypes=KonqPopupMenu/Plugin</code>, <code>X-KDE-Protocol=file</code>, and <code>X-KDE-Submenu</code> entries.</p>
+<p>When modifying menu actions:</p>
+<ul>
+<li>Preserve existing action IDs and command arguments unless intentionally changing their behavior.</li>
+<li>Use Bash arrays to handle filenames containing spaces or special characters.</li>
+<li>Keep MIME type restrictions appropriate for the selected action.</li>
+<li>Update the action reference and translations when menu labels or arguments change.</li>
+</ul>
+<p>The installer replaces the <code>kim_all</code> command in each menu with the absolute path to the installed executable.</p>
+<p>The dispatcher's command-line help is maintained in <code>src/bin/kim_all</code> and should remain consistent with the documented options.</p>
+<p>See <a href="ACTIONS.html">ACTIONS.md</a> for the complete menu definitions and <a href="commandconfig.html">commandconfig.md</a> for command-line arguments.</p>
+<h2 id="runtime-dependencies-and-format-support">Runtime Dependencies and Format Support</h2>
+<p>KIM6 uses Bash and common command-line utilities, along with:</p>
+<ul>
+<li><strong>ImageMagick 7:</strong> Image processing, format conversion, galleries, and related operations.</li>
+<li><strong>ExifTool:</strong> Metadata, timestamps, and copyright information.</li>
+<li><strong>FFmpeg and ffprobe:</strong> Video processing and media inspection.</li>
+<li><strong>KDialog and qdbus:</strong> KDE dialogs, progress reporting, and cancellation.</li>
+</ul>
+<p>Specific operations may also require optional image encoders, format delegates, ICC profiles, <code>xdg-open</code>, email clients, or <code>setsid</code>. Installation from source uses <code>intltool-merge</code>.</p>
+<p>KIM6 checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.</p>
+<p>Missing encoders or unsupported formats should produce an error rather than silently substituting another format.</p>
+<p>See <a href="FORMATS.html">FORMATS.md</a> for details about supported formats and dependencies.</p>
+<h2 id="configuration">Configuration</h2>
+<p><code>load_kim_config</code> reads configuration from:</p>
+<pre class="sh"><code>${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}</code></pre>
+<p>Configuration is read using <code>kreadconfig6</code>, from the <code>&lt;default&gt;</code> group.</p>
+<p>Recognized environment variables take precedence over their corresponding KConfig values.</p>
+<p>Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.</p>
+<p><code>KIM_POLICY</code> is the output-policy setting.</p>
+<p>See <a href="commandconfig.html">commandconfig.md</a> for the available keys, defaults, and affected actions.</p>
+<h2 id="file-safety-and-error-handling">File Safety and Error Handling</h2>
+<p>KIM6 processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:</p>
+<ol type="1">
+<li><p><strong>File paths:</strong> Treat selected filenames as untrusted input. Use Bash arrays and <code>--</code> separators. Check symbolic links and file aliases where appropriate. Spaces and Unicode are supported; filenames containing carriage returns or line feeds are rejected by operations that cannot safely process them.</p></li>
+<li><p><strong>Temporary files:</strong> Never write generated output directly to an original or final destination. Use <code>tmp_for_target()</code> to create temporary output on the destination filesystem, and validate the result before moving it into place.</p></li>
+<li><p><strong>Publishing results:</strong> <code>commit_tmp_to_target()</code> handles creating or overwriting output files. Create mode refuses to replace occupied paths, including symlinks. Overwriting must be explicitly authorized and use the supported atomic replacement mechanism rather than copying or truncating the destination.</p></li>
+<li><p><strong>Atomic replacement:</strong> On supported local filesystems, completed files are moved into place atomically. This prevents users from seeing partially written output, but it does not guarantee durability after a system crash or protect against changes made by other programs.</p></li>
+<li><p><strong>Cleanup:</strong> Remove only temporary files, directories, and child processes created by the current operation. Failed operations must preserve existing destination files and selected sources.</p></li>
+<li><p><strong>Cancellation:</strong> Use <code>progress_cancelled()</code> to detect cancellation. Missing, failed, or malformed D-Bus responses must be handled safely. Check cancellation before publishing results and before continuing with later files in a batch.</p></li>
+<li><p><strong>Output validation:</strong> Check that generated files contain valid results, not merely that a command returned successfully. Depending on the operation, this includes verifying format, dimensions, image frames, PDF pages, video streams, timestamps, color profiles, or metadata.</p></li>
+<li><p><strong>Metadata and timestamps:</strong> Preserve each action's documented behavior. Rotation preserves the original modification time; other transformations and metadata operations have their own rules. Do not apply metadata or timestamp restoration indiscriminately.</p></li>
+</ol>
+<p>See <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a> for the user-facing explanation of file handling and its limitations.</p>
+<h2 id="shared-helper-functions">Shared Helper Functions</h2>
+<p>Several functions in <code>src/bin/kim_all</code> provide common behavior across multiple actions.</p>
+<h3 id="file-selection">File selection</h3>
+<p><code>collect_valid_files()</code> validates regular-file selections for actions using line-based file lists.</p>
+<p>Publication, date, and rename operations perform additional checks involving canonical paths, file identity, and symbolic links.</p>
+<h3 id="temporary-files-and-publication">Temporary files and publication</h3>
+<p><code>tmp_for_target()</code> creates a temporary staging directory beside the intended destination and returns a path for generated output.</p>
+<p><code>register_stage_dir()</code> and <code>cleanup_stages()</code> track temporary directories created by the current operation.</p>
+<p><code>commit_tmp_to_target()</code> moves validated output into place using the selected create or authorized overwrite policy.</p>
+<p><code>atomic_overwrite_file()</code> remains available as a compatibility wrapper, although current actions use <code>tmp_for_target()</code> and <code>commit_tmp_to_target()</code>.</p>
+<h3 id="progress-and-cancellation">Progress and cancellation</h3>
+<p>The following functions manage KDialog progress reporting:</p>
+<ul>
+<li><code>progress_open()</code></li>
+<li><code>progress_label()</code></li>
+<li><code>progress_value()</code></li>
+<li><code>progress_cancelled()</code></li>
+<li><code>progress_close()</code></li>
+</ul>
+<p>They manage the dialog's D-Bus service and object-path references.</p>
+<h3 id="video-processing">Video processing</h3>
+<p>Video helpers inspect files using <code>ffprobe</code>, execute FFmpeg operations, monitor progress, and manage cancellation.</p>
+<p>Process cleanup is restricted to child processes started by the current KIM6 operation.</p>
+<p>These shared functions affect multiple actions. Changes should be tested against the operations that depend on them.</p>
+<h2 id="action-behavior">Action Behavior</h2>
+<p>Different KIM6 actions have different file-handling requirements.</p>
+<h3 id="image-transformations">Image transformations</h3>
+<p>Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.</p>
+<p>Rotation and flip/flop operations replace the selected image after validation, independently of <code>KIM_POLICY</code>.</p>
+<h3 id="metadata-and-dates">Metadata and dates</h3>
+<p>Metadata-only operations use ExifTool and verify the resulting metadata while preserving image pixels, color profiles, permissions, and modification times as appropriate.</p>
+<p>Date synchronization supports separate operations for filesystem timestamps and embedded image metadata.</p>
+<h3 id="web-export">Web export</h3>
+<p>Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility.</p>
+<h3 id="video-processing-1">Video processing</h3>
+<p>Video utilities create separate outputs. Video transcoding can replace an existing file only when authorized.</p>
+<p>Slideshow generation always creates a separate output file.</p>
+<h3 id="renaming">Renaming</h3>
+<p>Rename operations use filesystem move or copy behavior. They check the complete batch for naming conflicts before making changes and avoid unintentionally replacing existing files.</p>
+<p>Renaming does not use the same publication mechanism as image transformations.</p>
+<h3 id="special-image-formats">Special image formats</h3>
+<p>Not every image is a single-frame RGB photograph. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.</p>
+<p>Format-specific validation is important when modifying conversion and transformation functions.</p>
+<h2 id="adding-or-modifying-actions">Adding or Modifying Actions</h2>
+<p>Most KIM6 functionality is implemented as action functions in <code>src/bin/kim_all</code>. Dolphin invokes these functions through the service-menu definitions in <code>src/</code>.</p>
+<p>When adding or changing an action:</p>
+<ol type="1">
+<li>Identify the relevant function and its command-line arguments.</li>
+<li>Check the supported input formats, output naming, and existing file-handling behavior.</li>
+<li>Reuse the existing helpers for file validation, temporary files, progress reporting, and cancellation.</li>
+<li>Add or update tests for the intended behavior, including error handling and preservation of existing files.</li>
+<li>Update the corresponding service-menu definition, translations, CLI help, and documentation when necessary.</li>
+</ol>
+<p>Test changes against temporary files rather than personal photographs or videos.</p>
+<p>See <a href="ACTIONS.html">ACTIONS.md</a> for the menu-action inventory and <a href="commandconfig.html">commandconfig.md</a> for dispatcher arguments.</p>
+<h2 id="testing">Testing</h2>
+<p>For required tools and installation instructions, see <a href="INSTALL.html">INSTALL.md</a>. Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.</p>
+<p>KIM6 uses Python's <code>unittest</code> framework, with a custom test runner in <code>tests/run.py</code>.</p>
+<p>Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior.</p>
+<p>Run an individual test module while developing:</p>
+<pre class="sh"><code>python3 -B tests/run.py --pattern test_resize.py</code></pre>
+<p>Run the full test suite:</p>
+<pre class="sh"><code>python3 -B tests/run.py</code></pre>
+<p>Tests use temporary directories and generated media files. Some tests run ImageMagick, ExifTool, or FFmpeg directly, while others use controlled command adapters to simulate failures.</p>
+<p>Before submitting changes, check Bash syntax and run ShellCheck:</p>
+<pre class="sh"><code>bash -n src/bin/kim_all install.sh uninstall.sh
+shellcheck src/bin/kim_all install.sh uninstall.sh
+git --no-pager diff --check</code></pre>
+<p>Installer tests should use temporary installation directories rather than modifying the active Dolphin installation.</p>
+<p>KDE service menus use <code>Type=Service</code>, which may not be handled correctly by generic desktop-entry validators. Use the project's KDE-specific menu tests for structural validation.</p>
+<p>Automated menu tests verify definitions and command arguments, but actual menu display and interaction should also be tested in Dolphin.</p>
+<h2 id="installation-and-release-testing">Installation and Release Testing</h2>
+<p>The installation scripts support user, system-wide, and custom installation directories.</p>
+<p>The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.</p>
+<p>The uninstaller removes recognized KIM6 files without deleting unrelated files. Existing installations from older versions are also supported where their files can be identified.</p>
+<p>Installation updates are performed one file at a time. An interrupted installation can be completed by running <code>install.sh</code> again.</p>
+<p>Before preparing a release:</p>
+<ol type="1">
+<li>Run the complete test suite and static checks.</li>
+<li>Verify all five Dolphin service menus and their 107 action mappings.</li>
+<li>Test installation, upgrading, and uninstallation using temporary directories.</li>
+<li>Test the menus in Dolphin on a supported KDE Plasma system.</li>
+<li>Review the installation instructions and user documentation.</li>
+</ol>
+<p>See <a href="INSTALL.html">INSTALL.md</a> for installation options.</p>
+<h2 id="contributions-and-translations">Contributions and Translations</h2>
+<p>Contributions should include a description of the change, relevant tests, and enough information to reproduce any bugs being fixed.</p>
+<p>Changes to file-processing operations should explain how existing source and destination files are preserved, particularly when error handling or overwriting is involved.</p>
+<p>Preserve historical author notices and GPL license headers.</p>
+<p>Translations are maintained in <code>po/</code> using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.</p>
+<p>Historical development and release documentation is preserved in the <a href="../archive/upstream/ARCHIVE.md">upstream archive</a>.</p>
+<h2 id="file-publication-and-cancellation">File Publication and Cancellation</h2>
+<h3 id="staging-and-publication">Staging and publication</h3>
+<p>Generated media is first written to invocation-owned staging on the destination filesystem. The action checks the producer result and validates the staged artifact before publication. Create-new publication uses a no-clobber operation. Authorized replacement uses atomic replacement on supported local Linux filesystems. A failed rename is not followed by a destructive copy-over fallback.</p>
+<p>This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIM6’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.</p>
+<p>Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. Gallery publication uses a new directory name and does not recursively replace an occupied directory.</p>
+<p>Cleanup removes only staging files, directories and child processes owned by the current invocation. A producer failure, invalid result, cancellation or publication failure must not delete a pre-existing destination. Earlier completed batch results remain in place if a later item fails. Error and summary dialogs identify failed items rather than claiming a rejected output succeeded.</p>
+<h3 id="cancellation-and-process-ownership">Cancellation and process ownership</h3>
+<p>KDialog progress calls use the shared service/object reference parser. An explicit <code>wasCancelled=true</code> stops work. Explicit false permits work to continue. If the progress service disappears, the action treats that as an interruption and stops without claiming that disappearance proves the user clicked Cancel. A failed ownership query, failed method call while the service remains, or malformed reply is an error and also stops publication safely.</p>
+<p>Actions check for interruption before starting items and immediately before publishing staged output. Video producers run as invocation-owned FFmpeg processes; cancellation terminates only the owned producer, with bounded graceful termination and a forced stop if needed. Previously published batch outputs are retained.</p>
+<p>A KDE service-menu action accepts local files. Remote URL workflows are not silently treated as local pathnames; menu definitions restrict applicable selections to files. Newlines and certain ImageMagick filename metacharacters are rejected in actions whose current path or command syntax cannot represent them unambiguously. Spaces and Unicode are supported through quoted argument arrays and the selected-file argument boundary. Leading dashes are passed after <code>--</code> where the action supports that contract.</p>
+<h2 id="reporting-a-bug">Reporting a Bug</h2>
+<p>Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private photographs or videos without permission.</p>
+<h2 id="installer-compatibility-and-recovery">Installer Compatibility and Recovery</h2>
+<p>The installer recognizes a runtime from the <code>kim_all</code> dispatcher, a recognized KIM menu, or an older <code>.kim6-owned</code> marker left by a previous release. It also accepts an otherwise empty runtime directory, which can remain after an interrupted first install. New installs do not create ownership markers or manifests. The uninstaller uses the same recognizable dispatcher/menu checks and accepts the old marker only for compatibility; it does not require one. Both scripts refuse unrelated same-name menu files and symlinked runtime/menu paths. The installer replaces listed files through temporary sibling files and does not select unrelated filenames through broad globs. Unknown runtime files are preserved and prevent removal of their parent directory.</p>
+<p>Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.</p>
+<h2 id="local-smoke-test">Local Smoke Test</h2>
+<p>Test web export with a synthetic JPEG rather than a personal photograph. Run from the repository root:</p>
+<pre class="sh"><code>work=$(mktemp -d)
+mkdir -- &quot;$work/output&quot;
+
+magick -size 640x480 xc:gray80 &quot;$work/input.jpg&quot;
+
+KIM_POLICY=create ./src/bin/kim_all webexport \
+  --output-dir &quot;$work/output&quot; \
+  --size 600x600 \
+  --quality 75 \
+  -- &quot;$work/input.jpg&quot;
+
+find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
+<p>Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.</p>
+<p>See <a href="commandconfig.html">Command and Configuration Reference</a> for additional options.</p>
+<h2 id="building-the-offline-html-manual">Building the offline HTML manual</h2>
+<p>Markdown is the authoritative documentation source. The illustrated landing page is maintained in <code>docs/index.html</code>, and the reference pages under <code>docs/reference/</code> are generated from Markdown.</p>
+<p>Pandoc is required to build the reference pages, but is not required for users viewing the installed manual.</p>
+<p>After editing Markdown, run:</p>
+<pre><code>python3 tools/build_manual.py</code></pre>
+<p>Check that the generated reference pages are up to date:</p>
+<pre><code>python3 tools/build_manual.py --check</code></pre>
+<p>Run the documentation tests:</p>
+<pre><code>python3 -B tests/run.py --pattern test_documentation.py</code></pre>
+<p>Commit generated HTML alongside its Markdown source changes. Do not edit <code>docs/reference/</code> directly.</p>
+<p>The landing page, stylesheet and illustrations are maintained separately. Their content and presentation must be reviewed when corresponding user-facing functionality changes.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+</body>
+</html>

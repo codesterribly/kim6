@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FORMATS · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · docs/FORMATS.md</div>
+      <article class="markdown-body">
+<h1 id="image-and-video-format-support">Image and Video Format Support</h1>
+<p>KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A recognizable extension does not guarantee that a decoder or encoder is available. KIM6 checks required capabilities and validates generated output; if an encoder is unavailable, the operation fails rather than silently selecting another format.</p>
+<h2 id="image-formats">Image Formats</h2>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Reading</th>
+<th>Writing</th>
+<th>Important limitations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JPEG/JPG/JFIF</td>
+<td>ImageMagick JPEG decoder</td>
+<td>JPEG encoder; compression and conversion menus</td>
+<td>Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant.</td>
+</tr>
+<tr>
+<td>PNG</td>
+<td>ImageMagick PNG decoder</td>
+<td>PNG encoder</td>
+<td>Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported.</td>
+</tr>
+<tr>
+<td>APNG</td>
+<td>FFmpeg/ffprobe inspection when PNG animation control data is present</td>
+<td>FFmpeg APNG encoder</td>
+<td>Frame count, timing, and looping are checked for APNG-to-APNG conversion. Unsupported frame loss is rejected.</td>
+</tr>
+<tr>
+<td>GIF</td>
+<td>ImageMagick GIF decoder</td>
+<td>GIF encoder; <code>animate</code> creates animations</td>
+<td>Indexed color; frame count, delays, and looping are validated for animation operations.</td>
+</tr>
+<tr>
+<td>TIFF/TIF</td>
+<td>ImageMagick TIFF decoder</td>
+<td>TIFF encoder; <code>tiffjoin</code> creates multi-page files</td>
+<td>Multiple pages are supported where the selected operation permits them.</td>
+</tr>
+<tr>
+<td>BMP/DIB</td>
+<td>ImageMagick BMP decoder</td>
+<td>BMP encoder; menu selects BMP5</td>
+<td>Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee.</td>
+</tr>
+<tr>
+<td>WebP</td>
+<td>ImageMagick WebP decoder when installed</td>
+<td>Runtime-probed WebP encoder</td>
+<td>May contain animation; frame and ICC handling depend on the coder and operation.</td>
+</tr>
+<tr>
+<td>AVIF</td>
+<td>ImageMagick AVIF coder/delegate when installed</td>
+<td>Runtime-probed AVIF encoder</td>
+<td>Support depends on the installed AV1 delegate. Multi-frame and ICC handling are checked where applicable.</td>
+</tr>
+<tr>
+<td>HEIC/HEIF</td>
+<td>ImageMagick HEIC/HEIF decoder when installed</td>
+<td>Runtime-probed HEIC encoder</td>
+<td>May contain multiple images. No silent substitution with AVIF or JPEG.</td>
+</tr>
+<tr>
+<td>JPEG XL (JXL)</td>
+<td>Optional JXL decoder</td>
+<td>Optional JXL encoder</td>
+<td>Read and write capabilities are separate. The project's development environment lacks the optional encoder, so its real-encoder test skips there.</td>
+</tr>
+<tr>
+<td>JPEG 2000 (JP2/J2K/JPC/J2C)</td>
+<td>ImageMagick JPEG 2000 coder/delegate</td>
+<td>Runtime-probed JPEG 2000 encoder</td>
+<td>JP2 offers lossless/lossy modes; lossless uses delegate <code>rate=1</code>. Lossy quality is codec-specific, not equivalent to JPEG quality.</td>
+</tr>
+<tr>
+<td>ICO/CUR</td>
+<td>ImageMagick icon decoder when installed</td>
+<td>Custom conversion if writing is supported</td>
+<td>Files may contain several icon sizes or images. Do not assume a lossless single-image round trip.</td>
+</tr>
+<tr>
+<td>PNM family (PBM/PGM/PPM/PAM/PNM)</td>
+<td>ImageMagick decoder</td>
+<td>Available PNM coders</td>
+<td>Typically still images with limited profile and metadata support.</td>
+</tr>
+<tr>
+<td>SVG/SVGZ</td>
+<td>Rasterized through the installed SVG delegate and security policy</td>
+<td>Coder-dependent; conversion is primarily raster-oriented</td>
+<td>Rasterization loses vector structure. Do not weaken delegate security restrictions for untrusted files.</td>
+</tr>
+<tr>
+<td>PDF</td>
+<td>ImageMagick PDF delegate when local policy allows</td>
+<td>Validated PDF output; <code>album</code> and <code>print</code> generate PDFs</td>
+<td>Page count and layout are checked. Untrusted PDF input remains subject to local delegate/security policy.</td>
+</tr>
+<tr>
+<td>PSD/PSB</td>
+<td>ImageMagick decoder when installed</td>
+<td>Coder-dependent; no dedicated menu output</td>
+<td>Layers and document structure may be flattened. Use an editor for layer-preserving work.</td>
+</tr>
+<tr>
+<td>Radiance HDR / OpenEXR</td>
+<td>Coder-dependent decoder</td>
+<td>Coder-dependent encoder</td>
+<td>No promised automatic HDR-to-SDR color-managed conversion. <code>slideshow</code> rejects HDR input.</td>
+</tr>
+<tr>
+<td>Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, others)</td>
+<td>Installed ImageMagick RAW delegate, if available</td>
+<td>No dedicated RAW development or output workflow</td>
+<td>Demosaicing and color depend on the delegate. RAW metadata editing is rejected; conversion must not overwrite RAW originals. Use a dedicated RAW processor for development.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="frame-preservation">Frame Preservation</h2>
+<p>KIM6 distinguishes still images, animations, and multi-page documents. Conversion rejects known frame loss rather than silently flattening unsupported animations. APNG has a dedicated FFmpeg path; other multi-frame formats depend on the installed coder and the selected action.</p>
+<p>Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.</p>
+<h2 id="color-profiles-and-metadata">Color Profiles and Metadata</h2>
+<p>Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.</p>
+<p>See <a href="commandconfig.html#webexport">Web export</a> for color options and <a href="commandconfig.html#output-and-file-handling">File handling</a> for preservation behavior.</p>
+<h2 id="video-formats-and-encoders">Video Formats and Encoders</h2>
+<p>KIM6 uses FFmpeg for H.264 (<code>libx264</code>) and H.265 (<code>libx265</code>) video. AV1 prefers <code>libsvtav1</code> and uses <code>libaom-av1</code> when SVT-AV1 is unavailable; it does not substitute another codec if AV1 encoding is unavailable. Available containers must support the selected codecs and streams. An incompatible original container causes an error rather than an automatic switch to MP4.</p>
+<p>Video utilities use FFmpeg for frame extraction, contact sheets, audio extraction or removal, and GIF creation. See <a href="commandconfig.html#video-actions">Video actions</a> for preset choices, supported audio outputs, encoding settings, and operation-specific limits.</p>
+<h2 id="check-installed-capabilities">Check Installed Capabilities</h2>
+<p>These commands inspect local support without changing system configuration:</p>
+<pre class="sh"><code>magick -version
+magick -list format
+ffmpeg -hide_banner -encoders
+ffprobe -version
+exiftool -ver</code></pre>
+<p>The read/write flags in <code>magick -list format</code> show advertised capabilities of the installed build, not a guarantee that a particular conversion will succeed. Delegates, security policies, libraries, container compatibility, and individual file characteristics may still prevent an operation. KIM6 checks relevant capabilities and validates outputs for the selected action.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+</body>
+</html>

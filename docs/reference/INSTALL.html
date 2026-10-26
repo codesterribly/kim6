@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>INSTALL · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · INSTALL.md</div>
+      <article class="markdown-body">
+<h1 id="install-kim6">Install KIM6</h1>
+<p>KIM6 adds five image and video service menus to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
+<h2 id="install-through-dolphin">Install through Dolphin</h2>
+<p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIM6.</p>
+<p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
+<h2 id="install-this-rewrite-manually">Install this rewrite manually</h2>
+<p>KIM6 requires KDE Plasma 6 and Dolphin.</p>
+<p>To install from a source checkout, you need <code>intltool-merge</code> (and Git if you are cloning the source). The installer uses <code>msgfmt</code> to compile translations when available; without it, the menus can still be installed in English.</p>
+<p>KIM6 uses several common tools to process images and videos:</p>
+<ul>
+<li><strong>ImageMagick 7:</strong> Image resizing, compression, conversion, galleries, and other image operations.</li>
+<li><strong>ExifTool:</strong> Metadata management, photo dates, and copyright information.</li>
+<li><strong>FFmpeg and ffprobe:</strong> Video conversion, audio extraction, animations, and slideshows.</li>
+<li><strong>KDialog and qdbus:</strong> Dialogs, progress reporting, and interaction with KDE.</li>
+<li><strong>Email application:</strong> Required for KIM6's email features.</li>
+</ul>
+<p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>.</p>
+<p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
+<pre class="sh"><code>./install.sh</code></pre>
+<p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
+<p>The installer adds KIM6's program files and five service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
+<p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
+<p>To check the installed program without opening Dolphin:</p>
+<pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all&quot; --help</code></pre>
+<p>If the menus do not appear, restart Dolphin and verify that KIM6 was installed in a service-menu directory recognized by KDE.</p>
+<p><strong>KDE Frameworks 6.29 issue:</strong> Frameworks 6.29 introduced a regression that prevented some Dolphin service submenus from appearing. This was fixed in Frameworks 6.30. If you are using the affected version, update KDE Frameworks when a fixed package is available for your distribution.</p>
+<p>KIM6 retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>
+<h2 id="upgrade-or-reinstall">Upgrade or reinstall</h2>
+<p>Use the newer source checkout and run <code>./install.sh</code> again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.</p>
+<p>Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it.</p>
+<h2 id="uninstall">Uninstall</h2>
+<p>From the source directory, run:</p>
+<pre class="sh"><code>./uninstall.sh</code></pre>
+<p>The uninstaller removes the five recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
+<h2 id="advanced-installation-locations">Advanced installation locations</h2>
+<p>To choose a service-menu folder explicitly, use <code>--prefix</code>:</p>
+<pre class="sh"><code>./install.sh --prefix &quot;$HOME/.local/share/kio/servicemenus&quot;</code></pre>
+<p>For a system-wide installation, first check which service-menu directories KDE recognizes:</p>
+<pre class="sh"><code>qtpaths6 --locate-dirs GenericDataLocation kio/servicemenus</code></pre>
+<p>Choose a system-wide directory from the output, then install with administrator privileges. For example, if your system uses <code>/usr/share/kio/servicemenus</code>:</p>
+<pre class="sh"><code>sudo ./install.sh --prefix /usr/share/kio/servicemenus</code></pre>
+<p>To uninstall a system-wide installation, use the same directory:</p>
+<pre class="sh"><code>sudo ./uninstall.sh --prefix /usr/share/kio/servicemenus</code></pre>
+<p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
+<h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
+<h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
+<p>First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. On the development system, KDE Frameworks/KIO 6.29 has a known upstream <code>X-KDE-Submenu</code> issue; KIM6 keeps its submenus intact and does not recommend flattening them as a workaround. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
+<h3 id="installation-or-removal-reports-a-conflict">Installation or removal reports a conflict</h3>
+<p>The installer identifies existing KIM6 installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
+<p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
+<p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
+<p>For older-installation compatibility and implementation details, see <a href="DEVELOPMENT.html#installer-compatibility-and-recovery">Installer compatibility and recovery</a>.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+</body>
+</html>

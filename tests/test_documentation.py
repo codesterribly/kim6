@@ -44,6 +44,24 @@ def markdown_slug(heading):
 
 
 class DocumentationContractTests(unittest.TestCase):
+    def test_html_reference_pages_current(self):
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, str(root / "tools/build_manual.py"), "--check"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            result.stdout + result.stderr,
+        )
+
     def test_user_documents_describe_current_distribution_status(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         install = (ROOT / "INSTALL.md").read_text(encoding="utf-8")
@@ -69,7 +87,19 @@ class DocumentationContractTests(unittest.TestCase):
 
         self.assertIn('id="file-handling"', manual)
         self.assertIn("Illustration of an output example, not a Dolphin screenshot.", manual)
-        self.assertNotRegex(manual, r"<img\b")
+        # The manual includes generated illustrations, not actual screenshots.
+        self.assertIn("conceptual examples, not actual application screenshots", manual)
+
+        for name in (
+            "kim6-context-menu-illustration.png",
+            "kim6-web-export-illustration.png",
+            "kim6-metadata-illustration.png",
+        ):
+            self.assertIn(f'images/{name}', manual)
+            self.assertTrue(
+                (Path(__file__).resolve().parents[1] / "docs/images" / name).is_file(),
+                f"Missing manual illustration: {name}",
+            )
 
         for private_detail in ("/home/coolian", "natacha", "/mnt/"):
             self.assertNotIn(private_detail, readme + install + manual)
