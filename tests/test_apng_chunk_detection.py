@@ -91,5 +91,39 @@ class ApngChunkDetectionTests(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "still")
 
 
+    def test_actl_after_large_metadata_chunk_is_detected(self):
+        # A valid ancillary PNG chunk may exceed one megabyte.
+        insert_after_ihdr(
+            self.source,
+            png_chunk(b"tEXt", b"Comment\\x00" + b"x" * 1_100_000),
+            png_chunk(b"acTL", struct.pack(">II", 2, 3)),
+        )
+
+        result = self.probe('image_apng_control_offset "$1"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreater(int(result.stdout.strip()), 1_048_576)
+
+        result = self.probe('image_apng_play_count "$1"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "3")
+
+    def test_large_metadata_text_containing_actl_stays_still(self):
+        insert_after_ihdr(
+            self.source,
+            png_chunk(
+                b"tEXt",
+                b"Comment\\x00" + b"x" * 1_100_000 + b"acTL",
+            ),
+        )
+
+        result = self.probe(
+            'if image_has_apng_control_chunk "$1"; '
+            'then echo animated; else echo still; fi'
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "still")
+
+
 if __name__ == "__main__":
     unittest.main()

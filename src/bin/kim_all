@@ -359,19 +359,23 @@ image_output_preserves_frames() {
   esac
 }
 
-# APNG control chunks occur before image data. Read only the PNG header region
-# so ordinary large PNG photographs do not require a full-file format scan.
+# APNG control chunks occur before image data. Inspect chunk headers only,
+# skipping metadata payloads without reading image data.
 # Inspect actual PNG chunk boundaries. A text/metadata payload containing
 # "acTL" must not cause an ordinary still PNG to be treated as animated.
 # Preserve the existing 1 MiB header-inspection bound.
 image_apng_control_offset() {
-  local path="$1" offset=8 header length signature
+  local path="$1" offset=8 header length signature filesize
   local b0 b1 b2 b3 c0 c1 c2 c3 byte
 
   signature="$(od -An -tu1 -N8 -- "$path" 2>/dev/null)" || return 1
   [ "${signature//[$' \t\n\r']/}" = '13780787113102610' ] || return 1
 
-  while (( offset + 12 <= 1048576 )); do
+  # Skip complete ancillary chunks by their declared lengths.
+  # Bound inspection by the actual file, not an arbitrary header size.
+  filesize="$(stat -c '%s' -- "$path" 2>/dev/null)" || return 1
+  [[ "$filesize" =~ ^[0-9]+$ ]] || return 1
+  while (( offset + 12 <= filesize )); do
     header="$(od -An -tu1 -N8 -j "$offset" -- "$path" 2>/dev/null)" || return 1
     read -r b0 b1 b2 b3 c0 c1 c2 c3 <<< "$header"
 
@@ -381,7 +385,7 @@ image_apng_control_offset() {
     done
 
     length=$(( b0 * 16777216 + b1 * 65536 + b2 * 256 + b3 ))
-    (( length <= 1048576 - offset - 12 )) || return 1
+    (( length <= filesize - offset - 12 )) || return 1
 
     case "$c0 $c1 $c2 $c3" in
       '97 99 84 76')

@@ -525,7 +525,7 @@ def main():
             raise ValueError("unsupported stat invocation")
         info = owned(args[3]).lstat()
         formats = {"%d:%i": f"{info.st_dev}:{info.st_ino}", "%d": str(info.st_dev),
-                   "%h": str(info.st_nlink)}
+                   "%h": str(info.st_nlink), "%s": str(info.st_size)}
         if args[1] == '%d:%i:%s:%y:%f:%u:%g':
             print(f'{info.st_dev}:{info.st_ino}:{info.st_size}:{info.st_mtime_ns}:{info.st_mode}:{info.st_uid}:{info.st_gid}')
             return 0
