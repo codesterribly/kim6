@@ -3,84 +3,143 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="KIM6 brings quick image and video processing to KDE Dolphin context menus.">
-  <title>KIM6 — Image and video tools for Dolphin</title>
+  <meta name="description" content="A practical guide to using KIM6 image and video tools in KDE Dolphin.">
+  <title>KIM6 user guide</title>
   <link rel="stylesheet" href="work.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <p class="eyebrow">KDE Plasma 6 · Dolphin service menus</p>
+      <p class="eyebrow">KDE Plasma 6 · Dolphin</p>
       <h1>KIM6</h1>
-      <p class="lede">Quick image and video operations, right where your files are.</p>
-      <p>KIM6 adds a focused set of processing tools to Dolphin’s context menus. Select files, choose an operation, and let KIM6 prepare a validated result without opening a full editing application.</p>
+      <p class="lede">Image and video tools in the right-click menu</p>
+      <p>Select files in Dolphin, right-click, and choose a common photo or video task. KIM6 is useful when you need a quick result without opening a full editing application.</p>
       <nav class="primary-nav" aria-label="Main navigation">
-        <a href="#capabilities">Capabilities</a>
-        <a href="#getting-started">Get started</a>
-        <a href="#safety">Safe output</a>
-        <a href="#help">Help</a>
+        <a href="#photos">Photos</a>
+        <a href="#sharing">Sharing</a>
+        <a href="#private-info">Private information</a>
+        <a href="#dates">Photo dates</a>
+        <a href="#video">Video</a>
+        <a href="#collections">Albums and slideshows</a>
+        <a href="#troubleshooting">Troubleshooting</a>
       </nav>
     </div>
   </header>
-  <main id="main" class="wrap">
-    <section id="capabilities" aria-labelledby="capabilities-title">
-      <h2 id="capabilities-title">What you can do</h2>
-      <p>KIM6 is for quick, repeatable jobs. It complements photo and video applications such as digiKam, darktable, GIMP and Kdenlive; it is not a replacement for a catalog, RAW development or editing timeline.</p>
-      <div class="cards">
-        <article><h3>Prepare images</h3><p>Compress JPEGs, resize by dimensions or percentage, convert supported formats, rotate, flip and create web-ready or email copies.</p></article>
-        <article><h3>Manage photo details</h3><p>Rename and sort by capture date, synchronize camera and file dates, edit creator/copyright fields, shift capture times, or remove selected metadata.</p></article>
-        <article><h3>Make collections</h3><p>Create HTML galleries, collages, PDF albums and print layouts, joined TIFFs, and animated GIFs from still images.</p></article>
-        <article><h3>Work with video</h3><p>Use H.264, H.265 and optional AV1 presets; extract frames and audio; mute video without re-encoding; make contact sheets and GIFs; create a simple MP4 slideshow.</p></article>
-      </div>
-      <p><a href="https://github.com/KIM-6/kim6/blob/master/docs/FEATURES.md">Read the feature guide</a> or browse the <a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">complete 107-action Dolphin inventory</a>.</p>
-    </section>
 
-    <section id="getting-started" aria-labelledby="getting-started-title">
-      <h2 id="getting-started-title">Get started</h2>
-      <p>KIM6 targets KDE Plasma 6 and Dolphin’s KIO service-menu system. The installer puts one dispatcher and its required resources in place, then installs five service menus. Menu entries call the installed <code>kim_all</code> path directly.</p>
-      <h3>Install for your user</h3>
+  <main id="main" class="wrap">
+    <section id="start" aria-labelledby="start-title">
+      <h2 id="start-title">Start here</h2>
+      <p>KIM6 is designed for KDE Plasma 6 and Dolphin. Install it from a project checkout, then restart Dolphin. Select one or more local files and look for the KIM6 menus in the right-click menu. For a first try, select <code>photo.jpg</code>, choose <strong>Resize (1600x1600 pixels)</strong>, then choose <strong>Create new</strong> if asked; <code>photo_resized.jpg</code> appears beside the original.</p>
+      <p>To install from a checkout, you need Git and <code>intltool-merge</code>. At run time, ImageMagick handles most photo work, ExifTool handles metadata, and FFmpeg with <code>ffprobe</code> handles video. KDialog and <code>qdbus</code> provide dialogs and progress. Optional formats and encoders depend on your system; see <a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">formats and codecs</a>.</p>
       <pre><code>git clone https://github.com/KIM-6/kim6.git
 cd kim6
 ./install.sh</code></pre>
-      <p>For optional system-wide or custom-prefix installation, see the <a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">installation guide</a>. The runtime needs Bash, ImageMagick 7, ExifTool, FFmpeg/ffprobe and KDE’s KDialog/D-Bus tools. Optional codecs and ImageMagick delegates determine which formats are available.</p>
-      <h3>Use from Dolphin or the command line</h3>
-      <p>Select one or more local files, right-click, and choose an operation from the KIM6 submenu. Most actions offer interactive settings; menu presets pass explicit arguments. In the examples, <code>kim_all</code> stands for the installed <code>.../kim6/bin/kim_all</code> path, or <code>./src/bin/kim_all</code> from a source checkout:</p>
-      <pre><code>kim_all resize --size 1600x1600 -- photo.jpg
-kim_all webexport --size 800x800 --quality 75 -- photo.jpg
-kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- clip.mkv</code></pre>
-      <p>Commands require their documented inputs and tools. See the <a href="https://github.com/KIM-6/kim6/blob/master/docs/CLI.md">CLI reference</a> and <a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">format guide</a>.</p>
+      <p><a class="button-link" href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">Install KIM6</a> <a href="https://github.com/KIM-6/kim6/blob/master/docs/GETTING_STARTED.md">Follow five everyday examples</a></p>
+      <p class="note"><strong>Keep an eye on the output choice.</strong> Many actions let you create a new file or replace a selected file. Choose <em>Create new</em> when you want to keep the selected original. The choice may not appear if your output preference is already set to overwrite. Web export, resized email copies, video frame/audio/GIF tools, mute, and slideshows make separate results. Full-size email mode attaches selected originals without changing them. Video transcoding can replace a selected video when you authorize it.</p>
+    </section>
+
+    <section id="photos" aria-labelledby="photos-title">
+      <h2 id="photos-title">Working with photos</h2>
+      <div class="cards">
+        <article>
+          <h3>Resize</h3>
+          <p>Choose a maximum width and height, or enter a percentage. KIM6 keeps the photo's proportions. A 1600 × 1600 setting means the image fits within that box; it does not force a square crop.</p>
+        </article>
+        <article>
+          <h3>Compress a JPEG</h3>
+          <p>Choose a JPEG quality preset or enter a custom value. Lower quality may reduce detail. Progressive JPEG and coding-table optimization are available in the custom workflow; optimization does not guarantee a smaller file.</p>
+        </article>
+        <article>
+          <h3>Convert a format</h3>
+          <p>Use the format choices for JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000. Custom format is limited to encoders available on your computer. Some conversions lose detail, transparency, layers, or animation.</p>
+        </article>
+        <article>
+          <h3>Rotate or flip</h3>
+          <p>Rotate by a preset or custom angle, apply the camera's orientation setting, or flip horizontally and vertically. These actions can create a copy or replace the selected image when authorized.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="sharing" aria-labelledby="sharing-title">
+      <h2 id="sharing-title">Preparing images to share</h2>
+      <p>Web export makes a resized JPEG, WebP, or AVIF copy in a folder you choose. It always creates a separate file, even when the general preference is set to replace files. By default, web export converts color using an sRGB profile when a usable source profile is available. You can choose to preserve the source profile instead.</p>
+      <p>Email preparation can attach the selected originals at full size, or prepare smaller copies for common attachment sizes. It does not replace the selected files. KIM6 keeps prepared copies available after handing them to a mail program; if no supported mail program is available, it offers a persistent folder for the copies.</p>
+      <p><a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">See color and output preferences</a>.</p>
+    </section>
+
+    <section id="private-info" aria-labelledby="private-info-title">
+      <h2 id="private-info-title">Removing private information</h2>
+      <p><strong>Remove GPS coordinates</strong> targets recognized location-coordinate fields and leaves unrelated metadata in place. It cannot guarantee that every location clue is gone. <strong>Strip metadata</strong> removes much more, including ordinary camera and descriptive details. Review the choice before continuing.</p>
+      <p>Removing recognized AI-generation fields is best-effort. Signed C2PA Content Credentials and other unknown records may remain. Removing metadata does not make an image impossible to identify as AI-generated.</p>
+      <p>Metadata actions can create copies or replace the selected files, depending on the action and your output choice. They do not intentionally recompress image pixels. See the <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">safety guide</a> for the differences.</p>
+    </section>
+
+    <section id="dates" aria-labelledby="dates-title">
+      <h2 id="dates-title">Working with photo dates</h2>
+      <p>Rename photos from their EXIF capture date, adjust camera timestamps, or synchronize the capture date and the file's modification time. The dialogs identify which date is being changed. A camera timestamp often has no time-zone information; KIM6 does not assume that it means UTC.</p>
+      <p>Filesystem dates and dates stored inside a photo are separate. Changing one does not necessarily change the other. Some metadata-only changes preserve the file's modification time, while image transformations normally receive a fresh one.</p>
+    </section>
+
+    <section id="video" aria-labelledby="video-title">
+      <h2 id="video-title">Working with video</h2>
+      <p>Video presets make H.264 or H.265 copies at 720p or 1080p. Optional AV1 presets are available when a supported encoder is installed. The selected codec and container are not silently replaced when unavailable or incompatible.</p>
+      <p>You can also extract a frame or audio track, make a contact sheet or GIF from a video segment, and remove audio while copying the video stream without re-encoding it. These utilities create separate outputs. Video-to-GIF is different from making an animation from still images.</p>
+    </section>
+
+    <section id="collections" aria-labelledby="collections-title">
+      <h2 id="collections-title">Albums, galleries, and slideshows</h2>
+      <p>Make an HTML gallery, collage, PDF album, print-layout PDF, multi-page TIFF, or animated GIF from selected images. A simple MP4 slideshow displays selected photographs in natural filename order for the requested time. It has no music, transitions, titles, or editing timeline.</p>
+      <p>The HTML gallery contains its own pages and image copies in a new output folder. For file outputs, Create new mode avoids occupied names. Where an action supports replacement, the choice may be set by your output preference instead of a prompt.</p>
+    </section>
+
+    <section id="output" aria-labelledby="output-title">
+      <h2 id="output-title">Finding your results</h2>
+      <p>Most image copies are placed beside the selected files. In a resize or JPEG-compression batch, outputs go in the folder of the first selected file. These actions add tags such as <code>_resized</code> and <code>_compressed</code> before the extension. Actions with collision-numbered outputs add a number when a name is taken. Web export uses the folder you select and adds <code>_web</code> by default. Other actions may ask where to save the result.</p>
+      <p>Filename tags can be placed before or after the name using the name-affix setting. The exact behavior for each action is in the <a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">menu inventory</a>.</p>
     </section>
 
     <section id="safety" aria-labelledby="safety-title">
-      <h2 id="safety-title">Careful with originals</h2>
-      <p>Actions that support replacement stage and validate output before publishing. Create mode avoids occupied names and numbers collisions. Derived-only workflows—including web export, email preparation, video utilities and slideshows—never replace selected sources, even if overwrite policy is configured.</p>
-      <p>Metadata, color and timestamp behavior varies by action. Some operations intentionally update a selected file after authorization; others preserve filesystem times or create derivatives. Review the <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">safety guide</a> and <a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">configuration reference</a> before setting policy.</p>
+      <h2 id="safety-title">What happens to selected files?</h2>
+      <p>For actions that offer both choices, <strong>Create new</strong> keeps the selected original and makes a separate result. <strong>Overwrite existing</strong> replaces only the destination that the action is authorized to update, after a successful operation. The dialog may be skipped when an output preference is configured.</p>
+      <p>Renaming changes file names or locations. Date synchronization may change either the file's modification date or embedded photo dates. Web export, resized email copies, video frame/audio/GIF utilities, and slideshows do not replace selected source media. Full-size email mode attaches the selected files without changing them. Video transcoding can replace a selected video after authorization. Batch work can finish some files and report others as failed; completed results remain.</p>
+      <p>Read <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">Safe handling of originals</a> before choosing an overwrite preference.</p>
     </section>
 
-    <section id="compatibility" aria-labelledby="compatibility-title">
-      <h2 id="compatibility-title">Compatibility and project status</h2>
-      <p>KIM6 is designed for KDE Plasma 6 Dolphin. The development system’s KDE Frameworks/KIO 6.29 has an upstream submenu display regression. KIM6 retains its intended submenus and does not claim live Dolphin acceptance on that affected system. Automated menu and installed-resource integration checks remain available; graphical acceptance can be performed on a compatible KDE installation.</p>
-      <p>The processing feature set is frozen while the project completes its documentation and release review. The canonical test suite is run with <code>python3 -B tests/run.py</code>; optional codec tests may skip when a local encoder is unavailable.</p>
+    <section id="troubleshooting" aria-labelledby="troubleshooting-title">
+      <h2 id="troubleshooting-title">Troubleshooting</h2>
+      <details>
+        <summary>I installed KIM6, but I cannot see its menus.</summary>
+        <p>Restart Dolphin and confirm the five service-menu files are under the active KDE service-menu folder. KDE Frameworks/KIO 6.29 has a known upstream issue affecting submenu display. KIM6 keeps its submenus; do not remove the submenu setting. See the <a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">installation guide</a>.</p>
+      </details>
+      <details>
+        <summary>An action says a format or encoder is unavailable.</summary>
+        <p>Support depends on the image tools, video encoders, and profiles installed on your system. KIM6 reports unavailable formats rather than silently substituting another one. Check <a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">formats and codecs</a>.</p>
+      </details>
+      <details>
+        <summary>Where should I look for more help?</summary>
+        <p>Start with the <a href="https://github.com/KIM-6/kim6/blob/master/docs/GETTING_STARTED.md">Getting Started guide</a>. For installation or removal, use the <a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">installation guide</a>. Include the action name and a short description of what happened when reporting a problem. Do not send private photographs unless you have permission.</p>
+      </details>
     </section>
 
-    <section id="help" aria-labelledby="help-title">
-      <h2 id="help-title">Documentation and help</h2>
+    <section id="references" aria-labelledby="references-title">
+      <h2 id="references-title">More information</h2>
       <ul>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">Install, upgrade and uninstall</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/DEVELOPMENT.md">Developer guide</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/FEATURES.md">Feature overview</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">Complete menu action inventory</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/CLI.md">Dispatcher command reference</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">Formats and optional codecs</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">Configuration</a> · <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">Safety and troubleshooting</a></li>
-        <li><a href="https://github.com/KIM-6/kim6/blob/master/LICENSE.md">License</a> · <a href="https://github.com/KIM-6/kim6/blob/master/ABOUT">History and credits</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">Install, upgrade, or uninstall</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/GETTING_STARTED.md">Five everyday examples</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">Complete menu inventory</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">Image and video formats</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">Output and naming preferences</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">Original files and troubleshooting</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/ABOUT">History and credits</a> · <a href="https://github.com/KIM-6/kim6/blob/master/LICENSE.md">License</a></li>
       </ul>
-      <p>For an issue, include the KIM6 revision, distribution and tool versions, exact action/options, and a safe reproducible example. Avoid sharing private media without permission.</p>
     </section>
   </main>
   <footer class="site-footer">
-    <div class="wrap"><p>KIM6 is free software under the GNU General Public License, version 3 or later. Project history and original contributor credits are retained in the repository.</p><p><a href="https://github.com/KIM-6/kim6">KIM6 on GitHub</a></p></div>
+    <div class="wrap">
+      <p>KIM6 continues the KIM project for KDE Plasma 6. Original contributor credits and notices remain in the project.</p>
+      <p>Free software under the GNU General Public License, version 3 or later. <a href="https://github.com/KIM-6/kim6">KIM6 on GitHub</a>.</p>
+    </div>
   </footer>
 </body>
 </html>

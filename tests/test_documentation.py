@@ -44,6 +44,32 @@ def markdown_slug(heading):
 
 
 class DocumentationContractTests(unittest.TestCase):
+    def test_getting_started_examples_match_real_menu_actions_and_output_names(self):
+        entries = {action_id: (menu_name, label, command)
+                   for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
+                   for menu_name, action_id, label, command in menu_entries(menu)}
+        guide = (ROOT / "docs/GETTING_STARTED.md").read_text(encoding="utf-8")
+        expected = {
+            "Resize1600": ("kim_compressandresize.desktop.in", "Resize (1600x1600 pixels)",
+                           "kim_all resize --size 1600x1600 -- %F",
+                           "KIM6 — Compress, resize and web export"),
+            "Compress70": ("kim_compress.desktop.in", "JPEG quality: 70%",
+                           "kim_all compress --quality 70 -- %F", "KIM6 — JPEG compression"),
+            "ConvertJPG": ("kim_convertandrotate.desktop.in", "Convert to JPEG",
+                           "kim_all convert --format jpg -- %F", "KIM6 — Convert and transform"),
+            "StripGPS": ("kim_publication.desktop.in", "Remove GPS coordinates…",
+                         "kim_all stripmeta --mode gps -- %F", "KIM6 — Publish and organize"),
+        }
+        for action_id, (menu_name, label, command, submenu) in expected.items():
+            with self.subTest(action_id=action_id):
+                self.assertEqual((menu_name, label, command), entries[action_id])
+                self.assertIn(label, guide)
+                self.assertIn(submenu, guide)
+        for output_name in ("lake_resized.jpg", "lake_compressed.jpg", "garden.jpg", "trip_gps.jpg"):
+            self.assertIn(output_name, guide)
+        self.assertIn("choose **Create new**", guide)
+        self.assertIn("selected originals unchanged", guide)
+
     def test_authoritative_inventory_matches_all_menu_ids_labels_and_execs(self):
         expected = [entry for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
                     for entry in menu_entries(menu)]

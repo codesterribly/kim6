@@ -1,56 +1,43 @@
-# KIM6 — quick image and video actions for Dolphin
+# KIM6: image and video tools for KDE Dolphin
 
-KIM6 adds practical image and video operations to KDE Dolphin’s context menus. Select files, choose an action, and process them without opening a full photo editor or video editor. The unified `kim_all` dispatcher runs the work and presents progress, prompts, and results.
+KIM6 adds image and video tools to KDE Dolphin. Select a file, right-click, and choose an action to resize, convert, compress, rotate, prepare an image for sharing, remove metadata, and do other everyday jobs. You can select several files and process them together.
 
-KIM6 is designed for **KDE Plasma 6, KIO 6, and Dolphin**. It is a quick-workflow tool, not a replacement for digiKam, darktable, RawTherapee, GIMP, Lightroom, or Kdenlive.
+For these routine tasks, you do not need to open a full photo or video editor. KIM6 is designed for KDE Plasma 6 and Dolphin. It complements tools such as digiKam, darktable, GIMP, RawTherapee, and Kdenlive; it is not a photo catalog, RAW developer, or video editor.
 
-## What you can do
+## Common tasks
 
-- **Prepare images:** compress JPEGs, choose baseline or progressive JPEG, resize to a bound or percentage, and convert formats.
-- **Transform photographs:** rotate by common or custom angles, use EXIF auto-orientation, flip, or flop.
-- **Export and share:** create web-ready images with color management, prepare email attachments, or make a simple MP4 slideshow.
-- **Manage metadata and names:** strip all or selected GPS/AI metadata, edit creator and rights, shift camera timestamps, synchronize EXIF and file dates, or rename by rules and EXIF date.
-- **Create collections:** build HTML galleries, collages, PDF albums, print-layout PDFs, multi-page TIFFs, and animated GIFs.
-- **Work with video:** transcode with H.264, H.265, or optional AV1 presets; extract frames or audio; remove audio without re-encoding video; or export a video segment to GIF.
+- Resize photographs by a maximum size or percentage, or make JPEG copies at a chosen quality.
+- Convert common image formats, rotate or flip photos, and prepare web or email copies.
+- Remove GPS or other selected metadata, edit creator and copyright details, and work with camera dates.
+- Make galleries, collages, PDF albums, multi-page TIFFs, and GIF animations.
+- Compress videos, extract frames or audio, remove video audio, and make simple slideshows.
 
-There are five Dolphin service menus with 107 menu actions. The complete mapping, including menu IDs and exact dispatcher arguments, is in [the action inventory](docs/ACTIONS.md). For details, see the [feature guide](docs/FEATURES.md), [CLI reference](docs/CLI.md), [format guide](docs/FORMATS.md), [configuration reference](docs/CONFIGURATION.md), and [safety guide](docs/SAFETY.md). The [web manual](https://kim-6.github.io/kim6/) is intended for GitHub Pages.
+KIM6 installs five Dolphin menus. The [complete menu inventory](docs/ACTIONS.md) lists every action. The [Getting Started guide](docs/GETTING_STARTED.md) walks through common jobs. More detailed information is in the [installation guide](INSTALL.md), [feature guide](docs/FEATURES.md), [format guide](docs/FORMATS.md), [configuration reference](docs/CONFIGURATION.md), and [safety guide](docs/SAFETY.md). The [HTML manual](https://kim-6.github.io/kim6/) is also available.
 
-## Install
+## Install and use
 
-Install runtime dependencies first; optional image delegates and video encoders depend on the formats you need. Then, from a Git checkout:
+KIM6 is intended for KDE Plasma 6 and Dolphin. Install the tools needed for the formats and actions you plan to use, then install KIM6 from a checkout:
 
 ```sh
+git clone https://github.com/KIM-6/kim6.git
+cd kim6
 ./install.sh
 ```
 
-See [INSTALL.md](INSTALL.md) for dependencies, per-user and system installation, custom prefixes, upgrades, verification, and uninstall. The installed menus invoke the installed dispatcher by absolute path; `kim_all` does not need to be in `PATH`.
+Restart Dolphin if the menus do not appear. After installation, select one or more local files, right-click, and look for the KIM6 menus. See [INSTALL.md](INSTALL.md) for dependencies, system or custom locations, upgrades, and removal.
 
-## Use
+For a first try, select `photo.jpg` and choose **KIM6 — Compress, resize and web export → Resize (1600x1600 pixels)**. Choose **Create new** if asked; `photo_resized.jpg` appears beside the original.
 
-In Dolphin, select one or more local image or video files, right-click, and choose an operation from a KIM6 submenu. The menus pass selected files as separate arguments, so spaces and Unicode names are supported. Many actions also support direct invocation; begin with:
+## What happens to the originals?
 
-```sh
-./src/bin/kim_all --help
-```
+Many image actions ask whether to create a new file or replace the selected file, unless you have already set an output preference. Choose **Create new** to keep the original. Actions with collision-numbered outputs choose another name if needed; other workflows may ask for a destination or report a conflict. Web export, resized email attachments, video frame/audio/GIF tools, and slideshows create derived files only. Full-size email mode attaches selected originals without changing them. Video transcoding, rotation, flipping, and some metadata and date actions can replace a selected file when you authorize it. Rename actions have their own move/copy choices.
 
-For a safe smoke test, create a disposable copy of an image and run a create-mode action on that copy. See the [CLI reference](docs/CLI.md) for examples and output policies.
+Different operations preserve different things. JPEG conversion or compression can change image detail, and some formats cannot store transparency or animation. GPS-only removal leaves other metadata in place; full metadata removal removes much more. Read [Safe handling of originals](docs/SAFETY.md) before choosing replacement as a default.
 
-## Safe output behavior
+## Help, history, and license
 
-Generated output is staged and validated before publication. Create mode does not replace occupied paths. An action that supports overwrite only replaces the explicitly authorized target after successful validation. Web export, email preparation, video utilities, and slideshows always create derivatives and never replace selected sources. Metadata, timestamps, and permissions follow action-specific policies; they are not all treated alike.
+Use the Manual, License, and About entries in Dolphin for installed resources. For a problem, see the [safety and troubleshooting guide](docs/SAFETY.md) and include the action, KIM6 revision, and relevant tool versions in a report. Avoid sharing private photographs unless you have permission.
 
-## Project status and testing
+KIM descends from work begun for KDE 3 and continued through community KDE 4 and 5 versions. KIM6 carries that work forward for Plasma 6. Original contributors and historical notices are retained in [ABOUT](ABOUT), [ChangeLog](ChangeLog), and the [historical documentation archive](docs/archive/upstream/ARCHIVE.md).
 
-Processing features are frozen for the first polished release. The unified dispatcher and menus are covered by a 924-test canonical suite; one test is skipped when the optional JPEG XL encoder is unavailable. Run it with:
-
-```sh
-python3 -B tests/run.py
-```
-
-The development machine’s KDE Frameworks/KIO 6.29 has an upstream submenu regression, so live Dolphin submenu acceptance is deferred. KIM6 keeps its submenu declarations; automated menu and isolated installation tests are used until the KDE issue is fixed or another supported desktop is available.
-
-## History, contributors, and license
-
-KIM descends from work begun for KDE 3 and carried through community KDE 4/5 forks. KIM6 is the Plasma 6 continuation. The dispatcher retains attribution to Charles Bouveyron, Tomáš Hnyk, Raphaël Pinson, Mathieu Vilaplana, and KIM6 contributors; individual historical scripts retain their original notices. See [ABOUT](ABOUT), [ChangeLog](ChangeLog), and the [historical documentation archive](docs/archive/upstream/ARCHIVE.md).
-
-KIM6 is distributed under the GNU General Public License, version 3 or later. Read [LICENSE.md](LICENSE.md).
+KIM6 is free software under the GNU General Public License, version 3 or later. See [LICENSE.md](LICENSE.md).
