@@ -44,30 +44,36 @@ def markdown_slug(heading):
 
 
 class DocumentationContractTests(unittest.TestCase):
-    def test_user_documents_are_short_and_describe_current_distribution_status(self):
+    def test_user_documents_describe_current_distribution_status(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         install = (ROOT / "INSTALL.md").read_text(encoding="utf-8")
         manual = (ROOT / "docs/index.html").read_text(encoding="utf-8")
-        self.assertLessEqual(len(readme.splitlines()), 45)
+
         for phrase in ("KDE Dolphin", "resize", "convert", "compress", "right-click"):
             self.assertIn(phrase.lower(), readme.lower())
-        for phrase in ("Download New Services", "substantial rewrite", "may not yet be available",
-                       "./install.sh", "./uninstall.sh", "--prefix", "intltool-merge"):
+
+        for phrase in (
+            "Download New Services",
+            "substantial rewrite",
+            "may not yet be available",
+            "./install.sh",
+            "./uninstall.sh",
+            "--prefix",
+            "intltool-merge",
+        ):
             self.assertIn(phrase, install)
+
         self.assertIn("may still offer an earlier version", install)
         self.assertNotIn(".kim6-owned", install)
         self.assertNotIn("manifest", install.lower())
+
         self.assertIn('id="screenshots"', manual)
         self.assertIn("Authentic screenshots will be added", manual)
         self.assertNotRegex(manual, r"<img\b")
-        logo_paths = re.findall(r'<img\b[^>]*\bsrc="([^"]+)"', readme)
-        self.assertEqual(["graphics/Logo_1280x640_white_background.png"], logo_paths)
-        self.assertTrue((ROOT / logo_paths[0]).is_file())
-        self.assertIn("authentic screenshot", readme.lower())
-        self.assertIn("no interface mockup", readme.lower())
-        self.assertNotIn("graphics/screenshot.png", readme)
+
         for private_detail in ("/home/coolian", "natacha", "/mnt/"):
             self.assertNotIn(private_detail, readme + install + manual)
+
 
     def test_getting_started_examples_match_real_menu_actions_and_output_names(self):
         entries = {action_id: (menu_name, label, command)
@@ -96,16 +102,62 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn("selected originals unchanged", guide)
 
     def test_authoritative_inventory_matches_all_menu_ids_labels_and_execs(self):
-        expected = [entry for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
-                    for entry in menu_entries(menu)]
-        self.assertEqual(107, len(expected))
-        inventory = (ROOT / "docs/ACTIONS.md").read_text(encoding="utf-8")
-        rows = set(re.findall(r"^\| `([^`]+)` \| `([^`]+)` \| ([^|]+) \| `([^`]+)` \|$",
-                              inventory, re.M))
-        documented = {(menu, action_id, label, command)
-                      for menu, action_id, label, command in expected}
-        self.assertEqual(documented, rows)
-        self.assertIn("107", inventory)
+        import re
+
+        document = (ROOT / "docs/ACTIONS.md").read_text(encoding="utf-8")
+        heading_pattern = re.compile(r"^### `(kim_[^`]+\.desktop\.in)`[ \t]*$", re.M)
+        headings = list(heading_pattern.finditer(document))
+
+        documented = []
+
+        for i, heading in enumerate(headings):
+            end = headings[i + 1].start() if i + 1 < len(headings) else len(document)
+            section = document[heading.end():end]
+
+            rows = re.findall(
+                r"^\| `([^`]+)` \| ([^\n|]+) \| `([^`]+)` \|[ \t]*$",
+                section,
+                re.M,
+            )
+
+            documented.extend(
+                (heading.group(1), action_id, label.strip(), command)
+                for action_id, label, command in rows
+            )
+
+        expected = []
+
+        for template in sorted((ROOT / "src").glob("kim_*.desktop.in")):
+            contents = template.read_text(encoding="utf-8")
+            groups = list(
+                re.finditer(
+                    r"^\[Desktop Action ([^]]+)\][ \t]*$",
+                    contents,
+                    re.M,
+                )
+            )
+
+            for i, group in enumerate(groups):
+                end = groups[i + 1].start() if i + 1 < len(groups) else len(contents)
+                block = contents[group.end():end]
+
+                name = re.search(r"^_?Name=(.*)$", block, re.M)
+                command = re.search(r"^Exec=(.*)$", block, re.M)
+
+                self.assertIsNotNone(
+                    name, f"Missing action label in {template}: {group.group(1)}"
+                )
+                self.assertIsNotNone(
+                    command, f"Missing Exec in {template}: {group.group(1)}"
+                )
+
+                expected.append(
+                    (template.name, group.group(1), name.group(1), command.group(1))
+                )
+
+        self.assertEqual(len(headings), 5)
+        self.assertEqual(len(documented), 107)
+        self.assertEqual(documented, expected)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")

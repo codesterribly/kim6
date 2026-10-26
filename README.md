@@ -20,8 +20,8 @@ KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familia
 
 ### Organize photographs and manage metadata
 
-- **Remove private information:** Strip GPS coordinates or other embedded metadata.
-- **Manage photo dates:** Rename photographs using their EXIF dates, adjust timestamps, and synchronize image dates with file timestamps.
+- **Manage privacy and metadata:** Remove GPS coordinates, AI-related metadata, or all embedded metadata. Choose what to remove while retaining other useful information.
+- **Manage photo dates:** Rename photographs using their EXIF dates, shift capture timestamps to correct camera clock errors, and synchronize EXIF and filesystem timestamps.
 - **Update copyright information:** Add or modify copyright metadata across multiple photographs.
 - **Control what gets preserved:** Choose appropriate metadata and output behavior for different operations.
 
@@ -37,10 +37,11 @@ KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familia
 
 KIM6 also includes video operations directly in Dolphin:
 
-- Resize and convert videos using H.264, H.265, and supported additional encoders.
+- Resize and convert videos using H.264, H.265 (HEVC), and AV1 encoding.
 - Choose from predefined output resolutions and quality settings.
 - Extract individual frames or create contact sheets.
 - Save audio from video files.
+- Remove audio tracks from videos to create silent copies.
 - Convert short video clips into animated GIFs.
 - Create MP4 slideshows from photographs.
 
@@ -50,7 +51,9 @@ Available video codecs depend on FFmpeg and the encoders installed on your syste
 
 KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
 
-Many actions let you choose whether to create a separate result or replace an existing file. **Choose Create new to preserve the original** when that option is offered. Some operations, including certain rename, metadata, and rotation actions, have different file-handling behavior.
+Most resizing, compression, and conversion actions let you choose whether to create a new file or overwrite an existing one. **Choose Create new to preserve the original** when that option is available. Web exports, email copies, and video utilities create separate output files.
+
+Some operations, including rotation, flipping, and metadata editing, modify the selected files directly. Rename operations have their own file-handling options.
 
 See [Getting Started](docs/GETTING_STARTED.md) for examples and [Safe Handling](docs/SAFETY.md) for details.
 
@@ -64,7 +67,9 @@ Dolphin includes a **Download New Services** feature under its configuration set
 
 From a checkout containing the rewrite:
 
-    ./install.sh
+```bash
+./install.sh
+```
 
 Restart Dolphin after installing, then right-click a supported image or video to find the KIM6 menus.
 
@@ -97,7 +102,7 @@ Credit belongs to the original developers, including Charles Bouveyron and Tomá
 
 ## AI Attribution
 
-KIM6's rewrite code was rewritten by hand. Much of the unit testing and portions of the documentation were generated with the assistance of a self-trained, locally hosted AI model specializing in unit testing and technical documentation.
+KIM6's current code was rewritten by hand. Much of the unit testing and portions of the documentation were generated with the assistance of a self-trained, locally hosted AI model specializing in unit testing and technical documentation.
 
 ## License
 

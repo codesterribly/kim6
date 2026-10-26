@@ -1,115 +1,281 @@
-# KIM6 development guide
 
-This guide describes the checked-in Plasma 6 implementation. KIM6 has one processing entry point, `src/bin/kim_all`; historical standalone scripts remain references and are not invoked by menus or the dispatcher. Feature scope is frozen for the first polished release. Fixes should preserve the documented policies and tests rather than add new processing capabilities.
+# KIM6 Development Guide
 
-## Repository map
+KIM6 is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, `src/bin/kim_all`.
+
+The original scripts are retained in the repository for historical reference. All current Dolphin menu actions use `kim_all`.
+
+This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIM6.
+
+## Repository Structure
 
 | Path | Purpose |
 |---|---|
-| `src/bin/kim_all` | Dispatcher, action implementations, configuration, staging/publication, progress and validation helpers. |
-| `src/kim_*.desktop.in` | Five KDE service-menu templates and the 107 visible menu actions. |
-| `src/gallery/` | HTML gallery template fragments installed beside the dispatcher. |
-| `tests/run.py` | Canonical unittest discovery and runner. |
-| `tests/support.py`, `tests/adapter.py` | Disposable workspaces, synthetic fixtures and command adapters used by action tests. |
-| `tests/test_*.py` | Action, preservation, cancellation, publication and integration regressions. |
-| `install.sh`, `uninstall.sh` | Explicit-inventory Plasma 6 installation, upgrade and safe owned-resource removal. |
-| `po/` | gettext translations and desktop-entry catalogs. |
-| `docs/` | User references and the GitHub Pages manual. |
-| `docs/archive/upstream/` | Byte-preserved upstream and pre-overhaul documentation snapshots. |
+| `src/bin/kim_all` | Main executable containing image and video processing functions. |
+| `src/kim_*.desktop.in` | Five KDE Dolphin service-menu definitions containing 107 actions. |
+| `src/gallery/` | Templates used to generate HTML photo galleries. |
+| `tests/run.py` | Test runner. |
+| `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
+| `tests/test_*.py` | Unit and integration tests. |
+| `install.sh`, `uninstall.sh` | Installation and removal scripts. |
+| `po/` | Translation files. |
+| `docs/` | User documentation and HTML manual. |
+| `docs/archive/upstream/` | Archived documentation from earlier versions. |
 
-`README.md` is the landing page. `INSTALL.md` covers deployment. `docs/ACTIONS.md` is the one complete menu/action inventory. `docs/CLI.md`, `FEATURES.md`, `FORMATS.md`, `CONFIGURATION.md`, and `SAFETY.md` are the detailed references. `docs/index.html` is the static web manual.
+`README.md` provides the project overview, and `INSTALL.md` covers installation and removal.
 
-## Dispatcher and menu boundary
+The `docs/` directory contains additional references:
 
-Dolphin service-menu templates invoke `kim_all <action> ... -- %F`. `%F` forwards local selected paths as separate arguments. Preserve the `--` separator and use Bash arrays for paths; never use `eval`, shell concatenation, or a legacy script as an intermediate entry point. The installer replaces the bare `kim_all` token with the absolute installed executable path.
+- `ACTIONS.md` — Complete Dolphin menu and action inventory.
+- `CLI.md` — Command-line options and dispatcher arguments.
+- `FEATURES.md` — Detailed descriptions of KIM6 functionality.
+- `FORMATS.md` — Supported image and video formats.
+- `CONFIGURATION.md` — Configuration options and defaults.
+- `SAFETY.md` — File handling, preservation, and overwrite behavior.
+- `index.html` — HTML user manual.
 
-Menu definitions use `Type=Service`, `X-KDE-ServiceTypes=KonqPopupMenu/Plugin`, `X-KDE-Protocol=file`, and `X-KDE-Submenu`. Do not flatten menus to work around the known KIO 6.29 submenu regression. Keep each action’s MIME filter aligned with actual inputs. Follow `docs/ACTIONS.md` when editing IDs, labels, presets, and dispatcher arguments.
+## Dolphin Service Menus
 
-The dispatcher’s usage output is also maintained in `src/bin/kim_all`; every action option documented in `docs/CLI.md` must match its parser. Menu-facing dialog flags are action-local. Do not introduce a global parser rewrite.
+KIM6 uses five KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
-## Runtime and capability probing
+For example:
 
-Runtime tools include Bash/core utilities, ImageMagick 7 (`magick`, `identify`), ExifTool, FFmpeg/ffprobe, KDialog and qdbus. Specific workflows need optional encoders/delegates, ICC profiles, `xdg-open`, mail clients, `intltool-merge`, or `setsid`. Actions report missing required tools and probe optional codecs before claiming support. Do not infer encoding support from an extension or silently change the requested format. See [FORMATS.md](docs/FORMATS.md).
+```sh
+kim_all compress --quality 70 -- %F
+```
 
-Tests use disposable synthetic files and command adapters for controlled failure injection. Real-tool tests use small fixtures and skip only capability-dependent cases with a stated reason. Never point tests at personal media or installed KDE menu directories.
+The `%F` placeholder supplies the selected file paths. The `--` separator marks the end of command options so filenames beginning with a hyphen are handled correctly.
+
+The service-menu definitions use KDE's `Type=Service`, `X-KDE-ServiceTypes=KonqPopupMenu/Plugin`, `X-KDE-Protocol=file`, and `X-KDE-Submenu` entries.
+
+When modifying menu actions:
+
+- Preserve existing action IDs and command arguments unless intentionally changing their behavior.
+- Use Bash arrays to handle filenames containing spaces or special characters.
+- Keep MIME type restrictions appropriate for the selected action.
+- Update the action reference and translations when menu labels or arguments change.
+
+The installer replaces the `kim_all` command in each menu with the absolute path to the installed executable.
+
+The dispatcher's command-line help is maintained in `src/bin/kim_all` and should remain consistent with the documented options.
+
+See [ACTIONS.md](docs/ACTIONS.md) for the complete menu definitions and [CLI.md](docs/CLI.md) for command-line arguments.
+
+## Runtime Dependencies and Format Support
+
+KIM6 uses Bash and common command-line utilities, along with:
+
+- **ImageMagick 7:** Image processing, format conversion, galleries, and related operations.
+- **ExifTool:** Metadata, timestamps, and copyright information.
+- **FFmpeg and ffprobe:** Video processing and media inspection.
+- **KDialog and qdbus:** KDE dialogs, progress reporting, and cancellation.
+
+Specific operations may also require optional image encoders, format delegates, ICC profiles, `xdg-open`, email clients, or `setsid`. Installation from source uses `intltool-merge`.
+
+KIM6 checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.
+
+Missing encoders or unsupported formats should produce an error rather than silently substituting another format.
+
+See [FORMATS.md](docs/FORMATS.md) for details about supported formats and dependencies.
 
 ## Configuration
 
-`load_kim_config` reads `${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}` using `kreadconfig6`, group `<default>`. Recognized environment values override KConfig. Invalid KConfig values fall back to defaults where a key has a constrained value; invalid environment values follow that action’s validation or fallback behavior. `KIM_POLICY` is the sole output-policy variable. See [CONFIGURATION.md](docs/CONFIGURATION.md) for exact keys, defaults, and action scope.
+`load_kim_config` reads configuration from:
 
-## Safety invariants
+```sh
+${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}
+```
 
-Keep these invariants when changing actions or shared helpers:
+Configuration is read using `kreadconfig6`, from the `<default>` group.
 
-1. Treat selected paths as untrusted input. Use arrays, `--` separators, no-follow checks where required, and explicit alias checks. Spaces and Unicode are supported; CR/LF filenames are rejected where line-based path protocols cannot represent them safely.
-2. Never give a producer an original or final destination as its output path. Stage generated content on the destination filesystem with `tmp_for_target()` and validate it before publication.
-3. `commit_tmp_to_target()` owns create/overwrite publication. Create mode refuses any occupied entry, including symlinks. Overwrite is explicit and fails closed if rename-only atomic replacement cannot be established. Do not add a copy/truncate fallback.
-4. Publication provides atomic visibility on supported local filesystems, not crash durability and not protection from arbitrary external writers. Cooperative KIM6 publishers are serialized where the helper documents it.
-5. Cleanup may remove only invocation-owned stages or child processes. A failure must preserve pre-existing targets and selected sources.
-6. Use `progress_cancelled()` as the stop predicate. A disappeared D-Bus service is an interruption; failed or malformed queries stop safely with an error. Check immediately before publication and stop later batch items.
-7. Validate real output bytes and semantics: producer status, decodability, format, dimensions, frame/page count, streams, timing, profiles or metadata as appropriate. A nonempty file or zero exit is not enough.
-8. Preserve action-specific policies. Rotations preserve mtime; other transform and metadata actions have their documented distinctions. Do not add blanket metadata/timestamp restoration.
+Recognized environment variables take precedence over their corresponding KConfig values.
 
-See [SAFETY.md](docs/SAFETY.md) for the user-facing behavior and limits.
+Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.
 
-## Shared helper responsibilities
+`KIM_POLICY` is the output-policy setting.
 
-- `collect_valid_files()` handles regular-file selections for line-record action paths. Publication and date/rename collectors apply additional canonical-path, identity and link checks.
-- `tmp_for_target()` allocates an owned stage directory next to a target and returns a stage file inside it. `register_stage_dir()` and `cleanup_stages()` track ownership for cleanup.
-- `commit_tmp_to_target()` publishes validated staged files in create or authorized overwrite mode. `atomic_overwrite_file()` remains as a compatibility wrapper and is covered directly by publication tests; current action flows use `tmp_for_target()` and `commit_tmp_to_target()`. Do not use the wrapper as a reason to bypass target checks.
-- `progress_open()`, `progress_label()`, `progress_value()`, `progress_cancelled()`, and `progress_close()` manage owned KDialog references and D-Bus checks. The reference parser maintains separate service and object-path arguments.
-- Video helpers probe with ffprobe, run monitored FFmpeg children, and terminate only the process owned by this invocation.
+See [CONFIGURATION.md](docs/CONFIGURATION.md) for the available keys, defaults, and affected actions.
 
-These helpers encode safety policy. Change a helper only for a demonstrated defect with a focused regression test and review of all callers.
+## File Safety and Error Handling
 
-## Action families
+KIM6 processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:
 
-Image transformation actions generate and validate staged pixels. Most follow create or authorized overwrite policy; rotation and flip/flop explicitly replace the selected input, independent of `KIM_POLICY`. Metadata-only edits use ExifTool and verify tags, pixels, profiles, permissions and mtime. Date synchronization has separate filesystem-time and embedded-metadata directions. Web export is always derived-only and performs ICC-managed sRGB conversion by default. Video utility actions are derived-only; transcoding may overwrite only after authorization. Slideshow generation is always derived-only. Renaming is a filesystem operation with whole-batch preflight and safe no-clobber move/copy semantics; it is not an image-publication transaction.
+1. **File paths:** Treat selected filenames as untrusted input. Use Bash arrays and `--` separators. Check symbolic links and file aliases where appropriate. Spaces and Unicode are supported; filenames containing carriage returns or line feeds are rejected by operations that cannot safely process them.
 
-Do not assume all images are still RGB photographs: animations, multipage images, RAW, layered files, vectors, PDFs and HDR require action-specific handling or rejection.
+2. **Temporary files:** Never write generated output directly to an original or final destination. Use `tmp_for_target()` to create temporary output on the destination filesystem, and validate the result before moving it into place.
 
-## Adding or changing a supported action
+3. **Publishing results:** `commit_tmp_to_target()` handles creating or overwriting output files. Create mode refuses to replace occupied paths, including symlinks. Overwriting must be explicitly authorized and use the supported atomic replacement mechanism rather than copying or truncating the destination.
 
-1. Confirm the user-visible option already exists or is approved for the current scope; feature freeze means no new processing features.
-2. Identify its public dispatcher arguments, input MIME scope, output policy, naming, metadata/timestamp behavior, dependencies, cancellation points and validation requirements.
-3. Add a focused regression through the public dispatcher before changing behavior. Include real-tool fixtures when they provide meaningful evidence and controlled failure adapters for dangerous cases.
-4. Keep menu ID/label/argument changes synchronized with `docs/ACTIONS.md`, translations, CLI help and relevant references. Maintain selected-file argument boundaries.
-5. Test failure and cancellation preservation, not only success. Confirm cleanup removes owned stages and no unrelated files.
-6. Run independent accuracy and standards review for meaningful changes.
+4. **Atomic replacement:** On supported local filesystems, completed files are moved into place atomically. This prevents users from seeing partially written output, but it does not guarantee durability after a system crash or protect against changes made by other programs.
 
-## Test and static-check workflow
+5. **Cleanup:** Remove only temporary files, directories, and child processes created by the current operation. Failed operations must preserve existing destination files and selected sources.
 
-Run one focused module while iterating:
+6. **Cancellation:** Use `progress_cancelled()` to detect cancellation. Missing, failed, or malformed D-Bus responses must be handled safely. Check cancellation before publishing results and before continuing with later files in a batch.
+
+7. **Output validation:** Check that generated files contain valid results, not merely that a command returned successfully. Depending on the operation, this includes verifying format, dimensions, image frames, PDF pages, video streams, timestamps, color profiles, or metadata.
+
+8. **Metadata and timestamps:** Preserve each action's documented behavior. Rotation preserves the original modification time; other transformations and metadata operations have their own rules. Do not apply metadata or timestamp restoration indiscriminately.
+
+See [SAFETY.md](docs/SAFETY.md) for the user-facing explanation of file handling and its limitations.
+
+## Shared Helper Functions
+
+Several functions in `src/bin/kim_all` provide common behavior across multiple actions.
+
+### File selection
+
+`collect_valid_files()` validates regular-file selections for actions using line-based file lists.
+
+Publication, date, and rename operations perform additional checks involving canonical paths, file identity, and symbolic links.
+
+### Temporary files and publication
+
+`tmp_for_target()` creates a temporary staging directory beside the intended destination and returns a path for generated output.
+
+`register_stage_dir()` and `cleanup_stages()` track temporary directories created by the current operation.
+
+`commit_tmp_to_target()` moves validated output into place using the selected create or authorized overwrite policy.
+
+`atomic_overwrite_file()` remains available as a compatibility wrapper, although current actions use `tmp_for_target()` and `commit_tmp_to_target()`.
+
+### Progress and cancellation
+
+The following functions manage KDialog progress reporting:
+
+- `progress_open()`
+- `progress_label()`
+- `progress_value()`
+- `progress_cancelled()`
+- `progress_close()`
+
+They manage the dialog's D-Bus service and object-path references.
+
+### Video processing
+
+Video helpers inspect files using `ffprobe`, execute FFmpeg operations, monitor progress, and manage cancellation.
+
+Process cleanup is restricted to child processes started by the current KIM6 operation.
+
+These shared functions affect multiple actions. Changes should be tested against the operations that depend on them.
+
+## Action Behavior
+
+Different KIM6 actions have different file-handling requirements.
+
+### Image transformations
+
+Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.
+
+Rotation and flip/flop operations replace the selected image after validation, independently of `KIM_POLICY`.
+
+### Metadata and dates
+
+Metadata-only operations use ExifTool and verify the resulting metadata while preserving image pixels, color profiles, permissions, and modification times as appropriate.
+
+Date synchronization supports separate operations for filesystem timestamps and embedded image metadata.
+
+### Web export
+
+Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility.
+
+### Video processing
+
+Video utilities create separate outputs. Video transcoding can replace an existing file only when authorized.
+
+Slideshow generation always creates a separate output file.
+
+### Renaming
+
+Rename operations use filesystem move or copy behavior. They check the complete batch for naming conflicts before making changes and avoid unintentionally replacing existing files.
+
+Renaming does not use the same publication mechanism as image transformations.
+
+### Special image formats
+
+Not every image is a single-frame RGB photograph. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.
+
+Format-specific validation is important when modifying conversion and transformation functions.
+
+## Adding or Modifying Actions
+
+Most KIM6 functionality is implemented as action functions in `src/bin/kim_all`. Dolphin invokes these functions through the service-menu definitions in `src/`.
+
+When adding or changing an action:
+
+1. Identify the relevant function and its command-line arguments.
+2. Check the supported input formats, output naming, and existing file-handling behavior.
+3. Reuse the existing helpers for file validation, temporary files, progress reporting, and cancellation.
+4. Add or update tests for the intended behavior, including error handling and preservation of existing files.
+5. Update the corresponding service-menu definition, translations, CLI help, and documentation when necessary.
+
+Test changes against temporary files rather than personal photographs or videos.
+
+See [ACTIONS.md](docs/ACTIONS.md) for the menu-action inventory and [CLI.md](docs/CLI.md) for dispatcher arguments.
+
+## Testing
+
+For required tools and installation instructions, see [INSTALL.md](INSTALL.md). Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.
+
+KIM6 uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
+
+Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior.
+
+Run an individual test module while developing:
 
 ```sh
 python3 -B tests/run.py --pattern test_resize.py
 ```
 
-Run all tests with the canonical runner:
+Run the full test suite:
 
 ```sh
 python3 -B tests/run.py
 ```
 
-Do not replace the project’s unittest workflow with generic pytest discovery. The adapters record status, streams, argument boundaries and filesystem changes. Real ImageMagick/ExifTool/FFmpeg fixtures complement—but do not get replaced by—controlled failures.
+Tests use temporary directories and generated media files. Some tests run ImageMagick, ExifTool, or FFmpeg directly, while others use controlled command adapters to simulate failures.
 
-Before review, run:
+Before submitting changes, check Bash syntax and run ShellCheck:
 
 ```sh
 bash -n src/bin/kim_all install.sh uninstall.sh
 shellcheck src/bin/kim_all install.sh uninstall.sh
-python3 -B -c 'import ast, pathlib; [ast.parse(p.read_text(), filename=str(p)) for p in pathlib.Path("tests").glob("*.py")]'
 git --no-pager diff --check
 ```
 
-KDE service menus are `Type=Service`; generic desktop-entry validation may not understand their action groups. Use the KDE-specific menu and isolated installer tests. Do not claim GUI acceptance from parsing alone.
+Installer tests should use temporary installation directories rather than modifying the active Dolphin installation.
 
-## Installer and release checks
+KDE service menus use `Type=Service`, which may not be handled correctly by generic desktop-entry validators. Use the project's KDE-specific menu tests for structural validation.
 
-Use disposable prefixes for installation tests. The installer recognizes a populated runtime from the `kim_all` dispatcher, a recognized KIM menu, or an old `.kim6-owned` marker; an empty directory can also be adopted after an interrupted first install. New installs do not create markers. The uninstaller can identify the runtime from the dispatcher or a recognized KIM menu and does not require the old marker. Menus are recognized through their KIM marker or a recognized old KIM command. The installer checks known destinations and symlinks, then replaces each listed file through a temporary sibling file. There is no whole-install transaction, digest manifest, customization backup, or rollback: an interrupted upgrade can leave a mixed version, and rerunning the installer completes it. A hard kill can leave a hidden temporary sibling, which the installer does not sweep. Content at known KIM6 paths is replaced or removed; unlisted runtime data remains. Uninstall removes only the listed runtime files and leaves nonempty directories in place.
+Automated menu tests verify definitions and command arguments, but actual menu display and interaction should also be tested in Dolphin.
 
-Release verification should include the canonical suite, shell/Python checks, all five KDE templates and 107 action mappings, isolated fresh/repeated/upgrade/failure/uninstall tests, installation modes, and manual review of the documentation. Do not run upgrade/uninstall tests against the live desktop. Follow actual installer options documented in [INSTALL.md](INSTALL.md).
+## Installation and Release Testing
 
-## Contributions and translations
+The installation scripts support user, system-wide, and custom installation directories.
 
-Contributions should include a focused test, clear reproduction details, and a description of source/destination preservation. Preserve historical author notices and GPL headers. Translation sources live in `po/`; regenerate/update catalogs only through the established gettext/intltool workflow and ensure current menu message IDs stay synchronized. Do not execute obsolete release commands copied from the [historical archive](docs/archive/upstream/ARCHIVE.md).
+The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.
+
+The uninstaller removes recognized KIM6 files without deleting unrelated files. Existing installations from older versions are also supported where their files can be identified.
+
+Installation updates are performed one file at a time. An interrupted installation can be completed by running `install.sh` again.
+
+Before preparing a release:
+
+1. Run the complete test suite and static checks.
+2. Verify all five Dolphin service menus and their 107 action mappings.
+3. Test installation, upgrading, and uninstallation using temporary directories.
+4. Test the menus in Dolphin on a supported KDE Plasma system.
+5. Review the installation instructions and user documentation.
+
+See [INSTALL.md](INSTALL.md) for installation options.
+
+## Contributions and Translations
+
+Contributions should include a description of the change, relevant tests, and enough information to reproduce any bugs being fixed.
+
+Changes to file-processing operations should explain how existing source and destination files are preserved, particularly when error handling or overwriting is involved.
+
+Preserve historical author notices and GPL license headers.
+
+Translations are maintained in `po/` using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
+
+Historical development and release documentation is preserved in the [upstream archive](docs/archive/upstream/ARCHIVE.md).
