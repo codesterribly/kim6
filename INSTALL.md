@@ -1,56 +1,106 @@
-# Installing KIM6
+# Install KIM6
 
-KIM6 installs one executable runtime entry point, `kim_all`, and five KDE Dolphin service menus, including a JPEG-only compression menu. The original `kim_*` sources remain in the repository as historical references; the installer does not install them as active commands. Gallery templates, the manual, license, About text, and compiled translations are installed beside the dispatcher.
+KIM6 targets KDE Plasma 6, KIO 6, and Dolphin service menus. It installs one processing executable (`kim_all`), five `.desktop` service-menu data files, translations when compiled, the gallery templates, and resources for About, License, and Manual. It does not install the historical standalone `kim_*` programs as active commands.
 
-## Runtime requirements
+## Runtime dependencies
 
-- KDE Plasma 6 / KIO / Dolphin, KDialog, and `qdbus` for progress and cancellation.
-- ImageMagick (`magick`, with the formats/codecs you use) for image, PDF, TIFF, GIF, gallery, and collage workflows.
-- ExifTool for metadata removal and EXIF-date naming.
-- FFmpeg and `ffprobe`; the `libx264` and `libx265` encoders for video presets.
-- `xdg-email` for mail handoff and `xdg-open` for the manual, license, and gallery browser workflow.
-- `intltool-merge` to render service-menu templates when installing from a source checkout. `msgfmt` is optional; without it menus run in English.
+The exact requirements depend on the actions you use:
 
-Missing optional codecs or tools cause the related action to report an error; KIM6 does not silently switch output formats or codecs.
+- **KDE Plasma 6, KIO, Dolphin, KDialog, and `qdbus`** provide the service-menu and graphical progress/cancellation interface.
+- **ImageMagick 7**, with `magick` and `identify`, powers image operations and some PDF/TIFF/GIF workflows.
+- **ExifTool** is needed for metadata operations, EXIF-date renaming, and image workflows that inspect metadata or profiles.
+- **FFmpeg and ffprobe** are required for video workflows and APNG conversion. Slideshow creation requires FFmpeg’s `libx264` encoder.
+- **Optional ImageMagick delegates and ICC profiles** enable formats and color transforms such as WebP, AVIF, HEIC/HEIF, JPEG XL, JPEG 2000, and sRGB conversion.
+- **`xdg-open`** opens the installed manual/license and generated galleries. **`xdg-email`, KMail, or Thunderbird** can receive prepared email attachments.
+- **`intltool-merge`** is required to render service menus during installation. `msgfmt` is optional; without it, menu text remains untranslated. `kreadconfig6` is optional and reads the KConfig settings file; without it, configured KConfig values are unavailable and defaults apply.
+- `setsid` is used to monitor and stop slideshow image-preparation processes safely.
 
-## Install or upgrade
+KIM6 checks required tools for the selected action and probes optional encoders at runtime. A missing codec/delegate fails that operation; KIM6 does not silently substitute another format or video codec. Consult [FORMATS.md](docs/FORMATS.md) for format-specific requirements.
 
-From a checkout:
+## Install from a checkout
+
+Clone the repository and install the per-user service menus:
 
 ```sh
+git clone https://github.com/KIM-6/kim6.git
+cd kim6
 ./install.sh
 ```
 
-To install into a disposable or nonstandard service-menu directory:
+The default user prefix is `${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus`.
+
+To install into another service-menu directory, pass that directory—not its parent—as the prefix:
 
 ```sh
-./install.sh --prefix /path/to/kio/servicemenus
+./install.sh --prefix "$HOME/.local/share/kio/servicemenus"
 ```
 
-The default user installation uses `${XDG_DATA_HOME:-~/.local/share}/kio/servicemenus`. A root installation uses the first configured XDG data directory (normally `/usr/local/share`). The script creates missing directories.
+The supported installer option is `--prefix SERVICEMENU_DIRECTORY`. When run as root without an explicit prefix, the installer chooses the first directory in `${XDG_DATA_DIRS:-/usr/local/share:/usr/share}` and appends `/kio/servicemenus`. For a system install, use a deliberate prefix and run with appropriate privileges, for example:
 
-The installer renders and validates all replacement menus and stages the runtime before changing active files. Upgrade recognizes only the five known KIM menu filenames and the `kim6` runtime directory. It refuses a same-named menu that has neither the KIM ownership marker nor a recognizable previous KIM command. It preserves unknown files inside the old runtime tree, and removes a legacy executable only when its contents match the corresponding repository reference. Existing symlinks in the runtime or service-menu targets stop installation safely. If replacement fails, the previous runtime and menu files are restored.
+```sh
+sudo ./install.sh --prefix /usr/local/share/kio/servicemenus
+```
 
-After installation, restart Dolphin or refresh its service-menu cache if the new submenu does not appear. The installer validates staged menus with an isolated `kbuildsycoca6` run when available. After a successful swap, the live cache refresh is best-effort; a refresh failure leaves the installed files in place and can be retried by restarting Dolphin or rebuilding the cache. Customized prior KIM resources that cannot be matched to the previous manifest are retained under a hidden `.kim6-preserved.*` directory inside the runtime tree and are not removed by uninstall.
+Do not run system installation commands against an unfamiliar prefix. The installer creates a missing destination directory.
+
+## Upgrade and reinstall
+
+Run the same `./install.sh` command and prefix used for the existing installation. Repeating installation is supported. The installer prepares the runtime and rendered menus before swapping active files, checks menu references, records a manifest, and restores the prior installation if the replacement phase fails.
+
+The migration recognizes only the five named KIM service menus and the `kim6` runtime directory. It refuses ambiguous same-name menu ownership, runtime symlinks, and runtime trees containing symlinks. It removes known old executables only when it can establish ownership from an identical repository copy; customized legacy commands are preserved in a non-executable recovery location inside the new runtime. Unknown runtime files are retained. Customized managed resources are backed up rather than silently overwritten.
+
+KIM6 does not delete broad `kim*` globs or unrelated files in the service-menu directory. Do not manually remove files to “clean up” an upgrade.
+
+## Verify installation
+
+Check that these files exist under the chosen service-menu prefix:
+
+```text
+kim6/bin/kim_all
+kim_compress.desktop
+kim_compressandresize.desktop
+kim_convertandrotate.desktop
+kim_compressandresizevideo.desktop
+kim_publication.desktop
+```
+
+The dispatcher must be executable. The `.desktop` files are data files and are installed with mode `0644`; do not make them executable. Their `Exec` lines use the installed dispatcher’s absolute path, so it does not need to be in `PATH`.
+
+The installer runs an isolated KDE cache validation when `kbuildsycoca6` is available and refreshes the live cache best-effort. Restart Dolphin or rebuild its service-menu cache if entries do not appear. The development desktop uses KDE Frameworks/KIO 6.29, which has a known upstream `X-KDE-Submenu` regression. KIM6 retains its submenus; wait for the KDE fix or test on another supported Plasma 6 system rather than removing submenu declarations.
+
+You can also check dispatcher help without Dolphin:
+
+```sh
+/path/to/kio/servicemenus/kim6/bin/kim_all --help
+```
+
+For a real processing smoke test, use a disposable image copy and a create-mode command from [CLI.md](docs/CLI.md). Do not test destructive overwrite behavior on personal media.
 
 ## Uninstall
+
+Use the matching prefix. A per-user install can usually be removed with:
 
 ```sh
 ./uninstall.sh
 ```
 
-Or use `./uninstall.sh --prefix /path/to/kio/servicemenus` for a nonstandard prefix. Uninstall removes only the five named KIM menus when they carry the KIM marker or recognizable old KIM commands. It removes known installed KIM resources individually and leaves unrelated files, even inside the `kim6` resource directory. It will stop if that runtime directory contains symlinks, rather than risk following them.
+For a custom or system prefix:
 
-## Behavior and configuration
+```sh
+./uninstall.sh --prefix "$HOME/.local/share/kio/servicemenus"
+sudo ./uninstall.sh --prefix /usr/local/share/kio/servicemenus
+```
 
-- `KIM_POLICY=create` always creates derived outputs. `KIM_POLICY=overwrite` authorizes replacement only for actions that support it; other actions ask before proceeding. Publication uses destination-local staging and the shared safe publication helpers.
-- `KIM_NAME_AFFIX_POSITION=prefix|suffix` selects the position of the web, compressed, resized, and stripped filename tags. The KConfig key is `NAME_AFFIX_POSITION`; environment values take precedence and the default is `suffix`.
-- `KIM_WEB_FORMAT=jpg|webp|avif|keep` selects web-export encoding, and `KIM_WEB_QUALITY=1..100` supplies its quality prompt default. Web export always creates a separate derived artifact and never replaces a selected source, even under `KIM_POLICY=overwrite`.
-- Successful mail-resize attachments are retained under `${XDG_DATA_HOME:-~/.local/share}/kim6/email-attachments` after asynchronous client handoff. Remove those prepared files when they are no longer needed.
-- Rotation and metadata stripping preserve source modification timestamps (including available subsecond precision); true rename/move operations preserve filesystem metadata. Compression, conversion, resizing, and flip/flop produce changed content with a fresh modification timestamp. Other derived artifacts receive newly created timestamps.
+`uninstall.sh` also accepts `--no_message`. It removes a menu only when its ownership marker/manifest or a recognized previous KIM command establishes ownership. Manifest-managed runtime files are removed only when their contents still match the recorded digest. Unrelated files and user changes are retained. An unsafe runtime symlink causes uninstall to stop rather than follow it. Empty KIM-owned directories are removed when possible.
 
-## Scope
+## Troubleshooting
 
-The Dolphin menus route supported image and video workflows through `kim_all`: JPEG compression presets, conversion (including BMP5), resizing, web export, image transformations, metadata removal, EXIF-date and interactive rename, email resizing, PDF albums and print layouts, HTML galleries, collages, TIFF joining, GIF animation, and all 24 video presets. Obsolete Sony multiburst, deprecated basic treatment effects, and obsolete camera-specific downloading are excluded. No other legacy functionality is intentionally excluded.
+- **Installer says `intltool-merge` is missing:** install the distribution package providing `intltool` and rerun the same command.
+- **A format action is unavailable:** check the local ImageMagick coder list and relevant FFmpeg encoder; see [FORMATS.md](docs/FORMATS.md). Optional support varies by build.
+- **Progress or cancellation does not work:** verify KDialog and `qdbus` are installed and that Dolphin runs in a KDE graphical D-Bus session.
+- **The menu is missing:** confirm the files are under the active user/system `kio/servicemenus` directory, restart Dolphin, and check the KDE cache. Keep the submenu declaration; the 6.29 regression is external to KIM6.
+- **Installation failed during replacement:** the script attempts rollback and reports an error. Inspect the exact prefix and preserved runtime before retrying; do not remove unrelated files.
 
-All menu templates restrict processing to local files and forward selected paths as separate `%F` arguments. Remote URL processing is not supported; KIM6 does not reinterpret URLs as local paths.
+For reproducible reports, include the KIM6 commit, Plasma/KIO version, action and exact arguments, relevant dependency versions/coder output, and whether the issue reproduces on disposable test files.
+
+More detail: [configuration](docs/CONFIGURATION.md), [safety behavior](docs/SAFETY.md), and [feature inventory](docs/ACTIONS.md).

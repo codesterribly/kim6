@@ -1,71 +1,86 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="author" content="Tomáš Hnyk" />
-        <meta name="description" content="KIM6's documentation" />
-        <meta name="robots" content="noarchive" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>KIM 6 documentation</title>
-        <style type="text/css" title="Work, a pseudo-professional style sheet.">
-            @import "work.css";
-        </style>
-    </head>
-    <body>
-        <!-- The title on top -->
-        <h1 id="maintitle">Documentation of Kde Image Menu 6 — KIM6</h1>
-        <!-- The actual content of the page -->
-        <div id="content">
-            <h1>KIM6 (Kde Image Menu 6)</h1>
-            <p id="links"> Developed at: <a href="https://github.com/KIM-6/kim6">https://github.com/KIM-6/kim6</a>
-                <br> Webpage (work in progress): <a href="https://skatox.com/blog/kim-kde-image-manipulator-for-plasma-6/">https://skatox.com/blog/kim-kde-image-manipulator-for-plasma-6/</a>
-                <br> KDE Store: <a href="https://store.kde.org/p/2307290/">https://store.kde.org/p/2307290/</a>
-                <br> License: <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL 3</a> or any later version.
-            </p>
-            <p>KIM6 is a <a href="https://develop.kde.org/docs/apps/dolphin/service-menus">service menu</a> for <a href="https://kde.org">KDE</a> used for example by <a href="https://apps.kde.org/dolphin/Dolphin">Dolphin</a> and other users of <a href="https://invent.kde.org/frameworks/kio">KIO</a>. KIM6 allows you to perform actions on your images (and videos) from your desktop or file manager without having to use other applications. This service menu can be considered as a frontend of <a href="https://imagemagick.org">ImageMagick</a> (and <a href="https://ffmpeg.org">FFmpeg</a>). </p>
-            <h1>Menus</h1>
-            <ul>
-                <li>
-                    <b>Compress and resize</b>
-                    <p>This menu allows you to compress and resize images. Compression can significantly reduce the size of images in exchange for some loss of detail. Resizing changes the size of images but keeps scale. Each action defines a maximum size of the resulting image.</p>
-                    <p>So if your image is 2000x1000 (landscape orientation) and you resize it to 500x500, your resulting image will be 500x250 (so the limit will be applied to horizontal length of the image).</p>
-                    <p>If your image is 1000x2000 (portrait orientation) and you resize it to 500x500, your resulting image will be 250x500 (so the limit will be applied to vertical height of the image).</p>
-                    <p>Web export combines resizing and encoding, always creates a separate derived image, and never replaces its source. JPEG compression is available from a JPEG-only submenu. Outputs use safe staging and collision handling.</p>
-                </li>
-                <li>
-                    <b>Convert and rotate</b>
-                    <p>This menu converts images to JPEG, PNG/APNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL, or JPEG 2000 when the installed encoders support the requested format. JPEG 2000 offers lossless and lossy choices. Animated input is preserved only by outputs that validate with all frames; unsupported conversions fail instead of flattening. It also provides custom format selection, EXIF auto-orientation, fixed/custom rotation, and horizontal/vertical flips.</p>
-                </li>
-                <li>
-                    <b>Treatment and publication</b>
-                    <p>Rename selected images interactively, number a batch from a custom base, or rename from EXIF dates using supported date formats.</p>
-                    <p>Resize images for email and open a supported mail client with successfully prepared attachments.</p>
-                    <p>Metadata stripping removes the configured EXIF, GPS, XMP, and IPTC metadata while retaining image pixels, color profile, orientation behavior, permissions, and the original modification timestamp.</p>
-                    <p>Create an HTML gallery, a photo collage, a multi-page TIFF, an animated GIF, a PDF album, or a print-layout PDF.</p>
-                    <p>Basic treatment effects and obsolete Sony multiburst processing are excluded from the unified menus.</p>
-                    <p>You can also display a license, the names of authors and this help.</p>
-                </li>
-                <li>
-                    <b>Video Compress and resize</b>
-                    <p>Transcodes video using libx264 or libx265 to HD (1280x720) or FullHD (1920x1080) in the existing 24 size, quality, codec and container presets. Five additional AV1 actions use libsvtav1 when available and libaom-av1 otherwise; High uses AV1 CRF 28, Balanced CRF 35, and Custom asks for AV1 quality and speed settings. These AV1 values are codec-specific and are not direct equivalents of the H.264/H.265 quality numbers. Audio is copied when compatible, and an incompatible original container is rejected rather than silently changed.</p>
-                </li>
-            </ul>
-            <h1>Usage</h1>
-            <p> KIM6 is used via the file manager context menu. Select one or more image or video files, right-click, and choose the desired action from the KIM6 submenu. </p>
-            <p>Web export always creates derived images and never replaces the selected source. Its default color policy uses ICC profiles to transform tagged images to sRGB; untagged RGB is assumed to be sRGB and untagged CMYK is rejected. Set <span id="code">KIM_WEB_COLOR_MODE=preserve</span>, or KConfig <span id="code">WEB_COLOR_MODE=preserve</span>, to retain an embedded profile when the selected output format supports ICC data; the environment setting takes precedence and sRGB is the default. Optional image formats depend on the installed ImageMagick delegates and FFmpeg encoders; unavailable encoders are reported without substituting another format.</p>
-            <p> Most actions will prompt for confirmation before overwriting existing files. Pressing Enter will usually select the default option, which is to create new files rather than overwrite existing ones. </p>
-            <p> Some behavior can be customized using environment variables. These variables can be set in the environment where your file manager is launched. </p>
-                    <p>All installed Dolphin processing entries launch the unified <span id="code">kim_all</span> dispatcher and pass local selections as individual arguments. The historical <span id="code">kim_*</span> source scripts are references and are not installed as active commands.</p>
-            </p>
-            <h1>Configuration</h1>
-            <p>Set <span id="code">KIM_POLICY=create</span> to create new outputs or <span id="code">KIM_POLICY=overwrite</span> to authorize replacement for actions that support it. Unset or other values show the action's create/overwrite choice. Web export always creates derived images and never overwrites a source.</p>
-            <p><span id="code">KIM_NAME_AFFIX_POSITION=prefix|suffix</span> controls the placement of web, compressed, resized, and stripped tags. Its KConfig key is <span id="code">NAME_AFFIX_POSITION</span>; the default is suffix and the environment takes precedence.</p>
-            <p>Web-export defaults use <span id="code">KIM_WEB_FORMAT=jpg|webp|avif|keep</span> and <span id="code">KIM_WEB_QUALITY=1..100</span>. The quality setting supplies the dialog default. Format support depends on ImageMagick encoders.</p>
-            <h1>File behavior</h1>
-            <p>Rotation and metadata stripping preserve modification timestamps; rename/move operations preserve file metadata. Compression, conversion, resize, and flip/flop create changed content with fresh modification timestamps. Other output files are derived artifacts. Successful mail-resize attachments remain in <span id="code">${XDG_DATA_HOME:-~/.local/share}/kim6/email-attachments</span> after mail-client handoff so asynchronous clients can read them; remove the prepared files when finished.</p>
-            <p>Menus are restricted to local files. Remote URLs are not processed. See <a href="../INSTALL.md">installation and dependency notes</a> for upgrade, uninstall, and runtime details.</p>
-        </div>
-        <!-- The footer information -->
-        <div id="footer"> KIM6 — Kde Image Menu 6 | Copyleft 2004–2026 </div>
-    </body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="KIM6 brings quick image and video processing to KDE Dolphin context menus.">
+  <title>KIM6 — Image and video tools for Dolphin</title>
+  <link rel="stylesheet" href="work.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <p class="eyebrow">KDE Plasma 6 · Dolphin service menus</p>
+      <h1>KIM6</h1>
+      <p class="lede">Quick image and video operations, right where your files are.</p>
+      <p>KIM6 adds a focused set of processing tools to Dolphin’s context menus. Select files, choose an operation, and let KIM6 prepare a validated result without opening a full editing application.</p>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <a href="#capabilities">Capabilities</a>
+        <a href="#getting-started">Get started</a>
+        <a href="#safety">Safe output</a>
+        <a href="#help">Help</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+    <section id="capabilities" aria-labelledby="capabilities-title">
+      <h2 id="capabilities-title">What you can do</h2>
+      <p>KIM6 is for quick, repeatable jobs. It complements photo and video applications such as digiKam, darktable, GIMP and Kdenlive; it is not a replacement for a catalog, RAW development or editing timeline.</p>
+      <div class="cards">
+        <article><h3>Prepare images</h3><p>Compress JPEGs, resize by dimensions or percentage, convert supported formats, rotate, flip and create web-ready or email copies.</p></article>
+        <article><h3>Manage photo details</h3><p>Rename and sort by capture date, synchronize camera and file dates, edit creator/copyright fields, shift capture times, or remove selected metadata.</p></article>
+        <article><h3>Make collections</h3><p>Create HTML galleries, collages, PDF albums and print layouts, joined TIFFs, and animated GIFs from still images.</p></article>
+        <article><h3>Work with video</h3><p>Use H.264, H.265 and optional AV1 presets; extract frames and audio; mute video without re-encoding; make contact sheets and GIFs; create a simple MP4 slideshow.</p></article>
+      </div>
+      <p><a href="https://github.com/KIM-6/kim6/blob/master/docs/FEATURES.md">Read the feature guide</a> or browse the <a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">complete 107-action Dolphin inventory</a>.</p>
+    </section>
+
+    <section id="getting-started" aria-labelledby="getting-started-title">
+      <h2 id="getting-started-title">Get started</h2>
+      <p>KIM6 targets KDE Plasma 6 and Dolphin’s KIO service-menu system. The installer puts one dispatcher and its required resources in place, then installs five service menus. Menu entries call the installed <code>kim_all</code> path directly.</p>
+      <h3>Install for your user</h3>
+      <pre><code>git clone https://github.com/KIM-6/kim6.git
+cd kim6
+./install.sh</code></pre>
+      <p>For optional system-wide or custom-prefix installation, see the <a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">installation guide</a>. The runtime needs Bash, ImageMagick 7, ExifTool, FFmpeg/ffprobe and KDE’s KDialog/D-Bus tools. Optional codecs and ImageMagick delegates determine which formats are available.</p>
+      <h3>Use from Dolphin or the command line</h3>
+      <p>Select one or more local files, right-click, and choose an operation from the KIM6 submenu. Most actions offer interactive settings; menu presets pass explicit arguments. In the examples, <code>kim_all</code> stands for the installed <code>.../kim6/bin/kim_all</code> path, or <code>./src/bin/kim_all</code> from a source checkout:</p>
+      <pre><code>kim_all resize --size 1600x1600 -- photo.jpg
+kim_all webexport --size 800x800 --quality 75 -- photo.jpg
+kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- clip.mkv</code></pre>
+      <p>Commands require their documented inputs and tools. See the <a href="https://github.com/KIM-6/kim6/blob/master/docs/CLI.md">CLI reference</a> and <a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">format guide</a>.</p>
+    </section>
+
+    <section id="safety" aria-labelledby="safety-title">
+      <h2 id="safety-title">Careful with originals</h2>
+      <p>Actions that support replacement stage and validate output before publishing. Create mode avoids occupied names and numbers collisions. Derived-only workflows—including web export, email preparation, video utilities and slideshows—never replace selected sources, even if overwrite policy is configured.</p>
+      <p>Metadata, color and timestamp behavior varies by action. Some operations intentionally update a selected file after authorization; others preserve filesystem times or create derivatives. Review the <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">safety guide</a> and <a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">configuration reference</a> before setting policy.</p>
+    </section>
+
+    <section id="compatibility" aria-labelledby="compatibility-title">
+      <h2 id="compatibility-title">Compatibility and project status</h2>
+      <p>KIM6 is designed for KDE Plasma 6 Dolphin. The development system’s KDE Frameworks/KIO 6.29 has an upstream submenu display regression. KIM6 retains its intended submenus and does not claim live Dolphin acceptance on that affected system. Automated menu and installed-resource integration checks remain available; graphical acceptance can be performed on a compatible KDE installation.</p>
+      <p>The processing feature set is frozen while the project completes its documentation and release review. The canonical test suite is run with <code>python3 -B tests/run.py</code>; optional codec tests may skip when a local encoder is unavailable.</p>
+    </section>
+
+    <section id="help" aria-labelledby="help-title">
+      <h2 id="help-title">Documentation and help</h2>
+      <ul>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/INSTALL.md">Install, upgrade and uninstall</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/DEVELOPMENT.md">Developer guide</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/FEATURES.md">Feature overview</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/ACTIONS.md">Complete menu action inventory</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/CLI.md">Dispatcher command reference</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/FORMATS.md">Formats and optional codecs</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/docs/CONFIGURATION.md">Configuration</a> · <a href="https://github.com/KIM-6/kim6/blob/master/docs/SAFETY.md">Safety and troubleshooting</a></li>
+        <li><a href="https://github.com/KIM-6/kim6/blob/master/LICENSE.md">License</a> · <a href="https://github.com/KIM-6/kim6/blob/master/ABOUT">History and credits</a></li>
+      </ul>
+      <p>For an issue, include the KIM6 revision, distribution and tool versions, exact action/options, and a safe reproducible example. Avoid sharing private media without permission.</p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap"><p>KIM6 is free software under the GNU General Public License, version 3 or later. Project history and original contributor credits are retained in the repository.</p><p><a href="https://github.com/KIM-6/kim6">KIM6 on GitHub</a></p></div>
+  </footer>
+</body>
 </html>
