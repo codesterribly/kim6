@@ -10,6 +10,7 @@ import unittest
 from unittest import mock
 import shutil
 import os
+import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,112 @@ class AcceptanceInventoryTests(unittest.TestCase):
                     self.assertTrue(case[key], f"{case['id']} missing {key}")
         info = [case for case in cases if case["dispatcher"][0] in {"about", "license", "manual"}]
         self.assertEqual(6, len(info))
+
+    def test_case_instructions_use_real_submenu_and_action_specific_steps(self):
+        cases = acceptance.load_cases(ROOT)
+        preset = next(case for case in cases if case["action_id"] == "Compress50")
+        text = acceptance._instructions(preset, Path("/qa/generated/cases/example"))
+        self.assertIn("KIM6 — JPEG compression → JPEG quality: 50%", text)
+        self.assertIn("Menu path:", text)
+        self.assertIn("Output location: This case folder", text)
+        self.assertIn("quality 50", text.lower())
+        self.assertIn("photo_compressed.jpg", text)
+        self.assertIn("selected source remains unchanged", text.lower())
+        self.assertNotIn("KIM6 → JPEG compression →", text)
+        rotate = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "Rotate90")
+        rotate_text = acceptance._instructions(rotate, Path("/qa/generated/cases/rotate"))
+        self.assertIn("validate --policy in-place", rotate_text)
+        self.assertIn("pass --mode gui --policy in-place", rotate_text)
+        convert = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "ConvertWEBP")
+        self.assertEqual(["photo.jpg"], convert["fixtures"])
+        self.assertIn("WEBP", acceptance._case_guidance(convert)[1])
+        percent = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "ResizePercent")
+        self.assertIn("50%", acceptance._case_guidance(percent)[0])
+        self.assertIn("half the source width and height", acceptance._case_guidance(percent)[1])
+        av1 = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "Av1hd720Balanced")
+        self.assertIn("AV1 balanced quality", acceptance._case_guidance(av1)[0])
+        self.assertNotIn("CRF ", acceptance._case_guidance(av1)[0])
+        self.assertNotIn("custom AV1", " ".join(acceptance._interactive_choices("video", ["--codec", "libx264", "--crf", "23"], "Transcode 720 medium H.264" )).lower())
+
+    def test_import_is_conflict_aware_and_provenance_is_recorded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_path = root / "state" / "progress.json"
+            acceptance._save_result(state_path, "A", "passed", "gui", "looked correct")
+            local = acceptance.load_state(state_path)["results"]["A"]
+            self.assertIn("provenance", local)
+            self.assertEqual("gui", local["mode"])
+            export = root / "bundle.json"
+            acceptance.export_state(state_path, export, [{"id": "A"}, {"id": "B"}])
+            bundle = json.loads(export.read_text())
+            self.assertEqual("A", bundle["results"]["A"]["case_id"])
+            self.assertIn("hostname", bundle["source"])
+            self.assertIn("git_revision", bundle["source"])
+
+            bundle["results"]["B"] = {"case_id": "B", "status": "failed", "mode": "gui",
+                                       "note": "problem", "provenance": {"hostname": "homebase"}}
+            export.write_text(json.dumps(bundle))
+            acceptance._save_result(state_path, "B", "passed", "gui", "different local result")
+            before = acceptance.load_state(state_path)
+            with self.assertRaisesRegex(acceptance.MergeConflict, "B"):
+                acceptance.import_state(state_path, export, {"A", "B"})
+            self.assertEqual(before, acceptance.load_state(state_path))
+            merged = acceptance.import_state(state_path, export, {"A", "B"}, resolution="use-imported")
+            self.assertEqual("failed", merged["results"]["B"]["status"])
+
+    def test_export_and_import_reject_symlinks_and_unknown_case_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_path = root / "state" / "progress.json"
+            acceptance._save_result(state_path, "A", "passed", "gui")
+            export = root / "bundle.json"
+            acceptance.export_state(state_path, export, [{"id": "A"}])
+            with self.assertRaisesRegex(acceptance.SafetyError, "unknown case"):
+                acceptance.import_state(state_path, export, {"different"})
+            alias = root / "alias.json"
+            alias.symlink_to(export)
+            with self.assertRaisesRegex(acceptance.SafetyError, "symlink"):
+                acceptance.read_import_bundle(alias)
+
+    def test_cli_export_import_round_trip_uses_explicit_paths_inside_qa(self):
+        with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
+            root = Path(tmp)
+            first_state = acceptance._owned_tree(root / "first-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            second_state = acceptance._owned_tree(root / "second-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            case_id = "kim_compress.desktop:Compress10"
+            acceptance._save_result(first_state / "progress.json", case_id, "passed", "gui", "visual check done")
+            bundle = root / "transfer.json"
+            exported = acceptance.run_cli(["--state-dir", str(first_state), "export", "--output", str(bundle)])
+            imported = acceptance.run_cli(["--state-dir", str(second_state), "import", str(bundle)])
+            self.assertEqual(0, exported)
+            self.assertEqual(0, imported)
+            row = acceptance.load_state(second_state / "progress.json")["results"][case_id]
+            self.assertEqual("passed", row["status"])
+            self.assertEqual("gui", row["mode"])
+            self.assertEqual("visual check done", row["note"])
+
+    def test_prepare_creates_owned_transfer_inbox_without_touching_other_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            qa_root = root / "qa"
+            repo = root / "repo"
+            repo_qa = repo / "qa"
+            repo_qa.mkdir(parents=True)
+            generated = root / "generated"
+            state_dir = root / "state"
+            acceptance._owned_tree(state_dir, ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            original_progress = {"version": acceptance.STATE_VERSION, "current_case": None,
+                                 "results": {"existing": {"status": "passed", "mode": "gui"}}}
+            acceptance.save_state(state_dir / "progress.json", original_progress)
+            with mock.patch.object(acceptance, "QA_DIR", qa_root), \
+                    mock.patch.object(acceptance, "load_cases", return_value=[]), \
+                    mock.patch.object(acceptance, "write_plan", return_value=repo_qa / "ACCEPTANCE_PLAN.md"), \
+                    mock.patch.object(acceptance, "_make_masters", return_value={"sha256": {}, "capabilities": {}}):
+                acceptance.prepare(generated, state_dir, repo)
+            transfer_dir = qa_root / "transfers"
+            marker = transfer_dir / ".kim6-acceptance-transfer-owner"
+            self.assertEqual(acceptance.OWNER_TEXT, marker.read_text())
+            self.assertEqual(original_progress, acceptance.load_state(state_dir / "progress.json"))
 
     def test_duplicate_action_ids_in_one_menu_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -218,6 +325,54 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
         self.assertEqual(1, totals["gui_verified"])
         self.assertEqual(1, totals["cli_verified"])
         self.assertEqual(0, totals["not_tested"])
+
+    def test_instruction_policy_matches_environment_then_kconfig_precedence(self):
+        case = {"source_behavior": "authorized_overwrite"}
+        acceptance._effective_policy.cache_clear()
+        with mock.patch.dict(os.environ, {"KIM_POLICY": "overwrite"}, clear=False):
+            self.assertEqual("overwrite", acceptance._validation_policy(case))
+        acceptance._effective_policy.cache_clear()
+        with tempfile.TemporaryDirectory() as tmp:
+            config_file = Path(tmp) / "kim_kdeimagemenu"
+            config_file.write_text("[<default>]\nKIM_POLICY=overwrite\n")
+            with mock.patch.dict(os.environ, {"KIM_CONFIG_FILE": str(config_file)}, clear=True), \
+                    mock.patch.object(acceptance.shutil, "which", return_value="/usr/bin/kreadconfig6"), \
+                    mock.patch.object(acceptance, "_run", return_value=subprocess.CompletedProcess([], 0, "overwrite\n", "")):
+                self.assertEqual("overwrite", acceptance._validation_policy(case))
+        acceptance._effective_policy.cache_clear()
+
+    def test_dashboard_includes_per_case_validator_details_and_provenance(self):
+        case = {"id": "A", "menu": "m", "label": "One"}
+        state = {"results": {"A": {"status": "passed", "mode": "gui", "updated_at": "2026-10-26T00:00:00Z",
+                                         "note": "looked right", "provenance": {"hostname": "homebase", "git_revision": "abc123",
+                                         "kde_version": "KDE 6", "qt_version": "6.9", "test_mode": "gui"}}},
+                 "validations": {"A": {"checks": ["format is valid"], "warnings": [], "errors": [], "outputs": []}}}
+        dashboard = acceptance._render_html([case], state)
+        for phrase in ("homebase", "abc123", "KDE 6", "format is valid", "looked right", "GUI verified"):
+            self.assertIn(phrase, dashboard)
+
+    def test_named_next_prints_that_case_without_marking_it_passed(self):
+        with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
+            root = Path(tmp)
+            generated = acceptance.claim_workspace(root / "generated")
+            acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
+            case_id = "kim_compress.desktop:Compress10"
+            case_dir = acceptance.create_owned_case_dir(generated, case_id)
+            (case_dir / "case.json").write_text(json.dumps({"id": case_id, "fixtures": ["photo.jpg"],
+                                                             "unavailable_fixtures": []}))
+            (case_dir / "photo.jpg").write_bytes(b"disposable fixture")
+            state_dir = acceptance._owned_tree(root / "state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            acceptance.save_state(state_dir / "progress.json", {**acceptance.default_state(),
+                                                                 "results": {case_id: {"status": "failed", "mode": "gui"}}})
+            from contextlib import redirect_stdout
+            from io import StringIO
+            output = StringIO()
+            with redirect_stdout(output):
+                result = acceptance.run_cli(["--generated", str(generated), "--state-dir", str(state_dir),
+                                             "next", "--no-open", "--case-id", case_id])
+            self.assertEqual(0, result)
+            self.assertIn("JPEG quality: 10%", output.getvalue())
+            self.assertEqual("failed", acceptance.load_state(state_dir / "progress.json")["results"][case_id]["status"])
 
     def test_dashboard_links_cases_and_never_calls_technical_validation_gui_acceptance(self):
         cases = [{"id": "kim_test.desktop:Action", "menu": "kim_test.desktop.in", "label": "Photo <test>"}]

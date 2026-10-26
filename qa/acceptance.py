@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 import hashlib
 import html
 import json
@@ -12,6 +13,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -292,19 +294,27 @@ def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
         "timeshift": ["Choose offset direction and the camera timestamp fields to shift."],
         "datesync": ["Choose EXIF-to-filesystem or filesystem-to-EXIF; file-to-EXIF also asks which date tags to update."],
         "rename": ["Choose naming mode, sequence/base or EXIF date format, destination, and conflict behavior as prompted."],
-        "album": ["Choose one of the supported album layouts and output/title options."],
+        "album": ["Choose an album layout and output filename; this action does not prompt for a title."],
         "print": ["Choose one of the supported print layouts and page settings."],
         "gallery": ["Enter gallery title/author and layout/output options."],
         "pelemele": ["Choose canvas/image size, layout, background, border, spacing/overlap and rotation/shadow options."],
         "tiffjoin": ["Choose the output location/name; selected order is used."],
         "animate": ["Choose frame delay and animation settings."],
-        "video": ["AV1 custom quality/speed when requested; output policy is selected by the action."],
+        "video": ["Create or overwrite mode when asked."],
         "videoframes": ["Timestamp or contact-sheet grid only for interactive entries; format is fixed by the menu preset."],
         "videoaudio": ["Audio format only for the extract entry; mute has no format dialog."],
         "videogif": ["Choose interval, frame rate, width and loop behavior."],
         "slideshow": ["Choose slide duration, frame size/rate, background and ordering options."],
     }
     selected = list(choices.get(route, []))
+    if route == "video":
+        codec = _arg_value(args, "--codec")
+        quality = _arg_value(args, "--av1-quality")
+        if codec == "av1" and quality == "custom":
+            selected = ["Enter an AV1 CRF and speed preset when prompted; defaults are CRF 30 and speed 7.",
+                        "Create or overwrite mode when asked."]
+        elif codec == "av1":
+            selected = [f"Use the AV1 {quality} quality preset.", "Create or overwrite mode when asked."]
     if route in {"about", "license", "manual"}:
         selected = ["No processing dialog; open the informational resource and close it."]
     if "…" not in label and route in {"compress", "resize", "rotate"}:
@@ -347,15 +357,31 @@ def load_cases(repo: Path = ROOT) -> list[dict[str, Any]]:
 
 
 def _human_checks(route: str, label: str) -> list[str]:
-    base = [f"Confirm the dialog/action title matches: {label}",
-            "Confirm cancellation closes the dialog without publishing an unwanted result.",
-            "Inspect the output in this disposable case directory; do not use personal media."]
+    base = [f"Check that the menu starts the operation named ‘{label}’."]
     if route in {"about", "license", "manual"}:
         return ["Confirm the expected informational resource opens, is readable, and can be closed."]
     if route in {"video", "videoframes", "videoaudio", "videogif", "slideshow"}:
-        base += ["Play the result or inspect it with the relevant viewer; verify motion, orientation, audio, and timing as appropriate."]
+        base += ["Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality."]
+    elif route == "flipflop":
+        base += ["Open the result beside its input and use the asymmetric colored shapes to confirm which axis changed."]
+    elif route in {"compress", "resize", "convert", "webexport", "pelemele", "rotate", "rotatewithexif"}:
+        base += ["Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality."]
+    elif route in {"stripmeta", "copyright", "timeshift", "datesync"}:
+        base += ["Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case."]
+    elif route == "rename":
+        base += ["Check the resulting names and verify every selected image remains present; compare the names with the selected mode."]
+    elif route in {"album", "print"}:
+        base += ["Open the PDF and check page orientation, image order and layout; automated page counts do not judge layout quality."]
+    elif route == "gallery":
+        base += ["Open the gallery index in a browser, click a thumbnail and check the title, author and columns."]
+    elif route == "tiffjoin":
+        base += ["Open the TIFF as pages and check that red, green, then blue appear in that order."]
+    elif route == "animate":
+        base += ["Open the GIF in an animation-capable viewer and check red, green, blue order, delay and looping."]
+    elif route == "resizeandsend":
+        base += ["Check that the draft contains only the expected prepared images and do not send it."]
     else:
-        base += ["Compare visible colors, orientation, order, crop and framing with the input; automated checks cannot assess subjective quality."]
+        base += ["Check that the result matches the expected behavior below."]
     return base
 
 
@@ -373,12 +399,13 @@ def render_plan(cases: list[dict[str, Any]]) -> str:
         lines.append("")
         for case in group:
             lines += [f"### {case['label']} — `{case['id']}`", "",
-                      f"- **Menu path:** KIM6 → {case['menu_title']} → {case['label']}",
+                      f"- **Menu path:** {case['submenu']} → {case['label']}",
                       f"- **Dispatcher contract:** `{case['exec']}`",
                       f"- **Select for the Dolphin context menu:** {', '.join(case['fixtures']) if case['fixtures'] else 'No files.'}",
                       f"- **Files passed to dispatcher:** {'yes' if '%F' in case['exec'] or '%U' in case['exec'] else 'no (context file only)'}",
                       f"- **Interactive choices:** {'; '.join(case['interactive_choices'])}",
-                      f"- **Expected:** {case['expected']}",
+                      f"- **Suggested choices:** {_case_guidance(case)[0]}",
+                      f"- **Expected:** {_case_guidance(case)[1]}",
                       f"- **Source behavior:** `{case['source_behavior']}`. Inputs are case-local disposable copies.",
                       f"- **Dependencies:** {', '.join(case['dependencies'])}",
                       f"- **Technical validation:** {' '.join(case['technical_checks'])}",
@@ -696,7 +723,7 @@ def result_totals(cases: list[dict[str, Any]], state: dict[str, Any]) -> dict[st
         mode = row.get("mode", "")
         if status == "passed" and mode == "gui": totals["gui_verified"] += 1
         elif status == "passed" and mode == "cli": totals["cli_verified"] += 1
-        elif status == "blocked" and row.get("reason") == "KDE submenu issue": totals["gui_blocked"] += 1
+        elif status == "blocked" and row.get("mode") == "gui": totals["gui_blocked"] += 1
         else: totals["not_tested"] += 1
     return totals
 
@@ -1360,20 +1387,33 @@ def _baseline_for(case_dir: Path, fixture_names: list[str]) -> dict[str, str]:
 
 
 def _instructions(case: dict[str, Any], case_dir: Path) -> str:
-    policy = {"in_place": "in-place", "rename": "rename", "derived": "derived",
-              "none": "derived", "authorized_overwrite": "create"}[case["source_behavior"]]
+    policy = _validation_policy(case)
+    guidance, expected = _case_guidance(case)
+    behavior = case["source_behavior"]
+    if case["route"] in {"about", "license", "manual"}:
+        output_location = "No output file; the selected case image only opens the context menu."
+    elif case["route"] == "resizeandsend":
+        output_location = "Use the persistent attachment folder reported by the action; the email draft is temporary and must not be sent during this test."
+    elif behavior == "derived":
+        output_location = "This case folder. If the action asks for a destination, choose this folder."
+    elif behavior == "rename":
+        output_location = "This case folder or the destination you choose; keep every renamed test file inside this case folder."
+    elif behavior in {"in_place", "authorized_overwrite"}:
+        output_location = "This case folder. In-place or authorized overwrite choices change only these disposable case copies."
+    else:
+        output_location = "This case folder unless the action's instructions below specify otherwise."
     lines = [f"KIM6 Dolphin acceptance case: {case['label']}", f"Case ID: {case['id']}", "",
-             "1. Open this case directory in Dolphin.",
-             f"2. Select for the menu: {', '.join(case['fixtures']) if case['fixtures'] else '(no files)' }.",
+             f"1. Open this case directory in Dolphin: {case_dir}",
+             f"2. Select: {', '.join(case['fixtures']) if case['fixtures'] else '(no files)' }.",
              "   Informational actions use a selected file only to expose the context menu; the file is not passed to kim_all.",
-             f"3. Right-click → KIM6 → {case['menu_title']} → {case['label']}.",
-             "4. Use the prompts/options in the expected behavior below. For save/destination dialogs, choose this case directory.",
-             "5. Inspect the resulting files and visual behavior. Do not send an email or print; close external drafts after inspection.",
-             "6. Run: python3 qa/acceptance.py validate '" + case["id"] + "'",
-             "7. Record the GUI result: python3 qa/acceptance.py pass '" + case["id"] + f"' --mode gui --policy {policy}", "",
-             "Expected: " + case["expected"], "",
-             "Source behavior: " + case["source_behavior"],
-             "In-place warning: " + ("This test changes only disposable case copies. Verify the named source files are present before invoking." if case["source_behavior"] == "in_place" else "No user media is involved; all selected files are disposable case copies."),
+             f"3. Menu path: {case['submenu']} → {case['label']}.",
+             f"4. {guidance}",
+             f"5. Output location: {output_location}",
+             "   Inspect the result described below. Do not send email or print pages during this test; close any draft or viewer when finished.",
+             f"6. After visual inspection, run `python3 qa/acceptance.py pass --mode gui --policy {policy}`. This validates the files and records a pass only if the checks succeed.",
+             f"   If a check fails, inspect details with `python3 qa/acceptance.py validate --policy {policy}`, correct or explain the issue, then try again.", "",
+             "Expected result: " + expected, "",
+             "Source handling: " + _source_explanation(case),
              "", "Technical checks:"]
     lines += ["- " + check for check in case["technical_checks"]]
     lines += ["", "Human checks:"]
@@ -1385,9 +1425,153 @@ def _instructions(case: dict[str, Any], case_dir: Path) -> str:
     return "\n".join(lines)
 
 
+def _validation_policy(case: dict[str, Any]) -> str:
+    behavior = case["source_behavior"]
+    if behavior == "authorized_overwrite":
+        return _effective_policy() or "create"
+    return {"in_place": "in-place", "rename": "rename", "derived": "derived", "none": "derived"}[behavior]
+
+
+@lru_cache(maxsize=1)
+def _effective_policy() -> str | None:
+    if "KIM_POLICY" in os.environ:
+        configured = os.environ["KIM_POLICY"]
+        return configured if configured in {"create", "overwrite"} else None
+    if "KIM_CONFIG_FILE" in os.environ:
+        config_file = Path(os.environ["KIM_CONFIG_FILE"])
+    elif (GENERATED / "gui-config" / "kim_kdeimagemenu").is_file():
+        config_file = GENERATED / "gui-config" / "kim_kdeimagemenu"
+    else:
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        config_file = config_home / "kim_kdeimagemenu"
+    kreadconfig = shutil.which("kreadconfig6")
+    if not kreadconfig or not config_file.is_file():
+        return None
+    result = _run([kreadconfig, "--file", str(config_file), "--group", "<default>", "--key", "KIM_POLICY"], timeout=5)
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value in {"create", "overwrite"} else None
+
+
+def _arg_value(args: list[str], name: str, default: str = "") -> str:
+    try:
+        return args[args.index(name) + 1]
+    except (ValueError, IndexError):
+        return default
+
+
+def _source_explanation(case: dict[str, Any]) -> str:
+    behavior = case["source_behavior"]
+    if behavior == "derived":
+        return "This action creates a separate result. It must not replace a selected source, even if KIM_POLICY is set to overwrite."
+    if behavior == "in_place":
+        return "This action changes the selected file in place. The only selected files are disposable QA copies; do not use personal media."
+    if behavior == "rename":
+        return "This action renames or moves the selected disposable files. Check that no unrelated case file is displaced."
+    if behavior == "authorized_overwrite":
+        return "Choose create mode for this test when asked; in create mode the selected source remains unchanged. If KIM_POLICY or the KIM6 config forces overwrite, or if you choose overwrite in a prompt, the selected test copy may change; never use personal media. Use `--policy overwrite` when recording that result."
+    return "No media source is changed by this informational action."
+
+
+def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
+    route, args, label = case["route"], case["args"], case["label"]
+    fixtures = ", ".join(case["fixtures"])
+    tag = ""
+    if route == "compress":
+        quality = _arg_value(args, "--quality")
+        if quality:
+            return f"Use the menu preset at JPEG quality {quality}. Do not confuse this with resizing; it changes JPEG encoding quality.", f"A JPEG tagged `_compressed` (normally `{Path(case['fixtures'][0]).stem}_compressed.jpg` with the default suffix setting)."
+        return "Enter a JPEG quality from 1 to 100 when prompted; use 50 for this check.", "A JPEG derivative tagged `_compressed`, or the explicitly selected overwrite result."
+    if route == "resize":
+        size = _arg_value(args, "--size")
+        if "--custom-percent" in args:
+            return "Enter 50% in the resize percentage prompt (valid range 1–1000%).", "A resized derivative at half the source width and height, tagged `_resized`; check the decoded dimensions."
+        if size:
+            return f"The menu requests a maximum size of {size}; keep the aspect ratio when the prompt offers geometry choices.", f"A smaller image tagged `_resized`, within {size} bounds."
+        return "Choose a custom size such as 800x600, or choose 50% for the percentage action.", "A correctly sized image tagged `_resized`; check dimensions in the file properties."
+    if route == "convert":
+        fmt = _arg_value(args, "--format", "the format you choose")
+        fmt = {"jpg": "JPEG", "jpeg": "JPEG", "tif": "TIFF", "bmp": "BMP", "heic": "HEIC/HEIF", "jxl": "JPEG XL", "jp2": "JPEG 2000"}.get(fmt, fmt.upper())
+        extra = " The BMP5 preset should produce a BMP5 bitmap." if "--bmp5" in args else ""
+        return f"The menu preset targets {fmt}.{extra} If a destination or filename dialog appears, save in this case folder and keep the matching extension.", f"A readable {fmt} file with a matching extension in this case folder."
+    if route == "webexport":
+        size, quality = _arg_value(args, "--size", "1600x1600"), _arg_value(args, "--quality", "75")
+        fmt = _arg_value(args, "--format", "configured web format")
+        return f"Use the {size} size and quality {quality} preset; select this case folder as the export destination. Format: {fmt}. The action always makes a derivative.", "A distinct web image in this case folder; the selected source remains unchanged."
+    if route == "resizeandsend":
+        size = _arg_value(args, "--size", "full")
+        return f"Use the {size} mail preset. Inspect the draft's attachment list, then close the draft without sending.", "A draft containing only prepared image attachments. Prepared attachments remain in the QA-owned persistent attachment area after the action exits."
+    if route in {"rotate", "rotatewithexif"}:
+        angle = _arg_value(args, "--angle")
+        choice = f"Use the {angle} degree rotation." if angle else ("Choose a custom angle such as 17 degrees." if "--custom" in args else "Choose automatic EXIF orientation correction.")
+        return choice + " Confirm the direction by comparing the asymmetric fixture.", "The disposable image is changed in place and its visible orientation is corrected."
+    if route == "flipflop":
+        operation = "vertically flip (top and bottom exchange)" if args[:1] == ["flip"] else "horizontally flop (left and right exchange)"
+        return f"Use the requested operation: {operation}. Compare the asymmetric colored shapes.", f"The selected disposable image is transformed in place: {operation}."
+    if route == "stripmeta":
+        mode = _arg_value(args, "--mode", "all")
+        scope = {"gps": "GPS/location fields only", "ai": "recognized AI-generation metadata only", "all": "all metadata"}.get(mode, "all metadata")
+        return f"Confirm the requested {scope} removal when prompted. Choose create mode for this check if offered.", f"A result with {scope} removed; image pixels and unrelated metadata should follow the action's documented policy."
+    if route == "copyright":
+        return "Enter a short creator and copyright notice, leave usage rights blank, and select only the fields you intend to update. Save in this case folder if asked.", "The chosen rights tags are present; the image pixels and unrelated metadata are unchanged."
+    if route == "timeshift":
+        return "Choose a one-hour forward shift and the default capture-date fields; review the before/after confirmation before accepting.", "The selected EXIF camera dates move forward by one hour; filesystem modification time is unchanged."
+    if route == "datesync":
+        direction = _arg_value(args, "--direction")
+        if not direction:
+            direction = "choose EXIF to file for this first run"
+        return f"Choose {direction}. Review the displayed before/after time and confirm the direction explicitly.", "The selected date values match in the chosen direction; image bytes remain unchanged for EXIF-to-file mode."
+    if route == "rename":
+        mode = args[0] if args else "interactive"
+        return ("Choose sequential numbering, use base `acceptance`, start at 1, and select the case folder as the destination." if mode == "interactive" else "Choose the EXIF date naming format shown by the dialog, then confirm the target names before proceeding."), "The selected files have new names in the chosen case folder; verify all files remain present and ordered."
+    if route == "album":
+        return "Choose `2x2 landscape album` (the default), then accept the suggested output name in this case folder.", "A multi-page PDF album with the three selected images in order."
+    if route == "print":
+        return "Choose `11.5x15 cm: 1x2 images, portrait` (the default), then save the PDF in this case folder.", "A print-layout PDF with portrait physical pages and the selected images."
+    if route == "gallery":
+        return "Enter title `KIM6 acceptance`, author `QA`, and 3 columns; choose this case folder for the gallery output if asked.", "A gallery directory with an index, full-size images and thumbnails."
+    if route == "pelemele":
+        return "Use the defaults shown: 400x400 image size, 5x4 grid, 15% overlap and grey background; save in this case folder.", "A PNG collage containing all three colored source images."
+    if route == "tiffjoin":
+        return "Accept the suggested TIFF output name and choose this case folder if a destination is requested.", "A multi-page TIFF whose pages follow the selected red, green, blue order."
+    if route == "animate":
+        return "Use a 100-centisecond frame delay and loop count 0 (infinite); save the GIF in this case folder.", "An animated GIF showing red, green, then blue frames and looping continuously."
+    if route == "video":
+        size = _arg_value(args, "--size")
+        codec = _arg_value(args, "--codec")
+        container = _arg_value(args, "--container")
+        if codec == "av1":
+            quality = _arg_value(args, "--av1-quality")
+            preset = f"AV1 {quality} quality" if quality != "custom" else "AV1 custom quality (use CRF 30 and speed 7 for this check)"
+            detail = f"{preset}; output size {size}; container {container}."
+        else:
+            detail = f"{codec}, CRF {_arg_value(args, '--crf')}, output size {size}, container {container}."
+        return f"Use this preset: {detail} Choose create mode if prompted.", "A playable video encoded with the requested codec, quality setting, size limit and container; the original remains in create mode."
+    if route == "videoframes":
+        mode = _arg_value(args, "--mode")
+        if mode == "single":
+            return "Enter timestamp 00:00:01.000 and keep PNG format.", "One PNG frame taken at the requested timestamp."
+        if mode == "contact":
+            return "Choose a 3x3 grid, PNG format, and accept the suggested output name.", "One labeled contact sheet with sampled frames and timestamps."
+        return "Accept the automatic thumbnail choice and JPG format.", "One representative video thumbnail; sampling uses the action's documented midpoint rule."
+    if route == "videoaudio":
+        if _arg_value(args, "--mode") == "mute":
+            return "Choose the suggested output name. Do not select an audio format; this operation copies video streams and removes audio.", "A new silent video with the video stream copied without re-encoding."
+        return "Choose M4A/AAC when asked and accept the suggested output name.", "An audio-only M4A file; inspect the draft/file and confirm no video stream is present."
+    if route == "videogif":
+        return "Use start 00:00:00, duration 2 seconds, 10 fps, width 320, and infinite loop.", "A small animated GIF of the requested video segment."
+    if route == "slideshow":
+        return "Use 3 seconds per photo, 1280x720, 25 fps, black background and the natural filename ordering; save as `slideshow.mp4` in this case folder.", "A silent H.264 MP4 showing red, green, then blue slides, each for about 3 seconds."
+    if route in {"about", "license", "manual"}:
+        return "Open the item and close it after checking the installed information resource.", case["expected"]
+    return "Follow the choices printed by the action and save any result in this case folder.", case["expected"]
+
+
 def prepare(generated: Path = GENERATED, state_dir: Path = STATE_DIR, repo: Path = ROOT) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     generated = claim_workspace(generated)
     state_dir = _owned_tree(state_dir.absolute(), ".kim6-acceptance-state-owner", OWNER_TEXT)
+    # The transfer inbox is initialized here so a receiving checkout has a
+    # known QA-owned place for a manually copied result bundle.
+    _owned_tree(QA_DIR / "transfers", ".kim6-acceptance-transfer-owner", OWNER_TEXT)
     cases = load_cases(repo)
     (repo / "qa").mkdir(exist_ok=True)
     plan_path = write_plan(repo, cases)
@@ -1505,15 +1689,17 @@ def _find_case(cases: list[dict[str, Any]], case_id: str) -> dict[str, Any]:
 
 def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
     totals = result_totals(cases, state)
+    environment = _environment_snapshot()
     parts = ["<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>",
-             "<title>KIM6 Acceptance Progress</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1100px;padding:0 1rem;color:#18212b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd3dc;padding:.55rem;text-align:left}th{background:#eef2f7}button,select{font:inherit;padding:.4rem}.status-passed{color:#116329}.status-failed{color:#9b1c1c}.status-blocked{color:#805500}.group{margin:2.5rem 0}code{white-space:pre-wrap}</style></head><body>",
-             "<h1>KIM6 Human Acceptance Progress</h1><p>Read-only dashboard. Record results with <code>python3 qa/acceptance.py pass|fail|skip|blocked</code>; automated validation is not GUI verification.</p>",
-             f"<p>Passed: {totals['passed']} · Failed: {totals['failed']} · Skipped: {totals['skipped']} · Blocked: {totals['blocked']} · Pending: {totals['pending']} · GUI verified: {totals['gui_verified']} · CLI verified: {totals['cli_verified']} · Not tested: {totals['not_tested']}</p>",
+             "<title>KIM6 Acceptance Progress</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1200px;padding:0 1rem;color:#18212b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd3dc;padding:.55rem;text-align:left;vertical-align:top}th{background:#eef2f7}select{font:inherit;padding:.4rem}.status-passed{color:#116329}.status-failed{color:#9b1c1c}.status-blocked{color:#805500}.group{margin:2.5rem 0}code{white-space:pre-wrap}.details{white-space:pre-wrap;max-width:36rem}.environment{color:#435264}</style></head><body>",
+             "<h1>KIM6 Human Acceptance Progress</h1><p>Read-only dashboard. Record results with the CLI. A technical check is not a human GUI pass.</p>",
+             f"<p>Cases: {len(cases)} · Passed: {totals['passed']} · Failed: {totals['failed']} · Skipped: {totals['skipped']} · Environment blocked: {totals['blocked']} · Pending: {totals['pending']} · GUI passes: {totals['gui_verified']} · CLI-only passes: {totals['cli_verified']} · GUI blocked: {totals['gui_blocked']}</p>",
+             f"<p class='environment'>Report host: {html.escape(environment['hostname'])} · revision: {html.escape(environment['git_revision'])} · KDE: {html.escape(environment['kde_version'] or 'not detected')} · Qt: {html.escape(environment['qt_version'] or 'not detected')}</p>",
              "<label>Filter <select id='filter'><option value='all'>All</option><option>pending</option><option>passed</option><option>failed</option><option>skipped</option><option>blocked</option></select></label><p>Use the filter to focus on pending, failed, skipped or blocked cases.</p>"]
     for menu in sorted({case["menu"] for case in cases}):
         group = [c for c in cases if c["menu"] == menu]
         menu_passed = sum(state.get("results", {}).get(c["id"], {}).get("status") == "passed" for c in group)
-        parts += [f"<section class='group'><h2>{html.escape(MENU_TITLES.get(menu, menu))} — {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>GUI / CLI</th><th>Technical checks</th><th>Outputs</th><th>Instructions / files</th><th>Notes</th></tr></thead><tbody>"]
+        parts += [f"<section class='group'><h2>{html.escape(MENU_TITLES.get(menu, menu))} — {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>Test type</th><th>Technical validation</th><th>Outputs</th><th>Instructions / files</th><th>Recorded environment</th><th>Notes</th></tr></thead><tbody>"]
         for case in (c for c in cases if c["menu"] == menu):
             row = state.get("results", {}).get(case["id"], {})
             status = row.get("status", "pending")
@@ -1526,9 +1712,8 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
             errors = validation.get("errors", [])
             warnings = validation.get("warnings", [])
             checks = validation.get("checks", [])
-            technical = "Not run" if not (errors or warnings or checks) else f"{len(checks)} checks, {len(warnings)} warnings, {len(errors)} errors"
-            if errors:
-                technical += ": " + "; ".join(str(item) for item in errors)
+            technical = "Not run" if not (errors or warnings or checks) else "\n".join(
+                [*("PASS: " + str(item) for item in checks), *("WARN: " + str(item) for item in warnings), *("FAIL: " + str(item) for item in errors)])
             safe_id = re.sub(r"[^A-Za-z0-9_.:-]", "_", case["id"])
             case_link = f"../generated/cases/{safe_id}/"
             output_links = []
@@ -1545,7 +1730,10 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
                 external_link = "../generated/" + quote(relative.as_posix(), safe="/")
                 output_links.append(f"<a href='{html.escape(external_link)}'>{html.escape(relative.as_posix())} (persistent)</a>")
             outputs_html = " · ".join(output_links) if output_links else "—"
-            parts.append(f"<tr data-status='{status}' class='status-{status}'><td><code>{html.escape(case['id'])}</code></td><td>{html.escape(case['label'])}</td><td>{status}</td><td>{mode}</td><td>{html.escape(technical)}</td><td>{outputs_html}</td><td><a href='{html.escape(case_link)}INSTRUCTIONS.txt'>Instructions</a> · <a href='{html.escape(case_link)}'>case directory</a></td><td>{html.escape(str(notes or ''))}</td></tr>")
+            provenance = row.get("provenance", {})
+            env_text = "\n".join(str(provenance.get(key) or "not recorded") for key in ("hostname", "git_revision", "kde_version", "qt_version", "test_mode"))
+            recorded_at = row.get("updated_at", "not recorded")
+            parts.append(f"<tr data-status='{status}' class='status-{status}'><td><code>{html.escape(case['id'])}</code></td><td>{html.escape(case['label'])}</td><td>{status}</td><td>{mode}</td><td class='details'>{html.escape(technical)}</td><td>{outputs_html}</td><td><a href='{html.escape(case_link)}INSTRUCTIONS.txt'>Instructions</a> · <a href='{html.escape(case_link)}'>case directory</a></td><td class='details'>{html.escape(env_text)}\n{html.escape(recorded_at)}</td><td>{html.escape(str(notes or ''))}</td></tr>")
         parts.append("</tbody></table></section>")
     parts.append("<script>document.getElementById('filter').addEventListener('change',function(){document.querySelectorAll('tr[data-status]').forEach(function(row){row.hidden=this.value!=='all'&&row.dataset.status!==this.value},this)})</script></body></html>")
     return "\n".join(parts) + "\n"
@@ -1602,7 +1790,7 @@ def _open_dolphin(path: Path, isolated: bool = False, generated: Path = GENERATE
 
 def _print_case(case: dict[str, Any], directory: Path) -> None:
     print(f"\n{case['label']} — {case['id']}")
-    print(f"Menu: KIM6 → {case['menu_title']} → {case['label']}")
+    print(f"Menu: {case['submenu']} → {case['label']}")
     print("Select: " + (", ".join(case["fixtures"]) if case["fixtures"] else "no files"))
     print("Dispatcher contract: " + case["exec"])
     if case["route"] in {"about", "license", "manual"}:
@@ -1613,10 +1801,15 @@ def _print_case(case: dict[str, Any], directory: Path) -> None:
     print("Dependencies: " + ", ".join(case["dependencies"]))
     if case.get("unavailable_fixtures"):
         print("BLOCKED fixture: " + ", ".join(case["unavailable_fixtures"]) + "; mark blocked/skipped with the missing requirement.")
-    print("Expected: " + case["expected"])
-    print("Source behavior: " + case["source_behavior"])
+    guidance, expected = _case_guidance(case)
+    print("Choices: " + guidance)
+    print("Expected: " + expected)
+    print("Source handling: " + _source_explanation(case))
     print("Case directory: " + str(directory))
     print("Technical checks: " + " ".join(case["technical_checks"]))
+    policy = _validation_policy(case)
+    print(f"After visual inspection, run: python3 qa/acceptance.py pass --mode gui --policy {policy}")
+    print(f"That command validates and records only on success; inspect further with: python3 qa/acceptance.py validate --policy {policy}")
     if case["source_behavior"] == "in_place":
         print("WARNING: this action is in-place. It will only touch disposable files in this case directory.")
 
@@ -1625,9 +1818,128 @@ def _get_state(state_path: Path) -> dict[str, Any]:
     return load_state(state_path)
 
 
+def _environment_snapshot(mode: str = "") -> dict[str, Any]:
+    def version(argv: list[str]) -> str | None:
+        proc = _run(argv, timeout=5)
+        return (proc.stdout or proc.stderr).strip().splitlines()[0][:240] if proc.returncode == 0 and (proc.stdout or proc.stderr).strip() else None
+
+    def package_version(package: str) -> str | None:
+        dpkg_query = shutil.which("dpkg-query")
+        if not dpkg_query:
+            return None
+        proc = _run([dpkg_query, "-W", "-f=${Version}", package], timeout=5)
+        value = proc.stdout.strip()
+        return f"{package} {value}" if proc.returncode == 0 and value else None
+
+    revision_proc = _run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], timeout=5)
+    dirty_proc = _run(["git", "-C", str(ROOT), "status", "--porcelain"], timeout=5)
+    qt_version = version([shutil.which("qmake6") or "qmake6", "-query", "QT_VERSION"]) if shutil.which("qmake6") else None
+    if not qt_version and shutil.which("qtpaths6"):
+        qt_version = version([shutil.which("qtpaths6") or "qtpaths6", "--query", "QT_VERSION"])
+    kde_version = version([shutil.which("kf6-config") or "kf6-config", "--version"]) if shutil.which("kf6-config") else None
+    if not kde_version:
+        kde_version = package_version("plasma-workspace")
+    return {
+        "hostname": socket.gethostname(),
+        "git_revision": revision_proc.stdout.strip() if revision_proc.returncode == 0 else "unknown",
+        "working_tree_dirty": bool(dirty_proc.stdout.strip()) if dirty_proc.returncode == 0 else None,
+        "kde_version": kde_version,
+        "qt_version": qt_version,
+        "test_mode": mode or "unspecified",
+    }
+
+
+class MergeConflict(RuntimeError):
+    pass
+
+
+def export_state(state_path: Path, output: Path, cases: list[dict[str, Any]]) -> dict[str, Any]:
+    if output.is_symlink():
+        raise SafetyError(f"refusing symlink export path: {output}")
+    if output.exists():
+        raise SafetyError(f"export file already exists; choose a new name: {output}")
+    state = load_state(state_path)
+    known = {case["id"] for case in cases}
+    results = {case_id: {**row, "case_id": case_id} for case_id, row in state.get("results", {}).items() if case_id in known}
+    validations = {case_id: row for case_id, row in state.get("validations", {}).items() if case_id in known}
+    bundle = {"format": "kim6-acceptance-results", "version": 1, "exported_at": _utc_now(),
+              "source": _environment_snapshot("export"), "results": results, "validations": validations}
+    _write_exclusive(output, json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n", 0o600)
+    return bundle
+
+
+def read_import_bundle(path: Path) -> dict[str, Any]:
+    path = Path(path)
+    _reject_symlink_components(path.absolute())
+    if path.is_symlink() or not path.is_file():
+        raise SafetyError(f"import must be a regular, non-symlink JSON file: {path}")
+    try:
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SafetyError(f"cannot read acceptance transfer file: {error}") from error
+    if bundle.get("format") != "kim6-acceptance-results" or bundle.get("version") != 1:
+        raise SafetyError("unrecognized acceptance transfer file")
+    if not isinstance(bundle.get("results"), dict) or not isinstance(bundle.get("validations", {}), dict):
+        raise SafetyError("transfer file has invalid results or validations")
+    for case_id, row in bundle["results"].items():
+        if not isinstance(case_id, str) or not isinstance(row, dict) or row.get("status") not in {"passed", "failed", "skipped", "blocked"}:
+            raise SafetyError(f"invalid result record for {case_id!r}")
+        if row.get("case_id", case_id) != case_id:
+            raise SafetyError(f"result case ID does not match its record key: {case_id}")
+        if row.get("mode", "") not in {"gui", "cli", ""}:
+            raise SafetyError(f"invalid test mode for {case_id}")
+    for case_id, validation in bundle.get("validations", {}).items():
+        if not isinstance(case_id, str) or not isinstance(validation, dict):
+            raise SafetyError(f"invalid technical validation record for {case_id!r}")
+    return bundle
+
+
+def import_state(state_path: Path, bundle_path: Path, case_ids: set[str], resolution: str = "") -> dict[str, Any]:
+    bundle = read_import_bundle(bundle_path)
+    incoming = bundle["results"]
+    unknown = sorted(set(incoming) - case_ids)
+    if unknown:
+        raise SafetyError("transfer contains unknown case ID(s): " + ", ".join(unknown))
+    unknown_validations = sorted(set(bundle.get("validations", {})) - case_ids)
+    if unknown_validations:
+        raise SafetyError("transfer contains validation for unknown case ID(s): " + ", ".join(unknown_validations))
+    current = load_state(state_path)
+    existing = current.setdefault("results", {})
+    result_conflicts = {case_id for case_id, row in incoming.items() if case_id in existing and existing[case_id] != row}
+    current_validations = current.setdefault("validations", {})
+    validation_conflicts = set()
+    for case_id, validation in bundle.get("validations", {}).items():
+        if case_id not in current_validations:
+            continue
+        local_value = {key: value for key, value in current_validations[case_id].items() if key != "checked_at"}
+        imported_value = {key: value for key, value in validation.items() if key != "checked_at"}
+        if local_value != imported_value:
+            validation_conflicts.add(case_id)
+    conflict_ids = result_conflicts | validation_conflicts
+    conflicts = sorted(conflict_ids)
+    if conflicts and not resolution:
+        raise MergeConflict("conflicting result(s): " + ", ".join(conflicts) + "; rerun with --resolve keep-local or --resolve use-imported")
+    if resolution not in {"", "keep-local", "use-imported"}:
+        raise ValueError("resolution must be keep-local or use-imported")
+    for case_id, row in incoming.items():
+        if case_id not in existing or (case_id in conflicts and resolution == "use-imported"):
+            existing[case_id] = row
+        elif case_id in existing and existing[case_id] == row:
+            continue
+    for case_id, validation in bundle.get("validations", {}).items():
+        if case_id not in current_validations or case_id not in conflict_ids or resolution == "use-imported":
+            current_validations[case_id] = validation
+    save_state(state_path, current)
+    return current
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def _save_result(state_path: Path, case_id: str, status: str, mode: str = "", note: str = "", policy: str = "create") -> None:
     state = _get_state(state_path)
-    row = {"status": status, "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    row = {"case_id": case_id, "status": status, "updated_at": _utc_now(), "provenance": _environment_snapshot(mode)}
     if mode: row["mode"] = mode
     if note: row["note"] = note
     if status == "blocked": row["reason"] = note
@@ -1657,6 +1969,7 @@ def run_cli(argv: list[str] | None = None) -> int:
     next_p = sub.add_parser("next", help="show/open the next pending Dolphin case")
     next_p.add_argument("--no-open", action="store_true")
     next_p.add_argument("--isolated", action="store_true", help="open in a QA-only D-Bus/XDG Dolphin session")
+    next_p.add_argument("--case-id", help="open a named case without changing its recorded result")
     status_p = sub.add_parser("status", help="show acceptance progress")
     status_p.add_argument("--filter", choices=("all", "pending", "passed", "failed", "skipped", "blocked"), default="all")
     val = sub.add_parser("validate", help="inspect outputs after the human runs an action")
@@ -1671,7 +1984,12 @@ def run_cli(argv: list[str] | None = None) -> int:
         mark.add_argument("--reason", default="")
     reset = sub.add_parser("reset", help="reset one owned case without removing other cases or progress")
     reset.add_argument("case_id")
-    reset_p = sub.add_parser("report", help="write a shareable read-only HTML/JSON report")
+    sub.add_parser("report", help="write a shareable read-only HTML/JSON report")
+    export_p = sub.add_parser("export", help="write a transfer file for cross-machine result merging")
+    export_p.add_argument("--output", type=Path, help="new JSON file inside qa/; default is a timestamped qa/transfers file")
+    import_p = sub.add_parser("import", help="merge results from a transfer file without overwriting conflicts")
+    import_p.add_argument("bundle", type=Path)
+    import_p.add_argument("--resolve", choices=("keep-local", "use-imported"), help="explicitly resolve conflicting results")
     sub.add_parser("second-pass", help="print focused safety edge-case checklist")
     install = sub.add_parser("install-isolated", help="explicitly install matching QA menus under qa/generated/gui-data")
     check = sub.add_parser("check-install", help="verify isolated installed dispatcher and menu action contracts")
@@ -1721,11 +2039,14 @@ def run_cli(argv: list[str] | None = None) -> int:
             assert_workspace(options.generated)
             assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
             state = _get_state(state_path)
-            pending = [case for case in cases if state.get("results", {}).get(case["id"], {}).get("status", "pending") == "pending"]
-            if not pending:
-                print("No pending cases. Use status --filter failed|skipped|blocked to review remaining items.")
-                return 0
-            case = pending[0]
+            if options.case_id:
+                case = _find_case(cases, options.case_id)
+            else:
+                pending = [case for case in cases if state.get("results", {}).get(case["id"], {}).get("status", "pending") == "pending"]
+                if not pending:
+                    print("No pending cases. Use status --filter failed|skipped|blocked to review remaining items.")
+                    return 0
+                case = pending[0]
             case_dir = assert_case_directory(options.generated, case["id"])
             record = json.loads((case_dir / "case.json").read_text(encoding="utf-8"))
             if case["route"] == "resizeandsend" and "email_snapshot_dirs" not in record:
@@ -1765,10 +2086,32 @@ def run_cli(argv: list[str] | None = None) -> int:
             json_path = report_root / f"acceptance-{stamp}.json"
             _write_exclusive(html_path, _render_html(cases, state), 0o600)
             totals = result_totals(cases, state)
-            _write_exclusive(json_path, json.dumps({"totals": totals, "results": state.get("results", {})}, indent=2, ensure_ascii=False) + "\n", 0o600)
+            _write_exclusive(json_path, json.dumps({"totals": totals, "environment": _environment_snapshot(),
+                                                     "results": state.get("results", {}),
+                                                     "validations": state.get("validations", {})},
+                                                    indent=2, ensure_ascii=False) + "\n", 0o600)
             print("Read-only dashboard: " + str(html_path))
             print("JSON report: " + str(json_path))
             print("Use the CLI to record results; the HTML dashboard is read-only.")
+            return 0
+        if options.command == "export":
+            if options.output:
+                output = options.output
+            else:
+                transfer_dir = _owned_tree(QA_DIR / "transfers", ".kim6-acceptance-transfer-owner", OWNER_TEXT)
+                output = transfer_dir / f"acceptance-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{time.time_ns()}.json"
+            output = assert_toolkit_path(output, "export file")
+            bundle = export_state(state_path, output, cases)
+            print(f"Exported {len(bundle['results'])} recorded case result(s): {output}")
+            print("On the other checkout, run prepare, copy this JSON into qa/transfers/, then run: python3 qa/acceptance.py import qa/transfers/<file.json>")
+            return 0
+        if options.command == "import":
+            bundle_path = assert_toolkit_path(options.bundle, "import file")
+            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            merged = import_state(state_path, bundle_path, {case["id"] for case in cases}, options.resolve or "")
+            print(f"Merged results; {len(merged.get('results', {}))} case result(s) are now recorded.")
+            if options.resolve:
+                print(f"Conflicts were resolved explicitly using: {options.resolve}.")
             return 0
         if options.command == "reset":
             assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
@@ -1827,7 +2170,7 @@ def run_cli(argv: list[str] | None = None) -> int:
                 save_state(state_path, _merge_validation(_get_state(state_path), case["id"], validation))
             print(f"Recorded {status_value.upper()} ({mode}) for {case['id']}.")
             return 0
-    except (InventoryError, SafetyError, RuntimeError, ValueError, KeyError, OSError, json.JSONDecodeError) as error:
+    except (InventoryError, SafetyError, MergeConflict, RuntimeError, ValueError, KeyError, OSError, json.JSONDecodeError) as error:
         print(f"acceptance: {error}", file=sys.stderr)
         return 2
     return 2
@@ -1919,6 +2262,21 @@ def _check_isolated_install(generated: Path) -> int:
                     print(f"Action field {key} differs for {entry['action_id']} in {installed}.", file=sys.stderr); return 1
             total += 1
     print(f"Verified dispatcher hash and all {total} installed menu argument contracts.")
+    system_roots = set(filter(None, os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")))
+    system_roots.add("/usr/share")
+    collisions = []
+    for root in sorted(system_roots):
+        for menu_name in templates:
+            candidate = Path(root) / "kio" / "servicemenus" / menu_name
+            if candidate.exists() or candidate.is_symlink():
+                collisions.append(str(candidate))
+    if collisions:
+        print("Potential system-wide menu duplicates remain visible in the isolated session:")
+        for path in collisions:
+            print("  " + path)
+        print("The isolated test session does not hide or modify these files. Do not guess between duplicate entries.")
+    else:
+        print("No same-name service menus were found in the checked XDG_DATA_DIRS roots.")
     print("This verifies installed files, not successful live Dolphin GUI behavior.")
     return 0 if total == 107 else 1
 

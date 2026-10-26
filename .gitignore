@@ -1,5 +1,6 @@
 /qa/generated/
 /qa/state/
 /qa/reports/
+/qa/transfers/
 __pycache__/
 *.py[cod]

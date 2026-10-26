@@ -1,105 +1,126 @@
-# KIM6 human acceptance toolkit
+# KIM6 Human Acceptance Testing
 
-This toolkit prepares disposable fixtures and tracks a person testing every action from Dolphin. The action list is generated from the five checked-in `src/kim_*.desktop.in` templates; run `python3 qa/acceptance.py inventory` to refresh `qa/ACCEPTANCE_PLAN.md`. The plan and progress distinguish technical validation, CLI checks, and actual Dolphin GUI acceptance. No command automates menu clicks.
+This toolkit prepares disposable media and records a person testing the Dolphin menus. It never clicks menus for you. A technical validation or CLI run is not a GUI acceptance result.
 
 ## Start or resume
 
 From the repository checkout:
 
 ```sh
-python3 qa/acceptance.py prepare
-python3 qa/acceptance.py install-isolated
-python3 qa/acceptance.py check-install
-python3 qa/acceptance.py status
-python3 qa/acceptance.py next --isolated
+python3 -B qa/acceptance.py prepare
+python3 -B qa/acceptance.py install-isolated
+python3 -B qa/acceptance.py check-install
+python3 -B qa/acceptance.py next --isolated
 ```
 
-`prepare` creates `qa/generated/masters/` and a separate `qa/generated/cases/` copy for each menu action. It also initializes crash-safe progress in `qa/state/progress.json`. Existing owned cases and saved results are kept on later `prepare` runs; generated `INSTRUCTIONS.txt` files are refreshed from current menu templates, so record notes with the CLI rather than editing those files. Each case contains the exact file names to select. For rotate/flip cases the instruction includes a warning that the action changes only the disposable copy.
+`prepare` creates pristine masters and a separate working copy for every one of the 107 current menu actions. Re-running it does not reset case results or replace changed case media. Use `next` to open the first pending case. It prints the exact file, menu label, suggested dialog choices, expected result, source behavior and technical checks. Use `next --case-id 'kim_compress.desktop:Compress50'` to reopen a particular case without changing its recorded result.
 
-`next --isolated` opens the case directory in Dolphin if Dolphin is installed. Right-click the named file(s), choose the menu and label printed by the command, and perform the operation. For save/destination prompts, choose that case directory. Never select files outside `qa/generated/cases/`.
+Select only the filenames printed for that case. `next --isolated` opens the case folder in Dolphin using a separate QA user data/config/cache tree. You must invoke the menu yourself. Never use personal photos or videos for destructive tests. For rotate/flip and other in-place or overwrite cases, the prepared files are disposable copies.
 
-## Test menus from a revision-matched isolated install
+## Run one case
 
-The toolkit never changes the live KIM6 installation by itself. When you choose to test the checked-out revision, run:
+After the menu action finishes, run:
 
 ```sh
-python3 qa/acceptance.py install-isolated
-python3 qa/acceptance.py check-install
-python3 qa/acceptance.py next --isolated
+python3 -B qa/acceptance.py pass --mode gui --policy create
+python3 -B qa/acceptance.py next --isolated
 ```
 
-The first command explicitly installs into `qa/generated/gui-data/kio/servicemenus/kim6`, with configuration and KDE cache paths under `qa/generated/`. The installer is run with that isolated XDG environment; it does not install into the normal per-user or system service-menu directories. `check-install` compares the installed `kim_all` bytes, required resources, action IDs, permissions and all five menu argument contracts with this checkout. It proves the files match, not that Dolphin displayed or launched them.
-
-`next --isolated` starts Dolphin with a QA-only D-Bus session and QA XDG user-data/config/cache homes. It also restricts `XDG_DATA_DIRS` to `/usr/share` instead of inheriting local custom paths. System-wide service menus under `/usr/share` can still appear. Use only the matching KIM6 menu contract verified by `check-install`; if duplicate or unidentified KIM menus appear, stop rather than guessing. This keeps KIM6 email attachments and user app data inside the ignored QA workspace, but it does not isolate system-wide resources. If Dolphin is already open or this setup is unavailable, open the printed case path manually and follow the isolated-install checklist below. Do not run an in-place action against the normal home Dolphin session while testing.
-
-For testing on another KDE Plasma 6 host such as `homebase`, copy or clone the same repository revision there, then run the commands above on that host. The toolkit does not SSH to another machine. Before GUI testing, verify `git rev-parse HEAD`, `git status --short`, `check-install`, and that installed menus invoke the isolated installed `kim_all`. The KIO 6.29 submenu issue on `natacha` is recorded as a KDE block, not a KIM6 GUI pass; do not flatten or alter menus to work around it.
-
-## Validate and record
-
-After invoking an action manually:
+Use the policy printed in the case instructions (`create`, `derived`, `in-place` or `rename`). `pass` runs the technical checks and records the pass only if they succeed. If it reports errors, use `validate` for another detailed check after addressing the problem. Only use `--mode gui` after personally selecting the Dolphin action and inspecting the result. To record a direct command-line check, use `pass --mode cli`; it is tracked separately. Failures and environment limits need a note:
 
 ```sh
-python3 qa/acceptance.py validate
-python3 qa/acceptance.py pass --mode gui --policy create
-python3 qa/acceptance.py next --isolated
+python3 -B qa/acceptance.py fail --mode gui --note 'Describe what happened'
+python3 -B qa/acceptance.py skip --mode gui --reason 'Optional AV1 encoder unavailable'
+python3 -B qa/acceptance.py blocked --mode gui --reason 'KDE submenu issue'
 ```
 
-For an authorized overwrite, use `--policy overwrite`; for the in-place rotate/flip cases, use `--policy in-place`; for a rename case, use `--policy rename`. The case instructions print the recommended value. `pass` runs validation again and refuses to record a pass if technical errors remain. Record a direct command-line check with `--mode cli`; it remains separate from GUI verification.
+For a specific case, add its stable ID after the command. `status --filter pending|failed|skipped|blocked` shows focused lists. `reset CASE_ID` resets only that case and removes its saved result; it refuses unrecognized files. Do not reset a case until you have reviewed its outputs and notes.
 
-To record a failure or a legitimate skip/block, provide a note or reason:
+## Isolated installation and its limits
+
+`install-isolated` explicitly runs this checkout's installer with `--prefix qa/generated/gui-data/kio/servicemenus`, plus QA-only `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. It does not use sudo or write to normal per-user/system service-menu locations. It is still an installation command, so you choose when to run it. If it is interrupted, rerun it after checking the error; the installer is designed to be rerun. `check-install` compares the installed dispatcher, resources, permissions, menu IDs and argument contracts with this checkout. It also reports same-name service menus found in checked system XDG data roots. It does not prove that Dolphin displayed or launched an entry.
+
+The isolated Dolphin session may still show system-wide menus. If duplicate or unidentified KIM6 entries appear, stop rather than guessing. The development host `natacha` has a KDE Frameworks/KIO 6.29 submenu issue. Do not flatten or alter the menus to work around it. Actual GUI acceptance should be done on a KDE Plasma 6 machine with working submenus, such as `homebase` if its current environment check is suitable.
+
+## Test the first-run smoke sequence
+
+Follow [SMOKE_TEST.md](SMOKE_TEST.md) for a short install, menu visibility and representative-action check. It is separate from the 107-case plan; passing it does not mark the full plan complete.
+
+## Test on two machines and merge results
+
+Each recorded result includes hostname, Git revision and dirty-tree status, available KDE/Qt versions, GUI/CLI mode and UTC time. Older results created before provenance was added show “not recorded”. Run `prepare` on both checkouts first. It creates the QA-owned `qa/transfers/` folder without changing saved results. Export and import JSON files stay there:
 
 ```sh
-python3 qa/acceptance.py fail --note "Describe what happened"
-python3 qa/acceptance.py skip --reason "Optional encoder unavailable: libjxl"
-python3 qa/acceptance.py blocked --reason "KDE submenu issue"
+# On the first machine, after prepare has initialized the state:
+python3 -B qa/acceptance.py export
+
+# Copy the printed file manually into the other checkout's qa/transfers/ folder.
+# On that machine:
+python3 -B qa/acceptance.py import qa/transfers/acceptance-FILE.json
 ```
 
-You can also name a case explicitly, for example `python3 qa/acceptance.py validate 'kim_compress.desktop:Compress10'`. The current case is used when the ID is omitted. The six About/License/Manual entries appear in their respective image/video context menus; their selected file only opens that context menu and is not sent to the dispatcher.
-
-## Results, dashboard and reset
-
-Progress is stored outside disposable media in `qa/state/progress.json`; each write is atomically replaced and synced. It survives closing the terminal or reboot. Inspect progress with:
+Transfer files contain test results and validator records, not fixture media. Prepare the fixtures separately on each machine. Import adds cases that are not recorded locally. If the same case has different results, import makes no changes and lists the conflict. Review both reports and explicitly choose one policy:
 
 ```sh
-python3 qa/acceptance.py status --filter pending
-python3 qa/acceptance.py status --filter failed
-python3 qa/acceptance.py status --filter skipped
-python3 qa/acceptance.py status --filter blocked
-python3 qa/acceptance.py report
+python3 -B qa/acceptance.py import qa/transfers/acceptance-FILE.json --resolve keep-local
+python3 -B qa/acceptance.py import qa/transfers/acceptance-FILE.json --resolve use-imported
 ```
 
-`report` writes a timestamped, read-only HTML dashboard and JSON summary under ignored `qa/reports/`. The dashboard groups all actions by menu, links to case instructions and files, and labels GUI versus CLI verification. Record results through the CLI; opening the HTML does not update progress.
+Those options resolve every conflicting case in that file. Export again after resolving to share the merged state. The toolkit never SSHes or copies files between machines for you.
 
-Reset only one case after reviewing its results:
+Two records for the same case are treated as a conflict when the stored result record differs, including provenance, note, mode or timestamp. This conservative rule asks you to decide which observation should be the case's current result; each exported JSON remains available as a record of the other machine's observation.
+
+To test the same code revision on `homebase`, record the full revision on the source machine with `git rev-parse HEAD`. A Git bundle contains committed files only. If the working tree is dirty and you need to test those exact edits, transfer the patch and intended untracked source files too. Review the untracked-file list first; do not include ignored `qa/generated/`, `qa/state/` or `qa/reports/` data in the source archive.
 
 ```sh
-python3 qa/acceptance.py reset 'kim_compress.desktop:Compress10'
-python3 qa/acceptance.py prepare
+# On natacha, from the checkout:
+git bundle create ../kim6-acceptance.bundle HEAD
+git diff --binary HEAD > ../kim6-working.patch
+git ls-files --others --exclude-standard -z > ../kim6-untracked.list
+if [ -s ../kim6-untracked.list ]; then tar --create --gzip --file ../kim6-untracked.tar.gz --null --files-from=../kim6-untracked.list; fi
 ```
 
-Reset removes only that case directory and its saved result. It refuses unknown files rather than deleting them. If an output is not recognized, run `validate` first so known action outputs can be recorded; inspect anything still reported as untracked manually. Pristine masters and other case results are retained. Email attachments are deliberately left in the isolated persistent attachment area on reset: first close the external mail client, then decide whether to remove those specific QA-generated files. This avoids deleting attachments that an asynchronous client may still be reading. The tool refuses symlink escapes and unmarked existing workspaces; do not remove a workspace to recover it.
-
-## Fixture library and optional tools
-
-Fixtures are synthetic: solid-color and geometric photographs, transparent and multi-frame images, EXIF/GPS/rights/AI sample fields where ExifTool is available, sRGB/wide-gamut profile samples where local ICC profiles exist, and short FFmpeg videos with sound, without sound, and multiple audio streams when suitable encoders exist. Names include spaces, Unicode, brackets and a leading dash. `qa/generated/masters/manifest.json` records master SHA-256 hashes and generation capabilities. Every action receives private working copies. No personal media is read, and no copyrighted sample images are downloaded.
-
-ImageMagick 7 is required to prepare the image fixture library. ExifTool, FFmpeg, codecs, ICC profiles, PDF inspection tools, Dolphin and KDE utilities are capability-dependent. The `prepare` summary reports fixture capabilities; unavailable fixtures or encoders are not counted as passed. Record a case as skipped when an optional codec is unavailable, or blocked when the host/KDE environment prevents GUI testing. Technical checks use installed tools such as ImageMagick, ExifTool, FFmpeg/ffprobe and `pdfinfo` when available. They check file integrity, source hashes, formats, dimensions, frames, streams and relevant metadata. They cannot judge subjective visual quality.
-
-## Second-pass safety checks
-
-Print the focused manual checklist with:
+Copy the bundle, patch, untracked archive and list to `homebase` using a removable drive or another method you choose. On `homebase`, after placing them at a convenient path:
 
 ```sh
-python3 qa/acceptance.py second-pass
+git clone /path/to/kim6-acceptance.bundle kim6-acceptance
+cd kim6-acceptance
+git checkout --detach FULL_REVISION_FROM_NATACHA
+git apply --binary /path/to/kim6-working.patch
+if [ -f /path/to/kim6-untracked.tar.gz ]; then tar --extract --gzip --file /path/to/kim6-untracked.tar.gz --directory .; fi
+git status --short
+python3 -B qa/acceptance.py prepare
+python3 -B qa/acceptance.py install-isolated
+python3 -B qa/acceptance.py check-install
+python3 -B qa/acceptance.py next --isolated
 ```
 
-It covers cancellation, overwrite authorization, collisions, source protection, metadata/color behavior, date handling, animation, video stream copy, slideshow order, partial batch failures, missing tools, and installer/uninstaller checks in isolated directories. Never use personal media or the active installed menus for destructive tests. The installed HTML manual should be opened from the isolated installation when checking its stylesheet.
+Use the actual full revision, inspect the untracked-file list and `git status --short`, and confirm that the intended source changes were applied before testing. If testing only a committed release, omit the patch/archive steps. Do not assume `homebase` has a particular KDE or Qt release; the result record captures versions when the commands are available. Copy/export progress manually as above.
 
-## Canonical toolkit tests
+## Progress and reports
 
 ```sh
-python3 -B -m unittest tests.test_acceptance_toolkit -v
-python3 -B tests/run.py
+python3 -B qa/acceptance.py status
+python3 -B qa/acceptance.py status --filter failed
+python3 -B qa/acceptance.py report
 ```
 
-The toolkit tests validate inventory parity, fixture mapping, workspace/reset safety, persisted status, technical validators, optional tool handling, report totals, and separation of GUI from CLI results. The project’s canonical runner remains `tests/run.py`.
+The HTML report is read-only and groups all cases by menu. It shows pending/passed/failed/skipped/blocked totals, GUI and CLI passes, technical checks, outputs, notes, host, revision and available KDE/Qt versions. `report` also creates a JSON result export. Use the CLI to change status; opening a dashboard cannot mark a case passed.
+
+Progress lives in `qa/state/`, outside disposable cases, and each update is atomically saved. Do not delete that directory to reset testing. Case outputs and email attachments live under the ignored `qa/generated/` tree. Email attachments are intentionally persistent after the external mail draft opens; inspect the exact QA attachment directory and close the mail client before removing any QA-owned attachment.
+
+## Fixtures and optional tools
+
+Fixtures are generated synthetic images, metadata samples and short videos. Their master hashes are recorded and checked; each action gets separate working copies. No personal media is read and no photos are downloaded. ImageMagick 7 is required to prepare image fixtures. ExifTool, FFmpeg codecs, ICC profiles, PDF tools and KDE utilities depend on the host. Missing optional capabilities are shown as unavailable; record a skip or environment block with the exact reason. Technical checks inspect actual image/video data when tools exist, but cannot judge image quality or replace your visual check.
+
+Print the second-pass safety checklist with:
+
+```sh
+python3 -B qa/acceptance.py second-pass
+```
+
+Run the focused toolkit tests with:
+
+```sh
+python3 -B tests/run.py --pattern test_acceptance_toolkit.py
+```
