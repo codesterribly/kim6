@@ -26,13 +26,10 @@ This document covers the project structure, development conventions, testing, an
 
 The `docs/` directory contains additional references:
 
-- `ACTIONS.md` — Complete Dolphin menu and action inventory.
-- `commandconfig.md` — Command-line options and dispatcher arguments.
-- `commandconfig.md` — Detailed descriptions of KIM6 functionality.
-- `FORMATS.md` — Supported image and video formats.
-- `commandconfig.md` — Configuration options and defaults.
-- `commandconfig.md` — File handling, preservation, and overwrite behavior.
-- `index.html` — HTML user manual.
+- `ACTIONS.md` - Complete Dolphin menu and action inventory.
+- `commandconfig.md` - detailed descriptions of KIM6 functionality, command-line options and configuration.
+- `FORMATS.md` - Supported image and video formats.
+- `index.html` - HTML user manual with CSS styling (`work.css`).
 
 ## Dolphin Service Menus
 
