@@ -36,7 +36,7 @@ Operations that preserve frames validate expected input and output frame counts.
 
 Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.
 
-See [Web export](commandconfig.md#webexport) for color options and [SAFETY.md](SAFETY.md) for preservation behavior.
+See [Web export](commandconfig.md#webexport) for color options and [File handling](commandconfig.md#output-and-file-handling) for preservation behavior.
 
 ## Video Formats and Encoders
 

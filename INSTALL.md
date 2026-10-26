@@ -92,3 +92,26 @@ sudo ./uninstall.sh --prefix /usr/share/kio/servicemenus
 ```
 
 The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.
+
+## Installation and Removal Troubleshooting
+
+### Dolphin does not show an action
+
+First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. On the development system, KDE Frameworks/KIO 6.29 has a known upstream `X-KDE-Submenu` issue; KIM6 keeps its submenus intact and does not recommend flattening them as a workaround. Installation can be verified without relying on submenu display; see the installation instructions above.
+
+### Installation or removal reports a conflict
+The installer identifies existing KIM6 installations from recognized program
+and service-menu files. It also accepts an empty runtime directory left by
+an interrupted installation. Unrelated files and unsafe symlinked paths
+are protected from replacement or removal.
+
+Installation and removal operate one file at a time, not as a single
+transaction. If installation is interrupted, rerun `./install.sh`.
+There is no automatic rollback.
+
+Upgrades replace known KIM6 program and menu files. Save any customizations
+before upgrading. Unknown files are preserved and may prevent their
+containing directory from being removed.
+
+For older-installation compatibility and implementation details, see
+[Installer compatibility and recovery](DEVELOPMENT.md#installer-compatibility-and-recovery).

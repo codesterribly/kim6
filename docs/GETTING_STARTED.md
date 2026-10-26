@@ -1,6 +1,6 @@
 # Getting started with KIM6
 
-KIM6 adds common photo and video actions to Dolphin's right-click menus. These examples use the visible menu labels in the current KIM6 menus. Output names below assume the default suffix position. If you set prefix position, the action tag appears before the filename instead. If an action asks what to do with the result, choose **Create new** to keep the selected originals unchanged. A saved `KIM_POLICY` preference can choose this automatically or skip the question. If it is set to `overwrite`, use a disposable copy for these examples or change the preference to `create` first. See [Safe handling of originals](SAFETY.md) if you are unsure.
+KIM6 adds common photo and video actions to Dolphin's right-click menus. These examples use the visible menu labels in the current KIM6 menus. Output names below assume the default suffix position. If you set prefix position, the action tag appears before the filename instead. If an action asks what to do with the result, choose **Create new** to keep the selected originals unchanged. A saved `KIM_POLICY` preference can choose this automatically or skip the question. If it is set to `overwrite`, use a disposable copy for these examples or change the preference to `create` first. See [Safe handling of originals](GETTING_STARTED.md#troubleshooting-a-failed-action) if you are unsure.
 
 ## A. Resize a photograph
 
@@ -45,3 +45,18 @@ KIM6 applies the same size limit to each selected photograph. New files appear i
 ## If something does not work
 
 Restart Dolphin after installation. If the action is missing, check [INSTALL.md](../INSTALL.md) for the menu location and the KDE Frameworks/KIO 6.29 submenu issue. If an action reports a missing tool or format, that tool or codec may not be installed; see [Formats and codecs](FORMATS.md). Keep your original files and try again with a copy if you are uncertain about an output choice.
+
+## Troubleshooting a Failed Action
+
+The final dialog reports failed items. Confirm that the source is readable, the destination is writable and the selected format/delegate is available. Check ImageMagick/FFmpeg diagnostics in the action’s error dialog or the terminal when running a controlled CLI example. Do not diagnose a failure by testing an overwrite against an important original.
+
+A safe smoke test uses a disposable copy and an empty temporary output directory:
+
+```sh
+work=$(mktemp -d)
+cp -- ./example.jpg "$work/input.jpg"
+mkdir -- "$work/output"
+KIM_POLICY=create ./src/bin/kim_all webexport --output-dir "$work/output" --size 600x600 --quality 75 -- "$work/input.jpg"
+```
+
+Web export is derived-only. With `--output-dir`, the result stays in the disposable test directory. Verify the output before removing only the test-owned files. Remove only the test-owned `$work` directory after verifying that it contains no needed files.

@@ -62,7 +62,15 @@ KIM6 uses different file-handling rules depending on the operation.
 
 Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.
 
-See [SAFETY.md](SAFETY.md) for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.
+See [File handling](commandconfig.md#output-and-file-handling) for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.
+
+### File preservation details
+
+Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation and flipping are always in-place. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.
+
+Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.
+
+Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see [File publication and cancellation](../DEVELOPMENT.md#file-publication-and-cancellation).
 
 ## Configuration and Defaults
 
@@ -118,7 +126,7 @@ KIM_POLICY=create KIM_NAME_AFFIX_POSITION=prefix kim_all resize --size 1600x1600
 KIM_WEB_COLOR_MODE=preserve kim_all webexport --size 1600x1600 -- photo.jpg
 ```
 
-When running from a source checkout, replace `kim_all` in those examples with `./src/bin/kim_all`. See [SAFETY.md](SAFETY.md) for action-specific metadata and timestamp rules.
+When running from a source checkout, replace `kim_all` in those examples with `./src/bin/kim_all`. See [File handling](commandconfig.md#output-and-file-handling) for action-specific metadata and timestamp rules.
 
 ## Still-image actions
 
@@ -255,7 +263,7 @@ Geometry uses ImageMagick’s supported resize grammar and preserves aspect rati
 kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 ```
 
-Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [SAFETY.md](SAFETY.md).
+Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [File handling](commandconfig.md#output-and-file-handling).
 
 KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.
 

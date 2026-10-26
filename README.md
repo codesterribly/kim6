@@ -55,7 +55,7 @@ Most resizing, compression, and conversion actions let you choose whether to cre
 
 Some operations, including rotation, flipping, and metadata editing, modify the selected files directly. Rename operations have their own file-handling options.
 
-See [Getting Started](docs/GETTING_STARTED.md) for examples and [Safe Handling](docs/SAFETY.md) for details.
+See [Getting Started](docs/GETTING_STARTED.md) for examples and [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details.
 
 ## Installation
 

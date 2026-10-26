@@ -31,7 +31,7 @@ The `docs/` directory contains additional references:
 - `commandconfig.md` — Detailed descriptions of KIM6 functionality.
 - `FORMATS.md` — Supported image and video formats.
 - `commandconfig.md` — Configuration options and defaults.
-- `SAFETY.md` — File handling, preservation, and overwrite behavior.
+- `commandconfig.md` — File handling, preservation, and overwrite behavior.
 - `index.html` — HTML user manual.
 
 ## Dolphin Service Menus
@@ -116,7 +116,7 @@ KIM6 processes files that may be irreplaceable. Changes to image and video actio
 
 8. **Metadata and timestamps:** Preserve each action's documented behavior. Rotation preserves the original modification time; other transformations and metadata operations have their own rules. Do not apply metadata or timestamp restoration indiscriminately.
 
-See [SAFETY.md](docs/SAFETY.md) for the user-facing explanation of file handling and its limitations.
+See [File publication and cancellation](DEVELOPMENT.md#file-publication-and-cancellation) for the user-facing explanation of file handling and its limitations.
 
 ## Shared Helper Functions
 
@@ -279,3 +279,33 @@ Preserve historical author notices and GPL license headers.
 Translations are maintained in `po/` using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
 
 Historical development and release documentation is preserved in the [upstream archive](docs/archive/upstream/ARCHIVE.md).
+
+## File Publication and Cancellation
+
+### Staging and publication
+
+Generated media is first written to invocation-owned staging on the destination filesystem. The action checks the producer result and validates the staged artifact before publication. Create-new publication uses a no-clobber operation. Authorized replacement uses atomic replacement on supported local Linux filesystems. A failed rename is not followed by a destructive copy-over fallback.
+
+This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIM6’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.
+
+Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. Gallery publication uses a new directory name and does not recursively replace an occupied directory.
+
+Cleanup removes only staging files, directories and child processes owned by the current invocation. A producer failure, invalid result, cancellation or publication failure must not delete a pre-existing destination. Earlier completed batch results remain in place if a later item fails. Error and summary dialogs identify failed items rather than claiming a rejected output succeeded.
+
+### Cancellation and process ownership
+
+KDialog progress calls use the shared service/object reference parser. An explicit `wasCancelled=true` stops work. Explicit false permits work to continue. If the progress service disappears, the action treats that as an interruption and stops without claiming that disappearance proves the user clicked Cancel. A failed ownership query, failed method call while the service remains, or malformed reply is an error and also stops publication safely.
+
+Actions check for interruption before starting items and immediately before publishing staged output. Video producers run as invocation-owned FFmpeg processes; cancellation terminates only the owned producer, with bounded graceful termination and a forced stop if needed. Previously published batch outputs are retained.
+
+A KDE service-menu action accepts local files. Remote URL workflows are not silently treated as local pathnames; menu definitions restrict applicable selections to files. Newlines and certain ImageMagick filename metacharacters are rejected in actions whose current path or command syntax cannot represent them unambiguously. Spaces and Unicode are supported through quoted argument arrays and the selected-file argument boundary. Leading dashes are passed after `--` where the action supports that contract.
+
+## Reporting a Bug
+
+Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private photographs or videos without permission.
+
+## Installer Compatibility and Recovery
+
+The installer recognizes a runtime from the `kim_all` dispatcher, a recognized KIM menu, or an older `.kim6-owned` marker left by a previous release. It also accepts an otherwise empty runtime directory, which can remain after an interrupted first install. New installs do not create ownership markers or manifests. The uninstaller uses the same recognizable dispatcher/menu checks and accepts the old marker only for compatibility; it does not require one. Both scripts refuse unrelated same-name menu files and symlinked runtime/menu paths. The installer replaces listed files through temporary sibling files and does not select unrelated filenames through broad globs. Unknown runtime files are preserved and prevent removal of their parent directory.
+
+Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
