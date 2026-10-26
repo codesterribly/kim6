@@ -9,7 +9,7 @@ python3 -B qa/acceptance.py install-isolated
 python3 -B qa/acceptance.py check-install
 ```
 
-On `natacha`, KDE Frameworks/KIO 6.29 may hide submenu entries because of an upstream KDE issue. Do not change the menus to work around it. On another machine, first check its current KDE/Qt version and that its submenus work. `check-install` verifies installed files, not GUI behavior.
+KDE Frameworks/KIO 6.29 may prevent Dolphin service submenus from appearing. Do not modify the menus to work around this issue. Before GUI acceptance testing, verify that the test machine supports the submenus and check its KDE/Qt versions. `check-install` verifies installed files, not actual menu visibility or behavior.
 
 For each operation below, run the `next` command to open the exact disposable case folder in the isolated Dolphin session. Select only the named file and the menu item shown by the printed instructions.
 

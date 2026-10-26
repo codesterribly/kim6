@@ -80,7 +80,7 @@ class AcceptanceInventoryTests(unittest.TestCase):
             self.assertIn("git_revision", bundle["source"])
 
             bundle["results"]["B"] = {"case_id": "B", "status": "failed", "mode": "gui",
-                                       "note": "problem", "provenance": {"hostname": "homebase"}}
+                                       "note": "problem", "provenance": {"hostname": "qa-test-host"}}
             export.write_text(json.dumps(bundle))
             acceptance._save_result(state_path, "B", "passed", "gui", "different local result")
             before = acceptance.load_state(state_path)
@@ -344,11 +344,11 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
     def test_dashboard_includes_per_case_validator_details_and_provenance(self):
         case = {"id": "A", "menu": "m", "label": "One"}
         state = {"results": {"A": {"status": "passed", "mode": "gui", "updated_at": "2026-10-26T00:00:00Z",
-                                         "note": "looked right", "provenance": {"hostname": "homebase", "git_revision": "abc123",
+                                         "note": "looked right", "provenance": {"hostname": "qa-test-host", "git_revision": "abc123",
                                          "kde_version": "KDE 6", "qt_version": "6.9", "test_mode": "gui"}}},
                  "validations": {"A": {"checks": ["format is valid"], "warnings": [], "errors": [], "outputs": []}}}
         dashboard = acceptance._render_html([case], state)
-        for phrase in ("homebase", "abc123", "KDE 6", "format is valid", "looked right", "GUI verified"):
+        for phrase in ("qa-test-host", "abc123", "KDE 6", "format is valid", "looked right", "GUI verified"):
             self.assertIn(phrase, dashboard)
 
     def test_named_next_prints_that_case_without_marking_it_passed(self):

@@ -140,7 +140,7 @@
 <li><p><strong>Output validation:</strong> Check that generated files contain valid results, not merely that a command returned successfully. Depending on the operation, this includes verifying format, dimensions, image frames, PDF pages, video streams, timestamps, color profiles, or metadata.</p></li>
 <li><p><strong>Metadata and timestamps:</strong> Preserve each action's documented behavior. Rotation preserves the original modification time; other transformations and metadata operations have their own rules. Do not apply metadata or timestamp restoration indiscriminately.</p></li>
 </ol>
-<p>See <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a> for the user-facing explanation of file handling and its limitations.</p>
+<p>See <a href="#file-publication-and-cancellation">File Publication and Cancellation</a> below for the implementation details and limitations.</p>
 <h2 id="shared-helper-functions">Shared Helper Functions</h2>
 <p>Several functions in <code>src/bin/kim_all</code> provide common behavior across multiple actions.</p>
 <h3 id="file-selection">File selection</h3>
