@@ -1,49 +1,52 @@
-# Image and video format support
 
-KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg and ffprobe. A readable extension does not prove that an encoder is available. For output formats, KIM6 checks the requested encoder/coder and validates actual bytes; missing encoders fail closed. The tables describe KIM6’s support shape, not a promise that every codec exists on every distribution.
+# Image and Video Format Support
 
-## Image formats
+KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A recognizable extension does not guarantee that a decoder or encoder is available. KIM6 checks required capabilities and validates generated output; if an encoder is unavailable, the operation fails rather than silently selecting another format.
 
-| Format | Read/import | Write/export | Frames and color | Notes |
-|---|---|---|---|---|
-| JPEG/JPG/JFIF | ImageMagick decoder | JPEG coder; menu compression and conversion | Still images; ICC is handled where embedded and supported | Compression is lossy. Progressive/baseline and Huffman optimization are JPEG-specific. JFIF aliases JPEG. |
-| PNG | ImageMagick decoder | PNG coder | Still PNG; embedded ICC where supported | Standard PNG conversion does not imply APNG animation. |
-| APNG | Detected and inspected through FFmpeg/ffprobe when the PNG animation control chunk is present | FFmpeg APNG encoder when available | Frame count, timings and loop are checked for APNG-to-APNG; ICC depends on stream/coder support | Conversion to an output that cannot preserve frames is rejected rather than flattened. |
-| GIF | ImageMagick decoder | ImageMagick GIF encoder; `animate` creates GIFs | Multi-frame animation, delays and looping are validated for animation operations | Palette and timing limits apply; GIF is indexed color. |
-| TIFF/TIF | ImageMagick decoder | TIFF coder; `tiffjoin` creates ordered multi-page TIFF | Multi-page; ICC may be preserved | Supported as a multi-frame input/output where the selected action permits it. |
-| BMP/DIB | ImageMagick decoder | BMP coder; menu explicitly requests BMP5 | Normally still; no general ICC guarantee | DIB is treated as a BMP alias. |
-| WebP | ImageMagick coder when installed | Runtime-probed WebP encoder | May be animated; selected conversion/export checks frame handling | ICC depends on installed coder and selected operation. |
-| AVIF | ImageMagick coder/delegate when installed | Runtime-probed AVIF encoder | Multi-frame handling is checked; ICC supported by format/coder where available | Availability depends on ImageMagick build and AV1 delegate. |
-| HEIC/HEIF | ImageMagick coder/delegate when installed | HEIC encoder runtime-probed for both HEIC/HEIF naming | May contain multiple images; ICC depends on delegate | Not guaranteed by extension. No silent substitution with AVIF/JPEG. |
-| JPEG XL (JXL) | Decoder only when JXL read support is present | Encoder only when JXL write support is present | ICC supported where coder permits | The project’s development test environment lacks the optional JXL encoder, so its real-encoder test skips there. Other systems may provide it. |
-| JPEG 2000 JP2/J2K/JPC/J2C | ImageMagick JPEG 2000 coder/delegate when installed | Runtime-probed coder; JP2 lossless/lossy modes and J2K/JPC where supported | ICC supported where coder permits; frame handling depends on coder | Lossless JP2 uses delegate rate=1 and is pixel-tested when encoder exists. Lossy quality is codec-specific, not a JPEG quality percentage. |
-| ICO/CUR | ImageMagick coder when installed | Custom output only if the coder advertises write support | May represent multiple icon sizes/images; KIM6 treats preserved frames as a requirement for supported conversions | Do not assume a single image or lossless round trip. |
-| PNM family (PBM/PGM/PPM/PAM/PNM) | ImageMagick decoder | Available standard coders/custom output | Typically still; limited profile/metadata semantics | Useful interchange formats; not all preserve color metadata. |
-| SVG/SVGZ | Rasterized only through the installed ImageMagick SVG delegate/policy | A vector output may be offered by a coder, but conversion workflows are principally raster-image operations | Rasterization can discard vector structure and profile semantics | Treat untrusted SVG cautiously. The local delegate/security policy governs external resources; do not loosen it to process arbitrary documents. |
-| PDF | ImageMagick PDF delegate when local policy permits | PDF output is validated as a document with expected pages | May represent multiple pages; page dimensions/layout are checked for album/print | Input parsing is conservatively governed by local ImageMagick policy and delegates. Do not relax policy for untrusted PDFs. |
-| PSD/PSB | ImageMagick decoder when installed | Coder-dependent; not advertised as a dedicated output | Layer/composite selection may flatten document structure | Conversion is not a lossless layered-document round trip. Use an editor for layer-preserving work. |
-| Radiance HDR / OpenEXR | Coder-dependent decoder | Coder-dependent encoder | HDR range/color and ICC behavior vary | KIM6 does not promise automatic, color-managed HDR-to-SDR development. Slideshow rejects HDR input rather than silently tone-mapping it. |
-| Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, others) | Only when the installed ImageMagick delegate can decode it | No RAW development engine; conversion may be possible only as a decoder-mediated derivative | Camera color, demosaicing and metadata depend on the delegate | RAW metadata editing is rejected; never treat RAW as a normal editable raster or overwrite it during conversion. Prefer a dedicated RAW processor for development. |
+## Image Formats
 
-## Frame-preservation behavior
+| Format | Reading | Writing | Important limitations |
+|---|---|---|---|
+| JPEG/JPG/JFIF | ImageMagick JPEG decoder | JPEG encoder; compression and conversion menus | Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant. |
+| PNG | ImageMagick PNG decoder | PNG encoder | Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported. |
+| APNG | FFmpeg/ffprobe inspection when PNG animation control data is present | FFmpeg APNG encoder | Frame count, timing, and looping are checked for APNG-to-APNG conversion. Unsupported frame loss is rejected. |
+| GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
+| TIFF/TIF | ImageMagick TIFF decoder | TIFF encoder; `tiffjoin` creates multi-page files | Multiple pages are supported where the selected operation permits them. |
+| BMP/DIB | ImageMagick BMP decoder | BMP encoder; menu selects BMP5 | Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee. |
+| WebP | ImageMagick WebP decoder when installed | Runtime-probed WebP encoder | May contain animation; frame and ICC handling depend on the coder and operation. |
+| AVIF | ImageMagick AVIF coder/delegate when installed | Runtime-probed AVIF encoder | Support depends on the installed AV1 delegate. Multi-frame and ICC handling are checked where applicable. |
+| HEIC/HEIF | ImageMagick HEIC/HEIF decoder when installed | Runtime-probed HEIC encoder | May contain multiple images. No silent substitution with AVIF or JPEG. |
+| JPEG XL (JXL) | Optional JXL decoder | Optional JXL encoder | Read and write capabilities are separate. The project's development environment lacks the optional encoder, so its real-encoder test skips there. |
+| JPEG 2000 (JP2/J2K/JPC/J2C) | ImageMagick JPEG 2000 coder/delegate | Runtime-probed JPEG 2000 encoder | JP2 offers lossless/lossy modes; lossless uses delegate `rate=1`. Lossy quality is codec-specific, not equivalent to JPEG quality. |
+| ICO/CUR | ImageMagick icon decoder when installed | Custom conversion if writing is supported | Files may contain several icon sizes or images. Do not assume a lossless single-image round trip. |
+| PNM family (PBM/PGM/PPM/PAM/PNM) | ImageMagick decoder | Available PNM coders | Typically still images with limited profile and metadata support. |
+| SVG/SVGZ | Rasterized through the installed SVG delegate and security policy | Coder-dependent; conversion is primarily raster-oriented | Rasterization loses vector structure. Do not weaken delegate security restrictions for untrusted files. |
+| PDF | ImageMagick PDF delegate when local policy allows | Validated PDF output; `album` and `print` generate PDFs | Page count and layout are checked. Untrusted PDF input remains subject to local delegate/security policy. |
+| PSD/PSB | ImageMagick decoder when installed | Coder-dependent; no dedicated menu output | Layers and document structure may be flattened. Use an editor for layer-preserving work. |
+| Radiance HDR / OpenEXR | Coder-dependent decoder | Coder-dependent encoder | No promised automatic HDR-to-SDR color-managed conversion. `slideshow` rejects HDR input. |
+| Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, others) | Installed ImageMagick RAW delegate, if available | No dedicated RAW development or output workflow | Demosaicing and color depend on the delegate. RAW metadata editing is rejected; conversion must not overwrite RAW originals. Use a dedicated RAW processor for development. |
 
-KIM6 distinguishes still images, animated files and multi-page documents. Conversion refuses known frame loss where it cannot preserve the input animation. APNG has a dedicated FFmpeg path; GIF, TIFF, WebP, AVIF, HEIC/HEIF, ICO/CUR, and PDF are treated as potentially multi-frame in relevant conversion checks. Exact support still depends on the coder and action. `stripmeta`, resize, transform, and publication actions validate the expected frame count for their input/output path.
+## Frame Preservation
 
-Do not infer “animation supported” from a format name alone. The action’s validation and the local toolchain determine whether a particular file is accepted.
+KIM6 distinguishes still images, animations, and multi-page documents. Conversion rejects known frame loss rather than silently flattening unsupported animations. APNG has a dedicated FFmpeg path; other multi-frame formats depend on the installed coder and the selected action.
 
-## Color profiles and metadata
+Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.
 
-ICC profiles are transformed or retained only when a usable profile and output coder are available and the action’s policy requires it. Web export defaults to an actual ICC conversion to sRGB; it does not merely relabel pixels. `--color preserve` attempts to retain an embedded profile when the destination format supports one. Untagged RGB is assumed to be sRGB for web export; untagged CMYK is rejected. Other actions retain their established per-action behavior; this is not a global metadata promise. See [commandconfig.md](commandconfig.md) and [SAFETY.md](SAFETY.md).
+## Color Profiles and Metadata
 
-## Video formats and encoders
+Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.
 
-`video` uses FFmpeg with H.264 (`libx264`) or H.265 (`libx265`) at 720p/1080p, CRF 17/23/29, and MP4 or compatible original container. It preserves aspect ratio, avoids unnecessary upscaling and copies compatible audio. An incompatible original container is an error; KIM6 does not silently change it to MP4.
+See [Web export](commandconfig.md#webexport) for color options and [SAFETY.md](SAFETY.md) for preservation behavior.
 
-AV1 uses `libsvtav1` when available and falls back to `libaom-av1` only when SVT-AV1 is not advertised. AV1 High and Balanced use distinct encoder settings (CRF 28 and 35 respectively); they are not numeric quality equivalents of H.264/H.265 presets. KIM6 does not fall back from AV1 to another codec.
+## Video Formats and Encoders
 
-Audio extraction supports AAC in M4A, MP3, FLAC and PCM WAV, using stream copy for compatible AAC-to-M4A. Audio removal explicitly maps video and compatible non-audio streams without re-encoding video. Video-to-GIF uses a palette-generation/palette-use pipeline and checks loop/timing. Frame extraction/contact sheets use FFmpeg decoding and require relevant filters/fonts where applicable.
+KIM6 uses FFmpeg for H.264 (`libx264`) and H.265 (`libx265`) video. AV1 prefers `libsvtav1` and uses `libaom-av1` when SVT-AV1 is unavailable; it does not substitute another codec if AV1 encoding is unavailable. Available containers must support the selected codecs and streams. An incompatible original container causes an error rather than an automatic switch to MP4.
 
-Inspect local support without changing system configuration:
+Video utilities use FFmpeg for frame extraction, contact sheets, audio extraction or removal, and GIF creation. See [Video actions](commandconfig.md#video-actions) for preset choices, supported audio outputs, encoding settings, and operation-specific limits.
+
+## Check Installed Capabilities
+
+These commands inspect local support without changing system configuration:
 
 ```sh
 magick -version
@@ -53,4 +56,4 @@ ffprobe -version
 exiftool -ver
 ```
 
-In `magick -list format`, the read/write permission column is authoritative for that installed ImageMagick build. FFmpeg’s encoder list shows available codec names, but a usable encode still depends on the libraries and container combination. KIM6 performs operation-specific probes and validates outputs rather than treating these listings as universal guarantees.
+The read/write flags in `magick -list format` show advertised capabilities of the installed build, not a guarantee that a particular conversion will succeed. Delegates, security policies, libraries, container compatibility, and individual file characteristics may still prevent an operation. KIM6 checks relevant capabilities and validates outputs for the selected action.
