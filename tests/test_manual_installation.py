@@ -114,6 +114,41 @@ class ManualInstallationTests(unittest.TestCase):
         self.run_installer("uninstall.sh")
         self.assertTrue(unrelated.is_file())
 
+    def test_installed_menus_use_installed_dispatcher(self):
+        self.run_installer("install.sh")
+        dispatcher = self.runtime / "bin/kim_all"
+        self.assertTrue(dispatcher.is_file())
+
+        menu_names = (
+            "kim_compress.desktop",
+            "kim_compressandresize.desktop",
+            "kim_convertandrotate.desktop",
+            "kim_compressandresizevideo.desktop",
+            "kim_publication.desktop",
+        )
+
+        for name in menu_names:
+            with self.subTest(menu=name):
+                template = (ROOT / "src" / (name + ".in")).read_text()
+                installed = (self.prefix / name).read_text()
+                expected = sum(
+                    line.startswith("Exec=")
+                    for line in template.splitlines()
+                )
+                commands = [
+                    line for line in installed.splitlines()
+                    if line.startswith("Exec=")
+                ]
+
+                self.assertGreater(expected, 0)
+                self.assertEqual(expected, len(commands))
+
+                for command in commands:
+                    self.assertTrue(
+                        command.startswith(f'Exec="{dispatcher}" '),
+                        command,
+                    )
+
     def test_reject_symlinked_reference_directory(self):
         self.run_installer("install.sh")
         directory = self.runtime / "docs/reference"
