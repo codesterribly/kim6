@@ -379,6 +379,24 @@ class ConversionTests(unittest.TestCase):
                             for call in result.calls))
         self.assert_clean()
 
+    def test_animated_gif_refuses_multiframe_tiff_without_timing_contract(self):
+        first = self.workspace.ppm("input/animated-one.ppm")
+        second = self.workspace.ppm("input/animated-two.ppm")
+        source = self.workspace.path("input/animated-document.gif")
+        subprocess.run([shutil.which("magick"), "-delay", "10", str(first),
+                        "-delay", "40", str(second), "-loop", "0", str(source)],
+                       check=True, capture_output=True, timeout=15)
+        before = self.workspace.observe(source)
+        result = self.workspace.dispatch("convert", "tiff", source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(source.with_suffix(".tiff").exists())
+        self.assertFalse(any(call["tool"] == "magick" for call in result.calls))
+        self.assertTrue(any(call["tool"] == "kdialog" and
+                            "animated playback" in " ".join(call["argv"])
+                            for call in result.calls))
+        self.assertEqual(self.workspace.observe(source), before)
+        self.assert_clean()
+
     def test_jp2_lossless_uses_the_jpeg2000_rate_option_after_runtime_capability_check(self):
         self.workspace.sequence("magick", [
             {"stdout": "JP2* JP2 rw+ JPEG-2000\n"},

@@ -96,6 +96,9 @@ class ConversionICCLossTests(unittest.TestCase):
     def test_jxl_encoder_dropping_icc_fails_closed(self):
         self.verify_rejection("jxl", "JXL")
 
+    def test_gif_encoder_dropping_icc_fails_closed(self):
+        self.verify_rejection("gif", "GIF")
+
     def test_tiff_encoder_dropping_icc_fails_closed(self):
         self.verify_rejection("tiff", "TIFF")
 

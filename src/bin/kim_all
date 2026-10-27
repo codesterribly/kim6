@@ -424,6 +424,111 @@ image_apng_play_count() {
   printf '%s\n' "$plays"
 }
 
+# Compare encoded WebP animation metadata without decoding image payloads.
+# RIFF headers are little endian; ANIM carries the background and loop count,
+# while ANMF carries per-frame offsets, geometry, millisecond timing and flags.
+# Include VP8X canvas/feature flags because these affect playback composition.
+image_webp_animation_signature() {
+  local file="$1" size declared offset=12 length kind payload vp8x='' anim='' frames='' count=0
+  local -a bytes=()
+  size="$(stat -c '%s' -- "$file" 2>/dev/null)" || return 1
+  [[ "$size" =~ ^[0-9]+$ ]] && (( size >= 30 )) || return 1
+  read -r -a bytes <<< "$(od -An -tu1 -N12 -- "$file" 2>/dev/null)"
+  [ "${#bytes[@]}" -eq 12 ] || return 1
+  [ "${bytes[*]:0:4}" = '82 73 70 70' ] &&
+    [ "${bytes[*]:8:4}" = '87 69 66 80' ] || return 1
+  declared=$((bytes[4] + bytes[5]*256 + bytes[6]*65536 + bytes[7]*16777216))
+  (( declared + 8 == size )) || return 1
+  while (( offset + 8 <= size )); do
+    read -r -a bytes <<< "$(od -An -tu1 -N8 -j "$offset" -- "$file" 2>/dev/null)"
+    [ "${#bytes[@]}" -eq 8 ] || return 1
+    length=$((bytes[4] + bytes[5]*256 + bytes[6]*65536 + bytes[7]*16777216))
+    (( length <= size - offset - 8 )) || return 1
+    kind="${bytes[*]:0:4}"
+    case "$kind" in
+      '86 80 56 88') # VP8X: feature flags and canvas dimensions
+        [ -z "$vp8x" ] && [ "$length" -eq 10 ] || return 1
+        payload="$(od -An -tx1 -N10 -j "$((offset+8))" -- "$file" 2>/dev/null)" || return 1
+        vp8x="${payload//[[:space:]]/}"
+        [ "${#vp8x}" -eq 20 ] || return 1
+        # VP8X animation feature bit is 0x02.
+        read -r -a bytes <<< "$(od -An -tu1 -N1 -j "$((offset+8))" -- "$file" 2>/dev/null)"
+        [ "${#bytes[@]}" -eq 1 ] && (( (bytes[0] & 2) != 0 )) || return 1
+        ;;
+      '65 78 73 77') # ANIM: background and loop count
+        [ -n "$vp8x" ] && [ -z "$anim" ] && [ "$length" -eq 6 ] || return 1
+        payload="$(od -An -tx1 -N6 -j "$((offset+8))" -- "$file" 2>/dev/null)" || return 1
+        anim="${payload//[[:space:]]/}"
+        [ "${#anim}" -eq 12 ] || return 1
+        ;;
+      '65 78 77 70') # ANMF: 16-byte header precedes frame data
+        [ -n "$anim" ] && (( length >= 16 )) || return 1
+        payload="$(od -An -tx1 -N16 -j "$((offset+8))" -- "$file" 2>/dev/null)" || return 1
+        payload="${payload//[[:space:]]/}"
+        [ "${#payload}" -eq 32 ] || return 1
+        frames+="${payload}"$'\n'
+        count=$((count + 1))
+        ;;
+    esac
+    offset=$((offset + 8 + length + length % 2))
+  done
+  (( offset == size && count > 0 )) && [ -n "$vp8x" ] && [ -n "$anim" ] || return 1
+  printf 'VP8X:%s\nANIM:%s\n%s' "$vp8x" "$anim" "$frames"
+}
+
+# APNG control chunks explicitly record frame timing, canvas offsets,
+# blend/disposal modes and play count. Sequence numbers are bookkeeping and
+# must not be compared between two valid encodings.
+image_apng_animation_signature() {
+  local file="$1" size offset=8 length kind payload control='' frames='' declared=0 count=0
+  local -a bytes=()
+  image_has_apng_control_chunk "$file" || return 1
+  size="$(stat -c '%s' -- "$file" 2>/dev/null)" || return 1
+  [[ "$size" =~ ^[0-9]+$ ]] || return 1
+  while (( offset + 12 <= size )); do
+    read -r -a bytes <<< "$(od -An -tu1 -N8 -j "$offset" -- "$file" 2>/dev/null)"
+    [ "${#bytes[@]}" -eq 8 ] || return 1
+    length=$((bytes[0]*16777216 + bytes[1]*65536 + bytes[2]*256 + bytes[3]))
+    (( length <= size - offset - 12 )) || return 1
+    kind="${bytes[*]:4:4}"
+    case "$kind" in
+      '97 99 84 76') # acTL: 4-byte frame count and 4-byte play count
+        [ -z "$control" ] && [ "$length" -eq 8 ] || return 1
+        payload="$(od -An -tx1 -N8 -j "$((offset+8))" -- "$file" 2>/dev/null)" || return 1
+        control="${payload//[[:space:]]/}"
+        [ "${#control}" -eq 16 ] || return 1
+        read -r -a bytes <<< "$(od -An -tu1 -N4 -j "$((offset+8))" -- "$file" 2>/dev/null)"
+        [ "${#bytes[@]}" -eq 4 ] || return 1
+        declared=$((bytes[0]*16777216 + bytes[1]*65536 + bytes[2]*256 + bytes[3]))
+        ;;
+      '102 99 84 76') # fcTL: skip four-byte sequence number
+        [ -n "$control" ] && [ "$length" -eq 26 ] || return 1
+        payload="$(od -An -tx1 -N22 -j "$((offset+12))" -- "$file" 2>/dev/null)" || return 1
+        payload="${payload//[[:space:]]/}"
+        [ "${#payload}" -eq 44 ] || return 1
+        frames+="${payload}"$'\n'
+        count=$((count + 1))
+        ;;
+    esac
+    offset=$((offset + 12 + length))
+    [ "$kind" != '73 69 78 68' ] || break # IEND
+  done
+  (( count > 0 && count == declared )) || return 1
+  printf 'ACTL:%s\n%s' "$control" "$frames"
+}
+
+# Compare packet presentation durations in milliseconds for GIF -> APNG.
+# Unknown, missing or negative durations are not safe to publish.
+image_animation_packet_durations() {
+  local records
+  records="$(ffprobe -v error -select_streams v:0 \
+    -show_entries packet=duration_time -of csv=p=0 -i "$1" 2>/dev/null)" || return 1
+  awk 'BEGIN { count=0 }
+    /^[0-9]+([.][0-9]+)?$/ { printf "%.0f\n", $1 * 1000; count++; next }
+    { exit 1 }
+    END { if (count < 2) exit 1 }' <<< "$records"
+}
+
 image_format_carries_icc() {
   case "$(image_format_class "$1")" in
     JPEG|PNG|TIFF|WEBP|AVIF|HEIC|HEIF|JP2|JXL|EXR|HDR) return 0 ;;
@@ -1665,6 +1770,62 @@ action_convert() {
         "$(gettext 'Convert: the selected output format cannot preserve this multi-frame image.')\n\n$base"
       report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
     fi
+    # A same-extension overwrite with no options is an intentional no-op.
+    # Return before applying encoder safety restrictions: no re-encoding occurs.
+    if [ "$mode" = overwrite ] && [ -n "$ext" ] &&
+       [ "${ext,,}" = "$FORMAT" ] && [ -z "$jpeg_scan" ] && [ "$jpeg_optimize" != true ]; then
+      report_ok
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+
+    # A frame count is not evidence that an animation's playback contract
+    # survived conversion. Reject unverified cross-format re-encoding before
+    # creating a stage; preserve multipage document conversions separately.
+    if [ "$input_frames" -gt 1 ] && [ "$input_is_apng" != true ]; then
+      case "$(image_format_class "$input_format")" in
+        GIF)
+          case "$FORMAT" in
+            gif|apng) ;;
+            *)
+              kdialog --title "$(gettext 'Kim')" --error \
+                "$(gettext 'Convert: preserving animated playback across these formats is not verified; no output was written.')\n\n$base"
+              report_fail "$i"; progress_value "$dbusRef" "$counter"; continue ;;
+          esac
+          ;;
+        WEBP)
+          if [ "$FORMAT" != webp ]; then
+            kdialog --title "$(gettext 'Kim')" --error \
+              "$(gettext 'Convert: animated WebP conversion to another format cannot safely retain frame timing, blending and looping.')\n\n$base"
+            report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+          fi
+          ;;
+        AVIF|HEIC)
+          kdialog --title "$(gettext 'Kim')" --error \
+            "$(gettext 'Convert: multi-image AVIF/HEIC sequences cannot be safely re-encoded without verified timing and playback metadata.')\n\n$base"
+          report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+          ;;
+        *)
+          # TIFF/PDF/ICO collections are pages, not validated animations.
+          case "$FORMAT" in
+            gif|gif87|webp|apng|avif|heic|heif)
+              kdialog --title "$(gettext 'Kim')" --error \
+                "$(gettext 'Convert: multipage images cannot be safely converted to animated formats.')\n\n$base"
+              report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+              ;;
+          esac
+          ;;
+      esac
+    fi
+    if [ "$input_frames" -eq 1 ] && [ "$(image_format_class "$input_format")" = WEBP ] &&
+       image_webp_animation_signature "$i" >/dev/null 2>&1 && [ "$FORMAT" != webp ]; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Convert: animated WebP playback cannot be preserved in the requested output format.')\n\n$base"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    # Even a single-frame APNG has a looping/control contract. Same-format
+    # re-encoding must validate the control chunks after creating the stage.
+    # An animated WebP with a one-frame ANMF sequence is handled similarly.
 
     # If user "converts" to the same extension, do not try to write input to itself.
     # Create mode will create a copy with suffix, overwrite mode treats as no-op success.
@@ -1713,7 +1874,7 @@ action_convert() {
       # Profile-bearing outputs must retain the input ICC exactly.
       # JP2 retains its existing explicit profile-restoration behavior.
       case "$FORMAT" in
-        jp2|jxl|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
+        jp2|jxl|avif|heic|heif|png|webp|gif|gif87|apng|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
           convert_source_icc="$KIMDIR/convert-source.icc"
           if ! exiftool -b -ICC_Profile -- "$i" > "$convert_source_icc" 2>/dev/null; then
             rc=1
@@ -1815,7 +1976,7 @@ action_convert() {
       # Do not publish conversions that silently lose or substitute an ICC profile.
       if [ "$rc" -eq 0 ] && [ -s "$convert_source_icc" ]; then
         case "$FORMAT" in
-          jxl|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
+          jxl|avif|heic|heif|png|webp|gif|gif87|apng|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
             convert_output_icc="$KIMDIR/convert-output.icc"
             exiftool -b -ICC_Profile -- "$OUTTMP" > "$convert_output_icc" 2>/dev/null || rc=$?
             if [ "$rc" -eq 0 ] && ! cmp -s -- "$convert_source_icc" "$convert_output_icc"; then
@@ -1864,6 +2025,50 @@ action_convert() {
       [ "$output_frames" -eq "$input_frames" ] || rc=1
       if [ "$FORMAT" = apng ] && [ "$apng_codec" != apng ]; then
         rc=1
+      fi
+      # Verify frame composition, duration and iteration controls from the
+      # encoded output before atomic publication. Missing metadata fails closed.
+      if [ "$rc" -eq 0 ]; then
+        local animation_before animation_after loops_before loops_after
+        case "$(image_format_class "$input_format"):$FORMAT" in
+          GIF:gif)
+            if [ "$input_frames" -gt 1 ]; then
+              animation_before="$(identify -regard-warnings +ping \
+                -format '%T|%D|%W|%H|%X|%Y\n' -- "$i" 2>/dev/null)" || rc=1
+              animation_after="$(identify -regard-warnings +ping \
+                -format '%T|%D|%W|%H|%X|%Y\n' -- "$OUTTMP" 2>/dev/null)" || rc=1
+              [ -n "$animation_before" ] && [ "$animation_before" = "$animation_after" ] || rc=1
+              loops_before="$(exiftool -s3 -AnimationIterations -- "$i" 2>/dev/null)" || rc=1
+              loops_after="$(exiftool -s3 -AnimationIterations -- "$OUTTMP" 2>/dev/null)" || rc=1
+              [ "$loops_before" = "$loops_after" ] || rc=1
+            fi
+            ;;
+          WEBP:webp)
+            # Still WebP is valid without ANIM; validate when there is an
+            # ANIM/ANMF sequence, including a one-frame animation.
+            if [ "$input_frames" -gt 1 ] || image_webp_animation_signature "$i" >/dev/null 2>&1; then
+              animation_before="$(image_webp_animation_signature "$i")" || rc=1
+              animation_after="$(image_webp_animation_signature "$OUTTMP")" || rc=1
+              [ -n "$animation_before" ] && [ "$animation_before" = "$animation_after" ] || rc=1
+            fi
+            ;;
+          PNG:apng)
+            if [ "$input_is_apng" = true ]; then
+              animation_before="$(image_apng_animation_signature "$i")" || rc=1
+              animation_after="$(image_apng_animation_signature "$OUTTMP")" || rc=1
+              [ -n "$animation_before" ] && [ "$animation_before" = "$animation_after" ] || rc=1
+            fi
+            ;;
+          GIF:apng)
+            if [ "$input_frames" -gt 1 ]; then
+              animation_before="$(image_animation_packet_durations "$i")" || rc=1
+              animation_after="$(image_animation_packet_durations "$OUTTMP")" || rc=1
+              [ -n "$animation_before" ] && [ "$animation_before" = "$animation_after" ] || rc=1
+              loops_after="$(image_apng_play_count "$OUTTMP")" || rc=1
+              [ "$apng_loop" = "$loops_after" ] || rc=1
+            fi
+            ;;
+        esac
       fi
       # Direct replacement previously retained an existing target's mode.
       if [ "$rc" -eq 0 ] && [ "$publication_mode" = overwrite ] && [ ! -L "$OUTFILE" ] && [ -f "$OUTFILE" ]; then
