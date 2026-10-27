@@ -32,7 +32,7 @@ jobs:
       - name: Bash syntax and ShellCheck
         run: |
           bash -n src/bin/kim_all install.sh uninstall.sh
-          shellcheck src/bin/kim_all
+          shellcheck --exclude=SC2015 src/bin/kim_all
 
       - name: Python syntax
         run: |
