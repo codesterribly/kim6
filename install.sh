@@ -107,9 +107,24 @@ has_kim_menu() {
   done
   return 1
 }
+# A matching menu is not proof that an unrelated directory named "kim6"
+# belongs to us. The legacy exception requires an identifiable KIM script.
+legacy_runtime_is_kim6() {
+  local name path
+  has_kim_menu || return 1
+  for name in "${legacy_names[@]}"; do
+    path="$RUNTIME/bin/$name"
+    if [ -f "$path" ] && [ ! -L "$path" ] &&
+       grep -Eq 'SOURCE_TRANSLATION_TTT|Copyright.*Charles Bouveyron' "$path"; then
+      return 0
+    fi
+  done
+  return 1
+}
 runtime_is_kim6() {
-  dispatcher_is_kim6 "$RUNTIME/bin/kim_all" || has_kim_menu ||
-    { [ -f "$RUNTIME/.kim6-owned" ] && [ ! -L "$RUNTIME/.kim6-owned" ]; }
+  dispatcher_is_kim6 "$RUNTIME/bin/kim_all" ||
+    { [ -f "$RUNTIME/.kim6-owned" ] && [ ! -L "$RUNTIME/.kim6-owned" ]; } ||
+    legacy_runtime_is_kim6
 }
 
 # Refuse an unrelated populated kim6 directory, but allow a new empty directory.

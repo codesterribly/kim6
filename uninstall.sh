@@ -143,8 +143,23 @@ if [ -d "$RUNTIME" ]; then
     check_file "$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
   done
 
+  # Menus alone do not establish ownership of a separate runtime folder.
+  # Also recognize genuine legacy KIM scripts when upgrading old layouts.
+  legacy_runtime_known=false
+  if [ "$has_kim_menu" = true ]; then
+    for name in "${legacy_names[@]}"; do
+      path="$RUNTIME/bin/$name"
+      if [ -f "$path" ] && [ ! -L "$path" ] &&
+         grep -Eq 'SOURCE_TRANSLATION_TTT|Copyright.*Charles Bouveyron' "$path"; then
+        legacy_runtime_known=true
+        break
+      fi
+    done
+  fi
   runtime_known=false
-  if dispatcher_is_kim6 "$RUNTIME/bin/kim_all" || [ -f "$RUNTIME/.kim6-owned" ] || [ "$has_kim_menu" = true ]; then
+  if dispatcher_is_kim6 "$RUNTIME/bin/kim_all" ||
+     { [ -f "$RUNTIME/.kim6-owned" ] && [ ! -L "$RUNTIME/.kim6-owned" ]; } ||
+     [ "$legacy_runtime_known" = true ]; then
     runtime_known=true
   fi
   if [ "$runtime_known" = false ] && [ -n "$(find "$RUNTIME" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
