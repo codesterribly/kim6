@@ -12,7 +12,7 @@ class RenameTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.source = self.w.jpeg('input/PHOTO 雪.JPG')
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
 
     def clean(self):
         self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
@@ -420,7 +420,7 @@ for preset, expected in ((1, '20200314_150926'), (2, '2020-03-14_15-09-26'),
 
 def interruption_case(mode, phase, state):
     def test(self):
-        self.real(); self.w.env['KIM_POLICY'] = mode
+        self.real(); self.w.set_policy_for_test(mode)
         second = self.w.jpeg('other/SECOND.JPG')
         before = {p: self.w.observe(p) for p in (self.source, second)}
         if phase == 'before':

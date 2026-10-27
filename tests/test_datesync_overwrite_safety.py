@@ -19,7 +19,7 @@ class DateSyncOverwriteSafetyTests(unittest.TestCase):
         self.addCleanup(self.w.close)
 
         self.w.env["TZ"] = "America/New_York"
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         self.w.use_real_metadata_tools()
 
         self.source = self.w.jpeg("input/date-rollback.jpg")

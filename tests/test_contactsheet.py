@@ -44,7 +44,7 @@ class ContactSheetTests(unittest.TestCase):
         target = self.w.path('out/contact.pdf')
         target.write_bytes(b'existing destination')
         before = self.w.observe(target)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond('magick', status=1)
         result = self.w.dispatch('contactsheet', '--dpi', '150', '--grid', '3x4',
                                  '--output', target, '--', self.source)
@@ -77,7 +77,7 @@ class ContactSheetTests(unittest.TestCase):
         before_target = self.w.observe(target)
         before_protected = self.w.observe(protected)
         before_source = self.w.observe(self.source)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
 
         result = self.w.dispatch('contactsheet', '--dpi', '150', '--grid', '3x4',
                                  '--output', target, '--', self.source)
@@ -93,7 +93,7 @@ class ContactSheetTests(unittest.TestCase):
         target.write_bytes(b'existing unrelated PDF')
         before_target = self.w.observe(target)
         before_source = self.w.observe(self.source)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond_to('identify', '-regard-warnings', {'status': 70})
 
         result = self.w.dispatch('contactsheet', '--dpi', '150', '--grid', '3x4',

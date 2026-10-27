@@ -80,7 +80,7 @@ class PublicationActionTests(unittest.TestCase):
         for kind, extension in extensions.items():
             for failure in ('partial', 'invalid'):
                 with self.subTest(action=kind, failure=failure):
-                    self.w.env['KIM_POLICY'] = 'overwrite'
+                    self.w.approve_overwrite()
                     output = self.w.path(f'out/{kind}-{failure}.{extension}')
                     output.write_bytes(b'preserve destination')
                     before_sources = (self.w.observe(self.first), self.w.observe(self.second))
@@ -135,7 +135,7 @@ class PublicationActionTests(unittest.TestCase):
                 self.clean()
 
     def test_selected_source_cannot_be_used_as_derived_destination(self):
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         for kind, extension in (('album', 'pdf'), ('print', 'pdf'),
                                 ('tiffjoin', 'tiff'), ('animate', 'gif')):
             with self.subTest(action=kind):
@@ -160,7 +160,7 @@ class PublicationActionTests(unittest.TestCase):
     def test_service_loss_after_production_prevents_all_four_publications(self):
         self.real()
         self.w.use_real_mv()
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         for kind, extension in (('album', 'pdf'), ('print', 'pdf'),
                                 ('tiffjoin', 'tiff'), ('animate', 'gif')):
             with self.subTest(action=kind):
@@ -196,7 +196,7 @@ class PublicationActionTests(unittest.TestCase):
     def test_authorized_overwrite_publishes_valid_outputs_without_touching_sources(self):
         self.real()
         self.w.use_real_mv()
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         for kind, extension in (('album', 'pdf'), ('print', 'pdf'),
                                 ('tiffjoin', 'tiff'), ('animate', 'gif')):
             with self.subTest(action=kind):
@@ -454,7 +454,7 @@ class PublicationActionTests(unittest.TestCase):
         before = output.read_bytes()
         self.dialogs('Select album type:', 1, output)
         self.w.respond('magick', interrupt='gone', passthrough=True)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         result = self.w.dispatch('album', self.w.root, self.first)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(output.read_bytes(), before)

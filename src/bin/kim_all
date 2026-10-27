@@ -156,13 +156,12 @@ load_kim_config() {
     [ -z "$v" ] || KIM_COPYRIGHT_USAGE_RIGHTS="$v"
   fi
 
-  # Output policy: create new files or overwrite originals.
-  # Env: KIM_POLICY=create|overwrite (overrides KConfig).
-  # Without either setting, retain the interactive policy prompt.
+  # Only create and prompt are supported configuration policies.
+  # Legacy overwrite settings cannot authorize unattended replacement.
   if [ -z "${KIM_POLICY:-}" ]; then
     v="$(_cfg_get KIM_POLICY)"
     case "$v" in
-      create|overwrite) KIM_CFG_POLICY="$v" ;;
+      create|prompt) KIM_CFG_POLICY="$v" ;;
     esac
   fi
 }
@@ -171,15 +170,11 @@ load_kim_config() {
 # Policy handling
 # ---------------------------------------------------------------------------
 
-# KIM_POLICY=create skips the overwrite dialog (always create new files).
-# KIM_POLICY=overwrite skips the dialog and overwrites originals.
-# Anything else keeps the default prompt.
+# No configuration value can silently authorize an overwrite.
 policy_mode() {
   local p="${KIM_POLICY:-${KIM_CFG_POLICY:-}}"
-
   case "$p" in
     create) echo "create" ;;
-    overwrite) echo "overwrite" ;;
     *) echo "prompt" ;;
   esac
 }
@@ -249,28 +244,95 @@ collect_valid_files_with_repeats() {
 # Extra helpers (mode selection, path parsing, metadata, reporting)
 # ---------------------------------------------------------------------------
 
-# Choose how to output results: create or overwrite.
-# Echoes: create | overwrite | cancel
-# Respects KIM_POLICY=create|overwrite.
+# Overwrite requires explicit authorization, never configuration alone.
 choose_output_mode() {
-  local title="$1"
-  local prompt="$2"
+  local title="$1" prompt="$2" count="${3:-}" context="${4:-mixed}" choice warning yes_label
 
-  case "$(policy_mode)" in
-    create)  echo "create"; return 0 ;;
-    overwrite) echo "overwrite"; return 0 ;;
+  if [ "$(policy_mode)" = create ]; then
+    printf '%s\n' create
+    return 0
+  fi
+
+  if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+    prompt+="$(printf '\n\n%s %s' "$(gettext 'Selected files:')" "$count")"
+  fi
+
+  choice="$(kdialog --title "$title" --radiolist "$prompt" \
+    create "$(gettext 'Create new files (recommended; originals untouched)')" on \
+    review "$(gettext 'Review overwrite options...')" off)" || {
+    printf '%s\n' cancel
+    return 0
+  }
+
+  case "$choice" in
+    create) printf '%s\n' create; return 0 ;;
+    review) ;;
+    *) printf '%s\n' cancel; return 0 ;;
   esac
 
-  kdialog --title "$title" \
-    --yesnocancel "$prompt" \
-    --yes-label "$(gettext 'Create new')" \
-    --no-label  "$(gettext 'Overwrite existing')"
-
-  case $? in
-    0) echo "create" ;;
-    1) echo "overwrite" ;;
-    *) echo "cancel" ;;
+  yes_label="$(gettext 'Yes, overwrite existing files')"
+  case "$context" in
+    originals)
+      warning="$(gettext 'Overwrite the selected original files?')"
+      warning+="$(printf '\n\n%s' "$(gettext 'Selected original files will be replaced without backups. KIM6 cannot undo this operation.')")"
+      yes_label="$(gettext 'Yes, overwrite selected originals')"
+      ;;
+    rename)
+      warning="$(gettext 'Rename selected originals and remove their old filenames?')"
+      warning+="$(printf '\n\n%s' "$(gettext 'After the renamed files have been published, the old selected filenames will be removed. KIM6 cannot undo this operation.')")"
+      yes_label="$(gettext 'Yes, rename selected originals')"
+      ;;
+    output)
+      warning="$(gettext 'Replace existing derived output files?')"
+      warning+="$(printf '\n\n%s' "$(gettext 'Existing output files may be replaced without backups. KIM6 cannot undo this operation.')")"
+      yes_label="$(gettext 'Yes, replace existing outputs')"
+      ;;
+    mixed|*)
+      warning="$(gettext 'Overwrite original photographs or existing output files?')"
+      warning+="$(printf '\n\n%s' "$(gettext 'Existing files may be replaced without backup. This cannot be undone by KIM6.')")"
+      ;;
   esac
+  if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+    warning+="$(printf '\n%s %s' "$(gettext 'Selected files:')" "$count")"
+  fi
+
+  if kdialog --title "$title" \
+      --yes-label "$yes_label" \
+      --no-label "$(gettext 'Cancel')" \
+      --warningyesno "$warning"; then
+    printf '%s\n' overwrite
+  else
+    printf '%s\n' cancel
+  fi
+}
+
+# Explicit authorization for actions that replace selected originals.
+confirm_inplace_overwrite() {
+  local action="$1" count="$2" choice warning
+  [[ "$count" =~ ^[1-9][0-9]*$ ]] || return 1
+
+  if [ "$(policy_mode)" = create ]; then
+    kdialog --title "$(gettext 'Kim')" --error \
+      "$(gettext 'This action modifies original files. KIM_POLICY=create does not permit it; use KIM_POLICY=prompt to review the operation.')" 2>/dev/null || true
+    return 1
+  fi
+
+  choice="$(kdialog --title "$(gettext 'Kim')" --radiolist \
+    "$(gettext 'This action replaces selected original photographs, not copies.')$(printf '\n%s %s\n%s %s' "$(gettext 'Action:')" "$action" "$(gettext 'Selected files:')" "$count")" \
+    cancel "$(gettext 'Keep originals unchanged (recommended)')" on \
+    review "$(gettext 'Review original-file overwrite...')" off)" || return 1
+
+  [ "$choice" = review ] || return 1
+
+  warning="$(gettext 'Overwrite the selected original photographs?')"
+  warning+="$(printf '\n\n%s %s\n%s %s\n\n%s' \
+    "$(gettext 'Action:')" "$action" \
+    "$(gettext 'Selected files:')" "$count" \
+    "$(gettext 'Original files will be replaced without backup. KIM6 cannot undo this operation.')")"
+
+  kdialog --title "$(gettext 'Kim')" --warningyesno "$warning" \
+    --yes-label "$(gettext 'Yes, overwrite selected originals')" \
+    --no-label "$(gettext 'Cancel')"
 }
 
 # Split a path into dir/base/stem/ext.
@@ -543,7 +605,7 @@ image_animation_packet_durations() {
 
 image_format_carries_icc() {
   case "$(image_format_class "$1")" in
-    JPEG|PNG|TIFF|WEBP|AVIF|HEIC|HEIF|JP2|JXL|EXR|HDR) return 0 ;;
+    JPEG|PNG|TIFF|GIF|WEBP|AVIF|HEIC|HEIF|JP2|JXL|EXR|HDR) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -1237,7 +1299,7 @@ action_album() {
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new PDF?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new PDF?')" "${#files[@]}" output)"
   [ "$mode" != cancel ] || return 1
   outpdf="$(kdialog --getsavefilename "$dir" "album.pdf")" || return 1
   [ -n "$outpdf" ] || return 1
@@ -1346,7 +1408,7 @@ action_compress() {
   local mode
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')")"
+    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
 
   if [ "$mode" = "cancel" ]; then
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
@@ -1635,7 +1697,7 @@ action_convert() {
   local mode
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')")"
+    "$(gettext 'Do you want to create new files?')" "${#files[@]}" mixed)"
 
   if [ "$mode" = "cancel" ]; then
     return 1
@@ -1655,14 +1717,20 @@ action_convert() {
       } < <(split_path "$i")
       dir="$(cd -P -- "$dir" && pwd)" || return 1
       outfile="$dir/${stem}.${FORMAT}"
+      if [ -n "$ext" ] && [ "${ext,,}" = "$FORMAT" ]; then
+        outfile="$dir/$base"
+      fi
       if [[ -n "${_convert_seen["$outfile"]+x}" ]]; then
         kdialog --title "$(gettext 'Kim')" --error \
           "$(gettext 'Convert aborted. Two files would write the same destination:')\n\n$outfile"
         return 1
       fi
       _convert_seen["$outfile"]="$i"
-      # Existing same-format overwrite is an intentional no-op.
-      if [ -n "$ext" ] && [[ "${ext,,}" == "${FORMAT,,}" ]]; then
+      # An unchanged extension must refer to the selected source itself.
+      # Do not let a symlink or hard link bypass publication safeguards.
+      if [ -n "$ext" ] && [ "${ext,,}" = "$FORMAT" ]; then
+        [ ! -L "$outfile" ] && [ -f "$outfile" ] &&
+          [ "$(stat -c '%h' -- "$outfile")" = 1 ] || return 1
         continue
       fi
       for selected in "${files[@]}"; do
@@ -1715,6 +1783,9 @@ action_convert() {
       break
     fi
     OUTFILE="$dir/${stem}.${FORMAT}"
+    if [ "$mode" = overwrite ] && [ -n "$ext" ] && [ "${ext,,}" = "$FORMAT" ]; then
+      OUTFILE="$dir/$base"
+    fi
 
     rc=0
     input_is_apng=false
@@ -1785,7 +1856,9 @@ action_convert() {
     # A same-extension overwrite with no options is an intentional no-op.
     # Return before applying encoder safety restrictions: no re-encoding occurs.
     if [ "$mode" = overwrite ] && [ -n "$ext" ] &&
-       [ "${ext,,}" = "$FORMAT" ] && [ -z "$jpeg_scan" ] && [ "$jpeg_optimize" != true ]; then
+       [ "${ext,,}" = "$FORMAT" ] && [ -z "$jpeg_scan" ] &&
+       [ "$jpeg_optimize" != true ] && [ "$bmp5" != true ] &&
+       [ "$(image_format_class "$input_format")" = "$(image_format_class "$FORMAT")" ]; then
       report_ok
       progress_value "$dbusRef" "$counter"
       continue
@@ -1838,23 +1911,6 @@ action_convert() {
     # Even a single-frame APNG has a looping/control contract. Same-format
     # re-encoding must validate the control chunks after creating the stage.
     # An animated WebP with a one-frame ANMF sequence is handled similarly.
-
-    # If user "converts" to the same extension, do not try to write input to itself.
-    # Create mode will create a copy with suffix, overwrite mode treats as no-op success.
-    if [ -n "$ext" ] && [[ "${ext,,}" == "${FORMAT,,}" ]]; then
-      if [ "$mode" = "overwrite" ] && [ -z "$jpeg_scan" ] && [ "$jpeg_optimize" != true ]; then
-        report_ok
-        progress_value "$dbusRef" "$counter"
-        continue
-      fi
-      if [ "$mode" = "create" ]; then
-        n=1
-        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-          OUTFILE="$dir/${stem}_${n}.${FORMAT}"
-          n=$((n + 1))
-        done
-      fi
-    fi
 
     if [ "$mode" = "create" ]; then
       n=1
@@ -2540,7 +2596,7 @@ action_contactsheet() {
     requested="$(kdialog --getsavefilename "${files[0]%/*}" 'contact-sheet.pdf')" || return 1
     [ -n "$requested" ] || return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Create a new contact-sheet PDF?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Create a new contact-sheet PDF?')" "${#files[@]}" output)"
   [ "$mode" != cancel ] || return 1
   prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
@@ -2701,7 +2757,7 @@ action_print() {
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new print PDF?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new print PDF?')" "${#files[@]}" output)"
   [ "$mode" != cancel ] || return 1
   outpdf="$(kdialog --getsavefilename "$dir" "print.pdf")" || return 1
   [ -n "$outpdf" ] || return 1
@@ -2769,7 +2825,7 @@ action_tiffjoin() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"
     return 1
   }
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new joined TIFF?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new joined TIFF?')" "${#files[@]}" output)"
   [ "$mode" != cancel ] || return 1
   if [ -z "$requested" ]; then
     requested="$(kdialog --getsavefilename "$dir" "my_images.tiff")" || return 1
@@ -2891,7 +2947,7 @@ action_animate() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"
     return 1
   }
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new GIF animation?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new GIF animation?')" "${#files[@]}" output)"
   [ "$mode" != cancel ] || return 1
   if [ -z "$requested" ]; then
     requested="$(kdialog --getsavefilename "$dir" "my_animation.gif")" || return 1
@@ -3042,7 +3098,7 @@ action_rename() {
     progress_error "$(gettext 'ExifTool is required for EXIF-date renaming.')"
     return 1
   fi
-  action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"
+  action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
   [ "$action_mode" != cancel ] || return 1
   if [ -z "$output_dir" ] && { [ "$interactive" = true ] || [ "$mode" = sequential ]; }; then
     destination_choice="$(kdialog --radiolist "$(gettext 'Rename destination:')" \
@@ -3367,7 +3423,7 @@ action_resize() {
   local mode
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')")"
+    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
 
   [ "$mode" = "cancel" ] && return 1
 
@@ -3871,6 +3927,18 @@ action_transform_in_place() {
   # items without performing a second in-place modification.
   collect_valid_files_with_repeats files "$@" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
+
+  local operation_label
+  case "$operation" in
+    -rotate) operation_label="$(gettext 'Rotate')" ;;
+    -auto-orient) operation_label="$(gettext 'Auto-orient')" ;;
+    -flip) operation_label="$(gettext 'Flip')" ;;
+    -flop) operation_label="$(gettext 'Flop')" ;;
+    *) return 1 ;;
+  esac
+
+  confirm_inplace_overwrite "$operation_label" "${#files[@]}" || return 1
+
   report_init
   local ref i tmp rc interrupted counter=0 source_info actual expected frame format count produced
   local dimensions actual_dimensions identity source_icc actual_icc read_hint fixed_dimensions swap
@@ -4162,7 +4230,7 @@ action_stripmeta() {
   local mode
   mode="$(choose_output_mode \
     "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')")"
+    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
   [ "$mode" != cancel ] || return 1
 
   report_init
@@ -4442,7 +4510,7 @@ action_stripmeta_selective() {
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values and AIPromptInformation/AIPromptWriterName; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
   fi
   METADATA_INTERRUPTED=false
-  publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"
+  publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
   [ "$publication_mode" != cancel ] || return 1
   report_init
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
@@ -4580,7 +4648,7 @@ action_copyright() {
   [ -n "$creator$notice$rights" ] || die "copyright: select at least one nonempty field"
   [ -z "$year" ] || [[ "$year" =~ ^[0-9]{4}$ ]] || die "copyright: year must be four digits"
   local policy counter=0 source ref target capture_year expected_value option rc
-  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"; [ "$policy" != cancel ] || return 1
+  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
@@ -4680,7 +4748,7 @@ action_timeshift() {
       return 1
     fi
   fi
-  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"; [ "$policy" != cancel ] || return 1
+  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
@@ -4806,7 +4874,7 @@ action_datesync() {
   local stamp epoch fraction atime_before mtime_before current_date current_subsec wanted_date wanted_subsec
   local seconds fraction_field name key value offset_original offset_create offset_modify
   local create_date modify_date create_subsec modify_subsec
-  local -a files=() args=() expected=() atime_sources=() atime_values=()
+  local -a files=() args=() expected=() atime_sources=() atime_values=() original_identities=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --direction|--fields)
@@ -4835,6 +4903,12 @@ action_datesync() {
     return 1
   }
   [ "${#files[@]}" -gt 0 ] || return 0
+
+  # Bind the selected paths to their original filesystem objects.
+  for source in "${files[@]}"; do
+    original_identities+=("$(stat -c '%d:%i' -- "$source")") || return 1
+  done
+
   command -v exiftool >/dev/null 2>&1 || {
     progress_error "$(gettext 'ExifTool is required for date synchronization.')"
     return 1
@@ -4895,12 +4969,20 @@ action_datesync() {
   if [ "$direction" = file-to-exif ]; then
     require_action_tools datesync magick identify || return 1
   fi
-  policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')")"
+  policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Synchronizing photo dates ...')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
+
+    if [ -L "$source" ] || [ ! -f "$source" ] ||
+       [ "$(stat -c '%h:%d:%i' -- "$source" 2>/dev/null)" != "1:${original_identities[$((counter-1))]}" ]; then
+      report_fail "$source — $(gettext 'selected original changed before processing')"
+      progress_value "$ref" "$counter"
+      continue
+    fi
+
     atime_sources+=("$source")
     atime_values+=("$(stat -c '%x' -- "$source" 2>/dev/null)")
     if ! progress_begin_item "$ref" "$(gettext 'Kim - Synchronizing date: ')${source##*/}" || progress_cancelled "$ref"; then
@@ -4940,6 +5022,13 @@ action_datesync() {
         fi
       else
         if progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; report_fail "$source"; break; fi
+        if [ -L "$source" ] || [ ! -f "$source" ] ||
+           [ "$(stat -c '%h:%d:%i' -- "$source" 2>/dev/null)" != "1:${original_identities[$((counter-1))]}" ]; then
+          report_fail "$source — $(gettext 'selected original changed before timestamp update')"
+          progress_value "$ref" "$counter"
+          continue
+        fi
+
         if ! touch -m -d "$epoch" -- "$source"; then
           touch -m -d "$mtime_before" -- "$source" >/dev/null 2>&1 || true
           touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1 || true
@@ -4993,13 +5082,23 @@ action_datesync() {
     fi
     progress_value "$ref" "$counter" || { METADATA_INTERRUPTED=true; break; }
   done
+  # Create mode must not explicitly write metadata to selected originals.
+  # Never restore access time through a newly introduced link.
   local atime_index current_atime
-  for ((atime_index=0; atime_index<${#atime_sources[@]}; atime_index++)); do
-    current_atime="$(stat -c '%x' -- "${atime_sources[$atime_index]}" 2>/dev/null)" || continue
-    if [ "$current_atime" != "${atime_values[$atime_index]}" ]; then
-      touch -a -d "${atime_values[$atime_index]}" -- "${atime_sources[$atime_index]}" 2>/dev/null || true
-    fi
-  done
+
+  if [ "$policy" = overwrite ]; then
+    for ((atime_index=0; atime_index<${#atime_sources[@]}; atime_index++)); do
+      [ ! -L "${atime_sources[$atime_index]}" ] &&
+      [ -f "${atime_sources[$atime_index]}" ] &&
+      [ "$(stat -c '%h' -- "${atime_sources[$atime_index]}" 2>/dev/null)" = 1 ] || continue
+
+      current_atime="$(stat -c '%x' -- "${atime_sources[$atime_index]}" 2>/dev/null)" || continue
+
+      if [ "$current_atime" != "${atime_values[$atime_index]}" ]; then
+        touch -a -d "${atime_values[$atime_index]}" -- "${atime_sources[$atime_index]}" 2>/dev/null || true
+      fi
+    done
+  fi
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
   [ "$REPORT_FAIL" -eq 0 ]
@@ -5319,7 +5418,8 @@ action_webexport() {
     done <<< "$output_records"
     [ "$actual_frames" -eq "$source_frames" ] || rc=1
     if [ "$rc" -eq 0 ] && image_format_carries_icc "$coder" && \
-       { [ "$color_mode" = srgb ] || [ "$has_icc" = true ]; }; then
+       { [ "$has_icc" = true ] ||
+         { [ "$color_mode" = srgb ] && [ "$(image_format_class "$coder")" != GIF ]; }; }; then
       output_profiles="$(identify -format '%[profiles]\n' -- "$OUTTMP" 2>/dev/null)" || rc=1
       [[ "${output_profiles,,}" == *icc* ]] || rc=1
       output_profile_name="$(identify -format '%[profile:icc]' -- "$OUTTMP" 2>/dev/null)" || rc=1
@@ -5414,7 +5514,7 @@ collage_render_layout() (
     requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
   fi
   [ -n "$requested" ] || return 1
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')")" || return 1
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')" "${#files[@]}" output)" || return 1
   case "$mode" in create|overwrite) ;; *) return 1 ;; esac
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid or source-aliasing destination.')"
@@ -5741,7 +5841,7 @@ action_pelemele() {
     requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
   fi
   [ -n "$requested" ] || return 1
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')")" || return 1
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')" "${#files[@]}" output)" || return 1
   case "$mode" in create|overwrite) ;; *) return 1 ;; esac
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: output destination is invalid or aliases a selected image.')"
@@ -6209,7 +6309,7 @@ action_video() {
   if ! collect_publication_inputs files "${raw_files[@]}"; then
     progress_error "$(gettext 'Video selection is empty or contains an unsafe, aliased, linked or invalid source.')"; return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'Kim — Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')")"
+  mode="$(choose_output_mode "$(gettext 'Kim — Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
   [ "$mode" != cancel ] || return 1
   report_init
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Initialising video transcode…')")" || return 1
@@ -7615,11 +7715,12 @@ Environment:
   KIM_POLICY=create
       Always create new files (no overwrites).
 
-  KIM_POLICY=overwrite
-      Overwrite originals (use with care).
+  KIM_POLICY=prompt
+      Ask how to save results, defaulting to Create new.
+      Overwrite requires a separate confirmation.
 
-  If KIM_POLICY is unset or any other value:
-      Prompt for Create vs overwrite (default).
+  If KIM_POLICY is unset or has another value:
+      Use the safe prompt. Legacy overwrite is not automatic.
 
   KIM_WEB_QUALITY=1..100
       Default value for the web-export quality prompt.

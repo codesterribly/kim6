@@ -10,7 +10,7 @@ class CancellationTests(unittest.TestCase):
         self.addCleanup(w.close)
         a = w.jpeg('input/first 雪.jpg')
         b = w.jpeg('input/second space.jpg')
-        w.env['KIM_POLICY'] = mode
+        w.set_policy_for_test(mode)
         if action == 'convert':
             destination = w.png('input/first 雪.png')
             payload = w.png('.control/produced.png').read_bytes()

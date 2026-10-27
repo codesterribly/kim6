@@ -176,7 +176,7 @@ class ResizeTests(unittest.TestCase):
     def test_cancellation_prevents_publication_and_next_batch_item(self):
         second = self.workspace.png('input/second.png')
         before = {p: self.workspace.observe(p) for p in (self.source, second)}
-        self.workspace.env['KIM_POLICY'] = 'overwrite'
+        self.workspace.approve_overwrite()
         self.workspace.respond('magick', stdout='3 2\n', output_base64=base64.b64encode(self.source.read_bytes()).decode(), cancel=True)
         result = self.dispatch('3x2', sources=[self.source, second])
         for p, state in before.items():
@@ -187,7 +187,7 @@ class ResizeTests(unittest.TestCase):
         self.assert_clean()
 
     def test_real_overwrite_has_fresh_mtime_and_keeps_mode(self):
-        self.workspace.env['KIM_POLICY'] = 'overwrite'
+        self.workspace.approve_overwrite()
         self.workspace.use_real_resize()
         self.workspace.use_real_mv()
         self.source.chmod(0o640)
@@ -272,7 +272,7 @@ class ResizeTests(unittest.TestCase):
         self.assert_clean()
 
     def test_cancel_during_metadata_preparation_prevents_publication(self):
-        self.workspace.env['KIM_POLICY'] = 'overwrite'
+        self.workspace.approve_overwrite()
         self.workspace.use_real_resize()
         self.workspace.respond('chmod', cancel=True)
         before = self.workspace.observe(self.source)
@@ -390,7 +390,7 @@ for _geometry, _dimensions in (
 def failure_case(mode, scenario):
     def test(self):
         w = self.workspace
-        w.env['KIM_POLICY'] = mode
+        w.set_policy_for_test(mode)
         output = self.source if mode == 'overwrite' else self.source.with_name('photo 雪_resized.png')
         before = {p: w.observe(p) for p in (self.source, output)}
         response = {'output_base64': base64.b64encode(self.source.read_bytes()).decode()}
@@ -444,7 +444,7 @@ def invalid_geometry_case(geometry):
         self.workspace.env['SHELLOPTS'] = 'xtrace'
         for mode in ('create', 'overwrite'):
             with self.subTest(mode=mode):
-                self.workspace.env['KIM_POLICY'] = mode
+                self.workspace.set_policy_for_test(mode)
                 result = self.dispatch(geometry)
                 self.assertEqual(self.source.read_bytes(), source_bytes)
                 for path, state in before.items():

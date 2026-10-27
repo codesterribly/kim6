@@ -233,7 +233,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertEqual(0, full_decode.returncode, full_decode.stderr)
 
     def test_gif_once_omits_loop_extension_and_overwrite_policy_still_creates_derivative(self):
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         before = self.w.observe(self.source)
         result = self.dispatch("videogif", "--start", "00:00:00", "--duration", "0.5",
                                "--fps", "12", "--width", "480", "--loop", "once")

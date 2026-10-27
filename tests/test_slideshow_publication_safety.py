@@ -16,7 +16,7 @@ class SlideshowPublicationSafetyTests(unittest.TestCase):
 
         self.w = Workspace()
         self.addCleanup(self.w.close)
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         self.w.use_real_slideshow_tools()
 
         self.source = self.w.png("input/photo.png")

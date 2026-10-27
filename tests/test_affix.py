@@ -93,7 +93,7 @@ def naming_case(action, env, config, position, scenario="ordinary"):
             else:
                 names.add("exports/" + expected[:-4] + "_1.jpg")
         elif scenario == "overwrite":
-            self.workspace.env["KIM_POLICY"] = "overwrite"
+            self.workspace.approve_overwrite()
             names = {"input/photo.part 雪.jpg"}
         payload = b"processed image bytes" if scenario == "overwrite" else source.read_bytes()
         if action in ("compress", "resize") and scenario == "overwrite":

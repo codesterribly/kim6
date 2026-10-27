@@ -16,7 +16,7 @@ class MetadataActionTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.source = self.w.jpeg('input/photo 雪.jpg')
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.use_real_metadata_tools()
         self.w.use_real_mv()
 

@@ -17,7 +17,7 @@ class VideoUtilityPublicationSafetyTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.w.use_real_video_tools()
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
 
         self.source = self.w.path("input/clip.mp4")
         self.source.parent.mkdir(parents=True, exist_ok=True)

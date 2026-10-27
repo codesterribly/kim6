@@ -13,7 +13,7 @@ class SlideshowTests(unittest.TestCase):
             self.skipTest('FFmpeg, ffprobe and ImageMagick required')
         self.w = Workspace()
         self.addCleanup(self.w.close)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.use_real_slideshow_tools()
         self.images = [self.w.png('input/slide 2 [test].png'), self.w.png("input/slide 10 O'Neil 雪.png")]
         subprocess.run([shutil.which('magick'), '-size', '8x8', 'xc:red', str(self.images[0])], check=True)
@@ -67,7 +67,7 @@ class SlideshowTests(unittest.TestCase):
                                             str(output), '-f', 'null', '-'], capture_output=True).returncode)
 
     def test_single_image_still_produces_one_derived_slideshow(self):
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         before = self.images[0].read_bytes()
         result = self.w.dispatch('slideshow', '--seconds-per-photo', '1', '--size', '160x120',
                                  '--fps', '1', '--', str(self.images[0]))

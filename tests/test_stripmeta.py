@@ -16,7 +16,7 @@ class StripmetaTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.source = self.w.jpeg('input/photo 雪.jpg')
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
 
     def dispatch(self, *sources):
         return self.w.dispatch('stripmeta', *(sources or (self.source,)))
@@ -275,7 +275,7 @@ class StripmetaTests(unittest.TestCase):
                 '-ICC_Profile<=' + str(profile), str(encoded)], check=True, capture_output=True)
             images.append(encoded.read_bytes())
         for mode in ('create', 'overwrite'):
-            self.w.env['KIM_POLICY'] = mode
+            self.w.set_policy_for_test(mode)
             for name, original, output in (('lost', images[0], bare),
                     ('changed', images[0], images[1]), ('added', bare, images[0])):
                 with self.subTest(mode=mode, change=name):
@@ -298,7 +298,7 @@ class StripmetaTests(unittest.TestCase):
 
 def failure_case(mode, scenario):
     def test(self):
-        self.w.env['KIM_POLICY'] = mode
+        self.w.set_policy_for_test(mode)
         existing = self.source.with_name('photo 雪_stripped.jpg')
         existing.write_bytes(b'preexisting destination')
         before = {p: self.w.observe(p) for p in (self.source, existing)}

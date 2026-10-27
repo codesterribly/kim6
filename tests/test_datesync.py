@@ -15,7 +15,7 @@ class DateSyncTests(unittest.TestCase):
         self.addCleanup(self.w.close)
         self.w.env['TZ'] = 'America/New_York'
         self.source = self.w.jpeg('input/photo 雪.jpg')
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.use_real_metadata_tools()
         self.w.use_real_mv()
         subprocess.run([shutil.which('exiftool'), '-overwrite_original',

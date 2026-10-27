@@ -49,7 +49,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.ppm("input/photo 雪.ppm")
         destination = self.workspace.jpeg("input/photo 雪.jpg")
         before = self.protect(source, destination)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", status=23, stderr="injected failure before output\n")
         result = self.workspace.dispatch("convert", "jpg", source)
         self.assert_event(result, "magick", 23)
@@ -61,7 +61,7 @@ class PreservationTests(unittest.TestCase):
         destination = self.workspace.path("input/photo.jpg")
         destination.symlink_to("../retained.jpg")
         before = self.protect(source, referent, destination)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", status=23)
         result = self.workspace.dispatch("convert", "jpg", source)
         self.assert_event(result, "magick", 23)
@@ -71,7 +71,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/source.jpg")
         destination = self.workspace.jpeg("out/existing.jpg")
         before = self.protect(source, destination)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.sequence("mktemp", [{"passthrough": True}, {"status": 73}])
         result = self.workspace.dispatch("resize", "3x2", destination.parent, source)
         self.assert_event(result, "mktemp", 73)
@@ -81,7 +81,7 @@ class PreservationTests(unittest.TestCase):
     def test_failed_publication_directory_check_preserves_source(self):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mkdir", status=73)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
@@ -92,7 +92,7 @@ class PreservationTests(unittest.TestCase):
     def test_KNOWN_BUG_failed_move_does_not_fall_back_to_overwriting_source(self):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mv", status=73)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
@@ -106,7 +106,7 @@ class PreservationTests(unittest.TestCase):
     def test_KNOWN_BUG_failed_copy_fallback_cannot_truncate_source(self):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", source.read_bytes(), stdout="3 2\n")
         self.workspace.respond("mv", status=73)
         self.producer("cp", b"truncated during fallback", status=74)
@@ -134,7 +134,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.jpeg("input/photo.jpg")
         destination = self.workspace.jpeg("out/existing.jpg")
         before = self.protect(source, destination)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.respond_to("kdialog", "--inputbox", [
             {"stdout": "3x2\n"}, {"stdout": "75\n"},
         ])
@@ -147,7 +147,7 @@ class PreservationTests(unittest.TestCase):
         source = self.workspace.ppm("input/source.ppm")
         destination = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source, destination)
-        self.workspace.respond_to("kdialog", "--yesnocancel", {"status": 2})
+        self.workspace.respond_to("kdialog", "--radiolist", {"status": 2})
         result = self.workspace.dispatch("convert", "jpg", source)
         self.assert_event(result, "kdialog", 2)
         self.assertFalse([call for call in result.calls if call["tool"] == "magick"])
@@ -156,7 +156,7 @@ class PreservationTests(unittest.TestCase):
     def test_KNOWN_BUG_cancel_after_producer_output_prevents_source_replacement(self):
         source = self.workspace.jpeg("input/source.jpg")
         before = self.protect(source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.producer("magick", source.read_bytes(), stdout="3 2\n", cancel=True)
         result = self.workspace.dispatch("resize", "3x2", source.parent, source)
         event = next(event for event in self.assert_event(result, "magick", 0)
@@ -180,7 +180,7 @@ def failed_producer_case(action, payload, status):
                          "compress": ("compress", "75", destination.parent, source),
                          "stripmeta": ("stripmeta", source)}[action]
         before = self.protect(source, destination)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         tool = "exiftool" if action == "stripmeta" else "magick"
         self.producer(tool, payload, status=status)
         result = self.workspace.dispatch(*arguments)

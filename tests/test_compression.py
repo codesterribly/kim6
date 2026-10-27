@@ -98,7 +98,7 @@ class CompressionTests(unittest.TestCase):
 
     def test_cancel_after_production_preserves_original(self):
         before = self.workspace.observe(self.source)
-        self.workspace.env['KIM_POLICY'] = 'overwrite'
+        self.workspace.approve_overwrite()
         self.workspace.respond('magick', output_base64=base64.b64encode(self.source.read_bytes()).decode(), cancel=True)
         result = self.dispatch()
         self.assertEqual(self.workspace.observe(self.source), before)
@@ -119,7 +119,7 @@ class CompressionTests(unittest.TestCase):
         self.assert_clean()
 
     def test_real_overwrite_has_new_mtime_and_keeps_mode(self):
-        self.workspace.env['KIM_POLICY'] = 'overwrite'
+        self.workspace.approve_overwrite()
         self.source.chmod(0o640)
         os.utime(self.source, (1_600_000_000, 1_600_000_000))
         before = self.workspace.observe(self.source)
@@ -217,7 +217,7 @@ class CompressionTests(unittest.TestCase):
 
     def test_cancel_before_prompt_prevents_production(self):
         self.workspace.env.pop('KIM_POLICY')
-        self.workspace.respond_to('kdialog', '--yesnocancel', {'status': 2})
+        self.workspace.respond_to('kdialog', '--radiolist', {'status': 2})
         result = self.dispatch()
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))
@@ -258,7 +258,7 @@ for _quality, _accepted in (('1', True), ('100', True), ('0', False), ('101', Fa
 def failure_case(mode, scenario):
     def test(self):
         w = self.workspace
-        w.env['KIM_POLICY'] = mode
+        w.set_policy_for_test(mode)
         output = self.source if mode == 'overwrite' else self.source.with_name('photo 雪_compressed.jpg')
         sentinel = w.jpeg('retained.jpg')
         if scenario == 'source_symlink':

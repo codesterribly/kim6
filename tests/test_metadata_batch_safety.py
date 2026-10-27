@@ -18,7 +18,7 @@ class MetadataBatchSafetyTests(unittest.TestCase):
 
         self.w.use_real_metadata_tools()
         self.w.use_real_mv()
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
 
         self.good = self.w.jpeg("input/first.jpg")
 

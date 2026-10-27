@@ -590,7 +590,7 @@ class MenuArgumentExecutionTests(unittest.TestCase):
         w = Workspace()
         self.addCleanup(w.close)
         source = w.ppm("selected/input image.ppm")
-        w.env["KIM_POLICY"] = "overwrite"
+        w.approve_overwrite()
         w.use_real_transform()
         rotated = w.dispatch("rotate", "--angle", "90", "--", source)
         self.assertEqual(0, rotated.returncode, rotated.stderr)

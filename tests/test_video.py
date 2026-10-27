@@ -160,7 +160,7 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(self.w.observe(mkv), second_before)
 
     def test_real_authorized_overwrite_replaces_only_after_validated_encoding(self):
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         before = self.w.observe(self.source)
         result = self.transcode(self.source, codec="libx265", container="orig")
         self.assertEqual(result.returncode, 0, result.stderr)

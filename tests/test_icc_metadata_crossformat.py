@@ -94,7 +94,7 @@ class ICCMetadataCrossFormatTests(unittest.TestCase):
             check=True, capture_output=True, timeout=15,
         ).stdout
         before = self.w.observe(source)
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         self.w.use_real_metadata_tools()
         self.w.use_real_mv()
         result = self.w.dispatch("stripmeta", "--mode", "gps", "--", source)
@@ -112,7 +112,7 @@ class ICCMetadataCrossFormatTests(unittest.TestCase):
         self.assert_no_stages()
 
     def test_png_ai_removal_preserves_non_ai_rights_and_icc(self):
-        self.w.env["KIM_POLICY"] = "overwrite"
+        self.w.approve_overwrite()
         self.w.use_real_metadata_tools()
         self.w.use_real_mv()
         for source_kind in ("negativeFilm", "trainedAlgorithmicMedia"):

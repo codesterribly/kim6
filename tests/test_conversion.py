@@ -67,7 +67,7 @@ class ConversionTests(unittest.TestCase):
         target = self.source.with_suffix(".png")
         os.link(selected, target)
         before = {p: self.workspace.observe(p) for p in (self.source, selected, target)}
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.use_real_conversion()
         result = self.workspace.dispatch("convert", "png", self.source, selected)
         self.assertNotEqual(result.returncode, 0)
@@ -90,7 +90,7 @@ class ConversionTests(unittest.TestCase):
         os.utime(target, (1_600_000_000, 1_600_000_000))
         old = self.workspace.observe(target)
         source_before = self.workspace.observe(self.source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.use_real_conversion()
         self.workspace.use_real_mv()
         result = self.workspace.dispatch("convert", "png", self.source)
@@ -121,7 +121,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_duplicate_overwrite_mappings_rejected_before_processing(self):
         second = self.workspace.ppm("input/photo 雪.pnm")
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         result = self.workspace.dispatch("convert", "png", self.source, second)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(c["tool"] == "magick" for c in result.calls))
@@ -130,7 +130,7 @@ class ConversionTests(unittest.TestCase):
     def test_symlinked_parent_mapping_duplicates_rejected(self):
         alias = self.workspace.path("alias")
         alias.symlink_to(self.source.parent, target_is_directory=True)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         result = self.workspace.dispatch("convert", "png", self.source, alias / self.source.name)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(c["tool"] == "magick" for c in result.calls))
@@ -147,7 +147,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_same_format_overwrite_is_unchanged_noop(self):
         before = self.workspace.observe(self.source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         result = self.workspace.dispatch("convert", "PPM", self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any(c["tool"] == "magick" for c in result.calls))
@@ -165,7 +165,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_same_format_overwrite_reencodes_when_a_jpeg_scan_option_is_requested(self):
         source = self.workspace.jpeg("input/same.jpg")
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.use_real_conversion()
         self.workspace.use_real_mv()
         before = self.workspace.observe(source)
@@ -522,7 +522,7 @@ class ConversionTests(unittest.TestCase):
     def test_cancellation_during_metadata_preparation_preserves_destination(self):
         target = self.workspace.png("input/photo 雪.png")
         before = self.workspace.observe(target)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         self.workspace.use_real_conversion()
         self.workspace.respond("chmod", cancel=True)
         result = self.workspace.dispatch("convert", "png", self.source)
@@ -541,7 +541,7 @@ class ConversionTests(unittest.TestCase):
     def test_newline_mapping_is_rejected_before_processing(self):
         source = self.workspace.ppm("input/ambiguous\nname.ppm")
         before = self.workspace.observe(source)
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
         result = self.workspace.dispatch("convert", "png", source)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(c["tool"] == "magick" for c in result.calls))
@@ -552,7 +552,7 @@ class ConversionTests(unittest.TestCase):
 def failure_case(mode, failure):
     def test(self):
         w = self.workspace
-        w.env["KIM_POLICY"] = mode
+        w.set_policy_for_test(mode)
         target = self.source.with_suffix(".png")
         retained = w.png("retained.png")
         if mode == "overwrite":

@@ -17,7 +17,7 @@ class PublicationTests(unittest.TestCase):
         self.addCleanup(self.workspace.close)
         self.source = self.workspace.ppm("input/photo.ppm")
         self.destination = self.workspace.jpeg("input/photo.jpg")
-        self.workspace.env["KIM_POLICY"] = "overwrite"
+        self.workspace.approve_overwrite()
 
     def produce(self, payload=None, status=0, **options):
         payload = self.destination.read_bytes() if payload is None else payload

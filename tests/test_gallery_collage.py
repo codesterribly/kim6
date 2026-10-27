@@ -79,7 +79,7 @@ class GalleryCollageTests(unittest.TestCase):
         target = self.w.path('out/previous.png')
         target.write_bytes(b'previous content')
         old = self.w.observe(target)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond('magick', status=1)
         result = self.w.dispatch('pelemele', '--layout', 'grid', '--canvas', '400x300',
                                  '--no-shadow', '--output', target, '--', self.source)
@@ -251,7 +251,7 @@ class GalleryCollageTests(unittest.TestCase):
         target = self.w.path('out/collage.png')
         target.write_bytes(b'owned destination')
         original = self.w.observe(target)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond('magick', status=0, output_base64=base64.b64encode(b'invalid').decode())
         result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source)
@@ -266,7 +266,7 @@ class GalleryCollageTests(unittest.TestCase):
         target = self.w.path('out/collage.png')
         target.write_bytes(b'authorized existing output')
         original = self.w.observe(target)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond('magick', passthrough=True, interrupt='gone')
         result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source, second)
@@ -281,7 +281,7 @@ class GalleryCollageTests(unittest.TestCase):
         target = self.w.path('out/collage.png')
         target.write_bytes(b'authorized prior collage')
         before = self.w.observe(target)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         self.w.respond_to('mv', str(target), {'status': 73, 'stderr': 'injected publication failure'})
         result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source)
@@ -377,7 +377,7 @@ class GalleryCollageTests(unittest.TestCase):
         selected_png = self.w.path('source/selected.png')
         selected_png.write_bytes(self.source.read_bytes())
         before = self.w.observe(selected_png)
-        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.approve_overwrite()
         alias = self.w.dispatch('pelemele', '--size', '20x20', '--tile', '1x1',
                                 '--rotation', '0', '--no-shadow', '--output', selected_png,
                                 '--', selected_png)

@@ -140,6 +140,38 @@ class Workspace:
         self.plan.write_text(json.dumps(plan))
         (self.control / (tool + ".index")).unlink(missing_ok=True)
 
+    def approve_overwrite(self):
+        """Simulate explicit approval of both KDialog stages in tests."""
+        self.env["KIM_POLICY"] = "prompt"
+        self.respond_to(
+            "kdialog", "Create new files (recommended; originals untouched)",
+            {"stdout": "review\n"},
+        )
+        self.respond_to(
+            "kdialog", "--warningyesno",
+            {"status": 0},
+        )
+
+    def set_policy_for_test(self, mode):
+        """Handle historical test modes without silent overwrite."""
+        if mode == "overwrite":
+            self.approve_overwrite()
+            return
+
+        self.env["KIM_POLICY"] = mode
+
+        plan = json.loads(self.plan.read_text())
+        routes = plan.get("routes", {}).get("kdialog", {})
+
+        for option, approval in (
+            ("Create new files (recommended; originals untouched)", {"stdout": "review\n"}),
+            ("--warningyesno", {"status": 0}),
+        ):
+            if routes.get(option) == approval:
+                routes.pop(option)
+
+        self.plan.write_text(json.dumps(plan))
+
     def configure(self, key, value):
         """Set a value returned by the isolated kreadconfig6 adapter."""
         plan = json.loads(self.plan.read_text())
