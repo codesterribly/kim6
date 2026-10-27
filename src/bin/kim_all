@@ -3465,6 +3465,14 @@ action_resize() {
       break
     fi
 
+    # ImageMagick can decode a valid APNG as a single still PNG frame.
+    # Refuse resize rather than silently discard animation timing or frames.
+    if image_has_apng_control_chunk "$i"; then
+      report_fail "$i — $(gettext 'Animated PNG resizing is unavailable: the original animation is unchanged.')"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+
     rc=0
     source_info=""
     read_hint=""
@@ -5242,7 +5250,6 @@ action_webexport() {
   local output_records record actual_format actual_width actual_height actual_frames output_profiles
   local expected_format coder srgb_profile colorspace has_icc profile_path
   local output_profile_name
-  local animation_probe animation_codec animation_frames animation_key animation_value
   local source_width source_height orientation expected_dimensions source_dimensions
   local -a input_dimensions=()
   local interrupted=false failures=0 published=false
@@ -5296,22 +5303,13 @@ action_webexport() {
       source_frames=$((source_frames + 1))
     done <<< "$input_info"
     [ "$source_frames" -gt 0 ] || rc=1
-    if [ "$rc" -eq 0 ] && [ "$(image_format_class "$input_format")" = PNG ] && image_has_apng_control_chunk "$i"; then
-      animation_probe="$(ffprobe -v error -select_streams v:0 -count_frames \
-        -show_entries stream=codec_name,nb_read_frames -of default=noprint_wrappers=1 -i "$i" 2>/dev/null)" || rc=1
-      animation_codec=''; animation_frames=''
-      while IFS='=' read -r animation_key animation_value; do
-        case "$animation_key" in codec_name) animation_codec="$animation_value" ;; nb_read_frames) animation_frames="$animation_value" ;; esac
-      done <<< "$animation_probe"
-      if [ "$animation_codec" = apng ] && [[ "$animation_frames" =~ ^[1-9][0-9]*$ ]] &&
-         [ "$animation_frames" -gt "$source_frames" ]; then
-        kdialog --title "$(gettext 'Kim')" --error \
-          "$(gettext 'webexport: this ImageMagick build cannot safely preserve animated PNG frames during export.')\n\n$base"
-        report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
-      fi
-      if [ "$animation_codec" != apng ]; then
-        rc=1
-      fi
+    # Web export is not an animation editor. A decoded APNG may appear to
+    # ImageMagick as one still frame, so never publish a flattened export.
+    if [ "$rc" -eq 0 ] && image_has_apng_control_chunk "$i"; then
+      report_fail "$i — $(gettext 'Animated PNG web export is unavailable: the original animation is unchanged.')"
+      failures=$((failures + 1))
+      progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+      continue
     fi
     has_icc=false
     profile_path="$KIMDIR/web-source.icc"

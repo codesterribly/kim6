@@ -103,7 +103,7 @@
         </div>
         <div class="notice notice-info">
           <span class="notice-symbol" aria-hidden="true">i</span>
-          <p>New to KIM6? Start with <strong>Create new</strong>. A saved <code>KIM_POLICY=overwrite</code> setting can skip the prompt; change it to <code>create</code> before experimenting. Rotation and flips are exceptions: they operate <strong>in place</strong>. <a href="#file-handling">How file handling works</a>.</p>
+          <p>New to KIM6? Choose <strong>Create new files (recommended; originals untouched)</strong>. A saved <code>KIM_POLICY=overwrite</code> value no longer skips the prompt: only <code>create</code> and <code>prompt</code> are supported. Rotation, EXIF auto-orientation, and flips modify originals, so they are refused under <code>create</code> and require separate confirmation under <code>prompt</code>. <a href="#file-handling">How file handling works</a>.</p>
         </div>
       </section>
 
@@ -135,7 +135,7 @@
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-resize" aria-hidden="true">↗</span><span class="task-type">SIZE</span></div>
             <h3>Resize a photo</h3>
-            <p>Fit a photo inside a maximum width and height without cropping its proportions. This preset can enlarge smaller images.</p>
+            <p>Fit a photo inside a maximum width and height without cropping its proportions. This preset can enlarge smaller images; percentage resize supports 1–1000%.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">Compress, resize and web export <span aria-hidden="true">›</span> <strong>Resize (1600x1600 pixels)</strong></div>
             <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_resized.jpg</strong></div>
@@ -143,7 +143,7 @@
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-compress" aria-hidden="true">≋</span><span class="task-type">QUALITY</span></div>
             <h3>Compress a JPEG</h3>
-            <p>Create a JPEG using a chosen quality setting. Lower quality may reduce file size, but can lose detail.</p>
+            <p>Create a JPEG using a chosen quality setting. Lower quality may reduce file size, but can lose detail. Custom compression also offers progressive/baseline scans and Huffman optimization.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">JPEG compression <span aria-hidden="true">›</span> <strong>JPEG quality: 70%</strong></div>
             <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.jpg</strong></div>
@@ -151,7 +151,7 @@
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-convert" aria-hidden="true">⇄</span><span class="task-type">FORMAT</span></div>
             <h3>Convert an image</h3>
-            <p>Convert between supported formats. JPEG is lossy and cannot preserve transparent PNG areas.</p>
+            <p>Convert between supported formats, including optional JPEG XL, JPEG 2000, AVIF and HEIC/HEIF delegates. JPEG is lossy and cannot preserve transparent PNG areas; codec support is checked before publication.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">Convert and transform <span aria-hidden="true">›</span> <strong>Convert to JPEG</strong></div>
             <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.jpg</strong></div>
@@ -173,7 +173,7 @@
         <h2 id="sharing-title">Share without changing the source.</h2>
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
         <div class="feature-pair">
-          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the source, even if the general output policy is set to overwrite.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the selected original. Animated APNG inputs are refused to prevent a still-frame export; ordinary PNG remains supported.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
           <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare resized attachments or attach selected files at full size, depending on the action. Prepared copies remain in a persistent attachment folder because mail applications may read them later.</p><p>Review attachments before sending and clean up prepared copies when you no longer need them.</p></article>
         </div>
       </section>
@@ -191,7 +191,7 @@
           </div>
           <div>
             <h3>Copyright and capture times</h3>
-            <p>Add creator and copyright information, shift recorded capture times, or synchronize embedded timestamps with filesystem modification times.</p>
+            <p>Add creator and copyright information, shift recorded camera times, or synchronize embedded timestamps and filesystem modification times in either direction. A fixed time shift is not a timezone conversion.</p>
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
@@ -210,7 +210,7 @@
           <div><span class="collection-symbol" aria-hidden="true">◉</span><strong>Animated GIF</strong><span>Animation from selected frames.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Photos in natural filename order.</span></div>
         </div>
-        <p class="section-footnote">Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects.</p>
+        <p class="section-footnote">Collages include grid, mosaic, hero, filmstrip and scattered layouts with operation-specific canvas, spacing, background, frame and shadow controls. Galleries include Dark Portfolio; printable PDF contact sheets complement albums and print layouts. Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects.</p>
       </section>
 
       <section id="video" class="content-section" aria-labelledby="video-title">
@@ -232,10 +232,10 @@
         <p class="section-intro">Not every action has the same output policy. These are the distinctions that matter most.</p>
         <div class="policy-grid">
           <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>Where the action offers this choice, the result gets a separate filename and your original remains unchanged.</p></article>
-          <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Some image actions offer replacement after validation. Check the selected destination before agreeing.</p></article>
-          <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Always in place</h3><p>Rotation and flips modify the selected image. Work on a copy if you want to keep its current orientation.</p></article>
+          <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Select <strong>Review overwrite options...</strong>, then confirm the separate warning identifying originals, renamed files, or derived outputs and the selected-file count. Cancel is safe.</p></article>
+          <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Always in place</h3><p>Rotation, EXIF auto-orientation, flip and flop modify selected originals. <code>create</code> refuses these operations; <code>prompt</code> requires explicit confirmation.</p></article>
         </div>
-        <p class="section-footnote">Web exports, prepared email copies, galleries, albums, slideshows, and video-derived outputs do not replace selected source files. KIM6 stages and validates supported outputs before publishing them; see <a href="reference/commandconfig.html">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
+        <p class="section-footnote">Only <code>KIM_POLICY=create</code> and <code>KIM_POLICY=prompt</code> are supported; an old <code>overwrite</code> value always prompts. Create mode numbers colliding output names, while authorized publication validates outputs and checks unsafe symlinks, hardlinks and source aliases. Completed batch outputs survive later failures. Web exports, email copies, galleries, albums, slideshows and video-derived outputs leave selected sources intact. See <a href="reference/commandconfig.html">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
@@ -244,7 +244,7 @@
         <p class="section-intro">Check these common causes first. No need to test a failing action by overwriting a valuable photograph.</p>
         <div class="faq-list">
           <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="reference/INSTALL.html">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
-          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Animated APNG conversion needs FFmpeg; Resize and Web Export deliberately refuse animated APNG to avoid losing frames. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
           <details><summary>An action failed partway through a batch.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Read the final error report, confirm the source is readable and the destination is writable, and check that the requested encoder is available. Successfully completed outputs remain in place. Test uncertain inputs using copies.</p><p><a href="reference/commandconfig.html">Command reference and troubleshooting <span aria-hidden="true">↗</span></a></p></div></details>
           <details><summary>Where are my files, and what if a filename already exists?<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Many Create new actions save a derivative beside the input and add a number when the requested filename is occupied. Other actions prompt for a destination, use a configured output folder, or place email attachments in a persistent directory. Read the action's result dialog for the exact location.</p><p><a href="reference/commandconfig.html">Output policies and naming <span aria-hidden="true">↗</span></a></p></div></details>
         </div>
@@ -257,7 +257,7 @@
         <div class="reference-list">
           <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 107 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 108 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/commandconfig.html"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/FORMATS.html"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/DEVELOPMENT.html"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>

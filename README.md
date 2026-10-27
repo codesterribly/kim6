@@ -10,7 +10,7 @@ KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familia
 
 ## Quick Start
 
-Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose **Create new** to keep the selected originals unchanged. If `KIM_POLICY=overwrite` is configured, switch to `create` before trying these examples.
+Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose **Create new files (recommended; originals untouched)**. `KIM_POLICY=overwrite` is **not** an automatic overwrite setting: legacy and unsupported values now show the safe prompt. Use `KIM_POLICY=create` to choose separate outputs without prompting where supported.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
@@ -30,25 +30,25 @@ See [Command and Configuration Reference](docs/commandconfig.md#configuration-an
 
 ### Resize, compress, and convert images
 
-- **Resize images:** Choose common resolutions, enter custom dimensions, or resize by percentage. Process multiple photographs together.
-- **Compress JPEGs:** Select a JPEG quality level to reduce file sizes for sharing or storage.
+- **Resize images:** Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.
+- **Compress JPEGs:** Select a JPEG quality level, progressive or baseline encoding, and optional Huffman-table optimization. Smaller files are not guaranteed at every setting.
 - **Prepare images for the web:** Resize and optimize photographs, with options for output quality and color profiles.
-- **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 when supported by your system.
+- **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.
 - **Rotate and flip:** Rotate images manually or use their EXIF orientation information.
 
 ### Organize photographs and manage metadata
 
-- **Manage privacy and metadata:** Remove GPS coordinates, AI-related metadata, or all embedded metadata. Choose what to remove while retaining other useful information.
-- **Manage photo dates:** Rename photographs using their EXIF dates, shift capture timestamps to correct camera clock errors, and synchronize EXIF and filesystem timestamps.
+- **Manage privacy and metadata:** Remove recognized GPS coordinates, AI-generation fields, or all supported metadata. GPS-only cleanup is not complete location anonymization; C2PA/Content Credentials removal cannot be guaranteed.
+- **Manage photo dates:** Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.
 - **Update copyright information:** Add or modify copyright metadata across multiple photographs.
 - **Control what gets preserved:** Choose appropriate metadata and output behavior for different operations.
 
 ### Create and share
 
 - **Email photographs:** Send original images or create smaller copies suitable for email attachments.
-- **Build photo galleries:** Generate HTML galleries from selected photographs.
-- **Create collages:** Arrange multiple images into a single composition.
-- **Create PDF albums and print layouts:** Prepare photographs for viewing or printing.
+- **Build photo galleries:** Generate browsable HTML galleries, including the Dark Portfolio presentation.
+- **Create collages:** Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.
+- **Create PDF albums and print layouts:** Prepare photographs for viewing or printing, including printable contact-sheet layouts.
 - **Work with TIFF and GIF:** Combine images into multipage TIFF files or animated GIFs.
 
 ### Video tools
@@ -69,11 +69,13 @@ Available video codecs depend on FFmpeg and the encoders installed on your syste
 
 KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
 
-Most resizing, compression, and conversion actions let you choose whether to create a new file or overwrite an existing one. **Choose Create new to preserve the original** when that option is available. Web exports, email copies, and video utilities create separate output files.
+Most resizing, compression, and conversion actions offer **Create new files (recommended; originals untouched)** or **Review overwrite options...**. Overwrite review requires a separate, explicit confirmation describing what may be replaced and how many files are selected; merely setting an environment variable does not approve it. `KIM_POLICY=create` creates separate files where the action supports copies. `KIM_POLICY=prompt` and an unset or legacy `overwrite` value use the safe prompt.
 
-Some operations, including rotation, flipping, and metadata editing, modify the selected files directly. Rename operations have their own file-handling options.
+Rotation, EXIF auto-orientation, flip, and flop **always modify selected originals** and therefore refuse to run under `KIM_POLICY=create`. Under `prompt` they require explicit confirmation once per batch. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export and email preparation make separate results; video utilities and slideshows also create derivatives. Completed batch results remain available if a later item fails, while staged invalid results are not published.
 
-See [Getting Started](#quick-start) for examples and [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details.
+Create mode numbers occupied output filenames and respects configurable prefix/suffix affix placement (for example, `web_photo.jpg` versus `photo_web.jpg`). Output publication rejects unsafe source aliases and linked destinations where relevant. **Animated APNG is deliberately refused by Resize and Web Export** rather than being flattened to a still image; dedicated APNG conversion remains available when the required tools support it.
+
+See [Getting Started](#quick-start) for examples, [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details, and [Supported Formats](docs/FORMATS.md) for decoder and encoder limits.
 
 ## Installation
 

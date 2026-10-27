@@ -128,8 +128,8 @@ class DocumentationContractTests(unittest.TestCase):
                 self.assertIn(submenu, guide)
         for output_name in ("lake_resized.jpg", "lake_compressed.jpg", "garden.jpg", "trip_gps.jpg"):
             self.assertIn(output_name, guide)
-        self.assertIn("choose **Create new**", guide)
-        self.assertIn("selected originals unchanged", guide)
+        self.assertIn("choose **Create new files (recommended; originals untouched)**", guide)
+        self.assertIn("legacy and unsupported values now show the safe prompt", guide)
 
     def test_authoritative_inventory_matches_all_menu_ids_labels_and_execs(self):
         import re
@@ -186,7 +186,7 @@ class DocumentationContractTests(unittest.TestCase):
                 )
 
         self.assertEqual(len(headings), 5)
-        self.assertEqual(len(documented), 107)
+        self.assertEqual(len(documented), 108)
         self.assertEqual(documented, expected)
 
     def test_cli_reference_covers_every_dispatcher_route(self):

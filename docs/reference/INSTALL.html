@@ -45,7 +45,8 @@
 <li><strong>KDialog and qdbus:</strong> Dialogs, progress reporting, and interaction with KDE.</li>
 <li><strong>Email application:</strong> Required for KIM6's email features.</li>
 </ul>
-<p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>.</p>
+<p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
+<p><strong>Output policy after upgrading:</strong> Only <code>KIM_POLICY=create</code> and <code>KIM_POLICY=prompt</code> are supported. Unset and legacy <code>KIM_POLICY=overwrite</code> settings use the safe prompt rather than automatically replacing originals. With <code>prompt</code>, users must explicitly select <strong>Review overwrite options...</strong> and confirm a second warning. Rotation, EXIF auto-orientation, flip, and flop refuse to run under <code>create</code> because they operate directly on selected originals. See <a href="commandconfig.html#output-and-file-handling">Output and file handling</a>.</p>
 <p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
@@ -58,7 +59,7 @@
 <p>KIM6 retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>
 <h2 id="upgrade-or-reinstall">Upgrade or reinstall</h2>
 <p>Use the newer source checkout and run <code>./install.sh</code> again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.</p>
-<p>Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it.</p>
+<p>Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIM6 image/video actions, not to the installer's replacement of its own known program files.</p>
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>

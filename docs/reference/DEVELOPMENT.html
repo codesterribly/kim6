@@ -48,7 +48,7 @@
 </tr>
 <tr>
 <td><code>src/kim_*.desktop.in</code></td>
-<td>Five KDE Dolphin service-menu definitions containing 107 actions.</td>
+<td>Five KDE Dolphin service-menu definitions containing 108 actions.</td>
 </tr>
 <tr>
 <td><code>src/gallery/</code></td>
@@ -126,7 +126,7 @@
 <p>Configuration is read using <code>kreadconfig6</code>, from the <code>&lt;default&gt;</code> group.</p>
 <p>Recognized environment variables take precedence over their corresponding KConfig values.</p>
 <p>Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.</p>
-<p><code>KIM_POLICY</code> is the output-policy setting.</p>
+<p><code>KIM_POLICY</code> is the output-policy setting. Supported values are <code>create</code> and <code>prompt</code>; an unset, invalid, or legacy <code>overwrite</code> value is treated as <code>prompt</code>, <strong>never</strong> as unattended authorization. <code>choose_output_mode()</code> implements a safe-default radio choice followed by an explicit, action-specific warning before replacement. <code>confirm_inplace_overwrite()</code> handles actions that have no create-new path; it refuses them under <code>create</code> and requires confirmation under <code>prompt</code>. Both paths fail closed when KDialog exits, is unavailable, or returns an unexpected choice.</p>
 <p>See <a href="commandconfig.html">commandconfig.md</a> for the available keys, defaults, and affected actions.</p>
 <h2 id="file-safety-and-error-handling">File Safety and Error Handling</h2>
 <p>KIM6 processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:</p>
@@ -169,12 +169,12 @@
 <p>Different KIM6 actions have different file-handling requirements.</p>
 <h3 id="image-transformations">Image transformations</h3>
 <p>Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.</p>
-<p>Rotation and flip/flop operations replace the selected image after validation, independently of <code>KIM_POLICY</code>.</p>
+<p>Rotation, EXIF auto-orientation, flip and flop replace selected originals after validation; they do <strong>not</strong> bypass policy authorization. <code>KIM_POLICY=create</code> refuses those operations. Under <code>prompt</code>, <code>confirm_inplace_overwrite()</code> requests explicit confirmation once for the selected batch before processing starts. An old <code>KIM_POLICY=overwrite</code> value does not authorize anything silently.</p>
 <h3 id="metadata-and-dates">Metadata and dates</h3>
 <p>Metadata-only operations use ExifTool and verify the resulting metadata while preserving image pixels, color profiles, permissions, and modification times as appropriate.</p>
-<p>Date synchronization supports separate operations for filesystem timestamps and embedded image metadata.</p>
+<p>Date synchronization supports separate operations for filesystem timestamps and embedded image metadata. Before a direct original-file mtime update, the selected source's link count, device and inode are checked to detect unexpected path replacement. The create-copy path must not explicitly restore atime on the selected original. Camera-time shifting changes wall-clock date tags, not timezone interpretation; subsecond and timezone-offset metadata follow the documented per-action contract.</p>
 <h3 id="web-export">Web export</h3>
-<p>Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility.</p>
+<p>Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg path with frame and timing checks.</p>
 <h3 id="video-processing-1">Video processing</h3>
 <p>Video utilities create separate outputs. Video transcoding can replace an existing file only when authorized.</p>
 <p>Slideshow generation always creates a separate output file.</p>
@@ -183,7 +183,7 @@
 <p>Renaming does not use the same publication mechanism as image transformations.</p>
 <h3 id="special-image-formats">Special image formats</h3>
 <p>Not every image is a single-frame RGB photograph. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.</p>
-<p>Format-specific validation is important when modifying conversion and transformation functions.</p>
+<p>Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.</p>
 <h2 id="adding-or-modifying-actions">Adding or Modifying Actions</h2>
 <p>Most KIM6 functionality is implemented as action functions in <code>src/bin/kim_all</code>. Dolphin invokes these functions through the service-menu definitions in <code>src/</code>.</p>
 <p>When adding or changing an action:</p>
@@ -199,7 +199,7 @@
 <h2 id="testing">Testing</h2>
 <p>For required tools and installation instructions, see <a href="INSTALL.html">INSTALL.md</a>. Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.</p>
 <p>KIM6 uses Python's <code>unittest</code> framework, with a custom test runner in <code>tests/run.py</code>.</p>
-<p>Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior.</p>
+<p>Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior. The overwrite-policy regression tests exercise both confirmation stages, missing GUI, legacy policy values, batch authorization, and source/destination aliases. Historical tests that intentionally authorize overwrite must simulate both dialog approvals in the test <code>Workspace</code> rather than using <code>KIM_POLICY=overwrite</code> as a bypass. Their mock for the policy <code>--radiolist</code> must be scoped to the policy-specific choice text, so it does not intercept unrelated rename/date dialogs. The APNG fail-closed regression uses a real animation fixture when FFmpeg is available.</p>
 <p>Run an individual test module while developing:</p>
 <pre class="sh"><code>python3 -B tests/run.py --pattern test_resize.py</code></pre>
 <p>Run the full test suite:</p>
@@ -220,7 +220,7 @@ git --no-pager diff --check</code></pre>
 <p>Before preparing a release:</p>
 <ol type="1">
 <li>Run the complete test suite and static checks.</li>
-<li>Verify all five Dolphin service menus and their 107 action mappings.</li>
+<li>Verify all five Dolphin service menus and their 108 action mappings.</li>
 <li>Test installation, upgrading, and uninstallation using temporary directories.</li>
 <li>Test the menus in Dolphin on a supported KDE Plasma system.</li>
 <li>Review the installation instructions and user documentation.</li>

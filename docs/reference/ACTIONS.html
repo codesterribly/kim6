@@ -30,7 +30,7 @@
       <div class="reference-source">KIM6 DOCUMENTATION · docs/ACTIONS.md</div>
       <article class="markdown-body">
 <h1 id="kim6-dolphin-menu-actions">KIM6 Dolphin Menu Actions</h1>
-<p>KIM6 provides 107 Dolphin menu entries across five service-menu files. This document lists each entry, its menu label, and the command it executes.</p>
+<p>KIM6 provides 108 Dolphin menu entries across five service-menu files. This document lists each entry, its menu label, and the command it executes.</p>
 <p>The tables reflect the menu definitions in <code>src/</code>. Some commands, such as Manual, License, and About, appear in more than one menu.</p>
 <p>For command-line options beyond those available through Dolphin, see <a href="commandconfig.html">commandconfig.md</a>.</p>
 <h2 id="menu-behavior">Menu Behavior</h2>
@@ -45,14 +45,16 @@
 <ul>
 <li><strong>Resize, compress, and convert:</strong> Create new files or overwrite existing files when authorized.</li>
 <li><strong>Web export and email:</strong> Create separate output files without changing the selected images.</li>
-<li><strong>Rotate and flip:</strong> Modify the selected images directly.</li>
+<li><strong>Rotate, EXIF auto-orient, flip and flop:</strong> These are in-place operations. <code>KIM_POLICY=create</code> refuses them; <code>prompt</code> requires explicit two-stage confirmation before any selected original is replaced.</li>
 <li><strong>Metadata and date operations:</strong> Follow their specific create, overwrite, or timestamp-handling rules.</li>
 <li><strong>Galleries, collages, albums, and animations:</strong> Create separate output files or directories.</li>
 <li><strong>Video utilities and slideshows:</strong> Create separate results. Video transcoding also supports authorized overwriting.</li>
 </ul>
 <p>For detailed command options, dependencies, and output behavior, see <a href="commandconfig.html">commandconfig.md</a>. For file preservation and overwrite protections, see <a href="commandconfig.html#output-and-file-handling">File handling</a>.</p>
+<p><strong>File-safety choices:</strong> Only <code>KIM_POLICY=create</code> and <code>KIM_POLICY=prompt</code> are supported. Unset, invalid, or legacy <code>overwrite</code> values use the safe prompt, <strong>not</strong> automatic permission. The choice defaults to <strong>Create new files (recommended; originals untouched)</strong>; choosing <strong>Review overwrite options...</strong> requires a second confirmation with an operation-specific label and selected-file count. Cancellation or an unavailable dialog refuses replacement. Destination collisions use distinct names in create mode; destructive publication is checked for source aliases, symlinks, hardlinks, and destination identity as applicable. Batch results already completed are not undone by later failures.</p>
+<p><strong>Format notes:</strong> Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.</p>
 <h2 id="complete-menu-action-reference">Complete Menu Action Reference</h2>
-<p>The following tables list all 107 entries from KIM6's five Dolphin service-menu files.</p>
+<p>The following tables list all 108 entries from KIM6's five Dolphin service-menu files.</p>
 <p>Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.</p>
 <p>During installation, the <code>kim_all</code> command is replaced with the full path to the installed executable. The <code>%F</code> placeholder is expanded by Dolphin into the selected filenames.</p>
 <p>The mappings are checked against the menu templates by <code>tests/test_documentation.py</code>.</p>
@@ -618,6 +620,11 @@
 <td><code>Album</code></td>
 <td>Create a PDF album…</td>
 <td><code>kim_all album -- %F</code></td>
+</tr>
+<tr>
+<td><code>ContactSheet</code></td>
+<td>Create a photo contact sheet…</td>
+<td><code>kim_all contactsheet -- %F</code></td>
 </tr>
 <tr>
 <td><code>Print</code></td>

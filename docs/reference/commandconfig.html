@@ -44,7 +44,7 @@
 <li><a href="#command-syntax">Command Syntax</a></li>
 <li><a href="#output-and-file-handling">Output and File Handling</a></li>
 <li><a href="#configuration-and-defaults">Configuration and Defaults</a></li>
-<li><a href="#still-image-actions">Still-image actions</a>: album, animate, compress, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport</li>
+<li><a href="#still-image-actions">Still-image actions</a>: album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport</li>
 <li><a href="#video-actions">Video actions</a>: slideshow, video, videoframes, videoaudio, videogif</li>
 <li><a href="#information-actions">Information actions</a>: about, license, manual</li>
 </ul>
@@ -68,10 +68,11 @@
 <li><strong>Derived output:</strong> Always creates a separate result, regardless of <code>KIM_POLICY</code>.</li>
 <li><strong>In-place operation:</strong> Modifies the selected file directly. Rotation and flipping use this behavior.</li>
 </ul>
+<p>The output-policy prompt defaults to <strong>Create new files (recommended; originals untouched)</strong>. Selecting <strong>Review overwrite options...</strong> opens a second warning, requiring an explicit confirmation such as <strong>Yes, overwrite selected originals</strong>, <strong>Yes, rename selected originals</strong>, or <strong>Yes, replace existing outputs</strong>, according to the action. The warning lists the selected-file count. Canceling either dialog, closing it, or losing access to KDialog refuses replacement. One confirmation covers the selected batch, not each file.</p>
 <p>Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.</p>
 <p>See <a href="commandconfig.html#output-and-file-handling">File handling</a> for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.</p>
 <h3 id="file-preservation-details">File preservation details</h3>
-<p>Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation and flipping are always in-place. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.</p>
+<p>Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation, EXIF auto-orientation, flipping and flopping are always in-place; they require the separate original-file overwrite confirmation under <code>KIM_POLICY=prompt</code> and refuse to run under <code>KIM_POLICY=create</code>. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.</p>
 <p>Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.</p>
 <p>Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a>.</p>
 <p>For compression, conversion, resizing, metadata stripping and copyright editing, duplicate file identities (including aliases to the same file) cause the entire selection to be rejected before processing. Rotation and flipping instead report a repeated source as a failed item without transforming it again; camera-time shifting skips repeated paths and canonical-parent aliases after a successful update. All these actions reject filenames containing line breaks before processing. A processing failure returns a nonzero exit status even when other files in that batch were completed successfully; already published outputs are retained.</p>
@@ -98,8 +99,8 @@
 <tr>
 <td><code>KIM_POLICY</code></td>
 <td><code>KIM_POLICY</code></td>
-<td>Prompt</td>
-<td><code>create</code> or <code>overwrite</code> for actions offering a file-handling choice.</td>
+<td><code>prompt</code></td>
+<td><code>create</code> (always create distinct outputs where supported) or <code>prompt</code> (ask before replacement). Legacy <code>overwrite</code> is not accepted as automatic authorization.</td>
 </tr>
 <tr>
 <td><code>KIM_NAME_AFFIX_POSITION</code></td>
@@ -154,7 +155,7 @@
 <p><code>KIM_CONFIG_FILE</code> is an environment-only setting; it chooses the file containing the KConfig keys above. <code>KIM_GIF_DELAY</code> is also environment-only and is range-checked when the animation is requested. KIM6 uses <code>KIM_POLICY</code> alone for output policy; it does not support <code>KIM_MODE</code> as an alias.</p>
 <h3 id="validation-and-behavior">Validation and behavior</h3>
 <ul>
-<li><strong>Output policy:</strong> An unset or unsupported <code>KIM_POLICY</code> leaves the normal create/overwrite prompt available. <code>create</code> uses collision-safe output names; <code>overwrite</code> authorizes replacement only when the action supports it. Derived-only actions never replace selected originals merely because <code>KIM_POLICY=overwrite</code> is set.</li>
+<li><strong>Output policy:</strong> Only <code>create</code> and <code>prompt</code> are supported. Unset, unsupported and legacy <code>overwrite</code> values use the safe prompt; no environment variable or KConfig value can approve replacement without the two-stage confirmation. <code>create</code> uses collision-safe output names for actions supporting copies and refuses actions that inherently replace originals. Derived-only actions never replace selected originals.</li>
 <li><strong>Filename tags:</strong> <code>prefix</code> places a generated tag before the complete filename stem; <code>suffix</code> places it after the stem. The extension stays at the end, and collision numbering remains before the extension. This setting applies to compression, resize, web export, and full metadata stripping, not to rename. Only the exact value <code>prefix</code> selects prefix mode; otherwise suffix behavior is used. KConfig accepts the two documented values.</li>
 <li><strong>Web quality:</strong> Invalid KConfig values fall back to <code>75</code>. An invalid <code>KIM_WEB_QUALITY</code> environment value can appear as the dialog default but is rejected if submitted; an explicit <code>--quality</code> argument is validated for that invocation.</li>
 <li><strong>Web format and color:</strong> Invalid KConfig entries fall back to <code>jpg</code> and <code>srgb</code>, respectively. Unsupported environment or command-line values cause the action to fail rather than silently choosing another format or color mode. <code>keep</code> retains the source format when supported.</li>
@@ -187,10 +188,13 @@ kim_all album OUTPUT_DIRECTORY FILE...</code></pre>
 <pre class="sh"><code>kim_all compress --quality 1..100 [--output-dir DIR] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- JPEG...
 kim_all compress --custom -- JPEG...</code></pre>
 <p>Accepts JPEG image content only. Quality is a decimal integer 1–100. Custom mode asks for quality and may ask for progressive/baseline scan and Huffman-table optimization. Progressive is the established default; baseline explicitly selects sequential scans. Optimization is an encoding option; a smaller file is not guaranteed. Create mode uses the configured <code>_compressed</code> affix and collision numbering. Authorized overwrite replaces the selected JPEG only after validation.</p>
+<h3 id="contactsheet"><code>contactsheet</code></h3>
+<pre class="sh"><code>kim_all contactsheet [--paper letter|a4] [--orientation portrait|landscape] [--grid 3x4|4x5|5x7] [--labels both|number|filename|none] [--fit fit|fill] [--background white|black] [--dpi 150|300] [--title TEXT] [--output PATH] [--interactive] -- IMAGE...</code></pre>
+<p>Creates a validated multi-page PDF contact sheet from selected single-frame images. Defaults: US Letter, portrait, 4x5 grid, number-and-filename labels, fit without cropping, white background, and 300 DPI. Other options include A4, landscape, 3x4 or 5x7 grids, center cropping, alternative labels, black background, and 150 DPI. Interactive mode asks for the settings. KIM6 stages and validates the PDF before collision-safe creation or separately authorized replacement. The selected images are never overwritten.</p>
 <h3 id="convert"><code>convert</code></h3>
 <pre class="sh"><code>kim_all convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy] [--jp2-quality 1..100] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- FILE...
 kim_all convert --custom-format -- FILE...</code></pre>
-<p>Dedicated menu formats include JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL and JPEG 2000. Output depends on the installed coder/delegate; missing encoders fail rather than changing format. APNG is supported for animated PNG when FFmpeg/ffprobe are available. Animated sources are not silently flattened by a conversion that cannot preserve frames. <code>--bmp5</code> is valid only with BMP output. JP2 defaults to lossy; <code>--jp2-mode lossless</code> uses the installed JPEG 2000 delegate’s lossless rate setting. <code>--jp2-quality</code> is JPEG-2000-specific, not equivalent to JPEG quality. JPEG scan/optimization flags apply only to JPEG output. Create or overwrite follows the output policy; source bytes remain protected.</p>
+<p>Dedicated menu formats include JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL and JPEG 2000. Output depends on the installed coder/delegate; missing encoders fail rather than changing format. APNG is supported in the dedicated FFmpeg-based conversion path when FFmpeg/ffprobe are available. Animated APNG files are deliberately refused by Resize and Web Export because some ImageMagick decoders expose only the first animation frame. Nonanimated PNG files remain supported; failed APNG operations leave the original unchanged. Animated sources are not silently flattened by a conversion that cannot preserve frames. <code>--bmp5</code> is valid only with BMP output. JP2 defaults to lossy; <code>--jp2-mode lossless</code> uses the installed JPEG 2000 delegate’s lossless rate setting. <code>--jp2-quality</code> is JPEG-2000-specific, not equivalent to JPEG quality. JPEG scan/optimization flags apply only to JPEG output. Create or overwrite follows the output policy; source bytes remain protected.</p>
 <h3 id="copyright"><code>copyright</code></h3>
 <pre class="sh"><code>kim_all copyright [--creator TEXT] [--notice TEXT] [--usage-rights TEXT] [--year YYYY] -- FILE...
 kim_all copyright --interactive -- FILE...</code></pre>
@@ -203,7 +207,7 @@ kim_all datesync --interactive -- FILE...</code></pre>
 <h3 id="flipflop"><code>flipflop</code></h3>
 <pre class="sh"><code>kim_all flipflop flip -- FILE...
 kim_all flipflop flop -- FILE...</code></pre>
-<p><code>flip</code> mirrors vertically; <code>flop</code> mirrors horizontally. These are explicitly in-place transformations, independent of <code>KIM_POLICY</code>; the staged result replaces the selected image only after validation.</p>
+<p><code>flip</code> mirrors vertically; <code>flop</code> mirrors horizontally. These actions modify selected originals, so <code>KIM_POLICY=create</code> refuses them. With <code>prompt</code> (including legacy <code>overwrite</code> values), they require an explicit two-stage, once-per-batch confirmation; the staged result replaces the selected image only after validation.</p>
 <h3 id="gallery"><code>gallery</code></h3>
 <pre class="sh"><code>kim_all gallery -- IMAGE...</code></pre>
 <p>Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting <code>index.html</code> with <code>xdg-open</code> when available.</p>
@@ -276,7 +280,7 @@ kim_all rename interactive -- FILE...</code></pre>
 kim_all resize --percent PERCENT [--output-dir DIR] -- IMAGE...
 kim_all resize --custom -- IMAGE...
 kim_all resize --custom-percent -- IMAGE...</code></pre>
-<p>Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses <code>_resized</code>; authorized overwrite replaces only after validation.</p>
+<p>Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses <code>_resized</code>; authorized overwrite replaces only after validation. Animated APNG input is refused without changing the original, rather than risking silent frame loss; ordinary PNG is supported.</p>
 <h3 id="resizeandsend"><code>resizeandsend</code></h3>
 <pre class="sh"><code>kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...</code></pre>
 <p>Without <code>--size</code>, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or <code>xdg-email</code> is used if available. Attachments are retained in <code>${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments</code> because clients may read asynchronously; see <a href="commandconfig.html#output-and-file-handling">File handling</a>.</p>
@@ -285,7 +289,7 @@ kim_all resize --custom-percent -- IMAGE...</code></pre>
 <pre class="sh"><code>kim_all rotate --angle DEGREES -- IMAGE...
 kim_all rotate --exif -- IMAGE...
 kim_all rotate --custom -- IMAGE...</code></pre>
-<p>Rotates by a supported signed decimal angle, auto-orients using EXIF, or prompts for a custom angle. This is an explicitly in-place transformation, independent of <code>KIM_POLICY</code>. It keeps image profiles and validated frame content; rotation preserves source mtime including nanoseconds where supported.</p>
+<p>Rotates by a supported signed decimal angle, auto-orients using EXIF, or prompts for a custom angle. All variants modify originals: <code>KIM_POLICY=create</code> refuses the operation, and <code>prompt</code> (including legacy <code>overwrite</code> values) requires two-stage confirmation once per batch. It keeps image profiles and validated frame content; rotation preserves source mtime including nanoseconds where supported.</p>
 <h3 id="rotatewithexif"><code>rotatewithexif</code></h3>
 <pre class="sh"><code>kim_all rotatewithexif IMAGE...</code></pre>
 <p>Retained dispatcher alias for EXIF-based orientation. The Dolphin menu uses <code>rotate --exif</code>.</p>
@@ -301,7 +305,7 @@ kim_all timeshift --interactive -- IMAGE...</code></pre>
 <p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
 <h3 id="webexport"><code>webexport</code></h3>
 <pre class="sh"><code>kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...</code></pre>
-<p>Options can also be prompted. The legacy <code>webexport OUTPUT_DIRECTORY FILE...</code> dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web export always creates a distinct derivative, including under <code>KIM_POLICY=overwrite</code>. JPEG scan/optimization options apply only to JPEG output.</p>
+<p>Options can also be prompted. The legacy <code>webexport OUTPUT_DIRECTORY FILE...</code> dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web export always creates a distinct derivative regardless of <code>KIM_POLICY</code>. Animated APNG input is refused rather than silently exported as a still frame; ordinary PNG remains supported. JPEG scan/optimization options apply only to JPEG output.</p>
 <p>With <code>--color srgb</code> (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. <code>--color preserve</code> retains embedded color profiles where supported.</p>
 <h2 id="video-actions">Video actions</h2>
 <h3 id="slideshow"><code>slideshow</code></h3>

@@ -28,7 +28,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Command Syntax](#command-syntax)
 - [Output and File Handling](#output-and-file-handling)
 - [Configuration and Defaults](#configuration-and-defaults)
-- [Still-image actions](#still-image-actions): album, animate, compress, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
+- [Still-image actions](#still-image-actions): album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
 - [Video actions](#video-actions): slideshow, video, videoframes, videoaudio, videogif
 - [Information actions](#information-actions): about, license, manual
 
@@ -60,13 +60,15 @@ KIM6 uses different file-handling rules depending on the operation.
 - **Derived output:** Always creates a separate result, regardless of `KIM_POLICY`.
 - **In-place operation:** Modifies the selected file directly. Rotation and flipping use this behavior.
 
+The output-policy prompt defaults to **Create new files (recommended; originals untouched)**. Selecting **Review overwrite options...** opens a second warning, requiring an explicit confirmation such as **Yes, overwrite selected originals**, **Yes, rename selected originals**, or **Yes, replace existing outputs**, according to the action. The warning lists the selected-file count. Canceling either dialog, closing it, or losing access to KDialog refuses replacement. One confirmation covers the selected batch, not each file.
+
 Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.
 
 See [File handling](commandconfig.md#output-and-file-handling) for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.
 
 ### File preservation details
 
-Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation and flipping are always in-place. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.
+Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation, EXIF auto-orientation, flipping and flopping are always in-place; they require the separate original-file overwrite confirmation under `KIM_POLICY=prompt` and refuse to run under `KIM_POLICY=create`. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.
 
 Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.
 
@@ -85,7 +87,7 @@ The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimag
 | Environment variable | KConfig key | Default | Accepted values and purpose |
 |---|---|---|---|
 | `KIM_CONFIG_FILE` | — | `${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu` | Path to the KConfig file; environment-only setting. |
-| `KIM_POLICY` | `KIM_POLICY` | Prompt | `create` or `overwrite` for actions offering a file-handling choice. |
+| `KIM_POLICY` | `KIM_POLICY` | `prompt` | `create` (always create distinct outputs where supported) or `prompt` (ask before replacement). Legacy `overwrite` is not accepted as automatic authorization. |
 | `KIM_NAME_AFFIX_POSITION` | `NAME_AFFIX_POSITION` | `suffix` | `prefix` or `suffix` for generated filename tags. |
 | `KIM_WEB_QUALITY` | `WEB_EXPORT_QUALITY` | `75` | Integer 1–100 for web export quality. |
 | `KIM_WEB_FORMAT` | `WEB_EXPORT_FORMAT` | `jpg` | `jpg`, `jpeg`, `webp`, `avif`, or `keep` for web export. |
@@ -99,7 +101,7 @@ The default configuration file is `${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimag
 
 ### Validation and behavior
 
-- **Output policy:** An unset or unsupported `KIM_POLICY` leaves the normal create/overwrite prompt available. `create` uses collision-safe output names; `overwrite` authorizes replacement only when the action supports it. Derived-only actions never replace selected originals merely because `KIM_POLICY=overwrite` is set.
+- **Output policy:** Only `create` and `prompt` are supported. Unset, unsupported and legacy `overwrite` values use the safe prompt; no environment variable or KConfig value can approve replacement without the two-stage confirmation. `create` uses collision-safe output names for actions supporting copies and refuses actions that inherently replace originals. Derived-only actions never replace selected originals.
 - **Filename tags:** `prefix` places a generated tag before the complete filename stem; `suffix` places it after the stem. The extension stays at the end, and collision numbering remains before the extension. This setting applies to compression, resize, web export, and full metadata stripping, not to rename. Only the exact value `prefix` selects prefix mode; otherwise suffix behavior is used. KConfig accepts the two documented values.
 - **Web quality:** Invalid KConfig values fall back to `75`. An invalid `KIM_WEB_QUALITY` environment value can appear as the dialog default but is rejected if submitted; an explicit `--quality` argument is validated for that invocation.
 - **Web format and color:** Invalid KConfig entries fall back to `jpg` and `srgb`, respectively. Unsupported environment or command-line values cause the action to fail rather than silently choosing another format or color mode. `keep` retains the source format when supported.
@@ -158,6 +160,14 @@ kim_all compress --custom -- JPEG...
 
 Accepts JPEG image content only. Quality is a decimal integer 1–100. Custom mode asks for quality and may ask for progressive/baseline scan and Huffman-table optimization. Progressive is the established default; baseline explicitly selects sequential scans. Optimization is an encoding option; a smaller file is not guaranteed. Create mode uses the configured `_compressed` affix and collision numbering. Authorized overwrite replaces the selected JPEG only after validation.
 
+### `contactsheet`
+
+```sh
+kim_all contactsheet [--paper letter|a4] [--orientation portrait|landscape] [--grid 3x4|4x5|5x7] [--labels both|number|filename|none] [--fit fit|fill] [--background white|black] [--dpi 150|300] [--title TEXT] [--output PATH] [--interactive] -- IMAGE...
+```
+
+Creates a validated multi-page PDF contact sheet from selected single-frame images. Defaults: US Letter, portrait, 4x5 grid, number-and-filename labels, fit without cropping, white background, and 300 DPI. Other options include A4, landscape, 3x4 or 5x7 grids, center cropping, alternative labels, black background, and 150 DPI. Interactive mode asks for the settings. KIM6 stages and validates the PDF before collision-safe creation or separately authorized replacement. The selected images are never overwritten.
+
 ### `convert`
 
 ```sh
@@ -165,7 +175,7 @@ kim_all convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy] [--jp2-qual
 kim_all convert --custom-format -- FILE...
 ```
 
-Dedicated menu formats include JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL and JPEG 2000. Output depends on the installed coder/delegate; missing encoders fail rather than changing format. APNG is supported for animated PNG when FFmpeg/ffprobe are available. Animated sources are not silently flattened by a conversion that cannot preserve frames. `--bmp5` is valid only with BMP output. JP2 defaults to lossy; `--jp2-mode lossless` uses the installed JPEG 2000 delegate’s lossless rate setting. `--jp2-quality` is JPEG-2000-specific, not equivalent to JPEG quality. JPEG scan/optimization flags apply only to JPEG output. Create or overwrite follows the output policy; source bytes remain protected.
+Dedicated menu formats include JPEG, PNG, GIF, BMP5, TIFF, PDF, WebP, AVIF, HEIC/HEIF, JPEG XL and JPEG 2000. Output depends on the installed coder/delegate; missing encoders fail rather than changing format. APNG is supported in the dedicated FFmpeg-based conversion path when FFmpeg/ffprobe are available. Animated APNG files are deliberately refused by Resize and Web Export because some ImageMagick decoders expose only the first animation frame. Nonanimated PNG files remain supported; failed APNG operations leave the original unchanged. Animated sources are not silently flattened by a conversion that cannot preserve frames. `--bmp5` is valid only with BMP output. JP2 defaults to lossy; `--jp2-mode lossless` uses the installed JPEG 2000 delegate’s lossless rate setting. `--jp2-quality` is JPEG-2000-specific, not equivalent to JPEG quality. JPEG scan/optimization flags apply only to JPEG output. Create or overwrite follows the output policy; source bytes remain protected.
 
 ### `copyright`
 
@@ -193,7 +203,7 @@ kim_all flipflop flip -- FILE...
 kim_all flipflop flop -- FILE...
 ```
 
-`flip` mirrors vertically; `flop` mirrors horizontally. These are explicitly in-place transformations, independent of `KIM_POLICY`; the staged result replaces the selected image only after validation.
+`flip` mirrors vertically; `flop` mirrors horizontally. These actions modify selected originals, so `KIM_POLICY=create` refuses them. With `prompt` (including legacy `overwrite` values), they require an explicit two-stage, once-per-batch confirmation; the staged result replaces the selected image only after validation.
 
 ### `gallery`
 
@@ -257,7 +267,7 @@ kim_all resize --custom -- IMAGE...
 kim_all resize --custom-percent -- IMAGE...
 ```
 
-Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses `_resized`; authorized overwrite replaces only after validation.
+Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses `_resized`; authorized overwrite replaces only after validation. Animated APNG input is refused without changing the original, rather than risking silent frame loss; ordinary PNG is supported.
 
 ### `resizeandsend`
 
@@ -277,7 +287,7 @@ kim_all rotate --exif -- IMAGE...
 kim_all rotate --custom -- IMAGE...
 ```
 
-Rotates by a supported signed decimal angle, auto-orients using EXIF, or prompts for a custom angle. This is an explicitly in-place transformation, independent of `KIM_POLICY`. It keeps image profiles and validated frame content; rotation preserves source mtime including nanoseconds where supported.
+Rotates by a supported signed decimal angle, auto-orients using EXIF, or prompts for a custom angle. All variants modify originals: `KIM_POLICY=create` refuses the operation, and `prompt` (including legacy `overwrite` values) requires two-stage confirmation once per batch. It keeps image profiles and validated frame content; rotation preserves source mtime including nanoseconds where supported.
 
 ### `rotatewithexif`
 
@@ -318,7 +328,7 @@ Joins selected images/frames in selection order into a multi-page TIFF. Prompts 
 kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...
 ```
 
-Options can also be prompted. The legacy `webexport OUTPUT_DIRECTORY FILE...` dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to `KIM_WEB_FORMAT` (normally JPEG), and color defaults to ICC-managed sRGB. `keep` retains source format when supported. Web export always creates a distinct derivative, including under `KIM_POLICY=overwrite`. JPEG scan/optimization options apply only to JPEG output.
+Options can also be prompted. The legacy `webexport OUTPUT_DIRECTORY FILE...` dispatcher form remains accepted. Default size is 1600×1600, default quality is 75, format defaults to `KIM_WEB_FORMAT` (normally JPEG), and color defaults to ICC-managed sRGB. `keep` retains source format when supported. Web export always creates a distinct derivative regardless of `KIM_POLICY`. Animated APNG input is refused rather than silently exported as a still frame; ordinary PNG remains supported. JPEG scan/optimization options apply only to JPEG output.
 
 With `--color srgb` (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. `--color preserve` retains embedded color profiles where supported.
 

@@ -9,7 +9,7 @@ KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A re
 |---|---|---|---|
 | JPEG/JPG/JFIF | ImageMagick JPEG decoder | JPEG encoder; compression and conversion menus | Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant. |
 | PNG | ImageMagick PNG decoder | PNG encoder | Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported. |
-| APNG | FFmpeg/ffprobe inspection when PNG animation control data is present | FFmpeg APNG encoder | Frame count, timing, and looping are checked for APNG-to-APNG conversion. Unsupported frame loss is rejected. |
+| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | Dedicated FFmpeg APNG conversion path | APNG-to-APNG conversion validates frames, timing, and looping. **Animated APNG input is refused by Resize and Web Export** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
 | GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
 | TIFF/TIF | ImageMagick TIFF decoder | TIFF encoder; `tiffjoin` creates multi-page files | Multiple pages are supported where the selected operation permits them. |
 | BMP/DIB | ImageMagick BMP decoder | BMP encoder; menu selects BMP5 | Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee. |
@@ -32,9 +32,15 @@ KIM6 distinguishes still images, animations, and multi-page documents. Conversio
 
 Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.
 
+**Animation-specific boundaries:** Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. **Resize and Web Export refuse animated APNG rather than publish a flattened still image.** This applies even when the file is named `.png` rather than `.apng`. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.
+
+Multi-page TIFF and PDF inputs are documents rather than timed animations. Converting a multi-page or animated source to a single-image format is refused where frames would otherwise be discarded.
+
 ## Color Profiles and Metadata
 
 Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.
+
+The default web-export color mode targets sRGB; `--color preserve` instead requests retention of a usable, compatible input profile. ICC validation cannot manufacture a profile that an encoder does not support, and color conversion may be rejected rather than silently drop a required profile. JPEG baseline/progressive scans and Huffman optimization are separate from ICC handling. KIM6 does not promise automatic HDR-to-SDR tone mapping or universally lossless CMYK-to-RGB conversion. Metadata preservation also varies by format; stripping GPS fields is not the same as stripping all metadata, and signed C2PA provenance cannot be guaranteed fully removable.
 
 See [Web export](commandconfig.md#webexport) for color options and [File handling](commandconfig.md#output-and-file-handling) for preservation behavior.
 
@@ -42,7 +48,7 @@ See [Web export](commandconfig.md#webexport) for color options and [File handlin
 
 KIM6 uses FFmpeg for H.264 (`libx264`) and H.265 (`libx265`) video. AV1 prefers `libsvtav1` and uses `libaom-av1` when SVT-AV1 is unavailable; it does not substitute another codec if AV1 encoding is unavailable. Available containers must support the selected codecs and streams. An incompatible original container causes an error rather than an automatic switch to MP4.
 
-Video utilities use FFmpeg for frame extraction, contact sheets, audio extraction or removal, and GIF creation. See [Video actions](commandconfig.md#video-actions) for preset choices, supported audio outputs, encoding settings, and operation-specific limits.
+Video utilities use FFmpeg for frame extraction, midpoint thumbnails, contact sheets, audio extraction or removal, and GIF creation. Photo-to-MP4 slideshow generation creates a separate video using selected still images in natural filename order. Encoders, stream-copy compatibility, resolution/quality options, GIF loop settings, and output validation depend on the operation and installed FFmpeg capabilities. See [Video actions](commandconfig.md#video-actions) for exact options and limits.
 
 ## Check Installed Capabilities
 

@@ -23,7 +23,9 @@ KIM6 uses several common tools to process images and videos:
 - **KDialog and qdbus:** Dialogs, progress reporting, and interaction with KDE.
 - **Email application:** Required for KIM6's email features.
 
-Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md).
+Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
+
+**Output policy after upgrading:** Only `KIM_POLICY=create` and `KIM_POLICY=prompt` are supported. Unset and legacy `KIM_POLICY=overwrite` settings use the safe prompt rather than automatically replacing originals. With `prompt`, users must explicitly select **Review overwrite options...** and confirm a second warning. Rotation, EXIF auto-orientation, flip, and flop refuse to run under `create` because they operate directly on selected originals. See [Output and file handling](docs/commandconfig.md#output-and-file-handling).
 
 Download or clone the KIM6 source code, then open a terminal in the project directory and run:
 
@@ -53,7 +55,7 @@ KIM6 retains its normal submenu structure; you do not need to modify the service
 
 Use the newer source checkout and run `./install.sh` again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.
 
-Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it.
+Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIM6 image/video actions, not to the installer's replacement of its own known program files.
 
 ## Uninstall
 

@@ -1,7 +1,7 @@
 
 # KIM6 Dolphin Menu Actions
 
-KIM6 provides 107 Dolphin menu entries across five service-menu files. This document lists each entry, its menu label, and the command it executes.
+KIM6 provides 108 Dolphin menu entries across five service-menu files. This document lists each entry, its menu label, and the command it executes.
 
 The tables reflect the menu definitions in `src/`. Some commands, such as Manual, License, and About, appear in more than one menu.
 
@@ -21,16 +21,20 @@ File handling depends on the operation:
 
 - **Resize, compress, and convert:** Create new files or overwrite existing files when authorized.
 - **Web export and email:** Create separate output files without changing the selected images.
-- **Rotate and flip:** Modify the selected images directly.
+- **Rotate, EXIF auto-orient, flip and flop:** These are in-place operations. `KIM_POLICY=create` refuses them; `prompt` requires explicit two-stage confirmation before any selected original is replaced.
 - **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
 
 For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
 
+**File-safety choices:** Only `KIM_POLICY=create` and `KIM_POLICY=prompt` are supported. Unset, invalid, or legacy `overwrite` values use the safe prompt, **not** automatic permission. The choice defaults to **Create new files (recommended; originals untouched)**; choosing **Review overwrite options...** requires a second confirmation with an operation-specific label and selected-file count. Cancellation or an unavailable dialog refuses replacement. Destination collisions use distinct names in create mode; destructive publication is checked for source aliases, symlinks, hardlinks, and destination identity as applicable. Batch results already completed are not undone by later failures.
+
+**Format notes:** Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.
+
 ## Complete Menu Action Reference
 
-The following tables list all 107 entries from KIM6's five Dolphin service-menu files.
+The following tables list all 108 entries from KIM6's five Dolphin service-menu files.
 
 Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.
 
@@ -163,6 +167,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `DateSync` | Synchronize photo/file dates… | `kim_all datesync --interactive -- %F` |
 | `Slideshow` | Create MP4 slideshow… | `kim_all slideshow --interactive -- %F` |
 | `Album` | Create a PDF album… | `kim_all album -- %F` |
+| `ContactSheet` | Create a photo contact sheet… | `kim_all contactsheet -- %F` |
 | `Print` | Create a print-layout PDF… | `kim_all print -- %F` |
 | `TiffJoin` | Join images into a multi-page TIFF… | `kim_all tiffjoin -- %F` |
 | `Animation` | Create an animated GIF… | `kim_all animate -- %F` |

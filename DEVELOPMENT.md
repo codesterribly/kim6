@@ -12,7 +12,7 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | Five KDE Dolphin service-menu definitions containing 107 actions. |
+| `src/kim_*.desktop.in` | Five KDE Dolphin service-menu definitions containing 108 actions. |
 | `src/gallery/` | Templates used to generate HTML photo galleries. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
@@ -89,7 +89,7 @@ Recognized environment variables take precedence over their corresponding KConfi
 
 Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.
 
-`KIM_POLICY` is the output-policy setting.
+`KIM_POLICY` is the output-policy setting. Supported values are `create` and `prompt`; an unset, invalid, or legacy `overwrite` value is treated as `prompt`, **never** as unattended authorization. `choose_output_mode()` implements a safe-default radio choice followed by an explicit, action-specific warning before replacement. `confirm_inplace_overwrite()` handles actions that have no create-new path; it refuses them under `create` and requires confirmation under `prompt`. Both paths fail closed when KDialog exits, is unavailable, or returns an unexpected choice.
 
 See [commandconfig.md](docs/commandconfig.md) for the available keys, defaults, and affected actions.
 
@@ -163,17 +163,17 @@ Different KIM6 actions have different file-handling requirements.
 
 Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.
 
-Rotation and flip/flop operations replace the selected image after validation, independently of `KIM_POLICY`.
+Rotation, EXIF auto-orientation, flip and flop replace selected originals after validation; they do **not** bypass policy authorization. `KIM_POLICY=create` refuses those operations. Under `prompt`, `confirm_inplace_overwrite()` requests explicit confirmation once for the selected batch before processing starts. An old `KIM_POLICY=overwrite` value does not authorize anything silently.
 
 ### Metadata and dates
 
 Metadata-only operations use ExifTool and verify the resulting metadata while preserving image pixels, color profiles, permissions, and modification times as appropriate.
 
-Date synchronization supports separate operations for filesystem timestamps and embedded image metadata.
+Date synchronization supports separate operations for filesystem timestamps and embedded image metadata. Before a direct original-file mtime update, the selected source's link count, device and inode are checked to detect unexpected path replacement. The create-copy path must not explicitly restore atime on the selected original. Camera-time shifting changes wall-clock date tags, not timezone interpretation; subsecond and timezone-offset metadata follow the documented per-action contract.
 
 ### Web export
 
-Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility.
+Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg path with frame and timing checks.
 
 ### Video processing
 
@@ -191,7 +191,7 @@ Renaming does not use the same publication mechanism as image transformations.
 
 Not every image is a single-frame RGB photograph. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.
 
-Format-specific validation is important when modifying conversion and transformation functions.
+Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.
 
 ## Adding or Modifying Actions
 
@@ -215,7 +215,7 @@ For required tools and installation instructions, see [INSTALL.md](INSTALL.md). 
 
 KIM6 uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
 
-Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior.
+Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior. The overwrite-policy regression tests exercise both confirmation stages, missing GUI, legacy policy values, batch authorization, and source/destination aliases. Historical tests that intentionally authorize overwrite must simulate both dialog approvals in the test `Workspace` rather than using `KIM_POLICY=overwrite` as a bypass. Their mock for the policy `--radiolist` must be scoped to the policy-specific choice text, so it does not intercept unrelated rename/date dialogs. The APNG fail-closed regression uses a real animation fixture when FFmpeg is available.
 
 Run an individual test module while developing:
 
@@ -258,7 +258,7 @@ Installation updates are performed one file at a time. An interrupted installati
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all five Dolphin service menus and their 107 action mappings.
+2. Verify all five Dolphin service menus and their 108 action mappings.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.

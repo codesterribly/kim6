@@ -35,7 +35,7 @@
 <p>Select one file or an entire group of files, right-click, and choose what you want to do.</p>
 <p>KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.</p>
 <h2 id="quick-start">Quick Start</h2>
-<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose <strong>Create new</strong> to keep the selected originals unchanged. If <code>KIM_POLICY=overwrite</code> is configured, switch to <code>create</code> before trying these examples.</p>
+<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose <strong>Create new files (recommended; originals untouched)</strong>. <code>KIM_POLICY=overwrite</code> is <strong>not</strong> an automatic overwrite setting: legacy and unsupported values now show the safe prompt. Use <code>KIM_POLICY=create</code> to choose separate outputs without prompting where supported.</p>
 <table>
 <thead>
 <tr>
@@ -78,25 +78,25 @@
 <h2 id="features">Features</h2>
 <h3 id="resize-compress-and-convert-images">Resize, compress, and convert images</h3>
 <ul>
-<li><strong>Resize images:</strong> Choose common resolutions, enter custom dimensions, or resize by percentage. Process multiple photographs together.</li>
-<li><strong>Compress JPEGs:</strong> Select a JPEG quality level to reduce file sizes for sharing or storage.</li>
+<li><strong>Resize images:</strong> Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.</li>
+<li><strong>Compress JPEGs:</strong> Select a JPEG quality level, progressive or baseline encoding, and optional Huffman-table optimization. Smaller files are not guaranteed at every setting.</li>
 <li><strong>Prepare images for the web:</strong> Resize and optimize photographs, with options for output quality and color profiles.</li>
-<li><strong>Convert formats:</strong> Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 when supported by your system.</li>
+<li><strong>Convert formats:</strong> Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.</li>
 <li><strong>Rotate and flip:</strong> Rotate images manually or use their EXIF orientation information.</li>
 </ul>
 <h3 id="organize-photographs-and-manage-metadata">Organize photographs and manage metadata</h3>
 <ul>
-<li><strong>Manage privacy and metadata:</strong> Remove GPS coordinates, AI-related metadata, or all embedded metadata. Choose what to remove while retaining other useful information.</li>
-<li><strong>Manage photo dates:</strong> Rename photographs using their EXIF dates, shift capture timestamps to correct camera clock errors, and synchronize EXIF and filesystem timestamps.</li>
+<li><strong>Manage privacy and metadata:</strong> Remove recognized GPS coordinates, AI-generation fields, or all supported metadata. GPS-only cleanup is not complete location anonymization; C2PA/Content Credentials removal cannot be guaranteed.</li>
+<li><strong>Manage photo dates:</strong> Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.</li>
 <li><strong>Update copyright information:</strong> Add or modify copyright metadata across multiple photographs.</li>
 <li><strong>Control what gets preserved:</strong> Choose appropriate metadata and output behavior for different operations.</li>
 </ul>
 <h3 id="create-and-share">Create and share</h3>
 <ul>
 <li><strong>Email photographs:</strong> Send original images or create smaller copies suitable for email attachments.</li>
-<li><strong>Build photo galleries:</strong> Generate HTML galleries from selected photographs.</li>
-<li><strong>Create collages:</strong> Arrange multiple images into a single composition.</li>
-<li><strong>Create PDF albums and print layouts:</strong> Prepare photographs for viewing or printing.</li>
+<li><strong>Build photo galleries:</strong> Generate browsable HTML galleries, including the Dark Portfolio presentation.</li>
+<li><strong>Create collages:</strong> Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.</li>
+<li><strong>Create PDF albums and print layouts:</strong> Prepare photographs for viewing or printing, including printable contact-sheet layouts.</li>
 <li><strong>Work with TIFF and GIF:</strong> Combine images into multipage TIFF files or animated GIFs.</li>
 </ul>
 <h3 id="video-tools">Video tools</h3>
@@ -113,9 +113,10 @@
 <p>Available video codecs depend on FFmpeg and the encoders installed on your system.</p>
 <h2 id="how-kim6-works">How KIM6 works</h2>
 <p>KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.</p>
-<p>Most resizing, compression, and conversion actions let you choose whether to create a new file or overwrite an existing one. <strong>Choose Create new to preserve the original</strong> when that option is available. Web exports, email copies, and video utilities create separate output files.</p>
-<p>Some operations, including rotation, flipping, and metadata editing, modify the selected files directly. Rename operations have their own file-handling options.</p>
-<p>See <a href="#quick-start">Getting Started</a> for examples and <a href="commandconfig.html#output-and-file-handling">Safe Handling</a> for details.</p>
+<p>Most resizing, compression, and conversion actions offer <strong>Create new files (recommended; originals untouched)</strong> or <strong>Review overwrite options...</strong>. Overwrite review requires a separate, explicit confirmation describing what may be replaced and how many files are selected; merely setting an environment variable does not approve it. <code>KIM_POLICY=create</code> creates separate files where the action supports copies. <code>KIM_POLICY=prompt</code> and an unset or legacy <code>overwrite</code> value use the safe prompt.</p>
+<p>Rotation, EXIF auto-orientation, flip, and flop <strong>always modify selected originals</strong> and therefore refuse to run under <code>KIM_POLICY=create</code>. Under <code>prompt</code> they require explicit confirmation once per batch. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export and email preparation make separate results; video utilities and slideshows also create derivatives. Completed batch results remain available if a later item fails, while staged invalid results are not published.</p>
+<p>Create mode numbers occupied output filenames and respects configurable prefix/suffix affix placement (for example, <code>web_photo.jpg</code> versus <code>photo_web.jpg</code>). Output publication rejects unsafe source aliases and linked destinations where relevant. <strong>Animated APNG is deliberately refused by Resize and Web Export</strong> rather than being flattened to a still image; dedicated APNG conversion remains available when the required tools support it.</p>
+<p>See <a href="#quick-start">Getting Started</a> for examples, <a href="commandconfig.html#output-and-file-handling">Safe Handling</a> for details, and <a href="FORMATS.html">Supported Formats</a> for decoder and encoder limits.</p>
 <h2 id="installation">Installation</h2>
 <p>KIM6 is designed for KDE Plasma 6 and Dolphin.</p>
 <p>Dolphin includes a <strong>Download New Services</strong> feature under its configuration settings, which can install service-menu extensions from KDE's online catalog. You can also find the existing project on the <a href="https://store.kde.org/p/2307290/">KDE Store</a>.</p>
