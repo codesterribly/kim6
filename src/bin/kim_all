@@ -363,7 +363,7 @@ image_output_preserves_frames() {
 # skipping metadata payloads without reading image data.
 # Inspect actual PNG chunk boundaries. A text/metadata payload containing
 # "acTL" must not cause an ordinary still PNG to be treated as animated.
-# Preserve the existing 1 MiB header-inspection bound.
+# Inspect chunk boundaries up to the actual file size.
 image_apng_control_offset() {
   local path="$1" offset=8 header length signature filesize
   local b0 b1 b2 b3 c0 c1 c2 c3 byte
@@ -832,8 +832,7 @@ progress_open() {
 # 1 = confirmed false (continue); 0 = true OR unconfirmable (stop).
 # A failed query checks ownership: confirmed disappearance stops quietly; a
 # present service, unknown ownership or malformed reply reports an error. None
-# of these failures proves user cancellation. K14 will
-# consolidate the separate action-local cancellation queries.
+# of these failures proves user cancellation.
 progress_cancelled() {
   local ref="$1" cancelled
   if ! cancelled="$(progress_call "$ref" wasCancelled 2>/dev/null)"; then
@@ -1318,25 +1317,6 @@ action_compress() {
   [ "${REPORT_FAIL:-0}" -eq 0 ]
 }
 
-
-####################
-# Convert images to another format using ImageMagick.
-#
-# Usage: convert <format> <files...>
-#
-# Behavior:
-# - Prompts for Create vs Overwrite (unless KIM_POLICY forces a mode).
-# - Create mode: writes new sibling files next to the originals, never overwriting.
-# - overwrite mode: converts to a temporary file in the destination directory, then moves it into place.
-# - Uses a progress dialog and supports Cancel.
-#
-# Policy:
-# - KIM_POLICY=create      forces Create mode
-# - KIM_POLICY=overwrite   forces overwrite mode
-#
-# Notes:
-# - Overwrite mode does NOT preserve timestamps (conversion produces a new file).
-# - Uses `magick` (ImageMagick) for conversion.
 
 ####################
 # Convert images to another format.
@@ -1825,7 +1805,7 @@ action_convert() {
 
 
 ####################
-# Flip or flop images in-place using ImageMagick mogrify.
+# Flip or flop images in-place using validated ImageMagick staging.
 #
 # Usage: flipflop <mode> <files...>
 #
@@ -1849,7 +1829,7 @@ action_flipflop() {
 }
 
 ####################
-# Create a static HTML image gallery with copied originals and thumbnails.
+# Create a static HTML gallery with resized images and thumbnails.
 #
 # Usage: gallery <dir> <files...>
 #
@@ -1868,27 +1848,6 @@ action_flipflop() {
 # Notes:
 # - Uses `magick` to generate thumbnails.
 # - If index.part1 and index.part2 exist, uses them as templates, otherwise generates a basic HTML page.
-
-####################
-# Create an HTML image gallery with resized images and thumbnails.
-#
-# Usage: gallery <dir> <files...>
-#
-# Behavior (aligned with upstream kim_galery):
-# - Prompts for gallery title, author, and column count.
-# - Prompts for an output directory (chooser starts in <dir> if valid).
-# - Creates (or reuses) these within the chosen directory:
-#     images/
-#     thumbs/
-#     index.html
-# - Resizes images to 800x800 and thumbs to 200x200.
-# - Builds a table-based HTML gallery and opens it in the default browser.
-# - Uses index.part1 and index.part2 templates if present next to kim_all,
-#   otherwise generates a minimal HTML wrapper.
-#
-# Notes:
-# - Uses `magick` to generate images and thumbnails.
-# - Uses `identify` to adjust displayed dimensions based on orientation.
 
 action_gallery() {
   local start_dir="${1:-}" base_dir target_dir base_name timestamp number=1
