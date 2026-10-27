@@ -377,11 +377,8 @@ image_output_preserves_frames() {
   esac
 }
 
-# APNG control chunks occur before image data. Inspect chunk headers only,
-# skipping metadata payloads without reading image data.
-# Inspect actual PNG chunk boundaries. A text/metadata payload containing
-# "acTL" must not cause an ordinary still PNG to be treated as animated.
-# Inspect chunk boundaries up to the actual file size.
+# Walk PNG chunk boundaries without decoding image data. Only an actual acTL
+# chunk before IDAT counts as animation; embedded metadata text does not.
 image_apng_control_offset() {
   local path="$1" offset=8 header length signature filesize
   local b0 b1 b2 b3 c0 c1 c2 c3 byte
@@ -389,8 +386,7 @@ image_apng_control_offset() {
   signature="$(od -An -tu1 -N8 -- "$path" 2>/dev/null)" || return 1
   [ "${signature//[$' \t\n\r']/}" = '13780787113102610' ] || return 1
 
-  # Skip complete ancillary chunks by their declared lengths.
-  # Bound inspection by the actual file, not an arbitrary header size.
+  # Reject truncated chunks before advancing by their declared size.
   filesize="$(stat -c '%s' -- "$path" 2>/dev/null)" || return 1
   [[ "$filesize" =~ ^[0-9]+$ ]] || return 1
   while (( offset + 12 <= filesize )); do
@@ -450,7 +446,7 @@ image_webp_animation_signature() {
   [ "${#bytes[@]}" -eq 12 ] || return 1
   [ "${bytes[*]:0:4}" = '82 73 70 70' ] &&
     [ "${bytes[*]:8:4}" = '87 69 66 80' ] || return 1
-  # RIFF declares the file size excluding its eight-byte outer header.
+  # RIFF size excludes the outer eight-byte header.
   declared=$((bytes[4] + bytes[5]*256 + bytes[6]*65536 + bytes[7]*16777216))
   (( declared + 8 == size )) || return 1
   while (( offset + 8 <= size )); do
@@ -6045,8 +6041,8 @@ video_format_has_token() {
 }
 
 video_validate_output() {
-  # Verify the rendered file, not merely FFmpeg exit status: streams,
-  # codec, geometry, duration and muxer must meet the output contract.
+  # FFmpeg success is insufficient: verify streams, codec, container,
+  # geometry, aspect ratio, frame count and duration before publication.
   local output="$1" muxer="$2" codec="$3" max_width="$4" max_height="$5"
   local input_width="$6" input_height="$7" rotation="$8" input_duration="$9"
   local input_audio="${10}" input_dar="${11}" input_frames="${12}" output_formats output_duration
@@ -6080,6 +6076,8 @@ video_validate_output() {
   (( output_width <= max_width && output_height <= max_height )) || return 1
   (( output_width <= input_width && output_height <= input_height )) || return 1
   (( output_width % 2 == 0 && output_height % 2 == 0 )) || return 1
+  # Account for display rotation and tolerate minor sample/display aspect
+  # rounding without accepting distorted output.
   if awk -v input="$input_dar" -v output="$output_dar" -v rotation="$rotation" \
       -v input_width="$input_width" -v input_height="$input_height" \
       -v output_width="$output_width" -v output_height="$output_height" 'BEGIN {
@@ -6094,6 +6092,7 @@ video_validate_output() {
   if [[ "$output_frames" =~ ^[1-9][0-9]*$ ]] && [[ "$input_frames" =~ ^[1-9][0-9]*$ ]]; then
     [ "$output_frames" = "$input_frames" ] || return 1
   fi
+  # Container durations may differ slightly due to encoder/muxer rounding.
   awk -v input="$input_duration" -v output="$output_duration" 'BEGIN {
     if (input !~ /^[0-9]+([.][0-9]+)?$/ || output !~ /^[0-9]+([.][0-9]+)?$/) exit 1
     difference = input - output; if (difference < 0) difference = -difference
@@ -6368,10 +6367,9 @@ action_video() {
   [ "$REPORT_FAIL" -eq 0 ]
 }
 
-# Video utilities publish derived artifacts only. They intentionally ignore
-# KIM_POLICY so none of these actions can replace a selected media source.
-# Collect container/stream metadata for the derived-video actions.
-# Keep the first usable duration and reported dimensions; count every stream.
+# Video utilities create derivatives only; KIM_POLICY cannot overwrite sources.
+# Probe container and stream records, retaining first usable dimensions/duration
+# while counting all video and audio streams.
 video_utility_probe() {
   local path="$1" data key value
   data="$(ffprobe -v error \
@@ -6406,6 +6404,7 @@ video_utility_probe() {
   [[ -n "$VU_FORMAT" && "$VU_DURATION" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v d="$VU_DURATION" 'BEGIN { exit !(d > 0) }'
 }
 
+# Check the encoded still's codec and dimensions, then fully decode it.
 video_utility_image_valid() {
   local path="$1" wanted="$2" dimensions codec width height
   dimensions="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height -of csv=p=0 -i "$path" 2>/dev/null)" || return 1
@@ -6418,6 +6417,8 @@ video_utility_image_valid() {
   ffmpeg -hide_banner -v error -xerror -nostdin -i "$path" -map 0:v:0 -f null - >/dev/null 2>&1
 }
 
+# Choose a sibling filename without replacing an existing file or symlink.
+# Publication separately handles collisions that arise after this check.
 video_utility_target() {
   local source="$1" tag="$2" extension="$3" number=1 directory base stem target
   directory="${source%/*}"
@@ -6475,6 +6476,8 @@ video_gif_loop_valid() {
     [ -z "$offset" ]
     return
   fi
+  # NETSCAPE2.0 appears after the extension introducer; validate the full
+  # 19-byte structure before trusting its repeat count.
   [[ "$offset" =~ ^[0-9]+$ ]] && [ "$offset" -ge 3 ] || return 1
   bytes="$(od -An -v -tu1 -w19 -j "$((offset - 3))" -N 19 "$path" 2>/dev/null)" || return 1
   local -a extension=()
@@ -6510,7 +6513,10 @@ action_videoframes() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --mode|--at|--format|--grid)
-        [ "$#" -ge 2 ] || { progress_error "$(gettext 'Frame options require values.')"; return 2; }
+        [ "$#" -ge 2 ] || {
+          progress_error "$(gettext 'Frame options require values.')"
+          return 2
+        }
         option="$1"
         shift
         case "$option" in
@@ -6521,13 +6527,27 @@ action_videoframes() {
         esac
         shift
         ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; raw+=("$@"); break ;;
-      -*) progress_error "$(gettext 'Unknown frame option:') $1"; return 2 ;;
-      *) raw+=("$@"); break ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        raw+=("$@")
+        break
+        ;;
+      -*)
+        progress_error "$(gettext 'Unknown frame option:') $1"
+        return 2
+        ;;
+      *)
+        raw+=("$@")
+        break
+        ;;
     esac
   done
   video_utility_files files "${raw[@]}" || return 1
+  # Interactive defaults are resolved before validating the same CLI contract.
   if [ "$interactive" = true ]; then
     [ -n "$mode" ] || mode="$(kdialog --combobox "$(gettext 'Frame extraction mode:')" single single thumbnail contact)" || return 1
     [ "$mode" != single ] || at="$(kdialog --inputbox "$(gettext 'Timestamp (HH:MM:SS[.sss]):')" '00:00:01')" || return 1
@@ -6575,9 +6595,22 @@ action_videoframes() {
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     }
-    video_utility_probe "$source" || { report_fail "$source — $(gettext 'invalid video')"; progress_value "$ref" "$index"; continue; }
-    [ "$VU_VIDEO_COUNT" -gt 0 ] || { report_fail "$source — $(gettext 'no video stream')"; progress_value "$ref" "$index"; continue; }
-    if progress_cancelled "$ref"; then report_fail "$source — $(gettext 'interrupted before frame extraction')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    video_utility_probe "$source" || {
+      report_fail "$source — $(gettext 'invalid video')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    [ "$VU_VIDEO_COUNT" -gt 0 ] || {
+      report_fail "$source — $(gettext 'no video stream')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    if progress_cancelled "$ref"; then
+      report_fail "$source — $(gettext 'interrupted before frame extraction')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
     duration="$VU_DURATION"
     sample="$at"
     case "$mode" in
@@ -6597,7 +6630,11 @@ action_videoframes() {
     esac
     video_utility_target "$source" "$tag" "$ext"
     target="$VIDEO_UTILITY_TARGET"
-    stage="$(tmp_for_target "$target")" || { report_fail "$source — $(gettext 'staging failed')"; progress_value "$ref" "$index"; continue; }
+    stage="$(tmp_for_target "$target")" || {
+      report_fail "$source — $(gettext 'staging failed')"
+      progress_value "$ref" "$index"
+      continue
+    }
     local error_file="${stage%/*}/ffmpeg.stderr"
     rc=0
     if [ "$mode" = contact ]; then
@@ -6608,6 +6645,8 @@ action_videoframes() {
       local basename="${source##*/}" escaped tile_filter
       sample_rate="$(awk -v n="$samples" -v d="$duration" 'BEGIN { printf "%.6f", n/d }')"
       escaped="${basename//\\/\\\\}"; escaped="${escaped//:/\\:}"; escaped="${escaped//\'/\\\'}"; escaped="${escaped//%/\\%}"; escaped="${escaped//,/\\,}"; escaped="${escaped//;/\\;}"
+      # Preserve the filter graph as one argument; escaping above protects
+      # embedded filenames from FFmpeg's filter expression parser.
       tile_filter="fps=$sample_rate,scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2,drawtext=text='%{pts\\:hms}':x=4:y=h-th-4:fontsize=14:fontcolor=white:box=1:boxcolor=black@0.65,tile=${columns}x${rows}:nb_frames=${samples}:padding=0:margin=0,pad=iw:ih+40:0:40:black,drawtext=text='$escaped':x=8:y=8:fontsize=18:fontcolor=white"
       args=(-hide_banner -v error -nostdin -n -i "$source" -vf "$tile_filter" -frames:v 1 -progress pipe:1 -nostats -f image2)
       [ "$ext" != jpg ] || args+=(-q:v 3)
@@ -6667,10 +6706,23 @@ action_videoaudio() {
         [ "$option" != --format ] || format="$1"
         shift
         ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; raw+=("$@"); break ;;
-      -*) progress_error "$(gettext 'Unknown audio option:') $1"; return 2 ;;
-      *) raw+=("$@"); break ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        raw+=("$@")
+        break
+        ;;
+      -*)
+        progress_error "$(gettext 'Unknown audio option:') $1"
+        return 2
+        ;;
+      *)
+        raw+=("$@")
+        break
+        ;;
     esac
   done
   video_utility_files files "${raw[@]}" || return 1
@@ -6700,13 +6752,35 @@ action_videoaudio() {
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
-    index=$((index+1)); progress_begin_item "$ref" "$(gettext 'Kim — Video audio:') ${source##*/}" || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
-    video_utility_probe "$source" || { report_fail "$source — $(gettext 'invalid video')"; progress_value "$ref" "$index"; continue; }
-    [ "$VU_VIDEO_COUNT" -gt 0 ] || { report_fail "$source — $(gettext 'no video stream')"; progress_value "$ref" "$index"; continue; }
-    if progress_cancelled "$ref"; then report_fail "$source — $(gettext 'interrupted before audio processing')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    index=$((index+1))
+    progress_begin_item "$ref" "$(gettext 'Kim — Video audio:') ${source##*/}" || {
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    }
+    video_utility_probe "$source" || {
+      report_fail "$source — $(gettext 'invalid video')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    [ "$VU_VIDEO_COUNT" -gt 0 ] || {
+      report_fail "$source — $(gettext 'no video stream')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    if progress_cancelled "$ref"; then
+      report_fail "$source — $(gettext 'interrupted before audio processing')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
     duration="$VU_DURATION"
     if [ "$mode" = extract ]; then
-      if [ "$VU_AUDIO_COUNT" -eq 0 ]; then report_fail "$source — $(gettext 'no audio stream')"; progress_value "$ref" "$index"; continue; fi
+      if [ "$VU_AUDIO_COUNT" -eq 0 ]; then
+        report_fail "$source — $(gettext 'no audio stream')"
+        progress_value "$ref" "$index"
+        continue
+      fi
       # Audio export intentionally selects a:0; make the omission visible.
       if [ "$VU_AUDIO_COUNT" -gt 1 ]; then
         progress_label "$ref" "$(gettext 'Exporting the first audio stream only; additional streams are omitted:') ${source##*/}" || {
@@ -6726,7 +6800,11 @@ action_videoaudio() {
       target="$source"
       target="${target%.*}-audio.$extension"
     else
-      if [ "$VU_AUDIO_COUNT" -eq 0 ]; then report_ok; progress_value "$ref" "$index"; continue; fi
+      if [ "$VU_AUDIO_COUNT" -eq 0 ]; then
+        report_ok
+        progress_value "$ref" "$index"
+        continue
+      fi
       tag=muted
       extension="${source##*.}"
       # Retain a recognized source container; otherwise choose from the
@@ -6763,19 +6841,30 @@ action_videoaudio() {
         collision=$((collision+1))
       done
     done
-    stage="$(tmp_for_target "$target")" || { report_fail "$source — $(gettext 'staging failed')"; progress_value "$ref" "$index"; continue; }
+    stage="$(tmp_for_target "$target")" || {
+      report_fail "$source — $(gettext 'staging failed')"
+      progress_value "$ref" "$index"
+      continue
+    }
     error_file="${stage%/*}/ffmpeg.stderr"
     rc=0
     if [ "$mode" = extract ]; then
       args=(-hide_banner -v error -nostdin -n -i "$source" -map 0:a:0 -vn -progress pipe:1 -nostats -c:a "$encoder")
-      case "$format" in mp3) args+=(-q:a 2) ;; m4a) [ "$encoder" = copy ] || args+=(-b:a 192k) ;; esac
+      case "$format" in
+        mp3) args+=(-q:a 2) ;;
+        m4a) [ "$encoder" = copy ] || args+=(-b:a 192k) ;;
+      esac
       args+=(-f "$([[ "$format" == m4a ]] && printf ipod || printf '%s' "$format")" "$stage")
     else
       args=(-hide_banner -v error -nostdin -n -i "$source" -map 0 -map -0:a -map_metadata 0 -map_chapters 0 -c copy -progress pipe:1 -nostats "$stage")
     fi
     video_run_monitored "$ref" "$(gettext 'Video audio')" "$duration" "$error_file" "${args[@]}" || rc=$?
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no audio artifact was published')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      report_fail "$source — $(gettext 'interrupted; no audio artifact was published')"
+      rm -f -- "$stage"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
     fi
     local valid=false probe actual_format output_duration
     if [ "$rc" -eq 0 ] && [ -s "$stage" ]; then
@@ -6810,6 +6899,8 @@ action_videoaudio() {
             -i "$stage" -map 0:a:0 -f null - || valid=false
         fi
       else
+        # Mute copies the video streams, so their codecs must match the source.
+        # Separately allow small container-duration differences after remuxing.
         local input_video_codecs output_video_codecs input_duration="$duration"
         input_video_codecs="$(ffprobe -v error -select_streams v -show_entries stream=codec_name -of csv=p=0 -i "$source" 2>/dev/null)" || input_video_codecs=''
         output_video_codecs="$(ffprobe -v error -select_streams v -show_entries stream=codec_name -of csv=p=0 -i "$stage" 2>/dev/null)" || output_video_codecs=''
@@ -6868,10 +6959,23 @@ action_videogif() {
         esac
         shift
         ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; raw+=("$@"); break ;;
-      -*) progress_error "$(gettext 'Unknown video GIF option:') $1"; return 2 ;;
-      *) raw+=("$@"); break ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        raw+=("$@")
+        break
+        ;;
+      -*)
+        progress_error "$(gettext 'Unknown video GIF option:') $1"
+        return 2
+        ;;
+      *)
+        raw+=("$@")
+        break
+        ;;
     esac
   done
   video_utility_files files "${raw[@]}" || return 1
@@ -6904,10 +7008,28 @@ action_videogif() {
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
-    index=$((index+1)); progress_begin_item "$ref" "$(gettext 'Kim — Video GIF:') ${source##*/}" || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
-    video_utility_probe "$source" || { report_fail "$source — $(gettext 'invalid video')"; progress_value "$ref" "$index"; continue; }
-    [ "$VU_VIDEO_COUNT" -gt 0 ] || { report_fail "$source — $(gettext 'no video stream')"; progress_value "$ref" "$index"; continue; }
-    if progress_cancelled "$ref"; then report_fail "$source — $(gettext 'interrupted before GIF encoding')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    index=$((index+1))
+    progress_begin_item "$ref" "$(gettext 'Kim — Video GIF:') ${source##*/}" || {
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    }
+    video_utility_probe "$source" || {
+      report_fail "$source — $(gettext 'invalid video')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    [ "$VU_VIDEO_COUNT" -gt 0 ] || {
+      report_fail "$source — $(gettext 'no video stream')"
+      progress_value "$ref" "$index"
+      continue
+    }
+    if progress_cancelled "$ref"; then
+      report_fail "$source — $(gettext 'interrupted before GIF encoding')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
     awk -v s="$start" -v d="$duration" -v total="$VU_DURATION" 'BEGIN { split(s,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < total && x+d <= total) }' || { report_fail "$source — $(gettext 'GIF interval exceeds video duration; shorten the requested interval')"; progress_value "$ref" "$index"; continue; }
     local rotation_data
     rotation_data="$(ffprobe -v error -select_streams v:0 -show_entries stream_side_data=rotation -of default=noprint_wrappers=1:nokey=1 -i "$source" 2>/dev/null)"
@@ -6921,7 +7043,13 @@ action_videogif() {
     fi
     # Cap width × height × estimated frames before allocating encoder work.
     work_frames="$(awk -v d="$duration" -v f="$fps" 'BEGIN { print int(d*f)+1 }')"
-    if ! awk -v iw="$oriented_width" -v ih="$oriented_height" -v maxw="$width" -v frames="$work_frames" 'BEGIN { if(iw<1||ih<1)exit 1; w=(iw<maxw?iw:maxw); h=int((ih*w/iw)+0.999999); if(h<1)h=1; exit !(w*h*frames <= 200000000) }'; then
+    if ! awk -v iw="$oriented_width" -v ih="$oriented_height" -v maxw="$width" -v frames="$work_frames" 'BEGIN {
+      if (iw < 1 || ih < 1) exit 1
+      w = (iw < maxw ? iw : maxw)
+      h = int((ih * w / iw) + 0.999999)
+      if (h < 1) h = 1
+      exit !(w * h * frames <= 200000000)
+    }'; then
       report_fail "$source — $(gettext 'GIF request exceeds the 200 million output pixel-frame work limit; lower the frame rate, width or duration')"; progress_value "$ref" "$index"; continue
     fi
     tag=animated
@@ -6939,7 +7067,11 @@ action_videogif() {
     rc=0
     video_run_monitored "$ref" "$(gettext 'Video GIF')" "$duration" "$error_file" "${args[@]}" || rc=$?
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no GIF was published')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      report_fail "$source — $(gettext 'interrupted; no GIF was published')"
+      rm -f -- "$stage"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
     fi
     # Validate the encoded artifact, not merely FFmpeg's return status.
     info=""
@@ -6959,7 +7091,11 @@ action_videogif() {
         -i "$stage" -map 0:v -f null - || decode_rc=$?
     fi
     if [ "$rc" -eq 130 ] || [ "$decode_rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no GIF was published')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      report_fail "$source — $(gettext 'interrupted; no GIF was published')"
+      rm -f -- "$stage"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
     fi
     loop_marker=false
     if [ "$rc" -eq 0 ] && video_gif_loop_valid "$stage" "$loop"; then
@@ -6974,7 +7110,10 @@ action_videogif() {
       ! [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_width" -le "$width" && "$actual_height" =~ ^[1-9][0-9]*$ && "$frames" =~ ^[1-9][0-9]*$ && "$frames" -gt 1 ]] || \
       ! awk -v a="$duration" -v b="$output_duration" -v f="$fps" 'BEGIN { if(a!~/^[0-9]+([.][0-9]+)?$/||b!~/^[0-9]+([.][0-9]+)?$/)exit 1;d=a-b;if(d<0)d=-d;tol=1/f;exit !(d<=tol) }' || \
       [ "$frames" -lt "$(awk -v d="$duration" -v f="$fps" 'BEGIN { print int(d*f) }')" ]; then
-      report_fail "$source — $(gettext 'GIF output is invalid or contains fewer than two frames')"; rm -f -- "$stage"; progress_value "$ref" "$index"; continue
+      report_fail "$source — $(gettext 'GIF output is invalid or contains fewer than two frames')"
+      rm -f -- "$stage"
+      progress_value "$ref" "$index"
+      continue
     fi
     if video_utility_publish "$ref" "$stage" "$source" "$tag" gif; then
       report_ok
@@ -7049,10 +7188,23 @@ action_slideshow() {
         esac
         shift
         ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; files+=("$@"); break ;;
-      --*) progress_error "$(gettext 'Unknown slideshow option:') $1"; return 2 ;;
-      *) files+=("$1"); shift ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        files+=("$@")
+        break
+        ;;
+      --*)
+        progress_error "$(gettext 'Unknown slideshow option:') $1"
+        return 2
+        ;;
+      *)
+        files+=("$1")
+        shift
+        ;;
     esac
   done
   if [ "$interactive" = true ]; then
@@ -7144,7 +7296,10 @@ action_slideshow() {
   for source in "${ordered[@]}"; do
     index=$((index + 1))
     if ! progress_begin_item "$ref" "$(gettext 'Kim — Preparing photo:') ${source##*/}" || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted before frame preparation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      report_fail "$source — $(gettext 'interrupted before frame preparation')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
     fi
     case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][dD]|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
       report_fail "$source — $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
@@ -7154,7 +7309,12 @@ action_slideshow() {
     [[ "$source_width" =~ ^[1-9][0-9]*$ && "$source_height" =~ ^[1-9][0-9]*$ && "$frames" == 1 ]] || rc=1
     source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
     if [[ "${colorspace,,}" == *cmyk* && -z "$source_icc" ]]; then rc=1; fi
-    if [ "$rc" -ne 0 ]; then report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame photograph')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame photograph')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
     local frame_path
     printf -v frame_path '%s/slide_%04d.png' "${stage%/*}" "$index"
     if slideshow_run_magick_monitored "$ref" "$source" "$frame_path" magick - -auto-orient -profile "$srgb_profile" -profile "$rec709_profile" -resize "${width}x${height}>" \
@@ -7163,14 +7323,25 @@ action_slideshow() {
     else
       rc=$?
       if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-        report_fail "$source — $(gettext 'interrupted during frame preparation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+        report_fail "$source — $(gettext 'interrupted during frame preparation')"
+        progress_close "$ref" || true
+        report_finish_dialog "$(gettext 'Kim')"
+        return 1
       fi
-      report_fail "$source — $(gettext 'frame preparation failed')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      report_fail "$source — $(gettext 'frame preparation failed')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
     fi
     local frame_check
     frame_check="$(identify -regard-warnings +ping -format '%m|%w|%h|%n\n' - < "$frame_path" 2>/dev/null)" || rc=1
     [ "$frame_check" = "PNG|$width|$height|1" ] || rc=1
-    if [ "$rc" -ne 0 ]; then report_fail "$source — $(gettext 'prepared frame failed validation')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$source — $(gettext 'prepared frame failed validation')"
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    fi
     frames_out+=("$frame_path")
     progress_value "$ref" "$index" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
   done
@@ -7178,7 +7349,12 @@ action_slideshow() {
     report_fail "$(gettext 'No slideshow frames prepared.')"
     return 1
   }
-  if progress_cancelled "$ref"; then report_fail "$(gettext 'Slideshow interrupted before encoding.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+  if progress_cancelled "$ref"; then
+    report_fail "$(gettext 'Slideshow interrupted before encoding.')"
+    progress_close "$ref" || true
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
   error_file="${stage%/*}/ffmpeg.stderr"
   local -a ffargs=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats)
   filter_chain=''
@@ -7198,8 +7374,18 @@ action_slideshow() {
   else
     rc=$?
   fi
-  if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then report_fail "$(gettext 'Slideshow interrupted during encoding.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
-  if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then report_fail "$(gettext 'Slideshow encoder failed or produced no output.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
+  if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
+    report_fail "$(gettext 'Slideshow interrupted during encoding.')"
+    progress_close "$ref" || true
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
+  if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
+    report_fail "$(gettext 'Slideshow encoder failed or produced no output.')"
+    progress_close "$ref" || true
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
   local probe format_line
   probe="$(ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=codec_name,width,height,r_frame_rate,nb_read_frames -of csv=p=0 -i "$stage" 2>/dev/null)" || rc=1
   IFS=, read -r codec actual_width actual_height actual_fps actual_frames <<< "$probe"
@@ -7225,11 +7411,26 @@ action_slideshow() {
       -hide_banner -v error -xerror -nostdin -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -an -f null - || rc=$?
   fi
   if [ "$rc" -ne 0 ] || progress_cancelled "$ref"; then
-    report_fail "$(gettext 'Slideshow failed container, frame, duration or full-decode validation.')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+    report_fail "$(gettext 'Slideshow failed container, frame, duration or full-decode validation.')"
+    progress_close "$ref" || true
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
   fi
+  # Explicit destinations use an exclusive create; generated names also retry
+  # raced collisions. Neither path replaces a selected photograph.
   if [ -n "$output" ]; then
-    if ! commit_tmp_to_target "$stage" "$target" create; then report_fail "$(gettext 'Slideshow publication failed; destination was preserved.')"; rc=1; else report_ok; fi
-  elif video_utility_publish "$ref" "$stage" "${ordered[0]}" slideshow mp4; then report_ok; else report_fail "$(gettext 'Slideshow publication failed or was interrupted.')"; rc=1; fi
+    if ! commit_tmp_to_target "$stage" "$target" create; then
+      report_fail "$(gettext 'Slideshow publication failed; destination was preserved.')"
+      rc=1
+    else
+      report_ok
+    fi
+  elif video_utility_publish "$ref" "$stage" "${ordered[0]}" slideshow mp4; then
+    report_ok
+  else
+    report_fail "$(gettext 'Slideshow publication failed or was interrupted.')"
+    rc=1
+  fi
   rm -f -- "$error_file" "${frames_out[@]}" 2>/dev/null || true
   progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ]
 }
