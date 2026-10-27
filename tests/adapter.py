@@ -5,6 +5,7 @@ Unknown invocations fail closed. Writes stay within registered, owned fixture ro
 Filesystem adapters are deliberately narrow: extend them with tests when needed.
 """
 import json
+import re
 import base64
 import hashlib
 import os
@@ -683,6 +684,57 @@ def real_gallery_collage_tool(tools, tool, args):
             raise ValueError('gallery/collage inspection requires a small owned image')
         return subprocess.run([executable, *args], timeout=20,
                               env=dict(os.environ, PATH=os.defpath)).returncode
+    # New KIM6 collage layouts: permit only small, owned ImageMagick stages.
+    # Keep the old collage producer's strict command grammar unchanged.
+    if tool == 'magick' and args[:1] == ['-size']:
+        if (len(args) != 4 or not re.fullmatch(r'[1-9][0-9]{2,3}x[1-9][0-9]{2,3}', args[1])
+                or not args[2].startswith('xc:')):
+            raise ValueError('unsupported collage canvas initialization')
+        width, height = map(int, args[1].split('x'))
+        output = owned(args[-1].removeprefix('PNG:'))
+        if (width > 1024 or height > 1024 or not is_private_stage(output)
+                or output.exists() or not args[-1].startswith('PNG:')):
+            raise ValueError('collage canvas is outside test bounds')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'magick' and args[:3] == ['--', '-[0]', '-auto-orient']:
+        output = owned(args[-1].removeprefix('PNG:'))
+        payload = sys.stdin.buffer.read(1048577)
+        if (len(payload) > 131072 or not payload.startswith((b'P6\n', b'P3\n'))
+                or args[3] != '-resize' or '-extent' not in args
+                or not is_private_stage(output) or output.exists()
+                or not args[-1].startswith('PNG:')):
+            raise ValueError('unsupported new collage tile')
+        return subprocess.run([executable, *args], input=payload, timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'magick' and len(args) >= 4 and args[1] == '(':
+        source = owned(args[0])
+        output = owned(args[-1].removeprefix('PNG:'))
+        if (not source.is_file() or not is_private_stage(source)
+                or not is_private_stage(output) or output.exists()
+                or '-shadow' not in args or not args[-1].startswith('PNG:')):
+            raise ValueError('unsupported new collage shadow')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'magick' and args[:1] == ['--'] and '-composite' in args:
+        if len(args) < 6 or args[-2] != '-composite':
+            raise ValueError('unsupported new collage composition')
+        canvas = owned(args[1]); tile = owned(args[2])
+        output = owned(args[-1].removeprefix('PNG:'))
+        if (not all(path.is_file() and is_private_stage(path) and path.stat().st_size <= 8388608
+                    for path in (canvas, tile))
+                or not is_private_stage(output) or output.exists()
+                or not args[-1].startswith('PNG:')):
+            raise ValueError('new collage composition must stay in private staging')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
+    if tool == 'magick' and args[:1] == ['--'] and len(args) == 3 and args[-1].startswith('PNG:'):
+        source = owned(args[1]); output = owned(args[-1].removeprefix('PNG:'))
+        if (not source.is_file() or not is_private_stage(source)
+                or not is_private_stage(output) or source.stat().st_size > 8388608):
+            raise ValueError('new collage finalization must stay in private staging')
+        return subprocess.run([executable, *args], timeout=30,
+                              env=dict(os.environ, PATH=os.defpath)).returncode
     if args[:1] == ['montage']:
         if len(args) < 10 or args[1] != '-background' or args[3] != '-tile' or args[5] != '-geometry' or args[7] != '--':
             raise ValueError('unsupported real collage montage')
@@ -698,7 +750,8 @@ def real_gallery_collage_tool(tools, tool, args):
     # Gallery main image producer consumes stdin; all collage producers consume
     # one test-owned PPM source and write one private PNG tile.
     if args[:1] == ['-']:
-        if len(args) != 4 or args[1:3] != ['-resize', '800x800']:
+        if (len(args) != 4 or args[1] != '-resize'
+                or args[2] not in ('1920x1920>', '3840x3840>')):
             raise ValueError('unsupported real gallery image producer')
         output = owned(args[-1].split(':', 1)[1])
         if output.suffix != '.ppm' or not output.parent.name == 'images':
@@ -706,7 +759,7 @@ def real_gallery_collage_tool(tools, tool, args):
         return subprocess.run([executable, *args], stdin=sys.stdin.buffer, timeout=20,
                               env=dict(os.environ, PATH=os.defpath)).returncode
     if args[:1] == ['--']:
-        if len(args) == 5 and args[1].endswith('[0]') and args[2:4] == ['-resize', '200x200']:
+        if len(args) == 5 and args[1].endswith('[0]') and args[2:4] == ['-resize', '360x360>']:
             source = owned(args[1][:-3])
             output = owned(args[-1].removeprefix('PNG:'))
             if (source.suffix not in ('.ppm', '.png') or source.stat().st_size > 8388608

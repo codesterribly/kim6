@@ -1,34 +1,46 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
-<title>Image gallery (Kde Image Menu)</title>
-<style type="text/css">
-body {
-    background:#eee;
-    text-align:center;
-    height:100%;
-    padding-top:1em;
-}
-a,p {
-    color:#aaa;
-    font-family:Verdana,Arial,Helvetica,Sans-serif;
-    text-decoration:none;
-    font-size:xx-small;
-}
-a:hover {
-    color:#666;
-    text-decoration:underline;
-}
-img.photo { 
-    border: 5px solid #ffffff;
-}
-table {
-    text-align: center;
-    margin-left: auto;
-    margin-right: auto;
-}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>KIM6 Photography Gallery</title>
+<style>
+:root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #121417; color: #f0f2f3; }
+body.light { background: #f6f7f8; color: #242932; }
+.gallery-header { margin: auto; max-width: 1440px; padding: 3.5rem 2rem 1.7rem; }
+.gallery-header h1 { font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 550; letter-spacing: -.035em;
+                    overflow-wrap: anywhere; margin: 0 0 .65rem; }
+.gallery-header p { color: #a6adb6; margin: 0; }
+body.light .gallery-header p { color: #586473; }
+.gallery { max-width: 1440px; padding: 0 2rem 3rem; margin: 0 auto;
+           display: grid; grid-template-columns: repeat(var(--columns, 4), minmax(0, 1fr)); gap: 1.4rem; }
+.gallery-item { margin: 0; min-width: 0; }
+.gallery-item a { display: block; border-radius: 6px; overflow: hidden; background: #23272c;
+                  outline-offset: 4px; }
+.gallery-item img { display: block; width: 100%; height: 250px; object-fit: cover;
+                    transition: transform .2s ease; }
+.gallery-item a:hover img { transform: scale(1.025); }
+.gallery-item figcaption { padding: .65rem .1rem; color: #b8bec6; font-size: .86rem; overflow-wrap: anywhere; }
+body.light .gallery-item figcaption { color: #526070; }
+.gallery-footer { text-align: center; padding: 1.5rem; color: #8e959d; font-size: .8rem; }
+.gallery-footer a { color: inherit; }
+.lightbox { position: fixed; inset: 0; border: 0; padding: 2rem; max-width: none; max-height: none;
+            width: 100%; height: 100%; color: white; background: rgba(8, 10, 12, .97); }
+.lightbox::backdrop { background: rgba(8, 10, 12, .97); }
+.lightbox-content { display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    width: 100%; height: 100%; gap: 1rem; }
+.lightbox img { max-width: 96%; max-height: 84vh; width: auto; height: auto; object-fit: contain; }
+.lightbox-toolbar { display: flex; justify-content: center; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.lightbox button { background: #262b31; color: white; border: 1px solid #49515a; border-radius: 5px;
+                   padding: .55rem .9rem; cursor: pointer; font: inherit; }
+.lightbox-caption { color: #bbc1c9; overflow-wrap: anywhere; }
+@media (max-width: 850px) { .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+  .gallery-item img { height: 220px; } .gallery-header { padding: 2rem 1rem 1rem; } .gallery { padding: 0 1rem 2rem; } }
+@media (max-width: 500px) { .gallery { grid-template-columns: 1fr; } .gallery-item img { height: auto; max-height: 440px; object-fit: contain; } }
+@media (prefers-reduced-motion: reduce) { .gallery-item img { transition: none; } }
 </style>
 </head>
 <body>

@@ -27,6 +27,123 @@ class GalleryCollageTests(unittest.TestCase):
         self.assertTrue(any(path.is_dir() and path.name.startswith('kim-gallery-')
                             for path in self.w.path('out').iterdir()))
 
+    def test_modern_grid_layout_retains_sources_and_exact_canvas(self):
+        self.w.use_real_gallery_collage()
+        other = self.w.ppm('source/second.ppm')
+        output = self.w.path('out/grid.png')
+        before = (self.w.observe(self.source), self.w.observe(other))
+        result = self.w.dispatch(
+            'pelemele', '--layout', 'grid', '--canvas', '400x300',
+            '--fit', 'fit', '--gap', '12', '--frame', 'none',
+            '--no-shadow', '--output', output, '--', self.source, other,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.w.observe(self.source), self.w.observe(other)), before)
+        self.assertTrue(output.is_file())
+        dims = self.w.command('identify', '-regard-warnings', '-format',
+                              '%m|%w|%h|%T|%n|%#\\n', '--', output)
+        self.assertTrue(dims.stdout.startswith('PNG|400|300|'), dims.stdout)
+
+    def _assert_modern_layout(self, layout):
+        self.w.use_real_gallery_collage()
+        second = self.w.ppm('source/second.ppm')
+        inputs = (self.source, second)
+        before = tuple(self.w.observe(source) for source in inputs)
+        output = self.w.path(f'out/{layout}.png')
+        result = self.w.dispatch(
+            'pelemele', '--layout', layout, '--canvas', '400x300',
+            '--gap', '12', '--fit', 'fill', '--frame', 'thin',
+            '--no-shadow', '--output', output, '--', *inputs,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        dimensions = self.w.command('identify', '-regard-warnings', '-format',
+                                    '%m|%w|%h|%T|%n|%#\\n', '--', output)
+        self.assertTrue(dimensions.stdout.startswith('PNG|400|300|'), dimensions.stdout)
+        self.assertEqual(tuple(self.w.observe(source) for source in inputs), before)
+        self.assertFalse(any(path.name == 'collage-tiles' for path in
+                             self.w.path('out').rglob('*')))
+        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in
+                             self.w.path('out').iterdir()))
+
+    def test_mosaic_layout_keeps_sources_and_cleans_tiles(self):
+        self._assert_modern_layout('mosaic')
+
+    def test_hero_layout_keeps_sources_and_cleans_tiles(self):
+        self._assert_modern_layout('hero')
+
+    def test_filmstrip_layout_keeps_sources_and_cleans_tiles(self):
+        self._assert_modern_layout('filmstrip')
+
+    def test_grid_failure_does_not_replace_existing_output_or_leave_staging(self):
+        self.w.use_real_gallery_collage()
+        target = self.w.path('out/previous.png')
+        target.write_bytes(b'previous content')
+        old = self.w.observe(target)
+        self.w.env['KIM_POLICY'] = 'overwrite'
+        self.w.respond('magick', status=1)
+        result = self.w.dispatch('pelemele', '--layout', 'grid', '--canvas', '400x300',
+                                 '--no-shadow', '--output', target, '--', self.source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.w.observe(target), old)
+        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in
+                             self.w.path('out').iterdir()))
+
+    def test_collage_interactive_options_are_exposed(self):
+        self.w.use_real_gallery_collage()
+        target = self.w.path('out/interactive.png')
+        # Cancel at custom canvas selection to check the full layout UI up to
+        # that point without performing a large 3840px encode.
+        self.w.respond_to('kdialog', 'Choose a collage layout:', {'stdout': 'grid\n'})
+        self.w.respond_to('kdialog', 'Collage canvas size:', {'stdout': 'custom\n'})
+        self.w.respond_to('kdialog', 'Canvas dimensions (WIDTHxHEIGHT):', {'stdout': '400x300\n'})
+        self.w.respond_to('kdialog', 'Drop shadows:', {'stdout': 'false\n'})
+        self.w.respond_to('kdialog', 'Photo order:', {'stdout': 'selected\n'})
+        self.w.respond_to('kdialog', '--getsavefilename', {'stdout': str(target) + '\n'})
+        result = self.w.dispatch('pelemele', '--', self.source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(target.is_file())
+        dialogs = [call['argv'] for call in result.calls if call['tool'] == 'kdialog']
+        self.assertTrue(any('Drop shadows:' in argv for argv in dialogs))
+        self.assertTrue(any('Photo order:' in argv for argv in dialogs))
+        self.assertTrue(any('Collage background:' in argv for argv in dialogs))
+        self.assertTrue(any('Custom canvas size' in repr(argv) for argv in dialogs))
+
+    def test_gallery_template_fallback_has_offline_lightbox(self):
+        self.w.use_real_gallery_collage()
+        gallery_resources = self.w.path('gallery')
+        (gallery_resources / 'index.part1').unlink()
+        (gallery_resources / 'index.part2').unlink()
+        self.w.respond('xdg-open', status=0)
+        result = self.w.dispatch('gallery', self.w.root, self.source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        directories = [path for path in self.w.path('out').iterdir()
+                       if path.name.startswith('kim-gallery-') and path.is_dir()]
+        self.assertEqual(len(directories), 1)
+        html = (directories[0] / 'index.html').read_text()
+        self.assertIn('class="lightbox"', html)
+        self.assertIn('ArrowLeft', html)
+        self.assertIn('ArrowRight', html)
+        self.assertNotIn('https://cdn.', html)
+
+    def test_gallery_resolution_selector_supports_high_resolution(self):
+        self.w.use_real_gallery_collage()
+        self.w.respond_to('kdialog', 'Gallery image resolution:', {'stdout': '3840\n'})
+        self.w.respond('xdg-open', status=0)
+        result = self.w.dispatch('gallery', self.w.root, self.source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any(call['tool'] == 'magick' and '3840x3840>' in call['argv']
+                            for call in result.calls))
+
+    def test_modern_collage_rejects_invalid_canvas_before_publication(self):
+        self.w.use_real_gallery_collage()
+        output = self.w.path('out/invalid.png')
+        result = self.w.dispatch(
+            'pelemele', '--layout', 'mosaic', '--canvas', '400x0',
+            '--no-shadow', '--output', output, '--', self.source,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(output.exists())
+
     def test_pelemele_dispatcher_creates_a_collage_artifact(self):
         self.w.use_real_gallery_collage()
         output = self.w.path('out/collage.png')
@@ -60,16 +177,17 @@ class GalleryCollageTests(unittest.TestCase):
         self.assertIn('&lt;&amp;&quot;雪&gt;.ppm', html)
         self.assertIn('href="images/image_1.ppm"', html)
         self.assertIn('src="thumbs/image_2.png"', html)
-        self.assertIn('</tr><tr>', html)
+        self.assertIn('<main class="gallery"', html)
+        self.assertIn('class="lightbox"', html)
         self.assertTrue((gallery / 'images/image_1.ppm').is_file())
         self.assertTrue((gallery / 'thumbs/image_1.png').is_file())
         dims = self.w.command('identify', '-regard-warnings', '-format', '%m|%w|%h|%T|%n|%#\\n', '--', gallery / 'images/image_1.ppm')
-        self.assertIn('|800|533|', dims.stdout)
+        self.assertIn('|3|2|', dims.stdout)
         self.assertEqual(len(list((gallery / 'images').iterdir())), 2)
         self.assertEqual(self.w.observe(first), first_before)
         self.assertEqual(self.w.observe(second), second_before)
         thumb_dims = self.w.command('identify', '-regard-warnings', '-format', '%m|%w|%h|%T|%n|%#\\n', '--', gallery / 'thumbs/image_1.png')
-        self.assertIn('PNG|200|133|', thumb_dims.stdout)
+        self.assertIn('PNG|3|2|', thumb_dims.stdout)
         browser_calls = [call for call in result.calls if call['tool'] == 'xdg-open']
         self.assertEqual(len(browser_calls), 1)
         self.assertIn(str(gallery / 'index.html'), browser_calls[0]['argv'])

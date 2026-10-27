@@ -1903,17 +1903,23 @@ action_flipflop() {
   shift
   [ "${1:-}" != -- ] || shift
   [ "$#" -gt 0 ] || die "flipflop: missing files"
-  case "$operation" in flip|flop) ;; *) die "flipflop: expected flip or flop" ;; esac
+  case "$operation" in
+    flip|flop)
+      ;;
+    *)
+      die "flipflop: expected flip or flop"
+      ;;
+  esac
   action_transform_in_place fresh "-$operation" "$@"
 }
 
 ####################
-# Create a static HTML gallery with resized images and thumbnails.
+# Create a responsive, offline HTML gallery with a dark default theme.
 #
 # Usage: gallery <dir> <files...>
 #
 # Behavior:
-# - Prompts for gallery title, author, and column count.
+# - Prompts for gallery title, author, column count, appearance, and resolution.
 # - Prompts for a base output directory (chooser starts in <dir> if valid).
 # - Creates a timestamped folder:
 #     kim-gallery-YYYYMMDD-HHMMSS/
@@ -1925,7 +1931,8 @@ action_flipflop() {
 # - Opens the generated index.html in the default browser.
 #
 # Notes:
-# - Uses `magick` to generate thumbnails.
+# - Exports images up to 1920 px (or 3840 px on request), thumbnails up to 360 px.
+# - The existing HTML templates embed their own CSS and JavaScript; no CDN.
 # - If index.part1 and index.part2 exist, uses them as templates, otherwise generates a basic HTML page.
 
 action_gallery() {
@@ -1940,6 +1947,16 @@ action_gallery() {
   TITLE="$(kdialog --inputbox "$(gettext 'Kim - Title:')" "$(gettext 'My title ...')")" || return 1
   AUTHOR="$(kdialog --inputbox "$(gettext 'Kim - Author:')" "${USER:-}")" || return 1
   COLUMNS="$(kdialog --inputbox "$(gettext 'Kim - Number of columns:')" "4")" || return 1
+  local gallery_theme
+  gallery_theme="$(kdialog --radiolist "$(gettext 'Gallery appearance:')" \
+    dark "$(gettext 'Dark Portfolio (default)')" on \
+    light "$(gettext 'Clean Light')" off)" || return 1
+  case "$gallery_theme" in dark|light) ;; *) return 1 ;; esac
+  local gallery_max
+  gallery_max="$(kdialog --radiolist "$(gettext 'Gallery image resolution:')" \
+    1920 "$(gettext 'Standard — up to 1920 pixels')" on \
+    3840 "$(gettext 'High resolution — up to 3840 pixels')" off)" || return 1
+  case "$gallery_max" in 1920|3840) ;; *) return 1 ;; esac
 
   if ! [[ "$COLUMNS" =~ ^[0-9]{1,4}$ ]] || [ "$COLUMNS" -le 0 ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: columns must be a positive number.')"
@@ -1964,7 +1981,10 @@ action_gallery() {
 
   local ref tmp='' stage_dir gallery_dir index_file script_dir resource_dir tpl1 tpl2
   ref="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
-  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    return 1
+  fi
   # Anchor the owned stage in the existing output parent; the final gallery
   # directory must not exist until its complete tree is atomically renamed.
   tmp="$(tmp_for_target "$base_dir/index.html")" || {
@@ -1980,7 +2000,10 @@ action_gallery() {
   fi
 
   local DATE_STR etitle eauthor
-  DATE_STR="$(date +%Y%m%d)" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the current date.')"; return 1; }
+  DATE_STR="$(date +%Y%m%d)" || {
+    publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the current date.')"
+    return 1
+  }
   etitle="$(html_escape "$TITLE")"
   eauthor="$(html_escape "$AUTHOR")"
   script_dir="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || {
@@ -1991,36 +2014,46 @@ action_gallery() {
   tpl1="$resource_dir/index.part1"
   tpl2="$resource_dir/index.part2"
   if [ -f "$tpl1" ] && [ -f "$tpl2" ]; then
-    cat -- "$tpl1" > "$index_file" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the HTML template.')"; return 1; }
+    cat -- "$tpl1" > "$index_file" || {
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot read the HTML template.')"
+      return 1
+    }
   else
-    cat > "$index_file" <<EOF
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>$etitle</title>
-<style>
-body { font-family: sans-serif; }
-table { border-collapse: collapse; }
-td { padding: 10px; vertical-align: top; text-align: center; }
-img.photo { display: block; margin: 0 auto; }
-</style>
-</head>
-<body>
+    if ! cat > "$index_file" <<EOF
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>$etitle</title><style>
+body{margin:0;background:#121417;color:#f0f2f3;font-family:system-ui,sans-serif}
+body.light{background:#f6f7f8;color:#242932}
+.gallery-header,.gallery{max-width:1440px;margin:auto;padding:1rem}
+.gallery{display:grid;grid-template-columns:repeat(var(--columns,4),minmax(0,1fr));gap:1rem}
+.gallery-item{min-width:0;margin:0}.gallery-item img{display:block;width:100%;height:auto;border-radius:4px}
+.gallery-item figcaption{padding:.5rem;overflow-wrap:anywhere}
+@media(max-width:700px){.gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.gallery{grid-template-columns:1fr}}
+</style></head><body>
 EOF
-  fi || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot initialize the HTML page.')"; return 1; }
+    then
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot initialize the HTML page.')"
+      return 1
+    fi
+  fi
 
   if ! {
-    printf '<h1>%s</h1>\n' "$etitle"
-    printf '<h5>Author: %s<br>Date: %s</h5>\n' "$eauthor" "$DATE_STR"
-    printf '<table><tr>\n'
+    if [ "$gallery_theme" = light ]; then
+      printf '<script>document.body.classList.add("light")</script>\n'
+    fi
+    printf '<div class="gallery-shell">\n'
+    printf '<header class="gallery-header"><h1>%s</h1><p>By %s · %s</p></header>\n' \
+      "$etitle" "$eauthor" "$DATE_STR"
+    printf '<main class="gallery" style="--columns: %s" aria-label="Photographs">\n' "$COLUMNS"
   } >> "$index_file"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot write the HTML page.')"
     return 1
   fi
 
   report_init
-  local counter=0 col=0 file base info record format width height scenes
+  local counter=0 file base info record format width height scenes
   local image_path thumb_path image_records thumb_records image_count thumb_width thumb_height
   local asset_name='' source_format image_url thumb_url escaped_name rc=0 n=0 source_frames
   for file in "${files[@]}"; do
@@ -2040,7 +2073,10 @@ EOF
         IFS='|' read -r format width height scenes <<< "$record"
         [[ "$format" =~ ^[A-Za-z][A-Za-z0-9]{0,11}$ && "$width" =~ ^[1-9][0-9]*$ &&
            "$height" =~ ^[1-9][0-9]*$ && "$scenes" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
-        if [ "$source_frames" -eq 0 ]; then source_format="$format"; asset_name="${format,,}"; fi
+        if [ "$source_frames" -eq 0 ]; then
+          source_format="$format"
+          asset_name="${format,,}"
+        fi
         [ "$format" = "$source_format" ] || { rc=1; break; }
         source_frames=$((source_frames + 1))
       done <<< "$info"
@@ -2050,7 +2086,7 @@ EOF
     image_path="$gallery_dir/images/image_$n.$asset_name"
     thumb_path="$gallery_dir/thumbs/image_$n.png"
     if [ "$rc" -eq 0 ]; then
-      magick - -resize 800x800 "$asset_name:$image_path" < "$file" >/dev/null 2>&1 || rc=$?
+      magick - -resize "${gallery_max}x${gallery_max}>" "$asset_name:$image_path" < "$file" >/dev/null 2>&1 || rc=$?
     fi
     if progress_cancelled "$ref"; then
       report_fail "$file"
@@ -2063,12 +2099,12 @@ EOF
     while IFS= read -r record; do
       IFS='|' read -r format width height _ <<< "$record"
       [ "$format" = "${asset_name^^}" ] && [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
-      [ "$width" -le 800 ] && [ "$height" -le 800 ] || { rc=1; break; }
+      [ "$width" -le "$gallery_max" ] && [ "$height" -le "$gallery_max" ] || { rc=1; break; }
       image_count=$((image_count + 1))
     done <<< "$image_records"
     [ "$image_count" -eq "$source_frames" ] || rc=1
     if [ "$rc" -eq 0 ]; then
-      magick -- "${image_path}[0]" -resize 200x200 "PNG:$thumb_path" >/dev/null 2>&1 || rc=$?
+      magick -- "${image_path}[0]" -resize "360x360>" "PNG:$thumb_path" >/dev/null 2>&1 || rc=$?
     fi
     if progress_cancelled "$ref"; then
       report_fail "$file"
@@ -2081,7 +2117,7 @@ EOF
     while IFS= read -r record; do
       IFS='|' read -r format width height _ <<< "$record"
       [ "$format" = PNG ] && [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
-      [ "$width" -le 200 ] && [ "$height" -le 200 ] || { rc=1; break; }
+      [ "$width" -le 360 ] && [ "$height" -le 360 ] || { rc=1; break; }
       thumb_width="$width" thumb_height="$height"
       image_count=$((image_count + 1))
     done <<< "$thumb_records"
@@ -2099,9 +2135,9 @@ EOF
     thumb_assets+=("$gallery_dir/$thumb_url")
     escaped_name="$(html_escape "$base")"
     if ! {
-      printf '<td align="center"><a href="%s"><img class="photo" src="%s" width="%s" height="%s" alt="%s" title="%s"></a><p>%s</p></td>\n' \
+      printf '<figure class="gallery-item"><a href="%s"><img src="%s" width="%s" height="%s" alt="%s" loading="lazy" decoding="async"></a><figcaption>%s</figcaption></figure>\n' \
         "$(html_escape "$image_url")" "$(html_escape "$thumb_url")" "$thumb_width" "$thumb_height" \
-        "$escaped_name" "$escaped_name" "$escaped_name"
+        "$escaped_name" "$escaped_name"
     } >> "$index_file"; then
       report_fail "$file"
       report_finish_dialog "$(gettext 'Kim')"
@@ -2109,11 +2145,6 @@ EOF
       return 1
     fi
     report_ok
-    col=$((col + 1))
-    if [ "$col" -ge "$COLUMNS" ]; then
-      printf '</tr><tr>\n' >> "$index_file"
-      col=0
-    fi
     progress_value "$ref" "$counter"
     if progress_cancelled "$ref"; then
       report_fail "$file"
@@ -2124,12 +2155,58 @@ EOF
   done
 
   if [ -f "$tpl2" ]; then
-    cat -- "$tpl2" >> "$index_file" || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot finish the HTML template.')"; return 1; }
+    cat -- "$tpl2" >> "$index_file" || {
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot finish the HTML template.')"
+      return 1
+    }
   else
-    cat >> "$index_file" <<EOF
-</body>
-</html>
-EOF
+    if ! cat >> "$index_file" <<'KIM6_GALLERY_FALLBACK'
+</main></div>
+<dialog class="lightbox" aria-label="Photo viewer" style="border:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;background:#121417;color:white">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem">
+    <img id="lightbox-image" alt="" style="max-width:96%;max-height:80vh;object-fit:contain">
+    <div id="lightbox-caption"></div>
+    <div><button type="button" id="lightbox-prev">Previous</button>
+      <button type="button" id="lightbox-close">Close</button>
+      <button type="button" id="lightbox-next">Next</button></div>
+  </div>
+</dialog>
+<script>
+(() => {
+  const dialog = document.querySelector('.lightbox');
+  if (!dialog || !dialog.showModal) return;
+  const links = [...document.querySelectorAll('.gallery-item a')];
+  const image = document.getElementById('lightbox-image');
+  const caption = document.getElementById('lightbox-caption');
+  let current = 0;
+  const show = index => {
+    if (!links.length) return;
+    current = (index + links.length) % links.length;
+    image.src = links[current].href;
+    image.alt = links[current].querySelector('img').alt;
+    caption.textContent = links[current].closest('figure').querySelector('figcaption').textContent;
+  };
+  links.forEach((link, index) => link.addEventListener('click', event => {
+    event.preventDefault();
+    show(index);
+    if (!dialog.open) dialog.showModal();
+  }));
+  document.getElementById('lightbox-prev').addEventListener('click', () => show(current - 1));
+  document.getElementById('lightbox-next').addEventListener('click', () => show(current + 1));
+  document.getElementById('lightbox-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
+  });
+  dialog.addEventListener('close', () => image.removeAttribute('src'));
+})();
+</script>
+</body></html>
+KIM6_GALLERY_FALLBACK
+    then
+      publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot finish the HTML page.')"
+      return 1
+    fi
   fi
   [ -s "$index_file" ] || { publication_fail "$ref" "$tmp" "$(gettext 'Gallery: generated HTML is empty.')"; return 1; }
   local asset
@@ -2194,7 +2271,10 @@ action_print() {
   capacity=$(( ${tile%x*} * ${tile#*x} ))
   frames=0
   for file in "${files[@]}"; do
-    frame_count="$(publication_input_frames "$file")" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: an input image could not be inspected.')"; return 1; }
+    frame_count="$(publication_input_frames "$file")" || {
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: an input image could not be inspected.')"
+      return 1
+    }
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
@@ -2208,14 +2288,25 @@ action_print() {
   }
   outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
   ref="$(progress_open 2 "$(gettext 'Kim - Creating print layout ...')")"
-  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
-  tmp="$(tmp_for_target "$outpdf")" || { publication_fail "$ref" '' "$(gettext 'Print: cannot create destination-local staging.')"; return 1; }
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    return 1
+  fi
+  tmp="$(tmp_for_target "$outpdf")" || {
+    publication_fail "$ref" '' "$(gettext 'Print: cannot create destination-local staging.')"
+    return 1
+  }
   if ! magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
       -background white -- "${files[@]}" "$tmp" >/dev/null 2>&1; then rc=1; fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then
+    rc=1
+  fi
   if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Print: ImageMagick failed or produced an invalid PDF.')"; return 1; fi
   if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Print: publication interrupted; no output was written.')"; return 1; fi
-  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Print: PDF publication failed; existing files were preserved.')"; return 1; fi
+  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Print: PDF publication failed; existing files were preserved.')"
+    return 1
+  fi
   progress_value "$ref" 2
   progress_close "$ref"
   return 0
@@ -2251,7 +2342,10 @@ action_tiffjoin() {
       frames=$((frames + 1))
     done <<< "$info"
   done
-  [ "$frames" -gt 0 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"; return 1; }
+  [ "$frames" -gt 0 ] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"
+    return 1
+  }
   mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new joined TIFF?')")"
   [ "$mode" != cancel ] || return 1
   if [ -z "$requested" ]; then
@@ -2264,11 +2358,20 @@ action_tiffjoin() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
     return 1
   }
-  output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+  output="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
   ref="$(progress_open 2 "$(gettext 'Kim - Joining TIFF images ...')")"
-  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
-  tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'TIFF join: cannot create destination-local staging.')"; return 1; }
-  if ! magick -- "${files[@]}" -adjoin "$tmp" >/dev/null 2>&1; then rc=1; fi
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    return 1
+  fi
+  tmp="$(tmp_for_target "$output")" || {
+    publication_fail "$ref" '' "$(gettext 'TIFF join: cannot create destination-local staging.')"
+    return 1
+  }
+  if ! magick -- "${files[@]}" -adjoin "$tmp" >/dev/null 2>&1; then
+    rc=1
+  fi
   if [ "$rc" -eq 0 ]; then
     info="$(publication_image_records "$tmp" 2>/dev/null)" || rc=1
     if [ "$rc" -eq 0 ]; then
@@ -2282,9 +2385,18 @@ action_tiffjoin() {
       [ "$index" -eq "$frames" ] || rc=1
     fi
   fi
-  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: ImageMagick failed or produced an invalid TIFF.')"; return 1; fi
-  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication interrupted; no output was written.')"; return 1; fi
-  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication failed; existing files were preserved.')"; return 1; fi
+  if [ "$rc" -ne 0 ]; then
+    publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: ImageMagick failed or produced an invalid TIFF.')"
+    return 1
+  fi
+  if progress_cancelled "$ref"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication interrupted; no output was written.')"
+    return 1
+  fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication failed; existing files were preserved.')"
+    return 1
+  fi
   progress_value "$ref" 2
   progress_close "$ref"
 }
@@ -2297,14 +2409,29 @@ action_animate() {
   local -a files=() source_geometry=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --output) [ "$#" -ge 2 ] || return 1; requested="$2"; shift 2 ;;
-      --delay) [ "$#" -ge 2 ] || return 1; delay="$2"; shift 2 ;;
-      --loop) [ "$#" -ge 2 ] || return 1; loops="$2"; shift 2 ;;
+      --output)
+        [ "$#" -ge 2 ] || return 1
+        requested="$2"
+        shift 2
+        ;;
+      --delay)
+        [ "$#" -ge 2 ] || return 1
+        delay="$2"
+        shift 2
+        ;;
+      --loop)
+        [ "$#" -ge 2 ] || return 1
+        loops="$2"
+        shift 2
+        ;;
       --) shift; break ;;
       *) break ;;
     esac
   done
-  collect_publication_inputs files "$@" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: select regular, unambiguous image files.')"; return 1; }
+  collect_publication_inputs files "$@" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: select regular, unambiguous image files.')"
+    return 1
+  }
   dir="${files[0]%/*}"
   if [ -z "$delay" ]; then
     delay="$(kdialog --inputbox "$(gettext 'Delay between images in centiseconds (100 is one second):')" "${KIM_GIF_DELAY:-100}")" || return 1
@@ -2337,7 +2464,10 @@ action_animate() {
       frames=$((frames + 1))
     done <<< "$info"
   done
-  [ "$frames" -gt 0 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"; return 1; }
+  [ "$frames" -gt 0 ] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"
+    return 1
+  }
   mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new GIF animation?')")"
   [ "$mode" != cancel ] || return 1
   if [ -z "$requested" ]; then
@@ -2347,13 +2477,32 @@ action_animate() {
   prepare_derived_target "$requested" gif "$mode" "${files[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: invalid or unsafe output destination.')"; return 1; }
   output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
   ref="$(progress_open 2 "$(gettext 'Kim - Creating animation ...')")"
-  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
-  tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'Animation: cannot create destination-local staging.')"; return 1; }
-  if ! magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp" >/dev/null 2>&1; then rc=1; fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames"; then rc=1; fi
-  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: ImageMagick failed or produced an invalid GIF.')"; return 1; fi
-  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication interrupted; no output was written.')"; return 1; fi
-  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication failed; existing files were preserved.')"; return 1; fi
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    return 1
+  fi
+  tmp="$(tmp_for_target "$output")" || {
+    publication_fail "$ref" '' "$(gettext 'Animation: cannot create destination-local staging.')"
+    return 1
+  }
+  if ! magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp" >/dev/null 2>&1; then
+    rc=1
+  fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames"; then
+    rc=1
+  fi
+  if [ "$rc" -ne 0 ]; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Animation: ImageMagick failed or produced an invalid GIF.')"
+    return 1
+  fi
+  if progress_cancelled "$ref"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication interrupted; no output was written.')"
+    return 1
+  fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication failed; existing files were preserved.')"
+    return 1
+  fi
   progress_value "$ref" 2
   progress_close "$ref"
 }
@@ -2725,12 +2874,34 @@ action_resize() {
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        --size) [ "$#" -ge 2 ] || die "resize: --size needs a value"; SCALE="$2"; shift 2 ;;
-        --percent) [ "$#" -ge 2 ] || die "resize: --percent needs a value"; percent="$2"; shift 2 ;;
-        --output-dir) [ "$#" -ge 2 ] || die "resize: --output-dir needs a value"; outdir="$2"; shift 2 ;;
-        --custom) custom=true; shift ;;
-        --custom-percent) custom_percent=true; shift ;;
-        --) shift; raw_files+=("$@"); break ;;
+        --size)
+          [ "$#" -ge 2 ] || die "resize: --size needs a value"
+          SCALE="$2"
+          shift 2
+        ;;
+        --percent)
+          [ "$#" -ge 2 ] || die "resize: --percent needs a value"
+          percent="$2"
+          shift 2
+        ;;
+        --output-dir)
+          [ "$#" -ge 2 ] || die "resize: --output-dir needs a value"
+          outdir="$2"
+          shift 2
+        ;;
+        --custom)
+          custom=true
+          shift
+        ;;
+        --custom-percent)
+          custom_percent=true
+          shift
+        ;;
+        --)
+          shift
+          raw_files+=("$@")
+          break
+          ;;
         *) die "resize: unknown option $1" ;;
       esac
     done
@@ -2746,7 +2917,8 @@ action_resize() {
     if [ -n "$percent" ]; then
       [ -z "$SCALE" ] || die "resize: use either --size or --percent"
       [[ "$percent" =~ ^[0-9]{1,4}$ ]] && [ "$percent" -ge 1 ] && [ "$percent" -le 1000 ] || {
-        progress_error "$(gettext 'Resize percentage must be an integer from 1 to 1000.')"; return 2;
+        progress_error "$(gettext 'Resize percentage must be an integer from 1 to 1000.')"
+        return 2
       }
       SCALE="${percent}%"
     fi
@@ -2817,7 +2989,11 @@ action_resize() {
     rc=0
     source_info=""
     read_hint=""
-    case "${ext^^}" in TGA|ICB|VDA|VST) read_hint=TGA ;; esac
+    case "${ext^^}" in
+      TGA|ICB|VDA|VST)
+        read_hint=TGA
+        ;;
+    esac
     if [[ "$i" != *$'\n'* ]]; then
       source_info="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$i" 2>/dev/null)" || rc=$?
       if [ "$rc" -ne 0 ] && [ -n "$read_hint" ]; then
@@ -2918,7 +3094,13 @@ action_resize() {
         format="${BASH_REMATCH[1]}"
         actual_dimensions+="${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"$'\n'
         if [ "$expected_format" = PNM ]; then
-          case "$format" in PBM|PGM|PPM|PAM) ;; *) rc=1 ;; esac
+          case "$format" in
+            PBM|PGM|PPM|PAM)
+              ;;
+            *)
+              rc=1
+              ;;
+          esac
         elif [ "$format" != "$expected_format" ]; then
           rc=1
         fi
@@ -2931,7 +3113,9 @@ action_resize() {
       chmod --reference="$i" "$OUTTMP" || rc=$?
     fi
     interrupted=false
-    if progress_cancelled "$dbusRef"; then interrupted=true; fi
+    if progress_cancelled "$dbusRef"; then
+      interrupted=true
+    fi
     [ "$interrupted" != true ] || rc=1
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
@@ -2973,12 +3157,26 @@ action_resizeandsend() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --size)
-        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: --size needs a value.')"; return 2; }
-        size="$2"; shift 2 ;;
+        [ "$#" -ge 2 ] || {
+          kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: --size needs a value.')"
+          return 2
+        }
+        size="$2"
+        shift 2
+        ;;
       --)
-        shift; files+=("$@"); break ;;
-      --*) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: unknown option.')"; return 2 ;;
-      *) files+=("$1"); shift ;;
+        shift
+        files+=("$@")
+        break
+        ;;
+      --*)
+        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: unknown option.')"
+        return 2
+        ;;
+      *)
+        files+=("$1")
+        shift
+        ;;
     esac
   done
   if ! collect_publication_inputs files "${files[@]}"; then
@@ -3010,7 +3208,10 @@ action_resizeandsend() {
     return 1
   fi
   local max_width=0 max_height=0
-  if [ "$size" != full ]; then max_width="${BASH_REMATCH[1]}"; max_height="${BASH_REMATCH[2]}"; fi
+  if [ "$size" != full ]; then
+    max_width="${BASH_REMATCH[1]}"
+    max_height="${BASH_REMATCH[2]}"
+  fi
 
   report_init
   local dbusRef
@@ -3023,7 +3224,11 @@ action_resizeandsend() {
       break
     fi
     base="${i##*/}"
-    if [[ "$base" == .* && "$base" != *.*.* ]]; then stem="$base"; else stem="${base%.*}"; fi
+    if [[ "$base" == .* && "$base" != *.*.* ]]; then
+      stem="$base"
+    else
+      stem="${base%.*}"
+    fi
     rc=0
     input_dimensions=()
     input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n\n' - < "$i" 2>/dev/null)" || rc=1
@@ -3031,9 +3236,15 @@ action_resizeandsend() {
     while IFS= read -r record; do
       IFS='|' read -r actual_format source_width source_height orientation _ <<< "$record"
       [[ "$actual_format" =~ ^[A-Za-z0-9]+$ && "$source_width" =~ ^[1-9][0-9]*$ &&
-         "$source_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+         "$source_height" =~ ^[1-9][0-9]*$ ]] || {
+        rc=1
+        break
+      }
       [ -n "$input_format" ] || input_format="$actual_format"
-      [ "$input_format" = "$actual_format" ] || { rc=1; break; }
+      [ "$input_format" = "$actual_format" ] || {
+        rc=1
+        break
+      }
       source_dimensions="${source_width}x${source_height}"
       [ "$size" = full ] || source_dimensions="$(oriented_image_dimensions "$source_width" "$source_height" "$orientation")"
       input_dimensions+=("$source_dimensions")
@@ -3050,7 +3261,10 @@ action_resizeandsend() {
     elif [ "$rc" -eq 0 ]; then
       magick - -auto-orient -resize "$size" "$coder:$out" < "$i" >/dev/null 2>&1 || rc=$?
     fi
-    if progress_cancelled "$dbusRef"; then interrupted=true; rc=1; fi
+    if progress_cancelled "$dbusRef"; then
+      interrupted=true
+      rc=1
+    fi
     output_info=''
     if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
       output_info="$(identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' - < "$out" 2>/dev/null)" || rc=1
@@ -3059,17 +3273,26 @@ action_resizeandsend() {
     fi
     output_frames=0
     while IFS= read -r record; do
-      [ "$output_frames" -lt "$input_frames" ] || { rc=1; break; }
+      [ "$output_frames" -lt "$input_frames" ] || {
+        rc=1
+        break
+      }
       IFS='|' read -r actual_format actual_width actual_height _ _ _ <<< "$record"
       [ "$(image_format_class "$actual_format")" = "$(image_format_class "$input_format")" ] &&
-        [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_height" =~ ^[1-9][0-9]*$ ]] || { rc=1; break; }
+        [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_height" =~ ^[1-9][0-9]*$ ]] || {
+        rc=1
+        break
+      }
       if [ "$size" = full ]; then
         # Full-size mode is an exact byte copy, so each frame keeps dimensions.
         expected_dimensions="${input_dimensions[output_frames]}"
       else
         expected_dimensions="$(resize_fit_dimensions "${input_dimensions[output_frames]}" "$max_width" "$max_height")"
       fi
-      [ "${actual_width}x${actual_height}" = "$expected_dimensions" ] || { rc=1; break; }
+      [ "${actual_width}x${actual_height}" = "$expected_dimensions" ] || {
+        rc=1
+        break
+      }
       output_frames=$((output_frames + 1))
     done <<< "$output_info"
     [ "$output_frames" -eq "$input_frames" ] || rc=1
@@ -3081,7 +3304,10 @@ action_resizeandsend() {
       report_fail "$i"
     fi
     [ "$interrupted" != true ] || break
-    progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+    progress_value "$dbusRef" "$counter" || {
+      interrupted=true
+      break
+    }
   done
   local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments"
   if [ "${#prepared[@]}" -eq 0 ]; then
@@ -3122,7 +3348,9 @@ action_resizeandsend() {
 
   if command -v kmail >/dev/null 2>&1; then
     client=kmail
-    for out in "${attach_paths[@]}"; do mail_args+=(--attach "$out"); done
+    for out in "${attach_paths[@]}"; do
+      mail_args+=(--attach "$out")
+    done
     kmail "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
   elif command -v thunderbird >/dev/null 2>&1; then
     client=thunderbird
@@ -3132,7 +3360,15 @@ action_resizeandsend() {
       escaped=''
       for ((char_index=0; char_index<${#out}; char_index++)); do
         char="${out:char_index:1}"
-        case "$char" in [a-zA-Z0-9/._~-]) escaped+="$char" ;; *) printf -v byte '%02X' "'${char}"; escaped+="%${byte}" ;; esac
+        case "$char" in
+          [a-zA-Z0-9/._~-])
+            escaped+="$char"
+            ;;
+          *)
+            printf -v byte '%02X' "'${char}"
+            escaped+="%${byte}"
+            ;;
+        esac
       done
       uri="file://$escaped"
       [ -z "$attachment_csv" ] || attachment_csv+=,
@@ -3141,7 +3377,9 @@ action_resizeandsend() {
     thunderbird -compose "attachment='$attachment_csv'" >/dev/null 2>&1 || handoff=$?
   elif command -v xdg-email >/dev/null 2>&1; then
     client=xdg-email
-    for out in "${attach_paths[@]}"; do mail_args+=(--attach "$out"); done
+    for out in "${attach_paths[@]}"; do
+      mail_args+=(--attach "$out")
+    done
     xdg-email "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
   fi
 
@@ -3202,7 +3440,10 @@ action_transform_in_place() {
   local timestamp_policy="$1" operation="$2"
   shift 2
   local -a transform=("$operation") files=()
-  if [ "$operation" = -rotate ]; then transform+=("$1"); shift; fi
+  if [ "$operation" = -rotate ]; then
+    transform+=("$1")
+    shift
+  fi
   # The existing per-file identity check reports duplicate transforms as failed
   # items without performing a second in-place modification.
   collect_valid_files_with_repeats files "$@" || return 1
@@ -3218,7 +3459,10 @@ action_transform_in_place() {
       report_fail "$i"
       break
     fi
-    if progress_cancelled "$ref"; then report_fail "$i"; break; fi
+    if progress_cancelled "$ref"; then
+      report_fail "$i"
+      break
+    fi
     rc=0
     # Refuse ambiguous ImageMagick filename syntax and destination links.
     # Repeated selections/parent aliases must not transform the same inode twice.
@@ -3226,7 +3470,9 @@ action_transform_in_place() {
     identity="$(stat -c '%d:%i' -- "$i")" || rc=1
     [ "$(stat -c '%h' -- "$i")" = 1 ] || rc=1
     if [ -n "$identity" ]; then
-      if [[ -n "${seen[$identity]:-}" ]]; then rc=1; fi
+      if [[ -n "${seen[$identity]:-}" ]]; then
+        rc=1
+      fi
       seen[$identity]=1
     else rc=1; fi
     source_info=''
@@ -3268,11 +3514,20 @@ action_transform_in_place() {
         count=$((count + 1))
       else rc=1; fi
     done <<< "$source_info"
-    if [ "$rc" -ne 0 ]; then report_fail "$i"; progress_value "$ref" "$counter"; continue; fi
-    if ! tmp="$(tmp_for_target "$i")"; then
-      report_fail "$i"; progress_value "$ref" "$counter"; continue
+    if [ "$rc" -ne 0 ]; then
+      report_fail "$i"
+      progress_value "$ref" "$counter"
+      continue
     fi
-    if progress_cancelled "$ref"; then report_fail "$i"; break; fi
+    if ! tmp="$(tmp_for_target "$i")"; then
+      report_fail "$i"
+      progress_value "$ref" "$counter"
+      continue
+    fi
+    if progress_cancelled "$ref"; then
+      report_fail "$i"
+      break
+    fi
     # A single transformation reports its dimensions before encoding. Full
     # decoding below verifies the encoded frames without a second transformation.
     # Explicit encoder retains actual input encoding even for a missing or
@@ -3314,13 +3569,18 @@ action_transform_in_place() {
       fi
     fi
     interrupted=false
-    if progress_cancelled "$ref"; then interrupted=true; rc=1; fi
+    if progress_cancelled "$ref"; then
+      interrupted=true
+      rc=1
+    fi
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$tmp" "$i" overwrite; then
       report_ok
       # Atomic replacement changes inode: remember the replacement too so a
       # repeated path or safely resolved parent alias is not transformed again.
       identity="$(stat -c '%d:%i' -- "$i")" && seen[$identity]=1
-    else report_fail "$i"; fi
+    else
+      report_fail "$i"
+    fi
     rm -f -- "$tmp" || true
     [ "$interrupted" != true ] || break
     progress_value "$ref" "$counter"
@@ -3336,10 +3596,24 @@ action_rotate() {
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        --angle) [ "$#" -ge 2 ] || die "rotate: --angle needs a value"; angle="$2"; shift 2 ;;
-        --exif) exif=true; shift ;;
-        --custom) custom=true; shift ;;
-        --) shift; files+=("$@"); break ;;
+        --angle)
+          [ "$#" -ge 2 ] || die "rotate: --angle needs a value"
+          angle="$2"
+          shift 2
+          ;;
+        --exif)
+          exif=true
+          shift
+          ;;
+        --custom)
+          custom=true
+          shift
+          ;;
+        --)
+          shift
+          files+=("$@")
+          break
+          ;;
         *) die "rotate: unknown option $1" ;;
       esac
     done
@@ -3347,7 +3621,10 @@ action_rotate() {
       [ -z "$angle" ] && [ "$exif" = false ] || die "rotate: --custom cannot be combined with another angle"
       angle="$(kdialog --inputbox "$(gettext 'Rotate by how many degrees?')" 45)" || return 1
     fi
-    [ "$exif" = false ] || { [ -z "$angle" ] || die "rotate: --exif cannot be combined with --angle"; angle=EXIF; }
+    [ "$exif" = false ] || {
+      [ -z "$angle" ] || die "rotate: --exif cannot be combined with --angle"
+      angle=EXIF
+    }
   else
     angle="${1:-}"
     shift || true
@@ -3406,15 +3683,33 @@ action_stripmeta() {
     case "$1" in
       --mode)
         [ "$#" -ge 2 ] || die "stripmeta: --mode requires gps, ai or all"
-        strip_mode="$2"; shift 2 ;;
-      --remove-ai) remove_ai=true; shift ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; break ;;
+        strip_mode="$2"
+        shift 2
+        ;;
+      --remove-ai)
+        remove_ai=true
+        shift
+        ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
       --*) die "stripmeta: unknown option $1" ;;
       *) break ;;
     esac
   done
-  case "$strip_mode" in gps|ai|all) : ;; *) die "stripmeta: mode must be gps, ai or all" ;; esac
+  case "$strip_mode" in
+    gps|ai|all)
+      :
+      ;;
+    *)
+      die "stripmeta: mode must be gps, ai or all"
+      ;;
+  esac
   local -a files=()
   collect_valid_files files "$@" || return 1
   local nbfiles="${#files[@]}"
@@ -3424,7 +3719,14 @@ action_stripmeta() {
     local selected
     selected="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose metadata to remove:')" \
       all "$(gettext 'All metadata')" gps "$(gettext 'GPS coordinates')" ai "$(gettext 'Recognized AI-generation fields')" 2>/dev/null)" || return 1
-    case "$selected" in all|gps|ai) strip_mode="$selected" ;; *) return 1 ;; esac
+    case "$selected" in
+      all|gps|ai)
+        strip_mode="$selected"
+        ;;
+      *)
+        return 1
+        ;;
+    esac
   fi
   if [ "$strip_mode" != all ]; then
     action_stripmeta_selective "$strip_mode" "$remove_ai" "${files[@]}"
@@ -3559,7 +3861,9 @@ action_stripmeta() {
       fi
     fi
     interrupted=false
-    if progress_cancelled "$dbusRef"; then interrupted=true; fi
+    if progress_cancelled "$dbusRef"; then
+      interrupted=true
+    fi
     [ "$interrupted" != true ] || rc=1
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
@@ -3603,13 +3907,21 @@ metadata_icc_fingerprint() {
 }
 
 metadata_query() {
-  local file="$1"; shift
+  local file="$1"
+  shift
   exiftool -s3 "$@" -- "$file" 2>/dev/null
 }
 
 metadata_is_raw() {
   local ext="${1##*.}"
-  case "${ext^^}" in DNG|CR2|CR3|NEF|ARW|RAF|ORF|RW2|PEF|SRW|3FR|IIQ|KDC|X3F) return 0 ;; *) return 1 ;; esac
+  case "${ext^^}" in
+    DNG|CR2|CR3|NEF|ARW|RAF|ORF|RW2|PEF|SRW|3FR|IIQ|KDC|X3F)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 # Inputs: source target publication-mode progress-ref expected-tags producer-options...
@@ -3637,7 +3949,8 @@ metadata_publish_one() {
   output_icc="$(metadata_icc_fingerprint "$tmp")" || rc=1
   [ "$source_icc" = "$output_icc" ] || rc=1
   for pair in "${expected_pairs[@]}"; do
-    tag="${pair%%$'\034'*}"; value="${pair#*$'\034'}"
+    tag="${pair%%$'\034'*}"
+    value="${pair#*$'\034'}"
     actual="$(metadata_query "$tmp" "$tag")" || rc=1
     [ "$actual" = "$value" ] || rc=1
   done
@@ -3645,8 +3958,13 @@ metadata_publish_one() {
     chmod --reference="$source" "$tmp" || rc=$?
     [ "$rc" -ne 0 ] || touch -r "$source" -- "$tmp" || rc=$?
   fi
-  if [ "$rc" -eq 0 ] && progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; rc=1; fi
-  if [ "$rc" -eq 0 ]; then commit_tmp_to_target "$tmp" "$target" "$publication_mode" || rc=$?; fi
+  if [ "$rc" -eq 0 ] && progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rc=1
+  fi
+  if [ "$rc" -eq 0 ]; then
+    commit_tmp_to_target "$tmp" "$target" "$publication_mode" || rc=$?
+  fi
   rm -f -- "$tmp" >/dev/null 2>&1 || true
   [ "$rc" -eq 0 ]
 }
@@ -3659,7 +3977,10 @@ metadata_output_path() {
     IFS= read -r stem
     IFS= read -r ext
   } < <(split_path "$source")
-  if [ "$publication_mode" = overwrite ]; then printf '%s\n' "$source"; return; fi
+  if [ "$publication_mode" = overwrite ]; then
+    printf '%s\n' "$source"
+    return
+  fi
   target="$dir/$(affixed_filename "$stem" "$tag" "$ext")"
   while [ -e "$target" ] || [ -L "$target" ]; do
     target="$dir/$(affixed_filename "$stem" "$tag" "$ext" "$n" "-")"
@@ -3685,7 +4006,9 @@ action_stripmeta_selective() {
   fi
   local publication_mode counter=0 source ref target rc i tag query_before ai_source do_ai=false ai_remove=false ai_tag
   local -a ai_queries=()
-  for ai_tag in "${ai_tags[@]}"; do ai_queries+=("-$ai_tag"); done
+  for ai_tag in "${ai_tags[@]}"; do
+    ai_queries+=("-$ai_tag")
+  done
   [ "$strip_mode" = ai ] || [ "$remove_ai" != true ] || do_ai=true
   [ "$strip_mode" != ai ] || do_ai=true
   if [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; then
@@ -3700,14 +4023,17 @@ action_stripmeta_selective() {
     # Metadata eligibility belongs to this file, never an earlier batch item.
     ai_remove=false
     ai_source=''
-    counter=$((counter + 1)); tag="$strip_mode"
+    counter=$((counter + 1))
+    tag="$strip_mode"
     [ "$remove_ai" != true ] || tag="${tag}_ai"
     progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
     if [ "$strip_mode" = gps ] || [ "$strip_mode" = ai ] || [ "$remove_ai" = true ]; then
       if [ "$strip_mode" = gps ]; then
         local -a gps_queries=(-GPS:all '-XMP-exif:GPS*' '-XMP:GPS*')
         local gps_tag
-        for gps_tag in "${gps_ext_tags[@]}"; do gps_queries+=("-$gps_tag"); done
+        for gps_tag in "${gps_ext_tags[@]}"; do
+          gps_queries+=("-$gps_tag")
+        done
         if ! query_before="$(metadata_query "$source" "${gps_queries[@]}")"; then
           report_fail "$source"; progress_value "$ref" "$counter"; continue
         fi
@@ -3773,7 +4099,11 @@ action_stripmeta_selective() {
       case "$ai_source" in *trainedAlgorithmicMedia*|*compositeWithTrainedAlgorithmicMedia*|*algorithmicMedia*)
         expected+=("-XMP-iptcExt:DigitalSourceType"$'\034') ;; esac
     fi
-    if metadata_publish_one "$source" "$target" "$publication_mode" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+    if metadata_publish_one "$source" "$target" "$publication_mode" "$ref" expected "${args[@]}"; then
+      report_ok
+    else
+      report_fail "$source"
+    fi
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
@@ -3790,15 +4120,25 @@ action_copyright() {
       --creator|--notice|--usage-rights|--year)
         [ "$#" -ge 2 ] || die "copyright: $1 requires a value"
         provided=true
-        case "$1" in --creator) creator="$2" ;; --notice) notice="$2" ;; --usage-rights) rights="$2" ;; --year) year="$2" ;; esac
+        case "$1" in
+          --creator) creator="$2" ;;
+          --notice) notice="$2" ;;
+          --usage-rights) rights="$2" ;;
+          --year) year="$2" ;;
+        esac
         shift 2 ;;
       --interactive) interactive=true; shift ;;
-      --) shift; files+=("$@"); break ;;
+      --)
+        shift
+        files+=("$@")
+        break
+        ;;
       --*) die "copyright: unknown option $1" ;;
       *) files+=("$1"); shift ;;
     esac
   done
-  collect_valid_files files "${files[@]}" || return 1; [ "${#files[@]}" -gt 0 ] || return 0
+  collect_valid_files files "${files[@]}" || return 1
+  [ "${#files[@]}" -gt 0 ] || return 0
   if ! command -v exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for copyright metadata editing.')"
     return 1
@@ -3815,7 +4155,11 @@ action_copyright() {
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
-    counter=$((counter + 1)); progress_begin_item "$ref" "$(gettext 'Kim - Setting rights: ')${source##*/}" || { report_fail "$source"; break; }
+    counter=$((counter + 1))
+    progress_begin_item "$ref" "$(gettext 'Kim - Setting rights: ')${source##*/}" || {
+      report_fail "$source"
+      break
+    }
     args=(); expected=()
     if [ -n "$creator" ]; then
       args+=(-EXIF:Artist="$creator" -IPTC:By-line="$creator" -XMP-dc:Creator="$creator")
@@ -3838,7 +4182,11 @@ action_copyright() {
     done
     if [ "$already" = true ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
     target="$(metadata_output_path "$source" copyright "$policy")"
-    if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+    if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
+      report_ok
+    else
+      report_fail "$source"
+    fi
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
@@ -3852,7 +4200,11 @@ action_timeshift() {
     case "$1" in
       --offset|--fields)
         [ "$#" -ge 2 ] || die "timeshift: $1 requires a value"
-        if [ "$1" = --offset ]; then offset="$2"; else fields="$2"; fi
+        if [ "$1" = --offset ]; then
+          offset="$2"
+        else
+          fields="$2"
+        fi
         shift 2 ;;
       --interactive) interactive=true; shift ;;
       --) shift; files+=("$@"); break ;;
@@ -3874,7 +4226,10 @@ action_timeshift() {
     fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Capture, creation and modification dates')" capture "$(gettext 'Capture time only')")" || return 1
   fi
   [[ "$offset" =~ ^([+-])([0-9]{2,4}):([0-5][0-9]):([0-5][0-9])$ ]] || die "timeshift: offset must be signed HH:MM:SS"
-  sign="${BASH_REMATCH[1]}"; hours="${BASH_REMATCH[2]}"; minutes="${BASH_REMATCH[3]}"; seconds="${BASH_REMATCH[4]}"
+  sign="${BASH_REMATCH[1]}"
+  hours="${BASH_REMATCH[2]}"
+  minutes="${BASH_REMATCH[3]}"
+  seconds="${BASH_REMATCH[4]}"
   [[ "$fields" == all || "$fields" == capture ]] || die "timeshift: fields must be all or capture"
   shiftarg="0:0:0 ${hours}:${minutes}:${seconds}"
   local direction=+
@@ -3892,13 +4247,19 @@ action_timeshift() {
       "$(gettext 'Before:')" "${preview_before:-$(gettext 'no capture time')}" \
       "$(gettext 'After:')" "${preview_after:-$(gettext 'unavailable')}" \
       "$(gettext 'Apply this fixed local-clock offset? Timezone offsets are not converted.')")"
-    if ! kdialog --title "$(gettext 'Kim')" --yesno "$preview_message"; then return 1; fi
+    if ! kdialog --title "$(gettext 'Kim')" --yesno "$preview_message"; then
+      return 1
+    fi
   fi
   policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')")"; [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
-    counter=$((counter + 1)); progress_begin_item "$ref" "$(gettext 'Kim - Shifting camera time: ')${source##*/}" || { report_fail "$source"; break; }
+    counter=$((counter + 1))
+    progress_begin_item "$ref" "$(gettext 'Kim - Shifting camera time: ')${source##*/}" || {
+      report_fail "$source"
+      break
+    }
     key=''
     if [ ! -L "$source" ]; then
       parent="${source%/*}"
@@ -3909,7 +4270,9 @@ action_timeshift() {
     if [ -n "$key" ]; then
       for previous in "${seen_sources[@]}"; do
         if [ "$key" = "$previous" ]; then
-          report_ok; progress_value "$ref" "$counter"; continue 2
+          report_ok
+          progress_value "$ref" "$counter"
+          continue 2
         fi
       done
     fi
@@ -4017,17 +4380,34 @@ action_datesync() {
     case "$1" in
       --direction|--fields)
         [ "$#" -ge 2 ] || die "datesync: $1 requires a value"
-        if [ "$1" = --direction ]; then direction="$2"; else fields="$2"; fi
+        if [ "$1" = --direction ]; then
+          direction="$2"
+        else
+          fields="$2"
+        fi
         shift 2 ;;
-      --interactive) interactive=true; shift ;;
-      --) shift; files+=("$@"); break ;;
+      --interactive)
+        interactive=true
+        shift
+        ;;
+      --)
+        shift
+        files+=("$@")
+        break
+        ;;
       --*) die "datesync: unknown option $1" ;;
       *) files+=("$1"); shift ;;
     esac
   done
-  datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Date sync: select local, unambiguous regular files.')"; return 1; }
+  datesync_collect_files files "${files[@]}" || {
+    progress_error "$(gettext 'Date sync: select local, unambiguous regular files.')"
+    return 1
+  }
   [ "${#files[@]}" -gt 0 ] || return 0
-  command -v exiftool >/dev/null 2>&1 || { progress_error "$(gettext 'ExifTool is required for date synchronization.')"; return 1; }
+  command -v exiftool >/dev/null 2>&1 || {
+    progress_error "$(gettext 'ExifTool is required for date synchronization.')"
+    return 1
+  }
   if [ "$interactive" = true ] || [ -z "$direction" ]; then
     direction="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose date synchronization direction:')" \
       exif-to-file "$(gettext 'Set file modification time from DateTimeOriginal')" \
@@ -4067,8 +4447,20 @@ action_datesync() {
         "$(gettext 'Fields:')" "$fields")" || return 1
     fi
   fi
-  case "$direction" in exif-to-file|file-to-exif) ;; *) die "datesync: direction must be exif-to-file or file-to-exif" ;; esac
-  case "$fields" in capture|all) ;; *) die "datesync: fields must be capture or all" ;; esac
+  case "$direction" in
+    exif-to-file|file-to-exif)
+      ;;
+    *)
+      die "datesync: direction must be exif-to-file or file-to-exif"
+      ;;
+  esac
+  case "$fields" in
+    capture|all)
+      ;;
+    *)
+      die "datesync: fields must be capture or all"
+      ;;
+  esac
   if [ "$direction" = file-to-exif ]; then
     require_action_tools datesync magick identify || return 1
   fi
@@ -4084,7 +4476,11 @@ action_datesync() {
       report_fail "$source"; METADATA_INTERRUPTED=true; break
     fi
     if [ "$direction" = exif-to-file ]; then
-      epoch="$(datesync_exif_epoch "$source")" || { report_fail "$source — $(gettext 'missing or invalid capture date')"; progress_value "$ref" "$counter"; continue; }
+      epoch="$(datesync_exif_epoch "$source")" || {
+        report_fail "$source — $(gettext 'missing or invalid capture date')"
+        progress_value "$ref" "$counter"
+        continue
+      }
       atime_before="${atime_values[${#atime_values[@]}-1]}"
       mtime_before="$(stat -c '%y' -- "$source")" || { report_fail "$source"; continue; }
       current_date="$(stat -c '%Y' -- "$source")" || { report_fail "$source"; continue; }
@@ -4094,7 +4490,9 @@ action_datesync() {
       [[ "$fraction_field" =~ ^[0-9]{1,9}$ ]] || fraction_field=000000000
       fraction_field="${fraction_field}000000000"; fraction_field="${fraction_field:0:9}"
       if [ "$current_date" = "$seconds" ] && [ "$fraction_field" = "$fraction" ]; then
-        report_ok; progress_value "$ref" "$counter"; continue
+        report_ok
+        progress_value "$ref" "$counter"
+        continue
       fi
       if [ "$policy" = create ]; then
         target="$(metadata_output_path "$source" datesync create)"
@@ -4155,7 +4553,11 @@ action_datesync() {
       fi
       if [ "$rc" -eq 0 ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
       target="$(metadata_output_path "$source" datesync "$policy")"
-      if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then report_ok; else report_fail "$source"; fi
+      if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
+        report_ok
+      else
+        report_fail "$source"
+      fi
       [ "$METADATA_INTERRUPTED" != true ] || break
     fi
     progress_value "$ref" "$counter" || { METADATA_INTERRUPTED=true; break; }
@@ -4196,9 +4598,26 @@ action_webexport() {
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        --jpeg-progressive) [ -z "$jpeg_scan" ] || { progress_error "$(gettext 'Select only one JPEG scan mode.')"; return 2; }; jpeg_scan=Plane; shift ;;
-        --jpeg-baseline) [ -z "$jpeg_scan" ] || { progress_error "$(gettext 'Select only one JPEG scan mode.')"; return 2; }; jpeg_scan=None; shift ;;
-        --jpeg-optimize) jpeg_optimize=true; shift ;;
+        --jpeg-progressive)
+          [ -z "$jpeg_scan" ] || {
+            progress_error "$(gettext 'Select only one JPEG scan mode.')"
+            return 2
+          }
+          jpeg_scan=Plane
+          shift
+          ;;
+        --jpeg-baseline)
+          [ -z "$jpeg_scan" ] || {
+            progress_error "$(gettext 'Select only one JPEG scan mode.')"
+            return 2
+          }
+          jpeg_scan=None
+          shift
+          ;;
+        --jpeg-optimize)
+          jpeg_optimize=true
+          shift
+          ;;
         --size|--quality|--format|--output-dir|--color)
           [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
           case "$1" in
@@ -4207,7 +4626,11 @@ action_webexport() {
             --color) color_mode="$2" ;;
           esac
           shift 2 ;;
-        --) shift; files+=("$@"); break ;;
+        --)
+          shift
+          files+=("$@")
+          break
+          ;;
         *) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: use -- before input files.')"; return 2 ;;
       esac
     done
@@ -4352,7 +4775,9 @@ action_webexport() {
           "$(gettext 'webexport: this ImageMagick build cannot safely preserve animated PNG frames during export.')\n\n$base"
         report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
       fi
-      if [ "$animation_codec" != apng ]; then rc=1; fi
+      if [ "$animation_codec" != apng ]; then
+        rc=1
+      fi
     fi
     has_icc=false
     profile_path="$KIMDIR/web-source.icc"
@@ -4513,10 +4938,242 @@ action_webexport() {
 #
 # Options are action-local so the eventual Dolphin menu can expose presets
 # without changing the dispatcher-wide argument contract.
+# Render a deterministic, fixed-canvas collage without altering selected sources.
+# Every intermediate belongs to destination-local staging; only validated PNG
+# output is published. The legacy scattered layout stays in action_pelemele.
+collage_render_layout() (
+  local layout="$1" canvas="$2" fit="$3" gap="$4" frame="$5"
+  local color="$6" shadow="$7" requested="$8" shuffle="$9"
+  shift 9
+  local -a files=("$@")
+  local count="${#files[@]}" width height columns rows
+  local row column index=0 x y slot_width slot_height cell_width cell_height
+  local inner_width inner_height frame_width frame_bottom file tile_path
+  local output mode ref tmp='' tile_dir current next rc=0 recorded frames fmt w h rest
+  local i j random_file
+
+  [[ "$canvas" =~ ^([1-9][0-9]{2,3})x([1-9][0-9]{2,3})$ ]] || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: canvas dimensions must be 100–8192 pixels.')"
+    return 2
+  }
+  width="${BASH_REMATCH[1]}"
+  height="${BASH_REMATCH[2]}"
+  (( width <= 8192 && height <= 8192 )) || return 2
+  [[ "$gap" =~ ^[0-9]{1,3}$ ]] && (( gap <= 100 )) || return 2
+  case "$layout" in grid|mosaic|hero|filmstrip) ;; *) return 2 ;; esac
+  case "$fit" in fit|fill) ;; *) return 2 ;; esac
+  case "$frame" in none|thin|polaroid) ;; *) return 2 ;; esac
+  case "$shadow" in true|false) ;; *) return 2 ;; esac
+  case "$shuffle" in true|false) ;; *) return 2 ;; esac
+  [[ "$color" != *$'\n'* && "$color" != *$'\r'* &&
+     "$color" =~ ^[A-Za-z0-9#(),._%+[:blank:]-]{1,64}$ && "$color" != *'..'* ]] || return 2
+  (( count >= 1 && count <= 100 )) || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select between 1 and 100 images.')"
+    return 2
+  }
+
+  if [ "$shuffle" = true ]; then
+    for (( i=count-1; i>0; i-- )); do
+      j=$(( RANDOM % (i + 1) ))
+      random_file="${files[i]}"
+      files[i]="${files[j]}"
+      files[j]="$random_file"
+    done
+  fi
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
+  fi
+  [ -n "$requested" ] || return 1
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')")" || return 1
+  case "$mode" in create|overwrite) ;; *) return 1 ;; esac
+  if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid or source-aliasing destination.')"
+    return 1
+  fi
+  output="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
+  ref="$(progress_open "$count" "$(gettext 'Kim - Initialising ...')")"
+  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
+  tmp="$(tmp_for_target "$output")" || {
+    publication_fail "$ref" '' "$(gettext 'Collage: cannot create destination-local staging.')"
+    return 1
+  }
+  # tmp_for_target created a uniquely named, registered, private stage.
+  # Keep scratch files inside it and delete them even on error/cancellation.
+  tile_dir="${tmp%/*}/collage-tiles"
+  mkdir -- "$tile_dir" || {
+    publication_fail "$ref" "$tmp" "$(gettext 'Collage: cannot create staging.')"
+    return 1
+  }
+  trap 'rm -rf -- "$tile_dir"' EXIT
+  current="$tile_dir/canvas_0.png"
+  if ! magick -size "$canvas" "xc:$color" "PNG:$current" >/dev/null 2>&1; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Collage: cannot initialize canvas.')"
+    return 1
+  fi
+
+  # A single photo must occupy the canvas in every layout.
+  (( count != 1 )) || layout=grid
+  # Slot geometry: Grid = equal cells; Mosaic = one large and two small
+  # cells per group; Hero = leading image plus a right-hand grid;
+  # Filmstrip = consistently framed images in horizontal rows.
+  case "$layout" in
+    grid)
+      columns=1
+      while (( columns * columns * 2 < count * 3 )); do columns=$((columns + 1)); done
+      (( columns <= count )) || columns=count
+      rows=$(( (count + columns - 1) / columns ))
+      ;;
+    mosaic) columns=2; rows=$(( (count + 2) / 3 )) ;;
+    hero)
+      columns=2
+      (( count <= 2 )) && columns=1
+      rows=$(( (count - 1 + columns - 1) / columns ))
+      (( rows >= 1 )) || rows=1
+      ;;
+    filmstrip)
+      columns=4
+      (( columns <= count )) || columns=count
+      rows=$(( (count + columns - 1) / columns ))
+      ;;
+  esac
+  report_init
+  for file in "${files[@]}"; do
+    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
+      report_fail "$file"
+      report_finish_dialog "$(gettext 'Kim')"
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"
+      return 1
+    fi
+    case "$layout" in
+      grid|filmstrip)
+        row=$((index / columns)); column=$((index % columns))
+        cell_width=$(( (width - gap * (columns + 1)) / columns ))
+        cell_height=$(( (height - gap * (rows + 1)) / rows ))
+        x=$((gap + column * (cell_width + gap)))
+        y=$((gap + row * (cell_height + gap)))
+        slot_width="$cell_width"; slot_height="$cell_height"
+        ;;
+      mosaic)
+        row=$((index / 3)); column=$((index % 3))
+        cell_height=$(( (height - gap * (rows + 1)) / rows ))
+        y=$(( gap + row * (cell_height + gap) ))
+        if (( count - row * 3 == 1 )); then
+          x="$gap"; slot_width=$(( width - 2 * gap )); slot_height="$cell_height"
+        elif (( column == 0 )); then
+          x="$gap"; slot_width=$(( (width - 3 * gap) * 2 / 3 )); slot_height="$cell_height"
+        else
+          slot_width=$((width - 3 * gap - (width - 3 * gap) * 2 / 3))
+          x=$((width - gap - slot_width))
+          if (( count - row * 3 == 2 )); then
+            slot_height="$cell_height"
+          else
+            slot_height=$(( (cell_height - gap) / 2 ))
+            (( column == 2 )) && y=$((y + slot_height + gap))
+          fi
+        fi
+        ;;
+      hero)
+        if (( index == 0 )); then
+          x="$gap"; y="$gap"
+          slot_width=$(( (width - 3 * gap) * 3 / 5 ))
+          slot_height=$(( height - 2 * gap ))
+        else
+          j=$((index - 1)); row=$((j / columns)); column=$((j % columns))
+          cell_width=$(( (width - 3 * gap) * 2 / 5 ))
+          slot_width=$(( (cell_width - (columns - 1) * gap) / columns ))
+          slot_height=$(( (height - gap * (rows + 1)) / rows ))
+          x=$(( width - gap - cell_width + column * (slot_width + gap) ))
+          y=$(( gap + row * (slot_height + gap) ))
+        fi
+        ;;
+    esac
+    frame_width=0; frame_bottom=0
+    case "$frame" in
+      thin) frame_width=5 ;;
+      polaroid) frame_width=14; frame_bottom=28 ;;
+    esac
+    inner_width=$((slot_width - 2 * frame_width))
+    inner_height=$((slot_height - 2 * frame_width - frame_bottom))
+    if (( inner_width < 1 || inner_height < 1 )); then
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: too many images for the chosen canvas.')"
+      return 1
+    fi
+    tile_path="$tile_dir/tile_$index.png"
+    local resize_geometry="${inner_width}x${inner_height}"
+    [ "$fit" != fill ] || resize_geometry+='^'
+    if ! magick -- -'[0]' -auto-orient -resize "$resize_geometry" \
+        -background "$color" -gravity center -extent "${inner_width}x${inner_height}" \
+        -background white -gravity north -extent "${slot_width}x${slot_height}" \
+        "PNG:$tile_path" < "$file" >/dev/null 2>&1; then
+      report_fail "$file"
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: could not render an image tile.')"
+      return 1
+    fi
+    if progress_cancelled "$ref"; then
+      report_fail "$file"
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"
+      return 1
+    fi
+    # Optional shadow is composed behind each fully framed tile.
+    if [ "$shadow" = true ]; then
+      local shadow_path="$tile_dir/shadow_$index.png"
+      if ! magick "$tile_path" '(' +clone -background black -shadow 45x3+3+3 ')' \
+          +swap -background none -layers merge "PNG:$shadow_path" >/dev/null 2>&1; then
+        report_fail "$file"
+        publication_fail "$ref" "$tmp" "$(gettext 'Collage: could not render a shadow.')"
+        return 1
+      fi
+      tile_path="$shadow_path"
+    fi
+    next="$tile_dir/canvas_$((index + 1)).png"
+    if ! magick -- "$current" "$tile_path" -colorspace sRGB -gravity northwest \
+        -geometry "+${x}+${y}" -compose over -composite "PNG:$next" >/dev/null 2>&1; then
+      report_fail "$file"
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: could not composite an image tile.')"
+      return 1
+    fi
+    current="$next"
+    index=$((index + 1))
+    report_ok
+    if ! progress_value "$ref" "$index" || progress_cancelled "$ref"; then
+      report_fail "$file"
+      publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"
+      return 1
+    fi
+  done
+  if ! magick -- "$current" "PNG:$tmp" >/dev/null 2>&1; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Collage: cannot finalize the PNG.')"
+    return 1
+  fi
+  recorded="$(publication_image_records "$tmp" 2>/dev/null)" || rc=1
+  frames=0
+  if (( rc == 0 )); then
+    while IFS= read -r rest; do
+      IFS='|' read -r fmt w h _ <<< "$rest"
+      [ "$fmt" = PNG ] && [ "$w" = "$width" ] && [ "$h" = "$height" ] || rc=1
+      frames=$((frames + 1))
+    done <<< "$recorded"
+  fi
+  [ "$frames" -eq 1 ] && [ -s "$tmp" ] || rc=1
+  if (( rc != 0 )) || progress_cancelled "$ref"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Collage: generated output failed validation or was cancelled.')"
+    return 1
+  fi
+  if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Collage: publication failed; existing files were preserved.')"
+    return 1
+  fi
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+)
+
 action_pelemele() {
   local size='' tile='' overlap_percent='' color='' border_ratio='' rotation='' random_rotation=15
   local seed='' shadow=true requested='' mode='' output='' tmp='' ref='' tile_dir=''
   local width height columns rows overlap border angle file index=0 rc=0 record
+  local layout='' canvas='' fit='' gap='' frame='' shuffle=false interactive_layout=false
+  local appearance_choice order_choice
   local -a files=() tiles=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -4528,6 +5185,17 @@ action_pelemele() {
           --random-rotation) random_rotation="$2" ;; --seed) seed="$2" ;; --output) requested="$2" ;;
         esac
         shift 2 ;;
+      --layout|--canvas|--fit|--gap|--frame)
+        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: missing layout option value.')"; return 2; }
+        case "$1" in
+          --layout) layout="$2" ;;
+          --canvas) canvas="$2" ;;
+          --fit) fit="$2" ;;
+          --gap) gap="$2" ;;
+          --frame) frame="$2" ;;
+        esac
+        shift 2 ;;
+      --shuffle) shuffle=true; shift ;;
       --shadow) shadow=true; shift ;;
       --no-shadow) shadow=false; shift ;;
       --) shift; files+=("$@"); break ;;
@@ -4539,6 +5207,71 @@ action_pelemele() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
   fi
+  # Preserve existing scripted --size/--tile behavior. Dolphin's bare
+  # invocation opens the new layout chooser, with Grid selected by default.
+  if [ -z "$layout" ] && [ -z "$size$tile$overlap_percent$rotation$seed$border_ratio" ]; then
+    interactive_layout=true
+    layout="$(kdialog --radiolist "$(gettext 'Choose a collage layout:')" \
+      grid "$(gettext 'Classic Grid')" on \
+      mosaic "$(gettext 'Mosaic')" off \
+      hero "$(gettext 'Hero + Supporting Photos')" off \
+      scattered "$(gettext 'Scattered / Polaroid')" off \
+      filmstrip "$(gettext 'Filmstrip / Storyboard')" off)" || return 1
+  fi
+  case "$layout" in
+    ''|scattered) ;;
+    grid|mosaic|hero|filmstrip)
+      if [ "$interactive_layout" = true ]; then
+        canvas="$(kdialog --radiolist "$(gettext 'Collage canvas size:')" \
+          3840x2560 "$(gettext 'Classic 3:2 — 3840 × 2560')" on \
+          3840x2160 "$(gettext 'Widescreen 16:9 — 3840 × 2160')" off \
+          3200x3200 "$(gettext 'Square — 3200 × 3200')" off \
+          3200x4000 "$(gettext 'Portrait 4:5 — 3200 × 4000')" off \
+          custom "$(gettext 'Custom canvas size')" off)" || return 1
+        if [ "$canvas" = custom ]; then
+          canvas="$(kdialog --inputbox "$(gettext 'Canvas dimensions (WIDTHxHEIGHT):')" '3840x2560')" || return 1
+        fi
+        fit="$(kdialog --radiolist "$(gettext 'Image placement:')" \
+          fit "$(gettext 'Fit entire photograph')" on \
+          fill "$(gettext 'Fill and crop')" off)" || return 1
+        gap="$(kdialog --radiolist "$(gettext 'Spacing between photos:')" \
+          0 "$(gettext 'None')" off \
+          12 "$(gettext 'Small')" off \
+          24 "$(gettext 'Medium')" on \
+          48 "$(gettext 'Large')" off)" || return 1
+        frame="$(kdialog --radiolist "$(gettext 'Photo borders:')" \
+          none "$(gettext 'No borders')" on \
+          thin "$(gettext 'Thin white border')" off \
+          polaroid "$(gettext 'Polaroid frame')" off)" || return 1
+        appearance_choice="$(kdialog --radiolist "$(gettext 'Collage background:')" \
+          white "$(gettext 'White')" on \
+          black "$(gettext 'Black')" off \
+          none "$(gettext 'Transparent')" off \
+          custom "$(gettext 'Custom color')" off)" || return 1
+        case "$appearance_choice" in
+          white|black|none) color="$appearance_choice" ;;
+          custom) color="$(kdialog --inputbox "$(gettext 'Collage background color:')" "${color:-white}")" || return 1 ;;
+          *) return 1 ;;
+        esac
+        shadow="$(kdialog --radiolist "$(gettext 'Drop shadows:')" \
+          true "$(gettext 'Enabled')" on \
+          false "$(gettext 'Disabled')" off)" || return 1
+        case "$shadow" in true|false) ;; *) return 1 ;; esac
+        order_choice="$(kdialog --radiolist "$(gettext 'Photo order:')" \
+          selected "$(gettext 'Selection order')" on \
+          shuffled "$(gettext 'Shuffle photos')" off)" || return 1
+        case "$order_choice" in
+          selected) shuffle=false ;;
+          shuffled) shuffle=true ;;
+          *) return 1 ;;
+        esac
+      fi
+      collage_render_layout "$layout" "${canvas:-3840x2560}" "${fit:-fit}" "${gap:-24}" \
+        "${frame:-none}" "${color:-white}" "$shadow" "$requested" "$shuffle" "${files[@]}"
+      return $?
+      ;;
+    *) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid layout.')"; return 2 ;;
+  esac
   [ -n "$size" ] || size="$(kdialog --inputbox "$(gettext 'Size of small images:')" '400x400')" || return 1
   [ -n "$tile" ] || tile="$(kdialog --inputbox "$(gettext 'Number of rows and columns:')" '5x4')" || return 1
   [ -n "$overlap_percent" ] || overlap_percent="$(kdialog --inputbox "$(gettext 'Overlapping ratio in percent:')" '15')" || return 1
@@ -4971,8 +5704,15 @@ action_video() {
         esac
         shift
         ;;
-      --) shift; raw_files+=("$@"); break ;;
-      -*) progress_error "$(gettext 'Unknown video option:') $1"; return 2 ;;
+      --)
+        shift
+        raw_files+=("$@")
+        break
+        ;;
+      -*)
+        progress_error "$(gettext 'Unknown video option:') $1"
+        return 2
+        ;;
       *) raw_files+=("$@"); break ;;
     esac
   done
@@ -4999,7 +5739,15 @@ action_video() {
       ;;
     *) progress_error "$(gettext 'Video codec must be libx264, libx265 or av1.')"; return 2 ;;
   esac
-  case "$container" in orig|mp4) : ;; *) progress_error "$(gettext 'Video container must be orig or mp4.')"; return 2 ;; esac
+  case "$container" in
+    orig|mp4)
+      :
+      ;;
+    *)
+      progress_error "$(gettext 'Video container must be orig or mp4.')"
+      return 2
+      ;;
+  esac
   if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
     progress_error "$(gettext 'FFmpeg and ffprobe are required for video transcoding.')"; return 1
   fi
@@ -5007,9 +5755,14 @@ action_video() {
     progress_error "$(gettext 'FFmpeg encoder capabilities could not be queried.')"; return 1
   fi
   if [ "$codec" = av1 ]; then
-    if [[ "$encoder_output" =~ [[:space:]]libsvtav1[[:space:]] ]]; then av1_encoder=libsvtav1
-    elif [[ "$encoder_output" =~ [[:space:]]libaom-av1[[:space:]] ]]; then av1_encoder=libaom-av1
-    else progress_error "$(gettext 'No supported AV1 encoder is available (libsvtav1 or libaom-av1).')"; return 1; fi
+    if [[ "$encoder_output" =~ [[:space:]]libsvtav1[[:space:]] ]]; then
+      av1_encoder=libsvtav1
+    elif [[ "$encoder_output" =~ [[:space:]]libaom-av1[[:space:]] ]]; then
+      av1_encoder=libaom-av1
+    else
+      progress_error "$(gettext 'No supported AV1 encoder is available (libsvtav1 or libaom-av1).')"
+      return 1
+    fi
     if [ "$av1_quality" = custom ] && [ "$av1_encoder" = libaom-av1 ] && [ "$av1_speed" -gt 8 ]; then
       progress_error "$(gettext 'The selected AV1 encoder accepts custom CPU speed values from 0 to 8.')"; return 2
     fi
@@ -5100,7 +5853,9 @@ action_video() {
       ffmpeg_args+=(-c:v "$codec" -crf "$crf")
     fi
     ffmpeg_args+=(-c:a copy)
-    if [ "$muxer" = mp4 ]; then ffmpeg_args+=(-movflags +faststart); fi
+    if [ "$muxer" = mp4 ]; then
+      ffmpeg_args+=(-movflags +faststart)
+    fi
     ffmpeg_args+=(-f "$muxer" "$stage")
     rc=0
     video_run_monitored "$ref" "$label" "$duration" "$error_file" "${ffmpeg_args[@]}" || rc=$?
@@ -5723,17 +6478,21 @@ Commands:
       Flip or flop images.
 
   gallery -- <files...>
-      Create an HTML image gallery.
-      Prompts for an output directory and generates:
-        images/   resized images (800x800)
-        thumbs/   thumbnails (200x200)
-        index.html
+      Create an offline, responsive HTML gallery (Dark Portfolio by default).
+      Prompts for title, author, columns, theme, image size, and output directory.
+      The output includes images (up to 1920px), thumbnails (up to 360px),
+      and a self-contained index.html with a keyboard-accessible photo viewer.
 
-  pelemele <files...>
-      Build a validated PNG collage. Options: --size WxH, --tile CxR,
-      --overlap PERCENT, --background COLOR, --border PERCENT,
-      --rotation DEGREES, --random-rotation DEGREES, --seed INTEGER,
-      --shadow|--no-shadow, --output FILE, then -- and image files.
+  pelemele -- <files...>
+      Prompt for a collage layout: Grid, Mosaic, Hero, Scattered, Filmstrip.
+      --layout grid|mosaic|hero|filmstrip|scattered bypasses the layout chooser.
+      Modern layouts prompt for background, shadows, order, and canvas.
+      They accept --canvas WIDTHxHEIGHT, --fit fit|fill,
+      --gap 0..100, --frame none|thin|polaroid, --shuffle, --background COLOR,
+      --shadow|--no-shadow and --output FILE.
+      The existing scattered layout retains --size WxH, --tile CxR,
+      --overlap PERCENT, --border PERCENT, --rotation DEGREES,
+      --random-rotation DEGREES and --seed INTEGER.
 
   print -- <files...>
       Create a validated multi-page print PDF with seven layouts.

@@ -1,9 +1,46 @@
-</tr></table>
-
-<p style="margin-top:4em;">
-Gallery created with <a href="https://github.com/KIM-6/kim6">Kde Image Menu 6</a>
-</p>
-
+</main>
+</div>
+<footer class="gallery-footer">Created with <a href="https://github.com/KIM-6/kim6">KIM6</a> · Works offline</footer>
+<dialog class="lightbox" aria-label="Photo viewer">
+  <div class="lightbox-content">
+    <img alt="" id="lightbox-image">
+    <div class="lightbox-caption" id="lightbox-caption"></div>
+    <div class="lightbox-toolbar">
+      <button type="button" id="lightbox-prev" aria-label="Previous photograph">Previous</button>
+      <button type="button" id="lightbox-close">Close</button>
+      <button type="button" id="lightbox-next" aria-label="Next photograph">Next</button>
+    </div>
+  </div>
+</dialog>
+<script>
+(() => {
+  const dialog = document.querySelector('.lightbox');
+  if (!dialog || typeof dialog.showModal !== 'function') return;
+  const links = [...document.querySelectorAll('.gallery-item a')];
+  const picture = document.getElementById('lightbox-image');
+  const caption = document.getElementById('lightbox-caption');
+  let current = 0;
+  function show(index) {
+    if (!links.length) return;
+    current = (index + links.length) % links.length;
+    picture.src = links[current].href;
+    picture.alt = links[current].querySelector('img').alt;
+    caption.textContent = links[current].closest('figure').querySelector('figcaption').textContent;
+  }
+  links.forEach((link, index) => link.addEventListener('click', event => {
+    event.preventDefault();
+    show(index);
+    if (!dialog.open) dialog.showModal();
+  }));
+  document.getElementById('lightbox-prev').addEventListener('click', () => show(current - 1));
+  document.getElementById('lightbox-next').addEventListener('click', () => show(current + 1));
+  document.getElementById('lightbox-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
+  });
+  dialog.addEventListener('close', () => { picture.removeAttribute('src'); });
+})();
+</script>
 </body>
 </html>
-
