@@ -142,7 +142,7 @@ def _fixture_class(route: str, args: list[str], action_id: str, menu: str = "") 
         if route == "videoaudio" and ("mute" in action_id.lower() or action_id == "ExtractVideoAudio"):
             return ["video-multiaudio.mkv"]
         return ["video-audio.mp4"]
-    if route in {"album", "print", "tiffjoin", "animate", "pelemele", "slideshow", "gallery"}:
+    if route in {"album", "print", "contactsheet", "tiffjoin", "animate", "pelemele", "slideshow", "gallery"}:
         return ["sequence-red.png", "sequence-green.png", "sequence-blue.png"]
     if route == "rename":
         return ["dated-photo.jpg", "sequence-red.png", "-leading ü [1].jpg"]
@@ -181,7 +181,7 @@ def _source_behavior(route: str) -> str:
     if route == "rename":
         return "rename"
     if route in {"webexport", "resizeandsend", "videoframes", "videoaudio", "videogif", "slideshow",
-                 "gallery", "pelemele", "album", "print", "tiffjoin", "animate"}:
+                 "gallery", "pelemele", "album", "print", "contactsheet", "tiffjoin", "animate"}:
         return "derived"
     return "authorized_overwrite"
 
@@ -206,6 +206,7 @@ def _expected(route: str, args: list[str]) -> str:
         "rename": "The renamed/moved test files are in the case directory; originals remain in this disposable case when create mode is selected.",
         "album": "A multi-page PDF in the chosen case directory.",
         "print": "A print-layout PDF in the chosen case directory.",
+        "contactsheet": "A printable PDF contact sheet with the selected grid, labels and page size.",
         "gallery": "A complete gallery directory containing index.html, main images and thumbnails.",
         "pelemele": "A validated collage image in the chosen case directory.",
         "tiffjoin": "A multi-page TIFF in the chosen case directory, in selection order.",
@@ -235,6 +236,7 @@ def _dependencies(route: str) -> list[str]:
             "pelemele": ["magick", "identify", "qdbus", "kdialog"],
             "album": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
             "print": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
+            "contactsheet": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
             "tiffjoin": ["magick", "identify", "qdbus", "kdialog"],
             "animate": ["magick", "identify", "qdbus", "kdialog"],
             "video": ["ffmpeg", "ffprobe", "qdbus", "kdialog", "selected optional encoder"],
@@ -267,6 +269,7 @@ def _checks(route: str) -> list[str]:
         "rename": ["Each selected byte hash appears under the expected new name; no unrelated entry is lost."],
         "album": ["Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page count, image order and layout to the selected options."],
         "print": ["Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page orientation and print layout to the chosen options."],
+        "contactsheet": ["Automated: pdfinfo reports readable pages and correct physical size. Human: inspect image order, number/filename labels, grid and pagination."],
         "gallery": ["index.html and all relative image/thumbnail references exist."],
         "pelemele": ["Image decodes and selected tile ordering/layout is visible."],
         "tiffjoin": ["Automated: TIFF fully decodes and page count matches selected input frame count. Human: inspect page order."],
@@ -296,6 +299,7 @@ def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
         "rename": ["Choose naming mode, sequence/base or EXIF date format, destination, and conflict behavior as prompted."],
         "album": ["Choose an album layout and output filename; this action does not prompt for a title."],
         "print": ["Choose one of the supported print layouts and page settings."],
+        "contactsheet": ["Choose page size/orientation, grid, labels, image fit, background, resolution and title."],
         "gallery": ["Enter gallery title/author and layout/output options."],
         "pelemele": ["Choose canvas/image size, layout, background, border, spacing/overlap and rotation/shadow options."],
         "tiffjoin": ["Choose the output location/name; selected order is used."],
@@ -2278,7 +2282,7 @@ def _check_isolated_install(generated: Path) -> int:
     else:
         print("No same-name service menus were found in the checked XDG_DATA_DIRS roots.")
     print("This verifies installed files, not successful live Dolphin GUI behavior.")
-    return 0 if total == 107 else 1
+    return 0 if total == 108 else 1
 
 
 SECOND_PASS = """KIM6 second-pass safety acceptance checklist

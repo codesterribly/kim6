@@ -132,13 +132,17 @@ load_kim_config() {
   fi
   : "${KIM_WEB_FORMAT:=jpg}"
 
-  # Web color handling: sRGB is the default; preserve is explicit.
+  # Web export color policy: sRGB by default, or preserve the source profile.
+  # Env: KIM_WEB_COLOR_MODE=srgb|preserve
+  # Environment overrides KConfig WEB_COLOR_MODE.
   if [ -z "${KIM_WEB_COLOR_MODE:-}" ]; then
     v="$(_cfg_get WEB_COLOR_MODE)"
     case "$v" in srgb|preserve) KIM_WEB_COLOR_MODE="$v" ;; esac
   fi
   : "${KIM_WEB_COLOR_MODE:=srgb}"
 
+  # Optional copyright metadata: creator, notice, and usage rights.
+  # Environment overrides KConfig; unspecified fields remain unset.
   if [ -z "${KIM_COPYRIGHT_CREATOR:-}" ]; then
     v="$(_cfg_get COPYRIGHT_CREATOR)"
     [ -z "$v" ] || KIM_COPYRIGHT_CREATOR="$v"
@@ -152,8 +156,9 @@ load_kim_config() {
     [ -z "$v" ] || KIM_COPYRIGHT_USAGE_RIGHTS="$v"
   fi
 
-  # Policy mode from config (optional), only used if no env override exists.
-  # Env: KIM_POLICY
+  # Output policy: create new files or overwrite originals.
+  # Env: KIM_POLICY=create|overwrite (overrides KConfig).
+  # Without either setting, retain the interactive policy prompt.
   if [ -z "${KIM_POLICY:-}" ]; then
     v="$(_cfg_get KIM_POLICY)"
     case "$v" in
@@ -988,6 +993,8 @@ validate_publication_pdf() {
 
 # One verbose decode provides GIF frame geometry, delay and loop metadata.
 validate_publication_gif() {
+  # Validate each completed frame at the next Image: boundary.
+  # The last frame requires a separate check after the read loop.
   local file="$1" expected_delay="$2" expected_loops="$3" expected_name="$4" expected_frames="$5"
   local -n expected_ref="$expected_name"
   local verbose detail format='' geometry='' frame_delay=0 iterations='' index=0 expected_width expected_height width height
@@ -1075,7 +1082,7 @@ publish_gallery_directory() {
 action_album() {
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
   local file frame_count
-  local -a files=() image_assets=() thumb_assets=()
+  local -a files=()
   dir="${1:-}"
   shift || true
   if ! collect_publication_inputs files "$@"; then
@@ -1354,6 +1361,8 @@ action_compress() {
 # - Uses ImageMagick `magick` to write explicit outputs.
 
 action_convert() {
+  # Conversion validates animated inputs separately, so unsupported
+  # animation or frame timing cannot silently become a still image.
   local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
@@ -1704,7 +1713,7 @@ action_convert() {
       # Profile-bearing outputs must retain the input ICC exactly.
       # JP2 retains its existing explicit profile-restoration behavior.
       case "$FORMAT" in
-        jp2|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
+        jp2|jxl|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
           convert_source_icc="$KIMDIR/convert-source.icc"
           if ! exiftool -b -ICC_Profile -- "$i" > "$convert_source_icc" 2>/dev/null; then
             rc=1
@@ -1806,7 +1815,7 @@ action_convert() {
       # Do not publish conversions that silently lose or substitute an ICC profile.
       if [ "$rc" -eq 0 ] && [ -s "$convert_source_icc" ]; then
         case "$FORMAT" in
-          avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
+          jxl|avif|heic|heif|png|webp|jpg|jpeg|jpe|jfif|tif|tiff|tiff64)
             convert_output_icc="$KIMDIR/convert-output.icc"
             exiftool -b -ICC_Profile -- "$OUTTMP" > "$convert_output_icc" 2>/dev/null || rc=$?
             if [ "$rc" -eq 0 ] && ! cmp -s -- "$convert_source_icc" "$convert_output_icc"; then
@@ -1936,9 +1945,11 @@ action_flipflop() {
 # - If index.part1 and index.part2 exist, uses them as templates, otherwise generates a basic HTML page.
 
 action_gallery() {
+  # Build and verify gallery assets before publishing the HTML index.
+  # Keep fallback generation inside the staging area.
   local start_dir="${1:-}" base_dir target_dir base_name timestamp number=1
   shift || true
-  local -a files=()
+  local -a files=() image_assets=() thumb_assets=()
   collect_publication_inputs files "$@" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
     return 1
@@ -2236,6 +2247,202 @@ KIM6_GALLERY_FALLBACK
 
 ####################
 # Build a validated, destination-local print-layout PDF from selected images.
+
+# Produce a print-quality, numbered contact-sheet PDF without altering sources.
+# Labels and headers are rasterized into pages; the final multi-page PDF is
+# decoded and validated before destination-local publication.
+action_contactsheet() {
+  local paper=letter orientation=portrait grid=4x5 labels=both fit=fit background=white
+  local dpi=300 title='Contact Sheet' requested='' interactive=false
+  local arg file frames mode target ref tmp='' stage width height cols rows
+  local tile_width tile_height page_count page_index first last index counter=0
+  local front pointsize caption caption_name tile raw page geometry
+  local -a files=() page_files=() montage_args=() image_args=()
+
+  [ "${1:-}" != -- ] || interactive=true
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --paper|--orientation|--grid|--labels|--fit|--background|--dpi|--title|--output)
+        [ "$#" -ge 2 ] || die "contactsheet: $1 needs a value"
+        arg="$2"
+        case "$1" in
+          --paper) paper="$arg" ;;
+          --orientation) orientation="$arg" ;;
+          --grid) grid="$arg" ;;
+          --labels) labels="$arg" ;;
+          --fit) fit="$arg" ;;
+          --background) background="$arg" ;;
+          --dpi) dpi="$arg" ;;
+          --title) title="$arg" ;;
+          --output) requested="$arg" ;;
+        esac
+        shift 2 ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      -*) die "contactsheet: unknown option $1" ;;
+      *) files+=("$1"); shift ;;
+    esac
+  done
+
+  if [ "$interactive" = true ]; then
+    paper="$(kdialog --radiolist "$(gettext 'Contact sheet paper:')" letter 'US Letter' on a4 'A4' off)" || return 1
+    orientation="$(kdialog --radiolist "$(gettext 'Contact sheet orientation:')" portrait 'Portrait' on landscape 'Landscape' off)" || return 1
+    grid="$(kdialog --radiolist "$(gettext 'Contact sheet layout:')" 4x5 'Compact (4 × 5)' on 3x4 'Spacious (3 × 4)' off 5x7 'Dense (5 × 7)' off)" || return 1
+    labels="$(kdialog --radiolist "$(gettext 'Contact sheet labels:')" both 'Number + filename' on number 'Number only' off filename 'Filename only' off none 'No labels' off)" || return 1
+    fit="$(kdialog --radiolist "$(gettext 'Contact sheet image placement:')" fit 'Fit (no crop)' on fill 'Fill (center crop)' off)" || return 1
+    background="$(kdialog --radiolist "$(gettext 'Contact sheet background:')" white 'White' on black 'Black' off)" || return 1
+    dpi="$(kdialog --radiolist "$(gettext 'Contact sheet print resolution:')" 300 '300 DPI (print)' on 150 '150 DPI (draft)' off)" || return 1
+    title="$(kdialog --inputbox "$(gettext 'Contact sheet heading:')" 'Contact Sheet')" || return 1
+  fi
+
+  case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
+  case "$orientation" in portrait|landscape) ;; *) die 'contactsheet: invalid orientation' ;; esac
+  case "$grid" in 3x4|4x5|5x7) ;; *) die 'contactsheet: invalid grid' ;; esac
+  case "$labels" in number|filename|both|none) ;; *) die 'contactsheet: invalid labels' ;; esac
+  case "$fit" in fit|fill) ;; *) die 'contactsheet: invalid placement' ;; esac
+  case "$background" in white|black) ;; *) die 'contactsheet: invalid background' ;; esac
+  case "$dpi" in 150|300) ;; *) die 'contactsheet: invalid DPI' ;; esac
+  [[ "$title" != *$'\n'* && "$title" != *$'\r'* ]] || die 'contactsheet: invalid heading'
+  [ "${#title}" -le 150 ] || die 'contactsheet: heading is too long'
+  title="${title//%/%%}"
+  [[ "$title" != @* ]] || title=" $title"
+  [ "${#files[@]}" -gt 0 ] || return 1
+
+  local -a selected=()
+  collect_publication_inputs selected "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: select regular, unambiguous image files.')"
+    return 1
+  }
+  files=("${selected[@]}")
+  for file in "${files[@]}"; do
+    frames="$(publication_input_frames "$file")" || return 1
+    [ "$frames" -eq 1 ] || {
+      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: each source must be a single-frame image.')"
+      return 1
+    }
+  done
+
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "${files[0]%/*}" 'contact-sheet.pdf')" || return 1
+    [ -n "$requested" ] || return 1
+  fi
+  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Create a new contact-sheet PDF?')")"
+  [ "$mode" != cancel ] || return 1
+  prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
+    return 1
+  }
+  target="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
+
+  cols="${grid%x*}"
+  rows="${grid#*x}"
+  if [ "$paper" = letter ]; then
+    width=$((17 * dpi / 2))
+    height=$((11 * dpi))
+  else
+    width=$((827 * dpi / 100))
+    height=$((1169 * dpi / 100))
+  fi
+  if [ "$orientation" = landscape ]; then
+    local swap="$width"
+    width="$height"
+    height="$swap"
+  fi
+  # Reserve top and bottom margins for the page heading and page number.
+  tile_width=$(( (width - dpi / 2) / cols - dpi / 10 ))
+  tile_height=$(( (height - dpi) / rows - dpi / 5 ))
+  [ "$tile_width" -ge 60 ] && [ "$tile_height" -ge 60 ] || return 1
+  page_count=$(( (${#files[@]} + cols * rows - 1) / (cols * rows) ))
+  front=black
+  [ "$background" != black ] || front=white
+  pointsize=$(( dpi / 9 ))
+
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Creating contact sheet ...')")"
+  if progress_cancelled "$ref"; then
+    progress_close "$ref"
+    return 1
+  fi
+  tmp="$(tmp_for_target "$target")" || {
+    publication_fail "$ref" '' "$(gettext 'Contact sheet: cannot allocate destination-local staging.')"
+    return 1
+  }
+  stage="${tmp%/*}"
+  mkdir -- "$stage/pages" "$stage/tiles" || {
+    publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: cannot initialize staging.')"
+    return 1
+  }
+
+  for ((page_index = 0; page_index < page_count; page_index++)); do
+    montage_args=(-font DejaVu-Sans -pointsize "$pointsize" -background "$background" -fill "$front")
+    first=$(( page_index * cols * rows ))
+    last=$(( first + cols * rows ))
+    [ "$last" -le "${#files[@]}" ] || last="${#files[@]}"
+    for ((index = first; index < last; index++)); do
+      file="${files[index]}"
+      counter=$((counter + 1))
+      if ! progress_begin_item "$ref" "$(gettext 'Kim - Contact sheet: ')${file##*/}" || progress_cancelled "$ref"; then
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet interrupted.')"
+        return 1
+      fi
+      tile="$stage/tiles/$(printf '%05d' "$counter").png"
+      geometry="${tile_width}x${tile_height}"
+      [ "$fit" != fill ] || geometry+='^'
+      image_args=("$file" -auto-orient -thumbnail "$geometry" -gravity center -background "$background" -extent "${tile_width}x${tile_height}" "PNG:$tile")
+      if ! magick "${image_args[@]}" >/dev/null 2>&1; then
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: unable to render a thumbnail.')"
+        return 1
+      fi
+      caption_name="${file##*/}"
+      caption_name="${caption_name//%/%%}"
+      case "$labels" in
+        none) caption=' ' ;;
+        number) caption="$counter" ;;
+        filename) caption=" $caption_name" ;;
+        both) caption="$counter. $caption_name" ;;
+      esac
+      montage_args+=(-label "$caption" "$tile")
+      progress_value "$ref" "$counter" || {
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: progress update failed.')"
+        return 1
+      }
+    done
+    raw="$stage/pages/raw_$(printf '%04d' "$page_index").png"
+    page="$stage/pages/page_$(printf '%04d' "$page_index").png"
+    if ! magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
+        -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw" >/dev/null 2>&1; then
+      publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page layout failed.')"
+      return 1
+    fi
+    if ! magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
+        -units PixelsPerInch -density "$dpi" "PNG:$page" >/dev/null 2>&1; then
+      publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page sizing failed.')"
+      return 1
+    fi
+    page_files+=("$page")
+  done
+  if progress_cancelled "$ref" || ! magick "${page_files[@]}" -adjoin "PDF:$tmp" >/dev/null 2>&1; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF generation interrupted or failed.')"
+    return 1
+  fi
+  local pdf_width=612 pdf_height=792
+  if [ "$paper" = a4 ]; then pdf_width=595; pdf_height=842; fi
+  if [ "$orientation" = landscape ]; then
+    local swap="$pdf_width"
+    pdf_width="$pdf_height"
+    pdf_height="$swap"
+  fi
+  if ! validate_publication_pdf "$tmp" "$page_count" "$pdf_width" "$pdf_height" || progress_cancelled "$ref"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF validation failed or was interrupted.')"
+    return 1
+  fi
+  if ! commit_tmp_to_target "$tmp" "$target" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF publication failed; existing files were preserved.')"
+    return 1
+  fi
+  progress_close "$ref"
+  return 0
+}
 
 action_print() {
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
@@ -3927,6 +4134,8 @@ metadata_is_raw() {
 # Inputs: source target publication-mode progress-ref expected-tags producer-options...
 # expected-tags is a nameref to pairs of ExifTool query option and expected value.
 metadata_publish_one() {
+  # Metadata-only edit: decoded pixels and ICC data must not change.
+  # Expected tag/value pairs use ASCII file separator (0x1c).
   local source="$1" target="$2" publication_mode="$3" ref="$4" expected_name="$5"
   shift 5
   local -n expected_pairs="$expected_name"
@@ -3990,6 +4199,8 @@ metadata_output_path() {
 }
 
 action_stripmeta_selective() {
+  # Remove only the selected metadata classes; leave unrelated tags intact.
+  # AI/C2PA removal is best-effort, not proof of origin.
   local strip_mode="$1" remove_ai="$2"; shift 2
   local -a files=() expected args ai_tags=(XMP-iptcExt:AIPromptInformation XMP-iptcExt:AIPromptWriterName)
   local -a gps_ext_tags=(XMP-iptcExt:LocationShownGPSLatitude XMP-iptcExt:LocationShownGPSLongitude
@@ -4112,6 +4323,8 @@ action_stripmeta_selective() {
 }
 
 action_copyright() {
+  # Resolve copyright year substitutions from available capture dates.
+  # Compare expected tags against the staged output before publication.
   local creator="${KIM_COPYRIGHT_CREATOR:-}" notice="${KIM_COPYRIGHT_NOTICE:-}" rights="${KIM_COPYRIGHT_USAGE_RIGHTS:-}"
   local year='' interactive=false provided=false
   local -a files=() args expected
@@ -4194,7 +4407,9 @@ action_copyright() {
 }
 
 action_timeshift() {
-  local offset='' fields=all interactive=false sign hours minutes seconds shiftarg policy source ref target counter=0 capture_year preview_before preview_after preview_shift rc key previous parent canonical_parent
+  # Shift camera-local EXIF timestamps by the requested fixed offset.
+  # Preview the first file without writing; prevent duplicate source edits.
+  local offset='' fields=all interactive=false sign hours minutes seconds shiftarg policy source ref target counter=0 capture_year preview_before preview_after rc key previous parent canonical_parent
   local -a files=() args expected seen_sources=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -4238,8 +4453,6 @@ action_timeshift() {
   if [ "$interactive" = true ]; then
     local first_source="${files[0]}"
     preview_before="$(metadata_query "$first_source" -DateTimeOriginal)"
-    preview_shift="${hours}:${minutes}:${seconds}"
-    [ "$sign" = + ] || preview_shift="-${preview_shift}"
     preview_after="$(exiftool -globalTimeShift "${sign}0:0:0 ${hours}:${minutes}:${seconds}" -s3 -DateTimeOriginal -- "$first_source" 2>/dev/null)" || preview_after=''
     local preview_message
     preview_message="$(printf '%s\n\n%s %s\n%s %s\n\n%s' \
@@ -4371,6 +4584,8 @@ datesync_collect_files() {
 }
 
 action_datesync() {
+  # Synchronize EXIF and filesystem timestamps in the selected direction.
+  # Preserve subsecond data and access time where supported.
   local direction='' fields=capture interactive=false source target ref policy rc counter=0
   local stamp epoch fraction atime_before mtime_before current_date current_subsec wanted_date wanted_subsec
   local seconds fraction_field name key value offset_original offset_create offset_modify
@@ -4569,7 +4784,9 @@ action_datesync() {
       touch -a -d "${atime_values[$atime_index]}" -- "${atime_sources[$atime_index]}" 2>/dev/null || true
     fi
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  [ "$REPORT_FAIL" -eq 0 ]
 }
 
 ####################
@@ -4593,6 +4810,8 @@ action_datesync() {
 # - Uses `magick` for resize and compression.
 
 action_webexport() {
+  # Web export creates validated derivatives with explicit ICC handling.
+  # Preserve animation only when the chosen output supports its frames.
   local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false jpeg_scan='' jpeg_optimize=false
   local -a files=()
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
@@ -4931,17 +5150,12 @@ action_webexport() {
   [ "$interrupted" != true ] && [ "$failures" -eq 0 ]
 }
 
-
-
-
-# Create a safe, validated ImageMagick collage from the selected images.
-#
-# Options are action-local so the eventual Dolphin menu can expose presets
-# without changing the dispatcher-wide argument contract.
-# Render a deterministic, fixed-canvas collage without altering selected sources.
-# Every intermediate belongs to destination-local staging; only validated PNG
-# output is published. The legacy scattered layout stays in action_pelemele.
+# Render a fixed-canvas collage from staged, validated images.
+# Action-local options support presets; the legacy scattered layout
+# remains in action_pelemele. Selected source files are never changed.
 collage_render_layout() (
+  # Compute fixed-canvas layout inside a subshell with staged tiles.
+  # Validate each tile before montage and publish only the final result.
   local layout="$1" canvas="$2" fit="$3" gap="$4" frame="$5"
   local color="$6" shadow="$7" requested="$8" shuffle="$9"
   shift 9
@@ -5359,7 +5573,6 @@ action_pelemele() {
       report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: ImageMagick failed or produced an invalid tile.')"; return 1
     fi
     tiles+=("$tile_path")
-    dimensions+=("$tile_width|$tile_height")
     report_ok
     progress_value "$ref" "$index"
   done
@@ -5436,6 +5649,8 @@ action_manual() {
 # Video helpers are kept local to the video action so the shared image
 # publication and KDialog contracts remain unchanged.
 video_probe() {
+  # Fill VIDEO_* probe results from separate stream and container queries.
+  # Callers must validate stream counts and rotation before using them.
   local path="$1" video_info format_info audio_info key value record
   video_info="$(ffprobe -v error -select_streams v:0 \
     -show_entries stream=codec_name,width,height,duration,nb_frames,display_aspect_ratio:stream_tags=rotate:stream_side_data=rotation \
@@ -5487,6 +5702,7 @@ video_probe() {
 }
 
 video_resolve_container() {
+  # Resolve requested codec/container pairing before starting FFmpeg.
   local path="$1" requested="$2" extension formats="${3,,}" output_codec="${4:-$VIDEO_CODEC}"
   VIDEO_MUXER=''
   extension="${path##*.}"
@@ -5609,6 +5825,8 @@ video_format_has_token() {
 }
 
 video_validate_output() {
+  # Verify the rendered file, not merely FFmpeg exit status: streams,
+  # codec, geometry, duration and muxer must meet the output contract.
   local output="$1" muxer="$2" codec="$3" max_width="$4" max_height="$5"
   local input_width="$6" input_height="$7" rotation="$8" input_duration="$9"
   local input_audio="${10}" input_dar="${11}" input_frames="${12}" output_formats output_duration
@@ -6020,12 +6238,28 @@ video_utility_init() {
 }
 
 action_videoframes() {
+  # Extract one frame, a midpoint thumbnail, or a validated contact sheet.
+  # Do not publish partially rendered frames on cancellation.
   local mode='' at='' format=png grid=3x3 interactive=false option source duration stamp sample index=0 count tag ext stage ref rc=0 codec width height
   local -a raw=() files=() args=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --mode|--at|--format|--grid) [ "$#" -ge 2 ] || { progress_error "$(gettext 'Frame options require values.')"; return 2; }; option="$1"; shift; case "$option" in --mode) mode="$1" ;; --at) at="$1" ;; --format) format="$1" ;; --grid) grid="$1" ;; esac; shift ;;
-      --interactive) interactive=true; shift ;; --) shift; raw+=("$@"); break ;; -*) progress_error "$(gettext 'Unknown frame option:') $1"; return 2 ;; *) raw+=("$@"); break ;;
+      --mode|--at|--format|--grid)
+        [ "$#" -ge 2 ] || { progress_error "$(gettext 'Frame options require values.')"; return 2; }
+        option="$1"
+        shift
+        case "$option" in
+          --mode) mode="$1" ;;
+          --at) at="$1" ;;
+          --format) format="$1" ;;
+          --grid) grid="$1" ;;
+        esac
+        shift
+        ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; raw+=("$@"); break ;;
+      -*) progress_error "$(gettext 'Unknown frame option:') $1"; return 2 ;;
+      *) raw+=("$@"); break ;;
     esac
   done
   video_utility_files files "${raw[@]}" || return 1
@@ -6042,13 +6276,18 @@ action_videoframes() {
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   report_init
   for source in "${files[@]}"; do
-    index=$((index + 1)); progress_begin_item "$ref" "$(gettext 'Kim — Video frame:') ${source##*/}" || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
+    index=$((index + 1))
+    progress_begin_item "$ref" "$(gettext 'Kim — Video frame:') ${source##*/}" || {
+      progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'Kim')"
+      return 1
+    }
     video_utility_probe "$source" || { report_fail "$source — $(gettext 'invalid video')"; progress_value "$ref" "$index"; continue; }
     [ "$VU_VIDEO_COUNT" -gt 0 ] || { report_fail "$source — $(gettext 'no video stream')"; progress_value "$ref" "$index"; continue; }
     if progress_cancelled "$ref"; then report_fail "$source — $(gettext 'interrupted before frame extraction')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
     duration="$VU_DURATION"; sample="$at"
     case "$mode" in
-      single) awk -v t="$at" -v d="$duration" 'BEGIN { split(t,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < d) }' || { report_fail "$source — $(gettext 'timestamp is outside the video')"; progress_value "$ref" "$index"; continue; }; tag="frame-${at//:/-}"; tag="${tag//./.}" ;;
+      single) awk -v t="$at" -v d="$duration" 'BEGIN { split(t,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < d) }' || { report_fail "$source — $(gettext 'timestamp is outside the video')"; progress_value "$ref" "$index"; continue; }; tag="frame-${at//:/-}" ;;
       thumbnail) sample="$(awk -v d="$duration" 'BEGIN { printf "%.3f", d/2 }')"; tag=thumbnail ;;
       contact) tag=contact-sheet ;;
     esac
@@ -6074,12 +6313,17 @@ action_videoframes() {
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then report_fail "$source — $(gettext 'interrupted; no frame was published')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
     if [ "$rc" -ne 0 ] || ! video_utility_image_valid "$stage" "$ext"; then report_fail "$source — $(gettext 'frame production or validation failed')"; rm -f -- "$stage"; progress_value "$ref" "$index"; continue; fi
     if video_utility_publish "$ref" "$stage" "$source" "$tag" "$ext"; then report_ok; else report_fail "$source — $(gettext 'publication failed or operation interrupted')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
-    rm -f -- "$error_file"; progress_value "$ref" "$index"
+    rm -f -- "$error_file"
+    progress_value "$ref" "$index"
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  [ "$REPORT_FAIL" -eq 0 ]
 }
 
 action_videoaudio() {
+  # Extract or remove audio using destination-local staging.
+  # Probe source streams before encoding and validate final output.
   local mode='' format=m4a interactive=false option source duration codec tag extension encoder target stage error_file ref rc=0 index=0
   local -a raw=() files=() args=()
   while [ "$#" -gt 0 ]; do case "$1" in --mode|--format) [ "$#" -ge 2 ] || { progress_error "$(gettext 'Audio options require values.')"; return 2; }; option="$1"; shift; [ "$option" != --mode ] || mode="$1"; [ "$option" != --format ] || format="$1"; shift ;; --interactive) interactive=true; shift ;; --) shift; raw+=("$@"); break ;; -*) progress_error "$(gettext 'Unknown audio option:') $1"; return 2 ;; *) raw+=("$@"); break ;; esac; done
@@ -6165,12 +6409,17 @@ action_videoaudio() {
     fi
     if [ "$valid" != true ]; then report_fail "$source — $(gettext 'audio output validation failed')"; rm -f -- "$stage"; progress_value "$ref" "$index"; continue; fi
     if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension"; then report_ok; else report_fail "$source — $(gettext 'publication failed or operation interrupted')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
-    rm -f -- "$error_file"; progress_value "$ref" "$index"
+    rm -f -- "$error_file"
+    progress_value "$ref" "$index"
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  [ "$REPORT_FAIL" -eq 0 ]
 }
 
 action_videogif() {
+  # Bound requested GIF duration and frames before encoding.
+  # Verify the resulting animation before publishing it.
   local start='' duration='' fps='' width='' loop='' interactive=false option source info tag target stage error_file ref rc index=0 probe codec actual_width actual_height frames output_duration decode_rc loop_marker rotation oriented_width oriented_height work_frames
   local -a raw=() files=() args=()
   while [ "$#" -gt 0 ]; do case "$1" in --start|--duration|--fps|--width|--loop) [ "$#" -ge 2 ] || { progress_error "$(gettext 'GIF options require values.')"; return 2; }; option="$1"; shift; case "$option" in --start) start="$1" ;; --duration) duration="$1" ;; --fps) fps="$1" ;; --width) width="$1" ;; --loop) loop="$1" ;; esac; shift ;; --interactive) interactive=true; shift ;; --) shift; raw+=("$@"); break ;; -*) progress_error "$(gettext 'Unknown video GIF option:') $1"; return 2 ;; *) raw+=("$@"); break ;; esac; done
@@ -6231,9 +6480,12 @@ action_videogif() {
       report_fail "$source — $(gettext 'GIF output is invalid or contains fewer than two frames')"; rm -f -- "$stage"; progress_value "$ref" "$index"; continue
     fi
     if video_utility_publish "$ref" "$stage" "$source" "$tag" gif; then report_ok; else report_fail "$source — $(gettext 'publication failed or operation interrupted')"; rm -f -- "$stage"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; fi
-    rm -f -- "$error_file"; progress_value "$ref" "$index"
+    rm -f -- "$error_file"
+    progress_value "$ref" "$index"
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$REPORT_FAIL" -eq 0 ]
+  progress_close "$ref"
+  report_finish_dialog "$(gettext 'Kim')"
+  [ "$REPORT_FAIL" -eq 0 ]
 }
 
 SLIDESHOW_OWNED_MAGICK_PID=''
@@ -6270,6 +6522,8 @@ slideshow_run_magick_monitored() {
 }
 
 action_slideshow() {
+  # Normalize input frames and color profiles before FFmpeg assembly.
+  # Publish only after geometry, timing and video stream checks pass.
   local seconds=3 size=1280x720 fps=25 background=black output='' interactive=false option
   local source record format width height orientation colorspace frames target stage source_icc
   local ref error_file rc=0 index=0 total duration srgb_profile rec709_profile profile_path codec actual_width actual_height actual_fps actual_frames actual_duration actual_format audio_count
@@ -6652,7 +6906,7 @@ main() {
   shift || true
 
   case "$cmd" in
-    album|animate|compress|gallery|pelemele|print|resize|tiffjoin)
+    album|animate|compress|contactsheet|gallery|pelemele|print|resize|tiffjoin)
       require_action_tools "$cmd" magick identify || exit 1 ;;
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
@@ -6666,6 +6920,7 @@ main() {
     album)           mk_workdir; action_album "$@" ;;
     animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;
+    contactsheet)    mk_workdir; action_contactsheet "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
     copyright)       mk_workdir; action_copyright "$@" ;;
     datesync)        mk_workdir; action_datesync "$@" ;;

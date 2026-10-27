@@ -240,6 +240,8 @@ def main():
         source = owned(args[-1])
         return subprocess.run([shutil.which("exiftool", path=os.defpath), *args], timeout=15,
                               env=dict(os.environ, PATH=os.defpath)).returncode
+    if "real_contactsheet_tools" in plan and tool in ("magick", "identify") and response is None:
+        return real_contactsheet_tool(plan["real_contactsheet_tools"], tool, args)
     if "real_publication_tools" in plan and tool in ("magick", "identify", "pdfinfo", "pdftoppm") and response is None:
         return real_publication_tool(plan["real_publication_tools"], tool, args)
     if "real_web_email_tools" in plan and tool in ("magick", "identify", "exiftool") and response is None:
@@ -593,6 +595,39 @@ def real_magick(executable, args):
         raise ValueError("real magick accepts only the synthetic fixture")
     destination.parent.mkdir(parents=True, exist_ok=True)
     return subprocess.call([executable, str(source), *operation, "-depth", "8", str(destination)])
+
+
+def real_contactsheet_tool(tools, tool, args):
+    """Bounded, workspace-owned ImageMagick calls for contact sheet regression tests."""
+    executable = tools[tool]
+    if tool == "magick":
+        if args[0] == 'montage':
+            assert '-tile' in args and '-geometry' in args and '-title' in args
+            output_name = args[-1]
+        elif '-extent' in args and args[-1].startswith('PNG:'):
+            output_name = args[-1]
+        elif args[-2] == '-adjoin' and args[-1].startswith('PDF:'):
+            output_name = args[-1]
+        else:
+            raise ValueError('unsupported contact-sheet ImageMagick command')
+        output = owned(output_name.removeprefix('PNG:').removeprefix('PDF:'))
+        if (output.exists() or not any(x.name.startswith('.kim6-stage.') for x in output.parents)):
+            raise ValueError('contact-sheet output must use a new owned stage')
+        for item in args:
+            value = item.removeprefix('PNG:').removeprefix('PDF:')
+            if value.startswith('/'):
+                owned(value)
+        return subprocess.run([executable, *args], timeout=90,
+                              env=dict(os.environ, PATH=os.defpath,
+                                       MAGICK_THREAD_LIMIT='1')).returncode
+    if tool == 'identify':
+        if not (len(args) == 5 and args[3] == '--' and args[0] in ('-ping', '-regard-warnings')):
+            raise ValueError('unsupported contact-sheet inspection')
+        owned(args[-1])
+        return subprocess.run([executable, *args], timeout=90,
+                              env=dict(os.environ, PATH=os.defpath,
+                                       MAGICK_THREAD_LIMIT='1')).returncode
+    raise ValueError('unsupported contact-sheet tool')
 
 
 def real_publication_tool(tools, tool, args):

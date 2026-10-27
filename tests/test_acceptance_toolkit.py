@@ -21,7 +21,7 @@ from qa import acceptance
 class AcceptanceInventoryTests(unittest.TestCase):
     def test_every_menu_action_has_one_complete_unique_case(self):
         cases = acceptance.load_cases(ROOT)
-        self.assertEqual(107, len(cases))
+        self.assertEqual(108, len(cases))
         ids = [case["id"] for case in cases]
         self.assertEqual(len(ids), len(set(ids)))
         expected = {
@@ -163,9 +163,9 @@ class AcceptanceInventoryTests(unittest.TestCase):
         audio = next(case for case in cases if case["action_id"] == "ExtractVideoAudio")
         self.assertIn("video-multiaudio.mkv", audio["fixtures"])
         plan = acceptance.render_plan(cases)
-        self.assertIn("107 menu actions", plan)
+        self.assertIn("108 menu actions", plan)
         self.assertIn("Manual", plan)
-        self.assertEqual(107, len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
+        self.assertEqual(108, len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
 
     def test_media_duration_and_probe_rate_helpers_handle_common_shapes(self):
         self.assertEqual(2.5, acceptance._media_duration({"format": {"duration": "2.5"}}))

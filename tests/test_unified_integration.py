@@ -54,7 +54,7 @@ class MenuContractTests(unittest.TestCase):
     def test_supported_menu_capabilities_and_presets_are_represented(self):
         entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
         commands = [command for _, command, _ in entries]
-        self.assertEqual(107, len(entries))
+        self.assertEqual(108, len(entries))
         dispatcher = (ROOT / "src/bin/kim_all").read_text()
         self.assertNotRegex(dispatcher, r"action_[A-Za-z0-9_]+\(\)\s*\{\s*:\s*;\s*\}")
         routes = set(re.findall(r'^\s{4}([a-z][a-z0-9]*)\)\s+[^;]*;', dispatcher, re.M))

@@ -1,6 +1,6 @@
 # KIM6 Human Acceptance Plan
 
-Generated from the five current service-menu templates: **107 menu actions**.
+Generated from the five current service-menu templates: **108 menu actions**.
 
 Regenerate with `python3 qa/acceptance.py inventory`. Do not edit the action list by hand.
 Each case has a disposable input copy under `qa/generated/cases/`. Actions must be invoked manually in Dolphin; command execution is not equivalent to GUI acceptance.
@@ -1061,13 +1061,13 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 |---|---|---|---|---|---|
 | `kim_convertandrotate.desktop:ConvertJPG` | `ConvertJPG` | Convert to JPEG | `kim_all convert --format jpg -- %F` | orientation-6.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertPNG` | `ConvertPNG` | Convert to PNG | `kim_all convert --format png -- %F` | transparent.png | authorized_overwrite |
-| `kim_convertandrotate.desktop:ConvertGIF` | `ConvertGIF` | Convert to GIF | `kim_all convert --format gif -- %F` | animated.gif | authorized_overwrite |
-| `kim_convertandrotate.desktop:ConvertBMP` | `ConvertBMP` | Convert to BMP5 bitmap | `kim_all convert --format bmp --bmp5 -- %F` | photo.jpg | authorized_overwrite |
+| `kim_convertandrotate.desktop:ConvertWEBP` | `ConvertWEBP` | Convert to WebP | `kim_all convert --format webp -- %F` | photo.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertTIFF` | `ConvertTIFF` | Convert to TIFF | `kim_all convert --format tiff -- %F` | photo.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertPDF` | `ConvertPDF` | Convert to PDF | `kim_all convert --format pdf -- %F` | photo.tif | authorized_overwrite |
-| `kim_convertandrotate.desktop:ConvertWEBP` | `ConvertWEBP` | Convert to WebP | `kim_all convert --format webp -- %F` | photo.jpg | authorized_overwrite |
-| `kim_convertandrotate.desktop:ConvertAVIF` | `ConvertAVIF` | Convert to AVIF | `kim_all convert --format avif -- %F` | profile-wide.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertHEIC` | `ConvertHEIC` | Convert to HEIC/HEIF | `kim_all convert --format heic -- %F` | profile-wide.jpg | authorized_overwrite |
+| `kim_convertandrotate.desktop:ConvertAVIF` | `ConvertAVIF` | Convert to AVIF | `kim_all convert --format avif -- %F` | profile-wide.jpg | authorized_overwrite |
+| `kim_convertandrotate.desktop:ConvertGIF` | `ConvertGIF` | Convert to GIF | `kim_all convert --format gif -- %F` | animated.gif | authorized_overwrite |
+| `kim_convertandrotate.desktop:ConvertBMP` | `ConvertBMP` | Convert to BMP5 bitmap | `kim_all convert --format bmp --bmp5 -- %F` | photo.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertJXL` | `ConvertJXL` | Convert to JPEG XL | `kim_all convert --format jxl -- %F` | profile-wide.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertJP2Lossless` | `ConvertJP2Lossless` | Convert to JPEG 2000 (lossless) | `kim_all convert --format jp2 --jp2-mode lossless -- %F` | profile-wide.jpg | authorized_overwrite |
 | `kim_convertandrotate.desktop:ConvertJP2Lossy` | `ConvertJP2Lossy` | Convert to JPEG 2000 (lossy) | `kim_all convert --format jp2 --jp2-mode lossy -- %F` | profile-wide.jpg | authorized_overwrite |
@@ -1108,33 +1108,19 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to PNG’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to GIF — `kim_convertandrotate.desktop:ConvertGIF`
+### Convert to WebP — `kim_convertandrotate.desktop:ConvertWEBP`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to GIF
-- **Dispatcher contract:** `kim_all convert --format gif -- %F`
-- **Select for the Dolphin context menu:** animated.gif
-- **Files passed to dispatcher:** yes
-- **Interactive choices:** Custom format for the custom entry; destination and create/overwrite prompts as provided by the action.
-- **Suggested choices:** The menu preset targets GIF. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
-- **Expected:** A readable GIF file with a matching extension in this case folder.
-- **Source behavior:** `authorized_overwrite`. Inputs are case-local disposable copies.
-- **Dependencies:** magick, identify, qdbus, kdialog
-- **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
-- **Human inspection:** Check that the menu starts the operation named ‘Convert to GIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
-
-### Convert to BMP5 bitmap — `kim_convertandrotate.desktop:ConvertBMP`
-
-- **Menu path:** KIM6 — Convert and transform → Convert to BMP5 bitmap
-- **Dispatcher contract:** `kim_all convert --format bmp --bmp5 -- %F`
+- **Menu path:** KIM6 — Convert and transform → Convert to WebP
+- **Dispatcher contract:** `kim_all convert --format webp -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
 - **Interactive choices:** Custom format for the custom entry; destination and create/overwrite prompts as provided by the action.
-- **Suggested choices:** The menu preset targets BMP. The BMP5 preset should produce a BMP5 bitmap. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
-- **Expected:** A readable BMP file with a matching extension in this case folder.
+- **Suggested choices:** The menu preset targets WEBP. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
+- **Expected:** A readable WEBP file with a matching extension in this case folder.
 - **Source behavior:** `authorized_overwrite`. Inputs are case-local disposable copies.
 - **Dependencies:** magick, identify, qdbus, kdialog
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
-- **Human inspection:** Check that the menu starts the operation named ‘Convert to BMP5 bitmap’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
+- **Human inspection:** Check that the menu starts the operation named ‘Convert to WebP’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
 ### Convert to TIFF — `kim_convertandrotate.desktop:ConvertTIFF`
 
@@ -1164,19 +1150,19 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to PDF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to WebP — `kim_convertandrotate.desktop:ConvertWEBP`
+### Convert to HEIC/HEIF — `kim_convertandrotate.desktop:ConvertHEIC`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to WebP
-- **Dispatcher contract:** `kim_all convert --format webp -- %F`
-- **Select for the Dolphin context menu:** photo.jpg
+- **Menu path:** KIM6 — Convert and transform → Convert to HEIC/HEIF
+- **Dispatcher contract:** `kim_all convert --format heic -- %F`
+- **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
 - **Interactive choices:** Custom format for the custom entry; destination and create/overwrite prompts as provided by the action.
-- **Suggested choices:** The menu preset targets WEBP. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
-- **Expected:** A readable WEBP file with a matching extension in this case folder.
+- **Suggested choices:** The menu preset targets HEIC/HEIF. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
+- **Expected:** A readable HEIC/HEIF file with a matching extension in this case folder.
 - **Source behavior:** `authorized_overwrite`. Inputs are case-local disposable copies.
 - **Dependencies:** magick, identify, qdbus, kdialog
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
-- **Human inspection:** Check that the menu starts the operation named ‘Convert to WebP’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
+- **Human inspection:** Check that the menu starts the operation named ‘Convert to HEIC/HEIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
 ### Convert to AVIF — `kim_convertandrotate.desktop:ConvertAVIF`
 
@@ -1192,19 +1178,33 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to AVIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to HEIC/HEIF — `kim_convertandrotate.desktop:ConvertHEIC`
+### Convert to GIF — `kim_convertandrotate.desktop:ConvertGIF`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to HEIC/HEIF
-- **Dispatcher contract:** `kim_all convert --format heic -- %F`
-- **Select for the Dolphin context menu:** profile-wide.jpg
+- **Menu path:** KIM6 — Convert and transform → Convert to GIF
+- **Dispatcher contract:** `kim_all convert --format gif -- %F`
+- **Select for the Dolphin context menu:** animated.gif
 - **Files passed to dispatcher:** yes
 - **Interactive choices:** Custom format for the custom entry; destination and create/overwrite prompts as provided by the action.
-- **Suggested choices:** The menu preset targets HEIC/HEIF. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
-- **Expected:** A readable HEIC/HEIF file with a matching extension in this case folder.
+- **Suggested choices:** The menu preset targets GIF. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
+- **Expected:** A readable GIF file with a matching extension in this case folder.
 - **Source behavior:** `authorized_overwrite`. Inputs are case-local disposable copies.
 - **Dependencies:** magick, identify, qdbus, kdialog
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
-- **Human inspection:** Check that the menu starts the operation named ‘Convert to HEIC/HEIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
+- **Human inspection:** Check that the menu starts the operation named ‘Convert to GIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
+
+### Convert to BMP5 bitmap — `kim_convertandrotate.desktop:ConvertBMP`
+
+- **Menu path:** KIM6 — Convert and transform → Convert to BMP5 bitmap
+- **Dispatcher contract:** `kim_all convert --format bmp --bmp5 -- %F`
+- **Select for the Dolphin context menu:** photo.jpg
+- **Files passed to dispatcher:** yes
+- **Interactive choices:** Custom format for the custom entry; destination and create/overwrite prompts as provided by the action.
+- **Suggested choices:** The menu preset targets BMP. The BMP5 preset should produce a BMP5 bitmap. If a destination or filename dialog appears, save in this case folder and keep the matching extension.
+- **Expected:** A readable BMP file with a matching extension in this case folder.
+- **Source behavior:** `authorized_overwrite`. Inputs are case-local disposable copies.
+- **Dependencies:** magick, identify, qdbus, kdialog
+- **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
+- **Human inspection:** Check that the menu starts the operation named ‘Convert to BMP5 bitmap’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
 ### Convert to JPEG XL — `kim_convertandrotate.desktop:ConvertJXL`
 
@@ -1376,6 +1376,7 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_publication.desktop:DateSync` | `DateSync` | Synchronize photo/file dates… | `kim_all datesync --interactive -- %F` | metadata.jpg | authorized_overwrite |
 | `kim_publication.desktop:Slideshow` | `Slideshow` | Create MP4 slideshow… | `kim_all slideshow --interactive -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:Album` | `Album` | Create a PDF album… | `kim_all album -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
+| `kim_publication.desktop:ContactSheet` | `ContactSheet` | Create a photo contact sheet… | `kim_all contactsheet -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:Print` | `Print` | Create a print-layout PDF… | `kim_all print -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:TiffJoin` | `TiffJoin` | Join images into a multi-page TIFF… | `kim_all tiffjoin -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:Animation` | `Animation` | Create an animated GIF… | `kim_all animate -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
@@ -1550,6 +1551,20 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Dependencies:** magick, identify, qdbus, kdialog, PDF delegate
 - **Technical validation:** Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page count, image order and layout to the selected options.
 - **Human inspection:** Check that the menu starts the operation named ‘Create a PDF album…’. Open the PDF and check page orientation, image order and layout; automated page counts do not judge layout quality.
+
+### Create a photo contact sheet… — `kim_publication.desktop:ContactSheet`
+
+- **Menu path:** KIM6 — Publish and organize → Create a photo contact sheet…
+- **Dispatcher contract:** `kim_all contactsheet -- %F`
+- **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
+- **Files passed to dispatcher:** yes
+- **Interactive choices:** Choose page size/orientation, grid, labels, image fit, background, resolution and title.
+- **Suggested choices:** Follow the choices printed by the action and save any result in this case folder.
+- **Expected:** A printable PDF contact sheet with the selected grid, labels and page size.
+- **Source behavior:** `derived`. Inputs are case-local disposable copies.
+- **Dependencies:** magick, identify, qdbus, kdialog, PDF delegate
+- **Technical validation:** Automated: pdfinfo reports readable pages and correct physical size. Human: inspect image order, number/filename labels, grid and pagination.
+- **Human inspection:** Check that the menu starts the operation named ‘Create a photo contact sheet…’. Check that the result matches the expected behavior below.
 
 ### Create a print-layout PDF… — `kim_publication.desktop:Print`
 

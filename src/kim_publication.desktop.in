@@ -4,7 +4,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;DateSync;Slideshow;Album;Print;TiffJoin;Animation;Manual;License;About;
+Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;DateSync;Slideshow;Album;ContactSheet;Print;TiffJoin;Animation;Manual;License;About;
 _X-KDE-Submenu=KIM6 — Publish and organize
 X-KIM6-Managed=true
 
@@ -55,6 +55,10 @@ Exec=kim_all slideshow --interactive -- %F
 [Desktop Action Album]
 _Name=Create a PDF album…
 Exec=kim_all album -- %F
+
+[Desktop Action ContactSheet]
+_Name=Create a photo contact sheet…
+Exec=kim_all contactsheet -- %F
 
 [Desktop Action Print]
 _Name=Create a print-layout PDF…

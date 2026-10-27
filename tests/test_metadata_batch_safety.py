@@ -135,5 +135,69 @@ class MetadataBatchSafetyTests(unittest.TestCase):
         self.assert_clean()
 
 
+    def test_copyright_chmod_failure_preserves_overwrite_source(self):
+        before = self.w.observe(self.good)
+        self.w.respond("chmod", status=71, stderr="injected stage permission failure")
+
+        result = self.w.dispatch("copyright", "--creator", "New Artist", "--", self.good)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.w.observe(self.good), before)
+        self.assertEqual(self.tag(self.good, "-Artist"), "Original Artist")
+        self.assertTrue(any(call["tool"] == "chmod" for call in result.calls))
+        self.assert_clean()
+
+    def test_timeshift_touch_failure_preserves_overwrite_source(self):
+        before = self.w.observe(self.good)
+        self.w.respond("touch", status=72, stderr="injected stage timestamp failure")
+
+        result = self.w.dispatch(
+            "timeshift", "--offset", "+01:00:00", "--fields", "capture",
+            "--", self.good,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.w.observe(self.good), before)
+        self.assertEqual(self.tag(self.good, "-DateTimeOriginal"), "2024:02:28 23:30:00")
+        self.assertTrue(any(call["tool"] == "touch" and "-r" in call["argv"]
+                            for call in result.calls))
+        self.assert_clean()
+
+    def test_failed_create_keeps_occupied_destination_and_source(self):
+        self.w.env["KIM_POLICY"] = "create"
+        target = self.good.with_name("first_copyright.jpg")
+        target.write_bytes(b"unrelated existing destination")
+        before_source = self.w.observe(self.good)
+        before_target = self.w.observe(target)
+        self.w.respond("chmod", status=73, stderr="injected stage permission failure")
+
+        result = self.w.dispatch("copyright", "--creator", "New Artist", "--", self.good)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.w.observe(self.good), before_source)
+        self.assertEqual(self.w.observe(target), before_target)
+        self.assertFalse(self.good.with_name("first_copyright-1.jpg").exists())
+        self.assert_clean()
+
+    def test_stage_failure_in_batch_does_not_block_later_valid_photo(self):
+        second = self.w.path("input/second-valid.jpg")
+        second.write_bytes(self.good.read_bytes())
+        before_first = self.w.observe(self.good)
+        self.w.sequence("chmod", [
+            {"status": 74, "stderr": "injected first-item permission failure"},
+            {"passthrough": True},
+        ])
+
+        result = self.w.dispatch(
+            "copyright", "--creator", "New Artist", "--", self.good, second,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.w.observe(self.good), before_first)
+        self.assertEqual(self.tag(self.good, "-Artist"), "Original Artist")
+        self.assertEqual(self.tag(second, "-Artist"), "New Artist")
+        self.assert_clean()
+
+
 if __name__ == "__main__":
     unittest.main()
