@@ -303,7 +303,7 @@ Retained dispatcher alias for EXIF-based orientation. The Dolphin menu uses `rot
 kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...
 ```
 
-Default mode `all` preserves the existing full-strip behavior. `gps` removes recognized coordinate fields; `ai` removes recognized AI-generation fields. `--remove-ai` combines recognized AI-field removal with `all` or `gps`. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.
+Default mode `all` preserves the existing full-strip behavior. `gps` removes recognized coordinate fields; `ai` removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. `--remove-ai` combines recognized AI-field removal with `all` or `gps`. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.
 
 ### `timeshift`
 

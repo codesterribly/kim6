@@ -4501,7 +4501,7 @@ action_stripmeta_selective() {
   # Remove only the selected metadata classes; leave unrelated tags intact.
   # AI/C2PA removal is best-effort, not proof of origin.
   local strip_mode="$1" remove_ai="$2"; shift 2
-  local -a files=() expected args ai_tags=(XMP-iptcExt:AIPromptInformation XMP-iptcExt:AIPromptWriterName)
+  local -a files=() expected args ai_tags=(XMP-iptcExt:AIPromptInformation XMP-iptcExt:AIPromptWriterName XMP-iptcExt:AISystemUsed XMP-iptcExt:AISystemVersionUsed)
   local -a gps_ext_tags=(XMP-iptcExt:LocationShownGPSLatitude XMP-iptcExt:LocationShownGPSLongitude
     XMP-iptcExt:LocationShownGPSAltitude XMP-iptcExt:LocationShownGPSAltitudeRef
     XMP-iptcExt:LocationCreatedGPSLatitude XMP-iptcExt:LocationCreatedGPSLongitude
@@ -4522,7 +4522,7 @@ action_stripmeta_selective() {
   [ "$strip_mode" = ai ] || [ "$remove_ai" != true ] || do_ai=true
   [ "$strip_mode" != ai ] || do_ai=true
   if [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values and AIPromptInformation/AIPromptWriterName; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
+    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
   fi
   METADATA_INTERRUPTED=false
   publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"

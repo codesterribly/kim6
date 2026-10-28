@@ -156,6 +156,68 @@ class MetadataActionTests(unittest.TestCase):
         self.assertEqual(mtime, self.source.stat().st_mtime_ns)
         self.assert_clean()
 
+    def test_ai_system_tags_removed_without_erasing_other_metadata(self):
+        version = subprocess.run(
+            [shutil.which('exiftool'), '-ver'], check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        parts = version.split('.')
+        if (int(parts[0]), int(parts[1])) < (13, 40):
+            self.skipTest('ExifTool 13.40+ required for IPTC AI system tags')
+
+        self.set_tags(
+            '-XMP-iptcExt:AISystemUsed=Example Model',
+            '-XMP-iptcExt:AISystemVersionUsed=1.2',
+            '-XMP-iptcExt:DigitalSourceType=negativeFilm',
+            '-Artist=Photographer',
+            '-GPSLatitude=42',
+        )
+        before = self.w.image_info(self.source)
+
+        result = self.w.dispatch(
+            'stripmeta', '--mode', 'ai', '--', str(self.source)
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual('', self.tag('-XMP-iptcExt:AISystemUsed'))
+        self.assertEqual('', self.tag('-XMP-iptcExt:AISystemVersionUsed'))
+        self.assertEqual(
+            'negativeFilm',
+            self.tag('-XMP-iptcExt:DigitalSourceType'),
+        )
+        self.assertEqual('Photographer', self.tag('-Artist'))
+        self.assertTrue(self.tag('-GPSLatitude'))
+        self.assertEqual(before, self.w.image_info(self.source))
+        self.assert_clean()
+
+    def test_gps_extended_iptc_coordinates_preserve_location_text(self):
+        self.set_tags(
+            '-XMP-iptcExt:LocationCreatedGPSLatitude=42.5',
+            '-XMP-iptcExt:LocationCreatedGPSLongitude=3.25',
+            '-XMP-iptcExt:LocationShownGPSAltitude=200',
+            '-XMP-iptcExt:LocationCreatedCity=Example City',
+            '-Artist=Photographer',
+        )
+
+        result = self.w.dispatch(
+            'stripmeta', '--mode', 'gps', '--', str(self.source)
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        for tag in (
+            '-XMP-iptcExt:LocationCreatedGPSLatitude',
+            '-XMP-iptcExt:LocationCreatedGPSLongitude',
+            '-XMP-iptcExt:LocationShownGPSAltitude',
+        ):
+            self.assertEqual('', self.tag(tag), tag)
+
+        self.assertEqual(
+            'Example City',
+            self.tag('-XMP-iptcExt:LocationCreatedCity'),
+        )
+        self.assertEqual('Photographer', self.tag('-Artist'))
+        self.assert_clean()
+
     def test_ai_only_removal_does_not_remove_copyright_or_gps(self):
         self.set_tags('-XMP-iptcExt:DigitalSourceType=trainedAlgorithmicMedia',
                       '-XMP-iptcExt:AIPromptInformation=synthetic prompt',

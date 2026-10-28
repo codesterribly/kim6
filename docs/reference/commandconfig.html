@@ -295,7 +295,7 @@ kim_all rotate --custom -- IMAGE...</code></pre>
 <p>Retained dispatcher alias for EXIF-based orientation. The Dolphin menu uses <code>rotate --exif</code>.</p>
 <h3 id="stripmeta"><code>stripmeta</code></h3>
 <pre class="sh"><code>kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...</code></pre>
-<p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.</p>
+<p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.</p>
 <h3 id="timeshift"><code>timeshift</code></h3>
 <pre class="sh"><code>kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
 kim_all timeshift --interactive -- IMAGE...</code></pre>
