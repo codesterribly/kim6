@@ -21,7 +21,7 @@ OUTPUT_DIR = DOC_DIR / "reference"
 MAIN = (
     ROOT / "README.md",
     ROOT / "INSTALL.md",
-    ROOT / "DEVELOPMENT.md",
+    DOC_DIR / "DEVELOPMENT.md",
     DOC_DIR / "ACTIONS.md",
     DOC_DIR / "commandconfig.md",
     DOC_DIR / "FORMATS.md",
@@ -89,7 +89,7 @@ def render(source, names):
         ("All actions", DOC_DIR / "ACTIONS.md"),
         ("Commands & settings", DOC_DIR / "commandconfig.md"),
         ("Formats", DOC_DIR / "FORMATS.md"),
-        ("Development", ROOT / "DEVELOPMENT.md"),
+        ("Development", DOC_DIR / "DEVELOPMENT.md"),
     ]
     links = "\n".join(
         f'<a href="{escape(names[path.resolve()], quote=True)}">{escape(label)}</a>'

@@ -56,7 +56,7 @@ The installer replaces the `kim_all` command in each menu with the absolute path
 
 The dispatcher's command-line help is maintained in `src/bin/kim_all` and should remain consistent with the documented options.
 
-See [ACTIONS.md](docs/ACTIONS.md) for the complete menu definitions and [commandconfig.md](docs/commandconfig.md) for command-line arguments.
+See [ACTIONS.md](ACTIONS.md) for the complete menu definitions and [commandconfig.md](commandconfig.md) for command-line arguments.
 
 ## Runtime Dependencies and Format Support
 
@@ -73,7 +73,7 @@ KIM6 checks for required tools and probes optional format support where appropri
 
 Missing encoders or unsupported formats should produce an error rather than silently substituting another format.
 
-See [FORMATS.md](docs/FORMATS.md) for details about supported formats and dependencies.
+See [FORMATS.md](FORMATS.md) for details about supported formats and dependencies.
 
 ## Configuration
 
@@ -91,7 +91,7 @@ Invalid KConfig values fall back to defaults where a setting has a constrained v
 
 `KIM_POLICY` is the output-policy setting. Supported values are `create` and `prompt`; an unset, invalid, or legacy `overwrite` value is treated as `prompt`, **never** as unattended authorization. `choose_output_mode()` implements a safe-default radio choice followed by an explicit, action-specific warning before replacement. `confirm_inplace_overwrite()` handles actions that have no create-new path; it refuses them under `create` and requires confirmation under `prompt`. Both paths fail closed when KDialog exits, is unavailable, or returns an unexpected choice.
 
-See [commandconfig.md](docs/commandconfig.md) for the available keys, defaults, and affected actions.
+See [commandconfig.md](commandconfig.md) for the available keys, defaults, and affected actions.
 
 ## File Safety and Error Handling
 
@@ -207,11 +207,11 @@ When adding or changing an action:
 
 Test changes against temporary files rather than personal photographs or videos.
 
-See [ACTIONS.md](docs/ACTIONS.md) for the menu-action inventory and [commandconfig.md](docs/commandconfig.md) for dispatcher arguments.
+See [ACTIONS.md](ACTIONS.md) for the menu-action inventory and [commandconfig.md](commandconfig.md) for dispatcher arguments.
 
 ## Testing
 
-For required tools and installation instructions, see [INSTALL.md](INSTALL.md). Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.
+For required tools and installation instructions, see [INSTALL.md](../INSTALL.md). Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.
 
 KIM6 uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
 
@@ -263,7 +263,7 @@ Before preparing a release:
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.
 
-See [INSTALL.md](INSTALL.md) for installation options.
+See [INSTALL.md](../INSTALL.md) for installation options.
 
 ## Contributions and Translations
 
@@ -275,7 +275,7 @@ Preserve historical author notices and GPL license headers.
 
 Translations are maintained in `po/` using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
 
-Historical development and release documentation is preserved in the [upstream archive](docs/archive/upstream/ARCHIVE.md).
+Historical development and release documentation is preserved in the [upstream archive](archive/upstream/ARCHIVE.md).
 
 ## File Publication and Cancellation
 
@@ -328,7 +328,7 @@ find "$work/output" -maxdepth 1 -type f -print
 
 Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.
 
-See [Command and Configuration Reference](docs/commandconfig.md) for additional options.
+See [Command and Configuration Reference](commandconfig.md) for additional options.
 
 ## Building the offline HTML manual
 

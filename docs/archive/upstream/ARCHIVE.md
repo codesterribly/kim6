@@ -1,6 +1,6 @@
 # Historical documentation archive
 
-These files are preserved for project history. Current users should start with the repository [README](../../../README.md), [installation guide](../../../INSTALL.md), [developer guide](../../../DEVELOPMENT.md), and the current references linked from them. The archived upstream commands describe the older multi-script KIM project and are not KIM6 installation instructions.
+These files are preserved for project history. Current users should start with the repository [README](../../../README.md), [installation guide](../../../INSTALL.md), [developer guide](../../DEVELOPMENT.md), and the current references linked from them. The archived upstream commands describe the older multi-script KIM project and are not KIM6 installation instructions.
 
 ## Original upstream documents
 

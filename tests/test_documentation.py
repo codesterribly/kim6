@@ -238,7 +238,7 @@ class DocumentationContractTests(unittest.TestCase):
                     cwd=ROOT, capture_output=True, check=True,
                 )
                 self.assertEqual(result.stdout, (ROOT / "docs/archive/upstream" / name).read_bytes())
-                prior_path = ROOT / ("docs/" if name in ("index.html", "work.css") else "") / name
+                prior_path = ROOT / ("docs/" if name in ("index.html", "work.css", "DEVELOPMENT.md") else "") / name
                 prior = subprocess.run(
                     ["git", "--no-pager", "show", f"1278daf:{'docs/' if name in ('index.html', 'work.css') else ''}{name}"],
                     cwd=ROOT, capture_output=True, check=True,
@@ -251,7 +251,7 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn("Pre-overhaul KIM6 snapshot", archive_index)
 
     def test_current_markdown_links_and_heading_anchors_resolve(self):
-        markdown_files = [ROOT / "README.md", ROOT / "INSTALL.md", ROOT / "DEVELOPMENT.md"]
+        markdown_files = [ROOT / "README.md", ROOT / "INSTALL.md"]
         markdown_files += sorted((ROOT / "docs").glob("*.md"))
         markdown_files.append(ROOT / "docs/archive/upstream/ARCHIVE.md")
         for source in markdown_files:

@@ -116,7 +116,7 @@ before upgrading. Unknown files are preserved and may prevent their
 containing directory from being removed.
 
 For older-installation compatibility and implementation details, see
-[Installer compatibility and recovery](DEVELOPMENT.md#installer-compatibility-and-recovery).
+[Installer compatibility and recovery](docs/DEVELOPMENT.md#installer-compatibility-and-recovery).
 
 ## Offline manual and documentation updates
 
