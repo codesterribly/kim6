@@ -1,3 +1,12 @@
+Unreleased (KIM6 rewrite)
+- Consolidate Dolphin image and video operations in kim_all and document all 108 menu actions.
+- Add modern image codecs, animation safeguards, color-profile checks, collages and contact sheets.
+- Add video transcoding, frame/audio tools, GIF conversion and photo-to-MP4 slideshows.
+- Expand metadata privacy, copyright, date synchronization and renaming features.
+- Require explicit confirmation before replacing originals; improve atomic publication and cancellation safety.
+- Prevent animated APNG from being flattened by Resize, Web Export or resized email attachments.
+- Expand regression coverage and update installation and reference documentation.
+
 Release 2.1.0.
 - Add WEB_Q variable for image quality settings for webexport
 - Add Italian translation

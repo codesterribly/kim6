@@ -3716,6 +3716,13 @@ action_resizeandsend() {
     else
       stem="${base%.*}"
     fi
+    # ImageMagick may decode animated PNG as one still frame. Full-size
+    # attachments copy the original bytes, but resizing must fail closed.
+    if [ "$size" != full ] && image_has_apng_control_chunk "$i"; then
+      report_fail "$i — $(gettext 'Animated PNG email resizing is unavailable; use full size to keep the animation.')"
+      progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+      continue
+    fi
     rc=0
     input_dimensions=()
     input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n\n' - < "$i" 2>/dev/null)" || rc=1

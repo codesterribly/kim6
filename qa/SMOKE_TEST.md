@@ -1,6 +1,6 @@
 # KIM6 first-run Dolphin smoke test
 
-This quick check samples installation and representative menus. It is separate from the complete 107-action acceptance plan. A smoke-test pass is not a pass for the full plan.
+This quick check samples installation and representative menus. It is separate from the complete 108-action acceptance plan. A smoke-test pass is not a pass for the full plan.
 
 Use only the disposable files under `qa/generated/cases/`. If fixtures are not ready, start with `python3 -B qa/acceptance.py prepare`. Then explicitly install the isolated copy and check that its files match this checkout:
 

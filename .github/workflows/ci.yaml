@@ -24,10 +24,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ShellCheck
+      - name: Install ShellCheck and FFmpeg
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends shellcheck
+          sudo apt-get install -y --no-install-recommends shellcheck ffmpeg
 
       - name: Bash syntax and ShellCheck
         run: |
@@ -57,3 +57,9 @@ jobs:
         run: |
           python3 -B tests/run.py --pattern 'test_dolphin_ui_audit.py'
           python3 -B tests/run.py --pattern 'test_acceptance_toolkit.py'
+
+      - name: Critical overwrite and APNG regressions
+        run: |
+          for test in test_policy_authorization.py test_policy_final_boundary.py test_inplace_authorization.py test_apng_chunk_detection.py test_apng_fail_closed.py; do
+            python3 -B tests/run.py --pattern "$test"
+          done

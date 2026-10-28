@@ -1466,13 +1466,13 @@ def _arg_value(args: list[str], name: str, default: str = "") -> str:
 def _source_explanation(case: dict[str, Any]) -> str:
     behavior = case["source_behavior"]
     if behavior == "derived":
-        return "This action creates a separate result. It must not replace a selected source, even if KIM_POLICY is set to overwrite."
+        return "This action creates a separate result. It must not replace the selected source under any output policy."
     if behavior == "in_place":
-        return "This action changes the selected file in place. The only selected files are disposable QA copies; do not use personal media."
+        return "This action changes a selected original in place. KIM_POLICY=create refuses it; prompt requires explicit confirmation. Use disposable QA copies only."
     if behavior == "rename":
         return "This action renames or moves the selected disposable files. Check that no unrelated case file is displaced."
     if behavior == "authorized_overwrite":
-        return "Choose create mode for this test when asked; in create mode the selected source remains unchanged. If KIM_POLICY or the KIM6 config forces overwrite, or if you choose overwrite in a prompt, the selected test copy may change; never use personal media. Use `--policy overwrite` when recording that result."
+        return "Choose create mode for this test when asked; in create mode the selected source remains unchanged. Neither configuration nor environment settings can silently authorize overwrite. Only explicit two-stage confirmation may replace a selected original; never use personal media. Use `--policy overwrite` when recording that result."
     return "No media source is changed by this informational action."
 
 

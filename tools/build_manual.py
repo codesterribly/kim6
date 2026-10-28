@@ -132,6 +132,16 @@ def render(source, names):
 '''
 
 
+def equivalent_html(previous, generated):
+    # Pandoc versions may differ only in table-row classes.
+    # Do not rewrite existing HTML for this harmless difference.
+    def normalize(html):
+        return re.sub(
+            r'<tr class="(?:header|odd|even)">', '<tr>', html
+        )
+    return normalize(previous) == normalize(generated)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Fail if HTML is missing or stale; do not modify files")
@@ -144,7 +154,9 @@ def main():
         renders = {OUTPUT_DIR / names[path.resolve()]: render(path, names) for path in paths}
         stale = []
         for path, content in renders.items():
-            if path.exists() and path.read_text(encoding="utf-8") == content:
+            if path.exists() and equivalent_html(
+                path.read_text(encoding="utf-8"), content
+            ):
                 continue
             stale.append(path)
             if not args.check:

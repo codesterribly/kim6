@@ -75,6 +75,39 @@ class APNGFailClosedTests(unittest.TestCase):
             "resize", "--size", "8x8", "--", alternate
         )
 
+    def test_email_resize_refuses_real_animated_png(self):
+        result = self.w.dispatch(
+            "resizeandsend", "--size", "8x8", "--", self.source,
+        )
+        self.assertNotEqual(result.returncode, 0, result.events)
+        self.assertEqual(self.w.observe(self.source), self.before)
+        self.assertFalse(any(
+            c["tool"] in ("magick", "identify") for c in result.calls
+        ))
+        self.assertFalse(result.outputs)
+        storage = self.w.control / "data" / "kim6" / "email-attachments"
+        self.assertFalse(list(storage.glob("*")))
+        self.assertTrue(any(
+            "Animated PNG email resizing" in str(event)
+            for event in result.events
+        ), result.events)
+
+    def test_email_full_size_keeps_apng_bytes(self):
+        self.w.use_real_web_email()
+        result = self.w.dispatch(
+            "resizeandsend", "--size", "full", "--", self.source,
+        )
+        self.assertEqual(
+            result.returncode, 0, (result.stderr, result.events)
+        )
+        self.assertEqual(self.w.observe(self.source), self.before)
+        storage = self.w.control / "data" / "kim6" / "email-attachments"
+        attachments = list(storage.rglob("moving__send_1.png"))
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(
+            attachments[0].read_bytes(), self.source.read_bytes()
+        )
+
     def test_webexport_refuses_animated_png(self):
         destination = self.w.path("exports")
         destination.mkdir()

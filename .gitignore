@@ -3,4 +3,6 @@
 /qa/reports/
 /qa/transfers/
 __pycache__/
+.pytest_cache/
+.kim6-test-*/
 *.py[cod]

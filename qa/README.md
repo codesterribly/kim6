@@ -13,7 +13,7 @@ python3 -B qa/acceptance.py check-install
 python3 -B qa/acceptance.py next --isolated
 ```
 
-`prepare` creates pristine masters and a separate working copy for every one of the 107 current menu actions. Re-running it does not reset case results or replace changed case media. Use `next` to open the first pending case. It prints the exact file, menu label, suggested dialog choices, expected result, source behavior and technical checks. Use `next --case-id 'kim_compress.desktop:Compress50'` to reopen a particular case without changing its recorded result.
+`prepare` creates pristine masters and a separate working copy for every one of the 108 current menu actions. Re-running it does not reset case results or replace changed case media. Use `next` to open the first pending case. It prints the exact file, menu label, suggested dialog choices, expected result, source behavior and technical checks. Use `next --case-id 'kim_compress.desktop:Compress50'` to reopen a particular case without changing its recorded result.
 
 Select only the filenames printed for that case. `next --isolated` opens the case folder in Dolphin using a separate QA user data/config/cache tree. You must invoke the menu yourself. Never use personal photos or videos for destructive tests. For rotate/flip and other in-place or overwrite cases, the prepared files are disposable copies.
 
@@ -44,7 +44,7 @@ The isolated Dolphin session may still show system-wide menus. If duplicate or u
 
 ## Test the first-run smoke sequence
 
-Follow [SMOKE_TEST.md](SMOKE_TEST.md) for a short install, menu visibility and representative-action check. It is separate from the 107-case plan; passing it does not mark the full plan complete.
+Follow [SMOKE_TEST.md](SMOKE_TEST.md) for a short install, menu visibility and representative-action check. It is separate from the 108-case plan; passing it does not mark the full plan complete.
 
 ## Test on two machines and merge results
 

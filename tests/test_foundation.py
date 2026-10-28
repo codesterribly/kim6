@@ -99,6 +99,11 @@ class FoundationTests(unittest.TestCase):
         source = self.workspace.ppm("input/space 雪.ppm")
         payload = self.workspace.png(".control/reference.png").read_bytes()
         self.workspace.respond("magick", output_base64=base64.b64encode(payload).decode())
+        self.workspace.respond("identify", stdout="PNG|3|2\n")
+        self.workspace.respond_to(
+            "identify", "-ping", {"stdout": "PPM|3|2\n"}
+        )
+        self.workspace.respond("exiftool", stdout="")
         self.workspace.env["KIM_POLICY"] = "create"
         result = self.workspace.dispatch("convert", "png", source)
         self.assertEqual(result.returncode, 0, result.stderr)

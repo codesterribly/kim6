@@ -58,7 +58,7 @@
 <td>APNG</td>
 <td>PNG animation control detection and FFmpeg/ffprobe inspection</td>
 <td>Dedicated FFmpeg APNG conversion path</td>
-<td>APNG-to-APNG conversion validates frames, timing, and looping. <strong>Animated APNG input is refused by Resize and Web Export</strong> because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported.</td>
+<td>APNG-to-APNG conversion validates frames, timing, and looping. <strong>Animated APNG input is refused by Resize, Web Export and resized email preparation</strong> because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported.</td>
 </tr>
 <tr>
 <td>GIF</td>
@@ -155,7 +155,7 @@
 <h2 id="frame-preservation">Frame Preservation</h2>
 <p>KIM6 distinguishes still images, animations, and multi-page documents. Conversion rejects known frame loss rather than silently flattening unsupported animations. APNG has a dedicated FFmpeg path; other multi-frame formats depend on the installed coder and the selected action.</p>
 <p>Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.</p>
-<p><strong>Animation-specific boundaries:</strong> Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. <strong>Resize and Web Export refuse animated APNG rather than publish a flattened still image.</strong> This applies even when the file is named <code>.png</code> rather than <code>.apng</code>. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.</p>
+<p><strong>Animation-specific boundaries:</strong> Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. <strong>Resize, Web Export and resized email attachments refuse animated APNG rather than publish a flattened still image. Full-size email preparation copies the original bytes.</strong> This applies even when the file is named <code>.png</code> rather than <code>.apng</code>. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.</p>
 <p>Multi-page TIFF and PDF inputs are documents rather than timed animations. Converting a multi-page or animated source to a single-image format is refused where frames would otherwise be discarded.</p>
 <h2 id="color-profiles-and-metadata">Color Profiles and Metadata</h2>
 <p>Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.</p>

@@ -68,7 +68,7 @@ See [File handling](commandconfig.md#output-and-file-handling) for file preserva
 
 ### File preservation details
 
-Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation, EXIF auto-orientation, flipping and flopping are always in-place; they require the separate original-file overwrite confirmation under `KIM_POLICY=prompt` and refuse to run under `KIM_POLICY=create`. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video utilities, slideshows, galleries, and other publications never overwrite selected source files.
+Compression, conversion, resizing, and metadata changes can create new files or use explicitly authorized replacement according to the action. Rotation, EXIF auto-orientation, flipping and flopping are always in-place; they require the separate original-file overwrite confirmation under `KIM_POLICY=prompt` and refuse to run under `KIM_POLICY=create`. Rename preflights conflicts before moving or copying files. Derived-only exports, email preparations, video frame/audio/GIF utilities, slideshows, galleries, and other publications never overwrite selected source files. **Video transcoding** (`video`) is different: it may replace selected originals after explicit overwrite confirmation.
 
 Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.
 
@@ -275,7 +275,7 @@ Geometry uses ImageMagick’s supported resize grammar and preserves aspect rati
 kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 ```
 
-Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [File handling](commandconfig.md#output-and-file-handling).
+Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; `--size full` preserves the original animation by copying its bytes. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [File handling](commandconfig.md#output-and-file-handling).
 
 KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.
 

@@ -9,7 +9,7 @@ KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A re
 |---|---|---|---|
 | JPEG/JPG/JFIF | ImageMagick JPEG decoder | JPEG encoder; compression and conversion menus | Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant. |
 | PNG | ImageMagick PNG decoder | PNG encoder | Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported. |
-| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | Dedicated FFmpeg APNG conversion path | APNG-to-APNG conversion validates frames, timing, and looping. **Animated APNG input is refused by Resize and Web Export** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
+| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | Dedicated FFmpeg APNG conversion path | APNG-to-APNG conversion validates frames, timing, and looping. **Animated APNG input is refused by Resize, Web Export and resized email preparation** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
 | GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
 | TIFF/TIF | ImageMagick TIFF decoder | TIFF encoder; `tiffjoin` creates multi-page files | Multiple pages are supported where the selected operation permits them. |
 | BMP/DIB | ImageMagick BMP decoder | BMP encoder; menu selects BMP5 | Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee. |
@@ -32,7 +32,7 @@ KIM6 distinguishes still images, animations, and multi-page documents. Conversio
 
 Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.
 
-**Animation-specific boundaries:** Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. **Resize and Web Export refuse animated APNG rather than publish a flattened still image.** This applies even when the file is named `.png` rather than `.apng`. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.
+**Animation-specific boundaries:** Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. **Resize, Web Export and resized email attachments refuse animated APNG rather than publish a flattened still image. Full-size email preparation copies the original bytes.** This applies even when the file is named `.png` rather than `.apng`. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.
 
 Multi-page TIFF and PDF inputs are documents rather than timed animations. Converting a multi-page or animated source to a single-image format is refused where frames would otherwise be discarded.
 

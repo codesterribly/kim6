@@ -33,7 +33,7 @@ shift
 KIM_POLICY="${KIM_TEST_POLICY:-create}"
 KIM_NAME_AFFIX_POSITION=suffix
 gettext(){ printf '%s' "$1"; }
-kdialog(){ return 0; }
+kdialog(){ case " $* " in *--radiolist*) printf 'review\n' ;; esac; return 0; }
 progress_error(){ printf 'ERROR:%s\n' "$1"; }
 progress_open(){ printf 'fake'; }
 progress_begin_item(){ return 0; }
@@ -121,7 +121,11 @@ mk_workdir
             with self.subTest(action=invocation):
                 result = self.run_action(invocation, corrupt)
                 self.assertNotEqual(result.returncode, 0, (invocation, result.stdout, result.stderr))
-                self.assertIn('summary ok=0 fail=1', result.stdout)
+                if invocation.startswith(('action_rotate', 'action_flipflop')):
+                    # Create policy refuses in-place work before progress starts.
+                    self.assertNotIn('summary ok=', result.stdout)
+                else:
+                    self.assertIn('summary ok=0 fail=1', result.stdout)
                 self.assertEqual(corrupt.read_bytes(), b'not an actual image')
 
     @unittest.skipUnless(shutil.which('magick') and shutil.which('identify'),
@@ -175,7 +179,7 @@ metadata_publish_one(){
 '''
         # Fake ExifTool is only a presence probe; publishing is instrumented.
         result = self.run_action('action_stripmeta_selective gps true "$1" "$2"',
-                                 first, second, extra=extra, policy='overwrite',
+                                 first, second, extra=extra, policy='prompt',
                                  extra_env={'KIM_TEST_TOOL_DIR': str(self.root)})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('first.jpg deleted_digital_source_type=true', result.stdout)
