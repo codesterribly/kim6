@@ -148,6 +148,10 @@ class Workspace:
             {"stdout": "review\n"},
         )
         self.respond_to(
+            "kdialog", "Keep originals unchanged (recommended)",
+            {"stdout": "review\n"},
+        )
+        self.respond_to(
             "kdialog", "--warningyesno",
             {"status": 0},
         )

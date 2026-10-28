@@ -13,6 +13,7 @@ class TransformTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.source = self.w.png('input/photo 雪.png')
+        self.w.approve_overwrite()
         self.w.use_real_transform()
 
     def pixels(self, path):
@@ -155,7 +156,7 @@ class TransformTests(unittest.TestCase):
         dangling = self.w.path('input/photo 雪_flipped.png')
         dangling.symlink_to('absent')
         before = {p: self.w.observe(p) for p in (occupied, dangling)}
-        self.w.env['KIM_POLICY'] = 'create'
+        # Explicit in-place approval is configured in setUp.
         result = self.w.dispatch('rotate', '90', self.source)
         self.assertEqual(self.pixels(self.source), [3, 0, 4, 1, 5, 2], result.stderr)
         for path, state in before.items():

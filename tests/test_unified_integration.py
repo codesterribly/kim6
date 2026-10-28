@@ -36,7 +36,8 @@ class MenuContractTests(unittest.TestCase):
             declared = next(line.split("=", 1)[1].rstrip(";").split(";") for line in text.splitlines()
                             if line.startswith("Actions="))
             defined = [action_id for action_id, _, _ in action_entries(path)]
-            self.assertEqual(declared, defined, f"{path.name}: declared IDs must match action groups")
+            # Actions= determines menu order; group order may differ.
+            self.assertCountEqual(declared, defined, f"{path.name}: declared IDs must match action groups")
             self.assertEqual(len(defined), len(set(defined)), f"{path.name}: duplicate action IDs")
         for action_id, command, label in entries:
             with self.subTest(action=action_id):
