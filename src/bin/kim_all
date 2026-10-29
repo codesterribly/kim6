@@ -4283,6 +4283,96 @@ action_stripmeta() {
       break
     fi
 
+    # PNG/APNG full stripping removes custom ancillary metadata and text.
+    # Selective AI/GPS keep their existing paths until the next stage.
+    if [[ "${ext,,}" = png || "${ext,,}" = apng ]]; then
+      if [ "$mode" = overwrite ]; then
+        OUTFILE="$i"
+      else
+        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
+        n=1
+        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
+          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
+          n=$((n + 1))
+        done
+      fi
+
+      if metadata_png_publish_one "$i" "$OUTFILE" "$mode" "$dbusRef" all false; then
+        report_ok
+      else
+        report_fail "$i"
+      fi
+
+      progress_value "$dbusRef" "$counter"
+      [ "$METADATA_INTERRUPTED" != true ] || break
+      continue
+    fi
+
+    # Use native reconstruction in production.
+    # The isolated legacy test harness sets
+    # KIM_JPEG_WEBP_ENGINE=legacy so its ExifTool fault
+    # injection remains meaningful.
+    container_format=''
+    case "${ext,,}" in
+      jpg|jpeg) container_format=jpeg ;;
+      webp) container_format=webp ;;
+    esac
+
+    if [ -n "$container_format" ] &&
+       [ "${KIM_JPEG_WEBP_ENGINE:-native}" != legacy ]; then
+
+      if [ "$mode" = overwrite ]; then
+        OUTFILE="$i"
+      else
+        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
+        n=1
+        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
+          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
+          n=$((n + 1))
+        done
+      fi
+
+      if metadata_jpeg_webp_publish_all \
+          "$i" "$OUTFILE" "$mode" "$dbusRef" \
+          "$container_format"; then
+        report_ok
+      else
+        report_fail "$i"
+      fi
+
+      progress_value "$dbusRef" "$counter"
+      [ "$METADATA_INTERRUPTED" != true ] || break
+      continue
+    fi
+
+    # Native GIF full strip; keep the legacy producer for
+    # isolated fault-injection tests.
+    if [ "${ext,,}" = gif ] &&
+       [ "${KIM_GIF_ENGINE:-native}" != legacy ]; then
+
+      if [ "$mode" = overwrite ]; then
+        OUTFILE="$i"
+      else
+        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
+        n=1
+        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
+          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
+          n=$((n + 1))
+        done
+      fi
+
+      if metadata_jpeg_webp_publish_all \
+          "$i" "$OUTFILE" "$mode" "$dbusRef" gif; then
+        report_ok
+      else
+        report_fail "$i"
+      fi
+
+      progress_value "$dbusRef" "$counter"
+      [ "$METADATA_INTERRUPTED" != true ] || break
+      continue
+    fi
+
     read_hint='-'
     rc=0
     source_info="$(identify -regard-warnings +ping -format "$image_format" - < "$i" 2>/dev/null)" || rc=$?
@@ -4359,6 +4449,38 @@ action_stripmeta() {
       done
       [ "$source_icc" = "$actual_icc" ] || rc=1
     fi
+    # Ensure full TIFF stripping preserves compressed image data.
+    if [ "$rc" -eq 0 ] &&
+       [ "${KIM_TIFF_VERIFY:-native}" != legacy ]; then
+      case "${ext,,}" in
+        tif|tiff)
+          if ! metadata_tiff_encoded_equal "$i" "$OUTTMP"; then
+            printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$i" >&2
+            rc=1
+          fi
+          ;;
+      esac
+    fi
+
+    # HEIF/AVIF encoded-payload integrity verification.
+    if [ "$rc" -eq 0 ] &&
+       [ "${KIM_ISOBMFF_VERIFY:-native}" != legacy ]; then
+      case "${ext,,}" in
+        heic|heif|hif)
+          if ! metadata_isobmff_equal "$i" "$OUTTMP" heif; then
+            printf 'KIM6: HEIF encoded-data verification failed: %s\n' "$i" >&2
+            rc=1
+          fi
+          ;;
+        avif)
+          if ! metadata_isobmff_equal "$i" "$OUTTMP" avif; then
+            printf 'KIM6: AVIF encoded-data verification failed: %s\n' "$i" >&2
+            rc=1
+          fi
+          ;;
+      esac
+    fi
+
     if [ "$rc" -eq 0 ]; then
       # Stripping changes metadata only: unlike resize/compression, keep mtime.
       chmod --reference="$i" "$OUTTMP" || rc=$?
@@ -4388,6 +4510,271 @@ action_stripmeta() {
 # Read-only metadata probes, plus pixel/ICC fingerprints used by every
 # metadata-only writer. ExifTool edits a destination-local copy; publication
 # remains the existing K12 atomic operation.
+# Rebuild PNG/APNG metadata without re-encoding image or animation data.
+# KIM6 continues to enforce staging, verification, and atomic publication.
+# Compare embedded PNG ICC chunks directly, without ExifTool's
+# metadata serialization. The profile chunk must remain byte-identical.
+metadata_png_icc_equal() {
+  local source="$1" target="$2"
+  local interpreter="${KIM_PNG_PYTHON:-python3}"
+
+  command -v "$interpreter" >/dev/null 2>&1 || return 1
+
+  "$interpreter" -B - "$source" "$target" <<'PYICC'
+import binascii
+import struct
+import sys
+
+SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def profiles(filename):
+    data = open(filename, "rb").read()
+
+    if not data.startswith(SIGNATURE):
+        raise ValueError("not PNG")
+
+    pos = len(SIGNATURE)
+    found = []
+    ended = False
+
+    while pos < len(data):
+        if len(data) - pos < 12:
+            raise ValueError("truncated chunk")
+
+        size = struct.unpack_from(">I", data, pos)[0]
+        end = pos + size + 12
+
+        if end > len(data):
+            raise ValueError("invalid chunk boundary")
+
+        kind = data[pos + 4:pos + 8]
+        payload = data[pos + 8:end - 4]
+        crc = struct.unpack_from(">I", data, end - 4)[0]
+
+        if binascii.crc32(kind + payload) & 0xffffffff != crc:
+            raise ValueError("invalid chunk CRC")
+
+        if kind == b"iCCP":
+            found.append(payload)
+
+        pos = end
+
+        if kind == b"IEND":
+            ended = True
+            break
+
+    if not ended or pos != len(data):
+        raise ValueError("invalid PNG termination")
+
+    if len(found) > 1:
+        raise ValueError("multiple ICC chunks")
+
+    return found
+
+
+try:
+    before = profiles(sys.argv[1])
+    after = profiles(sys.argv[2])
+
+    if before != after:
+        raise ValueError("embedded ICC chunk changed")
+
+except (OSError, ValueError) as exc:
+    print(f"KIM6 PNG ICC verification failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+PYICC
+}
+
+metadata_png_publish_one() {
+  local source="$1" target="$2" mode="$3" ref="$4"
+  local strip_mode="${5:-all}" remove_ai="${6:-false}"
+  local -a png_args=(--mode "$strip_mode")
+  [ "$remove_ai" != true ] || png_args+=(--remove-ai)
+  local engine="$DISPATCHER_DIR/kim_png_metadata.py"
+  local interpreter="${KIM_PNG_PYTHON:-python3}"
+  local tmp before after icc_before icc_after
+  local animation_before animation_after response rc=0
+
+  METADATA_INTERRUPTED=false
+  if [ ! -f "$engine" ] || ! command -v "$interpreter" >/dev/null 2>&1; then
+    printf 'KIM6: PNG metadata engine or Python 3 is unavailable.\n' >&2
+    return 1
+  fi
+
+  [ ! -L "$source" ] && [ "$(stat -c '%h' -- "$source" 2>/dev/null)" = 1 ] || return 1
+  metadata_is_raw "$source" && return 1
+
+  before="$(metadata_image_fingerprint "$source")" || return 1
+  [ -n "$before" ] || return 1
+  # The PNG profile is verified against the actual iCCP bytes
+  # after reconstruction, not ExifTool's metadata representation.
+
+  tmp="$(tmp_for_target "$target")" || return 1
+
+  if progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rm -f -- "$tmp" >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  response="$("$interpreter" -B "$engine" "${png_args[@]}" --input "$source" --output "$tmp")" || rc=1
+  [[ "$response" =~ ^removed=[0-9]+\ bytes=[0-9]+-\>[0-9]+$ ]] || rc=1
+  [ -s "$tmp" ] || rc=1
+
+  if [ "$rc" -eq 0 ]; then
+    after="$(metadata_image_fingerprint "$tmp")" || rc=1
+    [ -n "$after" ] && [ "$before" = "$after" ] || rc=1
+
+    if ! metadata_png_icc_equal "$source" "$tmp"; then
+      rc=1
+    fi
+
+    if image_has_apng_control_chunk "$source"; then
+      animation_before="$(image_apng_animation_signature "$source")" || rc=1
+      animation_after="$(image_apng_animation_signature "$tmp")" || rc=1
+      [ "$animation_before" = "$animation_after" ] || rc=1
+    fi
+  fi
+
+  # Do not publish selective operations that made no changes.
+  if [ "$rc" -eq 0 ] && [ "$strip_mode" != all ] &&
+     [[ "$response" =~ ^removed=0[[:space:]] ]]; then
+    rm -f -- "$tmp" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if [ "$rc" -eq 0 ]; then
+    chmod --reference="$source" "$tmp" || rc=$?
+    [ "$rc" -ne 0 ] || touch -r "$source" -- "$tmp" || rc=$?
+  fi
+
+  if progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rc=1
+  fi
+
+  if [ "$rc" -eq 0 ]; then
+    commit_tmp_to_target "$tmp" "$target" "$mode" || rc=$?
+  fi
+
+  rm -f -- "$tmp" >/dev/null 2>&1 || true
+  [ "$rc" -eq 0 ]
+}
+
+# Full JPEG/WebP metadata removal without recompression.
+metadata_jpeg_webp_publish_all() {
+  local source="$1" target="$2" mode="$3" ref="$4" format="$5"
+  local engine="$DISPATCHER_DIR/kim_jpeg_webp_metadata.py"
+  if [ "$format" = gif ]; then
+    engine="$DISPATCHER_DIR/kim_gif_metadata.py"
+  fi
+  local interpreter="${KIM_PNG_PYTHON:-python3}"
+  local tmp before after icc_before icc_after response rc=0
+
+  METADATA_INTERRUPTED=false
+
+  if [ ! -f "$engine" ] ||
+     ! command -v "$interpreter" >/dev/null 2>&1; then
+    printf 'KIM6: JPEG/WebP reconstruction engine unavailable.\n' >&2
+    return 1
+  fi
+
+  [ ! -L "$source" ] &&
+    [ "$(stat -c '%h' -- "$source" 2>/dev/null)" = 1 ] ||
+    return 1
+
+  metadata_is_raw "$source" && return 1
+
+  before="$(metadata_image_fingerprint "$source")" || return 1
+  [ -n "$before" ] || return 1
+
+  icc_before="$(metadata_icc_fingerprint "$source")" || return 1
+
+  tmp="$(tmp_for_target "$target")" || return 1
+
+  if progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rm -f -- "$tmp" >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  response="$("$interpreter" -B "$engine" \
+    --format "$format" --input "$source" --output "$tmp")" ||
+    rc=1
+
+  [[ "$response" =~ ^removed=[0-9]+\ bytes=[0-9]+-\>[0-9]+$ ]] ||
+    rc=1
+
+  [ -s "$tmp" ] || rc=1
+
+  if [ "$rc" -eq 0 ]; then
+    after="$(metadata_image_fingerprint "$tmp")" || rc=1
+
+    if [ -z "$after" ] || [ "$before" != "$after" ]; then
+      printf 'KIM6: JPEG/WebP image fingerprint changed.\n' >&2
+      rc=1
+    fi
+
+    icc_after="$(metadata_icc_fingerprint "$tmp")" || rc=1
+
+    if [ "$icc_before" != "$icc_after" ]; then
+      printf 'KIM6: JPEG/WebP ICC profile changed.\n' >&2
+      rc=1
+    fi
+  fi
+
+  if [ "$rc" -eq 0 ]; then
+    chmod --reference="$source" "$tmp" || rc=$?
+    [ "$rc" -ne 0 ] ||
+      touch -r "$source" -- "$tmp" || rc=$?
+  fi
+
+  if progress_cancelled "$ref"; then
+    METADATA_INTERRUPTED=true
+    rc=1
+  fi
+
+  if [ "$rc" -eq 0 ]; then
+    commit_tmp_to_target "$tmp" "$target" "$mode" || rc=$?
+  fi
+
+  rm -f -- "$tmp" >/dev/null 2>&1 || true
+
+  [ "$rc" -eq 0 ]
+}
+
+# Verify TIFF compressed strips/tiles before metadata publication.
+# Unsupported Classic TIFF layouts and BigTIFF fail closed.
+metadata_tiff_encoded_equal() {
+  local source="$1" candidate="$2"
+  local engine="$DISPATCHER_DIR/kim_tiff_verify.py"
+  local interpreter="${KIM_PNG_PYTHON:-python3}"
+
+  [ -f "$engine" ] || return 1
+  command -v "$interpreter" >/dev/null 2>&1 || return 1
+
+  "$interpreter" -B "$engine" \
+    --before "$source" --after "$candidate"
+}
+
+# Verify HEIC/HEIF/AVIF encoded payload preservation.
+# The existing metadata writer, ICC checks and atomic publication
+# remain independently responsible for their existing guarantees.
+metadata_isobmff_equal() {
+  local source="$1" candidate="$2" format="$3"
+  local engine="$DISPATCHER_DIR/kim_isobmff_verify.py"
+  local interpreter="${KIM_PNG_PYTHON:-python3}"
+
+  [ -f "$engine" ] || return 1
+  command -v "$interpreter" >/dev/null 2>&1 || return 1
+
+  "$interpreter" -B "$engine" \
+    --format "$format" \
+    --before "$source" \
+    --after "$candidate"
+}
+
 metadata_image_fingerprint() {
   identify -regard-warnings +ping -format '%m %w %h %[orientation] %[colorspace] %[gamma] %g %T %D %#\n' -- "$1" 2>/dev/null
 }
@@ -4456,6 +4843,66 @@ metadata_publish_one() {
   source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
   output_icc="$(metadata_icc_fingerprint "$tmp")" || rc=1
   [ "$source_icc" = "$output_icc" ] || rc=1
+  # In normal JPEG/WebP selective operations, verify encoded
+  # picture and animation bytes before publishing ExifTool output.
+  # The isolated legacy harness retains its existing fault injection.
+  if [ "$rc" -eq 0 ] &&
+     [ "${KIM_JPEG_WEBP_ENGINE:-native}" != legacy ]; then
+    local integrity_format='' integrity_engine integrity_python
+
+    case "${source##*.}" in
+      jpg|jpeg|JPG|JPEG|Jpg|Jpeg)
+        integrity_format=jpeg ;;
+      webp|WEBP|Webp)
+        integrity_format=webp ;;
+    esac
+
+    if [ -n "$integrity_format" ]; then
+      integrity_engine="$DISPATCHER_DIR/kim_jpeg_webp_metadata.py"
+      integrity_python="${KIM_PNG_PYTHON:-python3}"
+
+      if [ ! -f "$integrity_engine" ] ||
+         ! command -v "$integrity_python" >/dev/null 2>&1 ||
+         ! "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$source"              --input "$tmp"; then
+        printf 'KIM6: Selective JPEG/WebP container verification failed: %s\n' "$source" >&2
+        rc=1
+      fi
+    fi
+  fi
+
+  # Ensure selective TIFF edits preserve compressed image data.
+  # Existing mocked tests explicitly use the legacy verifier mode.
+  if [ "$rc" -eq 0 ] &&
+     [ "${KIM_TIFF_VERIFY:-native}" != legacy ]; then
+    case "${source##*.}" in
+      tif|tiff|TIF|TIFF|Tif|Tiff)
+        if ! metadata_tiff_encoded_equal "$source" "$tmp"; then
+          printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$source" >&2
+          rc=1
+        fi
+        ;;
+    esac
+  fi
+
+  # HEIF/AVIF selective-edit encoded-payload verification.
+  if [ "$rc" -eq 0 ] &&
+     [ "${KIM_ISOBMFF_VERIFY:-native}" != legacy ]; then
+    local bmff_format=''
+    case "${source##*.}" in
+      heic|heif|hif|HEIC|HEIF|HIF)
+        bmff_format=heif ;;
+      avif|AVIF)
+        bmff_format=avif ;;
+    esac
+
+    if [ -n "$bmff_format" ] &&
+       ! metadata_isobmff_equal \
+           "$source" "$tmp" "$bmff_format"; then
+      printf 'KIM6: ISO-BMFF encoded-data verification failed: %s\n' "$source" >&2
+      rc=1
+    fi
+  fi
+
   for pair in "${expected_pairs[@]}"; do
     tag="${pair%%$'\034'*}"
     value="${pair#*$'\034'}"
@@ -4537,6 +4984,23 @@ action_stripmeta_selective() {
     tag="$strip_mode"
     [ "$remove_ai" != true ] || tag="${tag}_ai"
     progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
+    # PNG metadata is filtered at the container level.
+    # Other formats retain the existing selective ExifTool path.
+    case "${source##*.}" in
+      png|PNG|Png|apng|APNG|Apng)
+        target="$(metadata_output_path "$source" "$tag" "$publication_mode")"
+
+        if metadata_png_publish_one "$source" "$target" "$publication_mode" "$ref" "$strip_mode" "$do_ai"; then
+          report_ok
+        else
+          report_fail "$source"
+        fi
+
+        progress_value "$ref" "$counter"
+        [ "$METADATA_INTERRUPTED" != true ] || break
+        continue
+        ;;
+    esac
     if [ "$strip_mode" = gps ] || [ "$strip_mode" = ai ] || [ "$remove_ai" = true ]; then
       if [ "$strip_mode" = gps ]; then
         local -a gps_queries=(-GPS:all '-XMP-exif:GPS*' '-XMP:GPS*')

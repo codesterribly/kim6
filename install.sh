@@ -76,7 +76,7 @@ manual_files=(
   docs/images/kim6-metadata-illustration.png
   docs/images/kim6-web-export-illustration.png
 )
-runtime_files=(bin/kim_all gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}")
 temporary=''
 die() { echo "install.sh: $*" >&2; exit 1; }
@@ -186,7 +186,7 @@ if [ -f "$SOURCE_DIR/tools/build_manual.py" ]; then
 fi
 
 # Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_all src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
+for relative in src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -224,6 +224,11 @@ compile_translation() {
 
 mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
 install_file "$SOURCE_DIR/src/bin/kim_all" "$RUNTIME/bin/kim_all" 0755
+install_file "$SOURCE_DIR/src/bin/kim_png_metadata.py" "$RUNTIME/bin/kim_png_metadata.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_jpeg_webp_metadata.py" "$RUNTIME/bin/kim_jpeg_webp_metadata.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_gif_metadata.py" "$RUNTIME/bin/kim_gif_metadata.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_tiff_verify.py" "$RUNTIME/bin/kim_tiff_verify.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_isobmff_verify.py" "$RUNTIME/bin/kim_isobmff_verify.py" 0644
 install_file "$SOURCE_DIR/src/gallery/index.part1" "$RUNTIME/gallery/index.part1" 0644
 install_file "$SOURCE_DIR/src/gallery/index.part2" "$RUNTIME/gallery/index.part2" 0644
 install_file "$SOURCE_DIR/ABOUT" "$RUNTIME/ABOUT" 0644

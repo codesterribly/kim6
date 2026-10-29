@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import signal
+import sys
 import stat
 import subprocess
 import tempfile
@@ -68,6 +69,39 @@ class Workspace:
         self.dispatcher = self.control / "kim_all"
         shutil.copyfile(self.production, self.dispatcher)
         self.dispatcher.chmod(0o700)
+        # Keep companion runtime code alongside the isolated dispatcher.
+        companion = self.production.with_name("kim_png_metadata.py")
+        if companion.is_file():
+            shutil.copyfile(companion, self.control / companion.name)
+        native_companion = self.production.with_name(
+            "kim_jpeg_webp_metadata.py"
+        )
+        if native_companion.is_file():
+            shutil.copyfile(
+                native_companion,
+                self.control / native_companion.name,
+            )
+        gif_companion = self.production.with_name("kim_gif_metadata.py")
+        if gif_companion.is_file():
+            shutil.copyfile(
+                gif_companion, self.control / gif_companion.name
+            )
+        tiff_companion = self.production.with_name(
+            "kim_tiff_verify.py"
+        )
+        if tiff_companion.is_file():
+            shutil.copyfile(
+                tiff_companion,
+                self.control / tiff_companion.name,
+            )
+        bmff_companion = self.production.with_name(
+            "kim_isobmff_verify.py"
+        )
+        if bmff_companion.is_file():
+            shutil.copyfile(
+                bmff_companion,
+                self.control / bmff_companion.name,
+            )
         self.plan = self.control / "plan.json"
         self.plan.write_text(json.dumps({"responses": {}, "config": {}}))
         self.log = self.control / "calls.jsonl"
@@ -97,6 +131,15 @@ class Workspace:
             "XDG_RUNTIME_DIR": str(self.control / "runtime"),
             "KIM_CONFIG_FILE": str(self.control / "config/kim_kdeimagemenu"),
             "KIM_TEST_ROOT": str(self.root),
+            # Existing failure-injection tests exercise ExifTool.
+            # Native JPEG/WebP tests explicitly override this.
+            "KIM_JPEG_WEBP_ENGINE": "legacy",
+            "KIM_GIF_ENGINE": "legacy",
+            "KIM_TIFF_VERIFY": "legacy",
+            "KIM_ISOBMFF_VERIFY": "legacy",
+            # The adapter PATH intentionally excludes general executables.
+            # Only the PNG metadata subprocess receives this interpreter.
+            "KIM_PNG_PYTHON": sys.executable,
         }
         Path(self.env["KIM_CONFIG_FILE"]).touch()
 

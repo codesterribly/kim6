@@ -87,7 +87,7 @@ manual_files=(
   docs/images/kim6-metadata-illustration.png
   docs/images/kim6-web-export-illustration.png
 )
-runtime_files=(bin/kim_all gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" .kim6-owned .kim6-manifest)
 die() { echo "uninstall.sh: $*" >&2; exit 1; }
 check_dir() {

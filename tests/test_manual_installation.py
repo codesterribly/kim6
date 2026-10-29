@@ -93,6 +93,10 @@ class ManualInstallationTests(unittest.TestCase):
     def test_install_upgrade_uninstall_and_preserve_unrelated_file(self):
         self.run_installer("install.sh")
         self.assert_manual_matches_checkout()
+        engine = self.runtime / "bin/kim_png_metadata.py"
+        self.assertEqual(engine.read_bytes(),
+                         (ROOT / "src/bin/kim_png_metadata.py").read_bytes())
+        self.assertFalse(engine.is_symlink())
 
         # A modified managed HTML file is restored on an upgrade.
         readme = self.runtime / "docs/reference/README.html"

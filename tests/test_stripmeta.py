@@ -212,16 +212,20 @@ class StripmetaTests(unittest.TestCase):
         self.failed(self.dispatch(link), before)
 
 
-    def test_nondefault_png_gamma_fails_closed_without_new_metadata_policy(self):
+    def test_nondefault_png_gamma_survives_container_reconstruction(self):
         source = self.w.path('input/linear.png')
-        subprocess.run([shutil.which('magick'), '-size', '3x2', 'xc:red',
-                        '-set', 'gamma', '1', str(source)], check=True)
-        before = {source: self.w.observe(source)}
+        subprocess.run([shutil.which('magick'), '-size', '3x2',
+                        'xc:red', '-set', 'gamma', '1', str(source)], check=True)
+        before = self.w.image_info(source)
+        before_time = source.stat().st_mtime_ns
         self.w.use_real_stripmeta()
+        self.w.use_real_metadata_tools()
+        self.w.use_real_mv()
         result = self.dispatch(source)
-        self.failed(result, before)
-        self.assertTrue(any(e['tool'] == 'exiftool' and e['status'] == 0 for e in result.events))
-        self.assertFalse(any(c['tool'] == 'mv' for c in result.calls))
+        self.assertEqual(0, result.returncode, (result.stderr, result.events))
+        self.assertEqual(before, self.w.image_info(source))
+        self.assertEqual(before_time, source.stat().st_mtime_ns)
+        self.clean()
 
     def test_pdf_policy_removes_visible_tags_but_retains_revision_history(self):
         source = self.w.path('input/history.pdf')

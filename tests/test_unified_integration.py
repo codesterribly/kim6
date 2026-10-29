@@ -194,7 +194,25 @@ class InstallWorkflowTests(unittest.TestCase):
                 translation = runtime / f"locale/{language}/LC_MESSAGES/kim6.mo"
                 self.assertTrue(translation.is_file(), translation)
                 self.assertEqual(0o644, translation.stat().st_mode & 0o777)
-        self.assertFalse(any(path.name != "kim_all" for path in (runtime / "bin").iterdir()))
+        expected_runtime_bin = {
+            "kim_all",
+            "kim_png_metadata.py",
+            "kim_jpeg_webp_metadata.py",
+            "kim_gif_metadata.py",
+            "kim_tiff_verify.py",
+            "kim_isobmff_verify.py",
+        }
+        self.assertEqual(
+            expected_runtime_bin,
+            {path.name for path in (runtime / "bin").iterdir()},
+        )
+        for companion in expected_runtime_bin - {"kim_all"}:
+            installed = runtime / "bin" / companion
+            self.assertTrue(installed.is_file(), installed)
+            self.assertEqual(
+                0o644, installed.stat().st_mode & 0o777,
+                installed,
+            )
         menu_files = list(self.prefix.glob("kim_*.desktop"))
         self.assertEqual(5, len(menu_files))
         for path in menu_files:
