@@ -90,7 +90,7 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn('id="file-handling"', manual)
         self.assertIn("Illustration of an output example, not a Dolphin screenshot.", manual)
         # The manual includes generated illustrations, not actual screenshots.
-        self.assertIn("conceptual examples, not actual application screenshots", manual)
+        self.assertNotIn("conceptual examples, not actual application screenshots", manual)
 
         for name in (
             "kim6-photo-actions.png",
@@ -176,7 +176,7 @@ class DocumentationContractTests(unittest.TestCase):
                               for action_id, label, command in rows], menu.name)
             total += len(actual)
 
-        self.assertEqual(82, total)
+        self.assertEqual(83, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")

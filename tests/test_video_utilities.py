@@ -371,13 +371,13 @@ class VideoUtilityTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         expected_order = [
-            "ExtractVideoAudio",
-            "VideoFrameAt",
-            "VideoThumbnail",
-            "MuteVideo",
+            "A01ExtractVideoAudio",
+            "A02VideoFrameAt",
+            "A03VideoThumbnail",
+            "A04MuteVideo",
             "_SEPARATOR_",
-            "VideoContactSheet",
-            "VideoToGif",
+            "z01VideoContactSheet",
+            "z02VideoToGif",
         ]
 
         lines = menu.splitlines()
@@ -427,12 +427,12 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertEqual(set(executable_ids), set(actions))
 
         expected_routes = {
-            "ExtractVideoAudio": ("videoaudio", "--mode extract"),
-            "VideoFrameAt": ("videoframes", "--mode single"),
-            "VideoThumbnail": ("videoframes", "--mode thumbnail"),
-            "MuteVideo": ("videoaudio", "--mode mute"),
-            "VideoContactSheet": ("videoframes", "--mode contact"),
-            "VideoToGif": ("videogif", "--interactive"),
+            "A01ExtractVideoAudio": ("videoaudio", "--mode extract"),
+            "A02VideoFrameAt": ("videoframes", "--mode single"),
+            "A03VideoThumbnail": ("videoframes", "--mode thumbnail"),
+            "A04MuteVideo": ("videoaudio", "--mode mute"),
+            "z01VideoContactSheet": ("videoframes", "--mode contact"),
+            "z02VideoToGif": ("videogif", "--interactive"),
         }
 
         for action_id, (route, required_option) in expected_routes.items():

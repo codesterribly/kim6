@@ -7201,13 +7201,14 @@ action_video() {
       case "$av1_quality" in
         high) crf=28; av1_speed=6 ;;
         balanced) crf=35; av1_speed=8 ;;
+        smallest) crf=42; av1_speed=8 ;;
         custom)
           crf="$(kdialog --inputbox "$(gettext 'AV1 CRF quality (0-63):')" 30)" || return 1
           av1_speed="$(kdialog --inputbox "$(gettext 'AV1 speed preset (0-13; lower is slower):')" 7)" || return 1
           [[ "$crf" =~ ^[0-9]{1,2}$ ]] && [ "$crf" -le 63 ] || { progress_error "$(gettext 'AV1 CRF must be between 0 and 63.')"; return 2; }
           [[ "$av1_speed" =~ ^-?[0-9]{1,2}$ ]] && [ "$av1_speed" -ge -2 ] && [ "$av1_speed" -le 13 ] || { progress_error "$(gettext 'AV1 speed preset must be between -2 and 13.')"; return 2; }
           ;;
-        *) progress_error "$(gettext 'AV1 requires --av1-quality high, balanced or custom.')"; return 2 ;;
+        *) progress_error "$(gettext 'AV1 requires --av1-quality high, balanced, smallest or custom.')"; return 2 ;;
       esac
       ;;
     *) progress_error "$(gettext 'Video codec must be libx264, libx265 or av1.')"; return 2 ;;
@@ -8642,12 +8643,12 @@ Commands:
 
   video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265
         --container orig|mp4 -- <files...>
-  video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|custom
+  video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|smallest|custom
         --container orig|mp4 -- <files...>
       Safely transcode each selected video with FFmpeg. Original-container
       mode fails when the chosen codec/streams are incompatible; it never
       silently changes to MP4. AV1 prefers libsvtav1 and uses libaom-av1 only
-      when SVT-AV1 is unavailable. AV1 High uses CRF 28, Balanced CRF 35;
+      when SVT-AV1 is unavailable. AV1 High uses CRF 28, Balanced CRF 35, Smallest File CRF 42;
       these values are not direct equivalents of the H.264/H.265 presets.
       KIM_POLICY or the batch-wide dialog selects
       create versus authorized overwrite.

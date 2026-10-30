@@ -1,7 +1,7 @@
 
 # KIM6 Dolphin Menu Actions
 
-KIM6 provides 82 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.
+KIM6 provides 83 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.
 
 The tables reflect the menu definitions in `src/`. Settings, Manual, License, and About are grouped in the dedicated information service menu.
 
@@ -34,7 +34,7 @@ For detailed command options, dependencies, and output behavior, see [commandcon
 
 ## Complete Menu Action Reference
 
-The following tables list all 82 executable actions from KIM6's ten Dolphin service-menu files.
+The following tables list all 83 executable actions from KIM6's ten Dolphin service-menu files.
 
 Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.
 
@@ -88,14 +88,14 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `12ConvertWEBP` | Convert to WebP | `kim_all convert --format webp -- %F` |
 | `2001CompressRecommended` | Compress Recommended | `kim_all compress --recommended -- %F` |
 | `2102CompressMaximum` | Compress Maximum | `kim_all compress --maximum -- %F` |
-| `2203CompressCustom` | Compress Custom | `kim_all compress --custom -- %F` |
+| `2203CompressCustom` | Compress Custom… | `kim_all compress --custom -- %F` |
 
 ### `kim_information.desktop.in`
 
 | Action ID | Menu label | Command |
 |---|---|---|
 | `01Settings` | Settings… | `kim_all settings` |
-| `02About` | About KIM6… | `kim_all about` |
+| `02About` | About KIM6 | `kim_all about` |
 | `03License` | License | `kim_all license` |
 | `04Manual` | KIM6 Manual | `kim_all manual` |
 
@@ -107,9 +107,9 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `02AdjustCaptureTime` | Adjust camera timestamps… | `kim_all timeshift --interactive -- %F` |
 | `03DateSync` | Synchronize photo/file dates… | `kim_all datesync --interactive -- %F` |
 | `04SetCopyright` | Set creator and copyright… | `kim_all copyright --interactive -- %F` |
-| `05StripMetadata` | Strip Metadata… | `kim_all stripmeta -- %F` |
-| `06StripAI` | Strip AI Metadata… | `kim_all stripmeta --mode ai -- %F` |
-| `07StripGPS` | Strip GPS Metadata… | `kim_all stripmeta --mode gps -- %F` |
+| `05StripMetadata` | Strip Metadata | `kim_all stripmeta -- %F` |
+| `06StripAI` | Strip AI Metadata | `kim_all stripmeta --mode ai -- %F` |
+| `07StripGPS` | Strip GPS Metadata | `kim_all stripmeta --mode gps -- %F` |
 
 ### `kim_publication.desktop.in`
 
@@ -129,11 +129,12 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `Av1hd1080Balanced` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `Av1hd1080High` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `Av1hd720Balanced` | 720p • Balanced • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `Av1hd720High` | 720p • High Quality • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `Av1Custom` | Custom AV1 Settings… | `kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F` |
+| `01Av1hd1080High` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `02Av1hd1080Balanced` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `03Av1hd1080Smallest` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality smallest --container mp4 -- %F` |
+| `04Av1hd720High` | 720p • High Quality • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `05Av1hd720Balanced` | 720p • Balanced • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `06Av1hd720Smallest` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality smallest --container mp4 -- %F` |
 
 ### `kim_video_h264.desktop.in`
 
@@ -150,12 +151,12 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
-| `VideoFrameAt` | Extract frame at timestamp… | `kim_all videoframes --mode single --format png --interactive -- %F` |
-| `VideoThumbnail` | Extract automatic thumbnail | `kim_all videoframes --mode thumbnail --format jpg -- %F` |
-| `MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
-| `VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
-| `VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
+| `A01ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
+| `A02VideoFrameAt` | Extract frame at timestamp… | `kim_all videoframes --mode single --format png --interactive -- %F` |
+| `A03VideoThumbnail` | Extract automatic thumbnail | `kim_all videoframes --mode thumbnail --format jpg -- %F` |
+| `A04MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
+| `z01VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
+| `z02VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
 
 ### `kim_webemail.desktop.in`
 

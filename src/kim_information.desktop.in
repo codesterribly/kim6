@@ -11,7 +11,7 @@ X-KIM6-Managed=true
 
 [Desktop Action 02About]
 Icon=help-about
-_Name=About KIM6…
+_Name=About KIM6
 Exec=kim_all about
 
 [Desktop Action 03License]

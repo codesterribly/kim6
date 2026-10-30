@@ -81,7 +81,7 @@ Exec=kim_all compress --maximum -- %F
 
 [Desktop Action 2203CompressCustom]
 Icon=document-save
-_Name=Compress Custom
+_Name=Compress Custom…
 Exec=kim_all compress --custom -- %F
 
 [Desktop Action _SEPARATOR_]

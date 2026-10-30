@@ -5,36 +5,36 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
-Actions=ExtractVideoAudio;VideoFrameAt;VideoThumbnail;MuteVideo;_SEPARATOR_;VideoContactSheet;VideoToGif;
+Actions=A01ExtractVideoAudio;A02VideoFrameAt;A03VideoThumbnail;A04MuteVideo;_SEPARATOR_;z01VideoContactSheet;z02VideoToGif;
 _X-KDE-Submenu=KIM6 — Video Utilities
 X-KIM6-Managed=true
 
-[Desktop Action ExtractVideoAudio]
+[Desktop Action A01ExtractVideoAudio]
 Icon=audio-x-generic
 _Name=Extract audio…
 Exec=kim_all videoaudio --mode extract --format m4a --interactive -- %F
 
-[Desktop Action VideoFrameAt]
+[Desktop Action A02VideoFrameAt]
 Icon=camera-photo
 _Name=Extract frame at timestamp…
 Exec=kim_all videoframes --mode single --format png --interactive -- %F
 
-[Desktop Action VideoThumbnail]
+[Desktop Action A03VideoThumbnail]
 Icon=view-preview
 _Name=Extract automatic thumbnail
 Exec=kim_all videoframes --mode thumbnail --format jpg -- %F
 
-[Desktop Action MuteVideo]
+[Desktop Action A04MuteVideo]
 Icon=audio-x-generic
 _Name=Remove audio (copy video)
 Exec=kim_all videoaudio --mode mute -- %F
 
-[Desktop Action VideoContactSheet]
+[Desktop Action z01VideoContactSheet]
 Icon=view-grid
 _Name=Create video contact sheet…
 Exec=kim_all videoframes --mode contact --format jpg --interactive -- %F
 
-[Desktop Action VideoToGif]
+[Desktop Action z02VideoToGif]
 Icon=image-x-generic
 _Name=Create animated GIF from video…
 Exec=kim_all videogif --interactive -- %F

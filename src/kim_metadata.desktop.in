@@ -31,15 +31,15 @@ Exec=kim_all copyright --interactive -- %F
 
 [Desktop Action 06StripAI]
 Icon=document-properties
-_Name=Strip AI Metadata…
+_Name=Strip AI Metadata
 Exec=kim_all stripmeta --mode ai -- %F
 
 [Desktop Action 07StripGPS]
 Icon=document-properties
-_Name=Strip GPS Metadata…
+_Name=Strip GPS Metadata
 Exec=kim_all stripmeta --mode gps -- %F
 
 [Desktop Action 05StripMetadata]
 Icon=document-properties
-_Name=Strip Metadata…
+_Name=Strip Metadata
 Exec=kim_all stripmeta -- %F
