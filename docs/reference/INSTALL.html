@@ -36,7 +36,7 @@
 <p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
 <h2 id="install-this-rewrite-manually">Install this rewrite manually</h2>
 <p>KIM6 requires KDE Plasma 6 and Dolphin.</p>
-<p>To install from a source checkout, you need <code>intltool-merge</code> (and Git if you are cloning the source). The installer uses <code>msgfmt</code> to compile translations when available; without it, the menus can still be installed in English.</p>
+<p>To install from a source checkout, you need <code>intltool-merge</code>, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). The installer uses <code>msgfmt</code> to compile translations when available; without it, the menus can still be installed in English.</p>
 <p>KIM6 uses several common tools to process images and videos:</p>
 <ul>
 <li><strong>ImageMagick 7:</strong> Image resizing, compression, conversion, galleries, and other image operations.</li>
@@ -52,6 +52,49 @@
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
 <p>The installer adds KIM6's program files and ten service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
 <p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
+<h2 id="what-installsh-does">What <code>install.sh</code> does</h2>
+<p>The installer prepares KIM6 for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
+<h3 id="dependency-checks">Dependency checks</h3>
+<p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, Pacman, and Zypper and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
+<p>Python 3 with PySide6 Qt Widgets and <code>intltool-merge</code> are mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIM6 actions check for the tools they need when invoked.</p>
+<p>Optional tools include <code>msgfmt</code> for compiled translations, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache.</p>
+<h3 id="filesystem-and-source-validation">Filesystem and source validation</h3>
+<p>Before installing application files, <code>install.sh</code>:</p>
+<ul>
+<li>Checks that the destination service-menu directory is usable and not a symbolic link.</li>
+<li>Identifies existing KIM6 program files and service menus before replacing them.</li>
+<li>Rejects unsafe symbolic links, conflicting service-menu files, and unrecognized runtime directories.</li>
+<li>Checks the source checkout for required executables, graphical dialog helpers, resources, documentation, and menu templates.</li>
+<li>Protects unrelated files from replacement.</li>
+</ul>
+<p>A conflict or missing mandatory source file stops installation rather than proceeding with an unsafe or incomplete installation.</p>
+<h3 id="installing-kim6-components">Installing KIM6 components</h3>
+<p>The installer places the unified <code>kim_all</code> dispatcher and its supporting files in a <code>kim6</code> directory beneath the selected service-menu directory.</p>
+<p>The installed components include:</p>
+<ul>
+<li>The image and video command dispatcher.</li>
+<li>Seven Python graphical dialog and application helper files.</li>
+<li>Metadata processing and format-verification helpers.</li>
+<li>Gallery generation resources.</li>
+<li>Ten Dolphin service-menu definitions.</li>
+<li>Available compiled translation catalogs.</li>
+<li>The offline HTML manual, illustrations, stylesheet, and reference pages.</li>
+</ul>
+<p>The installer generates the Dolphin service-menu entries using <code>intltool-merge</code> and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
+<h3 id="safe-file-replacement">Safe file replacement</h3>
+<p>Each installed file is written to a temporary file beside its destination and then moved into place. This prevents an interrupted copy from leaving that individual destination file partially written.</p>
+<p>Installation is not a whole-tree transaction. An interruption can leave different installed files at different revision levels. Rerunning <code>./install.sh</code> completes or repairs the installation.</p>
+<p>The installer replaces recognized KIM6 program and menu files. Save any personal modifications to those files before upgrading.</p>
+<h3 id="post-installation-verification">Post-installation verification</h3>
+<p>After copying files, the installer:</p>
+<ul>
+<li>Confirms that all ten installed Dolphin menus exist, carry KIM6's identification marker, and reference the installed dispatcher.</li>
+<li>Confirms that the seven required Python helper files are present, are not symbolic links, and have valid Python syntax.</li>
+<li>Refreshes the KDE service cache with <code>kbuildsycoca6</code> when available.</li>
+<li>Prints the verified menu and helper inventories, installation path, and completion message.</li>
+</ul>
+<p>Successful installation confirms that the installed components are present and structurally valid. It does not guarantee that every optional media encoder or format delegate is available, or that Dolphin is free of KDE menu-display problems.</p>
+<p>For additional implementation details, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <p>To check the installed program without opening Dolphin:</p>
 <pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all&quot; --help</code></pre>
 <p>If the menus do not appear, restart Dolphin and verify that KIM6 was installed in a service-menu directory recognized by KDE.</p>
@@ -76,7 +119,7 @@
 <p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
 <h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
 <h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
-<p>First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
+<p>First verify that all ten KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
 <h3 id="installation-or-removal-reports-a-conflict">Installation or removal reports a conflict</h3>
 <p>The installer identifies existing KIM6 installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>

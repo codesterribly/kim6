@@ -13,7 +13,7 @@ The rewritten KIM6 may not yet be available through that catalog. The KDE Store 
 
 KIM6 requires KDE Plasma 6 and Dolphin.
 
-To install from a source checkout, you need `intltool-merge` (and Git if you are cloning the source). The installer uses `msgfmt` to compile translations when available; without it, the menus can still be installed in English.
+To install from a source checkout, you need `intltool-merge`, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). The installer uses `msgfmt` to compile translations when available; without it, the menus can still be installed in English.
 
 KIM6 uses several common tools to process images and videos:
 
@@ -38,6 +38,99 @@ If you downloaded a source archive, extract it first and run the installer from 
 The installer adds KIM6's program files and ten service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
+
+
+## What `install.sh` does
+
+The installer prepares KIM6 for Dolphin, checks the installation
+environment, and verifies the installed components. It does not install
+system packages, change KDE settings, or modify your photographs and videos.
+
+### Dependency checks
+
+The installer detects the Linux distribution and package manager, then
+reports installed and missing dependencies. It recognizes APT, DNF,
+Pacman, and Zypper and suggests appropriate package installation commands
+when dependencies are missing. Package availability may vary by distribution.
+
+Python 3 with PySide6 Qt Widgets and `intltool-merge` are mandatory for
+installation. Missing image-processing or video tools are reported as
+warnings rather than automatically installed. Individual KIM6 actions
+check for the tools they need when invoked.
+
+Optional tools include `msgfmt` for compiled translations, Pandoc for
+generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's
+service cache.
+
+### Filesystem and source validation
+
+Before installing application files, `install.sh`:
+
+- Checks that the destination service-menu directory is usable and not
+  a symbolic link.
+- Identifies existing KIM6 program files and service menus before
+  replacing them.
+- Rejects unsafe symbolic links, conflicting service-menu files, and
+  unrecognized runtime directories.
+- Checks the source checkout for required executables, graphical dialog
+  helpers, resources, documentation, and menu templates.
+- Protects unrelated files from replacement.
+
+A conflict or missing mandatory source file stops installation rather
+than proceeding with an unsafe or incomplete installation.
+
+### Installing KIM6 components
+
+The installer places the unified `kim_all` dispatcher and its supporting
+files in a `kim6` directory beneath the selected service-menu directory.
+
+The installed components include:
+
+- The image and video command dispatcher.
+- Seven Python graphical dialog and application helper files.
+- Metadata processing and format-verification helpers.
+- Gallery generation resources.
+- Ten Dolphin service-menu definitions.
+- Available compiled translation catalogs.
+- The offline HTML manual, illustrations, stylesheet, and reference pages.
+
+The installer generates the Dolphin service-menu entries using
+`intltool-merge` and replaces their command references with the absolute
+path to the installed dispatcher. No manual shell `PATH` changes are needed.
+
+### Safe file replacement
+
+Each installed file is written to a temporary file beside its destination
+and then moved into place. This prevents an interrupted copy from leaving
+that individual destination file partially written.
+
+Installation is not a whole-tree transaction. An interruption can leave
+different installed files at different revision levels. Rerunning
+`./install.sh` completes or repairs the installation.
+
+The installer replaces recognized KIM6 program and menu files. Save any
+personal modifications to those files before upgrading.
+
+### Post-installation verification
+
+After copying files, the installer:
+
+- Confirms that all ten installed Dolphin menus exist, carry KIM6's
+  identification marker, and reference the installed dispatcher.
+- Confirms that the seven required Python helper files are present,
+  are not symbolic links, and have valid Python syntax.
+- Refreshes the KDE service cache with `kbuildsycoca6` when available.
+- Prints the verified menu and helper inventories, installation path,
+  and completion message.
+
+Successful installation confirms that the installed components are
+present and structurally valid. It does not guarantee that every optional
+media encoder or format delegate is available, or that Dolphin is free
+of KDE menu-display problems.
+
+For additional implementation details, see
+[Installer safety and recovery](docs/DEVELOPMENT.md#installer-safety-and-recovery).
+
 
 To check the installed program without opening Dolphin:
 
@@ -99,7 +192,7 @@ The installer creates the chosen folder if needed. It does not install system pa
 
 ### Dolphin does not show an action
 
-First verify that all five KIM6 service-menu templates were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
+First verify that all ten KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
 
 ### Installation or removal reports a conflict
 The installer identifies existing KIM6 installations from recognized program
