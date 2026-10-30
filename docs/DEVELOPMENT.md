@@ -367,3 +367,27 @@ Do not edit `docs/reference/` directly.
 The landing page, stylesheet and illustrations are maintained
 separately. Their content and presentation must be reviewed when
 corresponding user-facing functionality changes.
+
+## Deferred Enhancements
+
+The following improvements are planned for future development. They are not implemented in the current release.
+
+### Format-aware Dolphin menu filtering
+
+Investigate hiding redundant or inapplicable conversion actions according to the selected image format. For example, **Convert to JPEG** would normally be unnecessary when only JPEG images are selected.
+
+The design must account for KDE service-menu MIME filtering, mixed-format batch selections, and situations where same-format re-encoding remains useful. Runtime format and encoder validation must remain in place regardless of menu visibility.
+
+### Translation infrastructure and localization
+
+Rebuild the translation infrastructure around the current KIM6 implementation:
+
+- Regenerate `po/kim6.pot` from the current unified dispatcher and Dolphin service-menu definitions.
+- Make user-visible strings in the Python graphical dialogs available for translation.
+- Reconcile the existing German, Spanish, French, Hungarian, Italian, Dutch, and Traditional Chinese catalogs with the updated template.
+- Preserve valid existing translations and identify missing, outdated, or fuzzy entries.
+- Develop a repeatable translation-maintenance workflow with automated extraction, catalog updates, and coverage reporting.
+- Use AI-assisted translation where appropriate, with consistent terminology and validation of placeholders, formatting, commands, and technical identifiers.
+- Prioritize native-speaker review of file-safety warnings and destructive-operation confirmations.
+
+Translation work should follow stabilization of the English interface to avoid repeatedly translating changing messages.

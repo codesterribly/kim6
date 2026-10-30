@@ -34,12 +34,14 @@
 <p>The tables reflect the menu definitions in <code>src/</code>. Settings, User Guide, License, and About are grouped in the dedicated information service menu.</p>
 <p>For command-line options beyond those available through Dolphin, see <a href="commandconfig.html">commandconfig.md</a>.</p>
 <h2 id="menu-behavior">Menu Behavior</h2>
-<p>Dolphin displays KIM6 actions according to the selected file type:</p>
+<p>Dolphin displays KIM6 submenus according to broad MIME-type filters, not whether every individual action is applicable to every selected file:</p>
 <ul>
-<li><strong>JPEG compression:</strong> JPEG images.</li>
-<li><strong>Image processing and publication:</strong> Supported image files.</li>
-<li><strong>Video processing:</strong> Supported video files.</li>
+<li><strong>Image actions:</strong> Conversion, compression, resizing, metadata, and publication menus appear for image files.</li>
+<li><strong>Video actions:</strong> Video conversion and utility menus appear for video files.</li>
+<li><strong>Compression:</strong> JPEG, PNG, WebP, and AVIF are supported, using format-specific compression settings and encoders.</li>
 </ul>
+<p>Individual conversion targets are not dynamically hidden according to the selected image format. For example, <strong>Convert to JPEG</strong> remains available when a JPEG is selected. In Create new mode, this can produce a separately encoded JPEG. In Overwrite mode, converting a JPEG to JPEG without special encoding options is treated as a successful no-op.</p>
+<p>KIM6 validates input formats and encoder capabilities when an action runs. When multiple files are selected, format support may differ between individual files.</p>
 <p>The menu definitions use <code>X-KDE-Protocol=file</code> for local files. Dolphin passes selected filenames through <code>%F</code>, allowing actions to process multiple files.</p>
 <p>File handling depends on the operation:</p>
 <ul>

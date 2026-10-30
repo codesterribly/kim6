@@ -274,6 +274,23 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
 <pre><code>python3 -B tests/run.py --pattern test_documentation.py</code></pre>
 <p>Commit generated HTML alongside its Markdown source changes. Do not edit <code>docs/reference/</code> directly.</p>
 <p>The landing page, stylesheet and illustrations are maintained separately. Their content and presentation must be reviewed when corresponding user-facing functionality changes.</p>
+<h2 id="deferred-enhancements">Deferred Enhancements</h2>
+<p>The following improvements are planned for future development. They are not implemented in the current release.</p>
+<h3 id="format-aware-dolphin-menu-filtering">Format-aware Dolphin menu filtering</h3>
+<p>Investigate hiding redundant or inapplicable conversion actions according to the selected image format. For example, <strong>Convert to JPEG</strong> would normally be unnecessary when only JPEG images are selected.</p>
+<p>The design must account for KDE service-menu MIME filtering, mixed-format batch selections, and situations where same-format re-encoding remains useful. Runtime format and encoder validation must remain in place regardless of menu visibility.</p>
+<h3 id="translation-infrastructure-and-localization">Translation infrastructure and localization</h3>
+<p>Rebuild the translation infrastructure around the current KIM6 implementation:</p>
+<ul>
+<li>Regenerate <code>po/kim6.pot</code> from the current unified dispatcher and Dolphin service-menu definitions.</li>
+<li>Make user-visible strings in the Python graphical dialogs available for translation.</li>
+<li>Reconcile the existing German, Spanish, French, Hungarian, Italian, Dutch, and Traditional Chinese catalogs with the updated template.</li>
+<li>Preserve valid existing translations and identify missing, outdated, or fuzzy entries.</li>
+<li>Develop a repeatable translation-maintenance workflow with automated extraction, catalog updates, and coverage reporting.</li>
+<li>Use AI-assisted translation where appropriate, with consistent terminology and validation of placeholders, formatting, commands, and technical identifiers.</li>
+<li>Prioritize native-speaker review of file-safety warnings and destructive-operation confirmations.</li>
+</ul>
+<p>Translation work should follow stabilization of the English interface to avoid repeatedly translating changing messages.</p>
 
       </article>
     </main>
