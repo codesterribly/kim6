@@ -194,6 +194,12 @@ class Workspace:
             "kdialog", "Keep originals unchanged (recommended)",
             {"stdout": "review\n"},
         )
+        # Current dispatcher: explicitly select overwrite review.
+        self.respond_to(
+            "kdialog",
+            "Overwrite originals (confirmation required)",
+            {"stdout": "review\n"},
+        )
         self.respond_to(
             "kdialog", "--warningyesno",
             {"status": 0},
@@ -212,6 +218,7 @@ class Workspace:
 
         for option, approval in (
             ("Create new files (recommended; originals untouched)", {"stdout": "review\n"}),
+            ("Overwrite originals (confirmation required)", {"stdout": "review\n"}),
             ("--warningyesno", {"status": 0}),
         ):
             if routes.get(option) == approval:

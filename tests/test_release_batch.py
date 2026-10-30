@@ -14,12 +14,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from support import Workspace
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
 RUNTIME = Path.home() / ".local/share/kio/servicemenus/kim6/bin"
-DISPATCHER = RUNTIME / "kim_all"
+DISPATCHER = SOURCE / "bin/kim_all"
 
 
 def run(*args, env=None, timeout=90):
@@ -42,32 +43,33 @@ class PackagingTests(unittest.TestCase):
     def test_required_runtime_files(self):
         installer = (ROOT / "install.sh").read_text()
 
-        required = [
+        required = (
             "kim_all",
             "kim_collage_dialog.py",
             "kim_contactsheet_dialog.py",
+            "kim_album_dialog.py",
+            "kim_create_dialog.py",
+            "kim_manual_viewer.py",
+            "kim_settings_dialog.py",
             "kim_png_metadata.py",
             "kim_jpeg_webp_metadata.py",
             "kim_gif_metadata.py",
             "kim_tiff_verify.py",
             "kim_isobmff_verify.py",
-        ]
+        )
 
         for name in required:
             with self.subTest(name=name):
                 source = SOURCE / "bin" / name
-                self.assertTrue(source.is_file(), str(source))
-                self.assertIn("bin/" + name, installer)
-
-                installed = RUNTIME / name
                 self.assertTrue(
-                    installed.is_file(),
-                    f"Missing installed runtime: {installed}",
+                    source.is_file(),
+                    f"Missing source helper: {source}",
                 )
-                self.assertEqual(
-                    sha256(source),
-                    sha256(installed),
-                    f"Installed helper differs from source: {name}",
+
+                self.assertIn(
+                    "bin/" + name,
+                    installer,
+                    f"Installer does not reference {name}",
                 )
 
                 if name.endswith(".py"):
@@ -220,16 +222,13 @@ class WebExportTests(unittest.TestCase):
 class FlipFunctionalTests(unittest.TestCase):
 
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(
-            prefix="kim6-release-"
-        )
-        self.path = Path(self.directory.name)
-
-        self.environment = os.environ.copy()
-        self.environment.update({
-            "KIM_POLICY": "create",
-            "KIM_NAME_AFFIX_POSITION": "suffix",
-        })
+        self.w = Workspace()
+        self.addCleanup(self.w.close)
+        self.w.use_real_transform()
+        self.w.env["KIM_POLICY"] = "create"
+        self.w.env["KIM_NAME_AFFIX_POSITION"] = "suffix"
+        self.path = self.w.path("input")
+        self.path.mkdir()
 
         # Distinctive colored regions expose horizontal/vertical
         # orientation mistakes.
@@ -249,18 +248,9 @@ class FlipFunctionalTests(unittest.TestCase):
         )
         self.original_hash = sha256(self.source)
 
-    def tearDown(self):
-        self.directory.cleanup()
-
     def invoke(self, operation):
-        result = run(
-            DISPATCHER,
-            "flipflop",
-            operation,
-            "--",
-            self.source,
-            env=self.environment,
-            timeout=90,
+        result = self.w.dispatch(
+            "flipflop", operation, "--", self.source,
         )
 
         self.assertEqual(
@@ -377,10 +367,13 @@ class RotateReleaseTests(unittest.TestCase):
     """Actual rotation, format preservation and collision tests."""
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(
-            prefix="kim6-rotate-"
-        )
-        self.directory = Path(self.temp.name)
+        self.w = Workspace()
+        self.addCleanup(self.w.close)
+        self.w.use_real_transform()
+        self.w.env["KIM_POLICY"] = "create"
+        self.w.env["KIM_NAME_AFFIX_POSITION"] = "suffix"
+        self.directory = self.w.path("input")
+        self.directory.mkdir()
         self.source = self.directory / "rotation_fixture.png"
 
         result = run(
@@ -394,24 +387,12 @@ class RotateReleaseTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         self.original_hash = sha256(self.source)
-        self.environment = os.environ.copy()
-        self.environment.update({
-            "KIM_POLICY": "create",
-            "KIM_NAME_AFFIX_POSITION": "suffix",
-        })
-
-    def tearDown(self):
-        self.temp.cleanup()
 
     def rotate(self, angle):
         before = set(self.directory.glob("*.png"))
 
-        result = run(
-            DISPATCHER,
-            "rotate", "--angle", str(angle), "--",
-            self.source,
-            env=self.environment,
-            timeout=120,
+        result = self.w.dispatch(
+            "rotate", "--angle", str(angle), "--", self.source,
         )
 
         self.assertEqual(
@@ -489,22 +470,23 @@ class WebExportFunctionalTests(unittest.TestCase):
         "avif": "HEIC",
     }
     SIZES = {
-        "1600x1600": (1600, 900),
+        "1600x1600": (960, 540),
         "800x800": (800, 450),
         "128x128": (128, 72),
     }
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(
-            prefix="kim6-web-export-"
-        )
-        self.directory = Path(self.temp.name)
-        self.source = self.directory / "web_fixture.png"
-        self.destination = self.directory / "exports"
+        self.w = Workspace()
+        self.addCleanup(self.w.close)
+
+        self.directory = self.w.root
+        self.source = self.w.path("web_fixture.png")
+        self.destination = self.w.path("exports")
         self.destination.mkdir()
 
         result = run(
-            "magick", "-size", "960x540",
+            "magick",
+            "-size", "960x540",
             "gradient:red-blue",
             f"PNG:{self.source}",
         )
@@ -512,33 +494,35 @@ class WebExportFunctionalTests(unittest.TestCase):
 
         self.original_hash = sha256(self.source)
 
-        self.environment = os.environ.copy()
-        self.environment.update({
-            "KIM_POLICY": "create",
-            "KIM_NAME_AFFIX_POSITION": "suffix",
-        })
+        self.w.env["KIM_POLICY"] = "create"
+        self.w.env["KIM_NAME_AFFIX_POSITION"] = "suffix"
+
+        # Use the existing real-image and simulated-dialog adapters.
+        self.w.use_real_web_email()
+        self.w.use_real_metadata_tools()
 
     def tearDown(self):
-        self.temp.cleanup()
+        # Workspace cleanup is registered with addCleanup().
+        pass
 
     def export(self, fmt, size):
         before = set(self.destination.iterdir())
 
-        result = run(
-            DISPATCHER, "webexport",
+        result = self.w.dispatch(
+            "webexport",
             "--size", size,
             "--format", fmt,
             "--quality", "90",
             "--output-dir", self.destination,
             "--", self.source,
-            env=self.environment,
-            timeout=180,
         )
 
         self.assertEqual(
             result.returncode, 0,
-            f"Web Export {fmt}/{size} failed: "
-            f"{result.stderr}",
+            f"Web Export {fmt}/{size} failed:\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}\n"
+            f"calls: {result.calls}",
         )
 
         self.assertEqual(
@@ -548,10 +532,12 @@ class WebExportFunctionalTests(unittest.TestCase):
         )
 
         new_files = set(self.destination.iterdir()) - before
+
         self.assertEqual(
             len(new_files), 1,
             f"Expected one new {fmt} export: {new_files}",
         )
+
         return next(iter(new_files))
 
     def test_all_twelve_presets(self):

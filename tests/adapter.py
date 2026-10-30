@@ -820,6 +820,16 @@ def real_web_email_tool(tools, tool, args):
     """Run only small PPM/JPEG fixtures through the web/email action grammar."""
     executable = tools.get(tool, shutil.which(tool, path=os.defpath))
     if tool == 'identify':
+        # Permit the dispatcher's read-only ICC inspection of
+        # generated files inside the disposable test workspace.
+        if (len(args) == 4 and args[0] == '-format'
+                and args[2] == '--'
+                and args[1] in ('%[profiles]\\n', '%[profile:icc]')):
+            fixture = owned(args[3])
+            if not fixture.is_file() or fixture.stat().st_size > 1048576:
+                raise ValueError('web/email ICC inspection exceeds test bound')
+            return subprocess.run([executable, *args], timeout=20,
+                                  env=dict(os.environ, PATH=os.defpath)).returncode
         if (len(args) == 5 and args[:2] == ['-regard-warnings', '-format']
                 and args[3] == '--'):
             fixture = owned(args[4])
@@ -839,6 +849,28 @@ def real_web_email_tool(tools, tool, args):
             raise ValueError('web/email fixture exceeds test bound')
         return subprocess.run([executable, *args], input=payload, timeout=20,
                               env=dict(os.environ, PATH=os.defpath)).returncode
+    if (tool == 'exiftool' and len(args) == 4
+            and args[0] == '-overwrite_original'
+            and args[1].startswith('-ICC_Profile<=')
+            and args[2] == '--'):
+        profile = Path(args[1].split('<=', 1)[1])
+        output = owned(args[3])
+
+        if (not profile.is_relative_to(Path('/usr/share/color/icc'))
+                or not profile.is_file() or profile.is_symlink()
+                or profile.stat().st_size > 8388608
+                or not output.is_file() or output.is_symlink()
+                or not output.parent.name.startswith('.kim6-stage.')
+                or output.suffix.lower() != '.png'
+                or output.stat().st_size > 1048576):
+            raise ValueError('web/email ICC write exceeds test bounds')
+
+        return subprocess.run(
+            [shutil.which('exiftool', path=os.defpath), *args],
+            timeout=20,
+            env=dict(os.environ, PATH=os.defpath),
+        ).returncode
+
     if tool == 'exiftool' and args[:2] == ['-b', '-ICC_Profile'] and len(args) == 4 and args[2] == '--':
         source = owned(args[3])
         if source.stat().st_size > 1048576:
@@ -878,7 +910,7 @@ def real_web_email_tool(tools, tool, args):
         raise ValueError('web/email producer requires a new owned stage')
     payload = sys.stdin.buffer.read(1048577)
     if len(payload) > 1048576 or not payload.startswith((b'P6\n', b'P3\n', b'\xff\xd8\xff',
-                                                          b'GIF87a', b'GIF89a', b'II*\x00', b'MM\x00*')):
+                                                          b'\x89PNG\r\n\x1a\n', b'GIF87a', b'GIF89a', b'II*\x00', b'MM\x00*')):
         raise ValueError('web/email producer requires a small synthetic image fixture')
     if not (output.parent.name.startswith('.kim6-stage.') or
             output.parent.resolve().is_relative_to((CONTROL / 'tmp').resolve())):

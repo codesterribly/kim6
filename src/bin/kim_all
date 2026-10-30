@@ -6168,6 +6168,15 @@ action_webexport() {
       rc=1
     fi
 
+    # ImageMagick may write an sRGB PNG without an embedded ICC
+    # profile. Embed the selected profile before publication checks.
+    if [ "$rc" -eq 0 ] && [ "$color_mode" = srgb ] &&
+       [ "$(image_format_class "$coder")" = PNG ] &&
+       [ -s "$OUTTMP" ]; then
+      exiftool -overwrite_original "-ICC_Profile<=$srgb_profile" \
+        -- "$OUTTMP" >/dev/null 2>&1 || rc=1
+    fi
+
     output_records=''
     if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
       output_records="$(publication_image_records "$OUTTMP" 2>/dev/null)" || rc=1
@@ -6194,14 +6203,24 @@ action_webexport() {
     if [ "$rc" -eq 0 ] && image_format_carries_icc "$coder" && \
        { [ "$has_icc" = true ] ||
          { [ "$color_mode" = srgb ] && [ "$(image_format_class "$coder")" != GIF ]; }; }; then
-      output_profiles="$(identify -format '%[profiles]\n' -- "$OUTTMP" 2>/dev/null)" || rc=1
-      [[ "${output_profiles,,}" == *icc* ]] || rc=1
-      output_profile_name="$(identify -format '%[profile:icc]' -- "$OUTTMP" 2>/dev/null)" || rc=1
-      if [ "$color_mode" = srgb ]; then
-        [[ "${output_profile_name,,}" == *srgb* ]] || rc=1
-      elif [ "$has_icc" = true ]; then
-        exiftool -b -ICC_Profile -- "$OUTTMP" > "$KIMDIR/web-output.icc" 2>/dev/null || rc=1
-        cmp -s -- "$profile_path" "$KIMDIR/web-output.icc" || rc=1
+      if [ "$color_mode" = srgb ] &&
+         [ "$(image_format_class "$coder")" = PNG ]; then
+        # ImageMagick profile properties can report success while
+        # returning no profile. Compare the actual embedded ICC bytes.
+        exiftool -b -ICC_Profile -- "$OUTTMP" \
+          > "$KIMDIR/web-output.icc" 2>/dev/null || rc=1
+        [ -s "$KIMDIR/web-output.icc" ] || rc=1
+        cmp -s -- "$srgb_profile" "$KIMDIR/web-output.icc" || rc=1
+      else
+        output_profiles="$(identify -format '%[profiles]\n' -- "$OUTTMP" 2>/dev/null)" || rc=1
+        [[ "${output_profiles,,}" == *icc* ]] || rc=1
+        output_profile_name="$(identify -format '%[profile:icc]' -- "$OUTTMP" 2>/dev/null)" || rc=1
+        if [ "$color_mode" = srgb ]; then
+          [[ "${output_profile_name,,}" == *srgb* ]] || rc=1
+        elif [ "$has_icc" = true ]; then
+          exiftool -b -ICC_Profile -- "$OUTTMP" > "$KIMDIR/web-output.icc" 2>/dev/null || rc=1
+          cmp -s -- "$profile_path" "$KIMDIR/web-output.icc" || rc=1
+        fi
       fi
     fi
 
