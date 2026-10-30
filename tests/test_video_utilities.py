@@ -363,11 +363,86 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
 
     def test_menu_contract_exposes_six_video_utility_actions(self):
-        menu = (self.w.production.parents[1] / "kim_compressandresizevideo.desktop.in").read_text()
-        commands = [line.removeprefix("Exec=") for line in menu.splitlines() if line.startswith("Exec=")]
-        utility_commands = [command for command in commands
-                            if command.startswith("kim_all videoframes ")
-                            or command.startswith("kim_all videoaudio ")
-                            or command.startswith("kim_all videogif ")]
-        self.assertEqual(6, len(utility_commands))
-        self.assertTrue(all(command.endswith("-- %F") for command in utility_commands))
+        from pathlib import Path
+
+        menu = (
+            Path(__file__).resolve().parents[1]
+            / "src/kim_videoutilities.desktop.in"
+        ).read_text(encoding="utf-8")
+
+        expected_order = [
+            "ExtractVideoAudio",
+            "VideoFrameAt",
+            "VideoThumbnail",
+            "MuteVideo",
+            "_SEPARATOR_",
+            "VideoContactSheet",
+            "VideoToGif",
+        ]
+
+        lines = menu.splitlines()
+        declarations = [
+            line for line in lines
+            if line.startswith("Actions=")
+        ]
+        self.assertEqual(1, len(declarations))
+
+        listed = [
+            item for item in declarations[0][8:].split(";")
+            if item
+        ]
+        self.assertEqual(expected_order, listed)
+
+        actions = {}
+        current = None
+
+        for line in lines:
+            if line.startswith("[Desktop Action ") and line.endswith("]"):
+                current = line[len("[Desktop Action "):-1]
+
+                if current == "_SEPARATOR_":
+                    current = None
+                    continue
+
+                self.assertNotIn(current, actions)
+                actions[current] = {"label": None, "command": None}
+                continue
+
+            if current is None:
+                continue
+
+            if line.startswith("_Name="):
+                actions[current]["label"] = line.split("=", 1)[1]
+            elif line.startswith("Name=") and actions[current]["label"] is None:
+                actions[current]["label"] = line.split("=", 1)[1]
+            elif line.startswith("Exec="):
+                actions[current]["command"] = line.split("=", 1)[1]
+
+        executable_ids = [
+            action_id for action_id in expected_order
+            if action_id != "_SEPARATOR_"
+        ]
+
+        self.assertEqual(6, len(actions))
+        self.assertEqual(set(executable_ids), set(actions))
+
+        expected_routes = {
+            "ExtractVideoAudio": ("videoaudio", "--mode extract"),
+            "VideoFrameAt": ("videoframes", "--mode single"),
+            "VideoThumbnail": ("videoframes", "--mode thumbnail"),
+            "MuteVideo": ("videoaudio", "--mode mute"),
+            "VideoContactSheet": ("videoframes", "--mode contact"),
+            "VideoToGif": ("videogif", "--interactive"),
+        }
+
+        for action_id, (route, required_option) in expected_routes.items():
+            with self.subTest(action=action_id):
+                entry = actions[action_id]
+                self.assertTrue(entry["label"])
+                self.assertIsNotNone(entry["command"])
+                self.assertTrue(
+                    entry["command"].startswith(f"kim_all {route} "),
+                    entry["command"],
+                )
+                self.assertIn(required_option, entry["command"])
+                self.assertIn("%F", entry["command"])

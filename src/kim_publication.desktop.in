@@ -10,37 +10,46 @@ _X-KDE-Submenu=KIM6 — Create/Publish
 X-KIM6-Managed=true
 
 [Desktop Action Album]
+Icon=image-x-generic
 _Name=Create a PDF album…
 Exec=kim_all album -- %F
 
 [Desktop Action Animation]
+Icon=image-x-generic
 _Name=Create an animated GIF…
 Exec=kim_all animate -- %F
 
 [Desktop Action Collage]
+Icon=folder-pictures
 _Name=Create a photo collage…
 Exec=kim_all pelemele -- %F
 
 [Desktop Action ContactSheet]
+Icon=view-grid
 _Name=Create a photo contact sheet…
 Exec=kim_all contactsheet -- %F
 
 [Desktop Action Gallery]
+Icon=internet-web-browser
 _Name=Create an HTML gallery…
 Exec=kim_all gallery -- %F
 
 [Desktop Action Print]
+Icon=image-x-generic
 _Name=Create a print-layout PDF…
 Exec=kim_all print -- %F
 
 [Desktop Action Slideshow]
+Icon=video-x-generic
 _Name=Create a video slideshow…
 Exec=kim_all slideshow --interactive -- %F
 
 [Desktop Action TiffJoin]
+Icon=image-x-generic
 _Name=Create a multi-page TIFF…
 Exec=kim_all tiffjoin -- %F
 
 [Desktop Action Emailfull]
+Icon=mail-send
 _Name=Send via email…
 Exec=kim_all resizeandsend --size full -- %F

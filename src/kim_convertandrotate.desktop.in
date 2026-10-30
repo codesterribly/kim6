@@ -10,62 +10,77 @@ _X-KDE-Submenu=KIM6 — Convert/Compress
 X-KIM6-Managed=true
 
 [Desktop Action 01ConvertAVIF]
+Icon=image-x-generic
 _Name=Convert to AVIF
 Exec=kim_all convert --format avif -- %F
 
 [Desktop Action 02ConvertBMP]
+Icon=image-x-generic
 _Name=Convert to BMP
 Exec=kim_all convert --format bmp --bmp5 -- %F
 
 [Desktop Action 03ConvertGIF]
+Icon=image-x-generic
 _Name=Convert to GIF
 Exec=kim_all convert --format gif -- %F
 
 [Desktop Action 04ConvertHEIC]
+Icon=image-x-generic
 _Name=Convert to HEIC/HEIF
 Exec=kim_all convert --format heic -- %F
 
 [Desktop Action 05ConvertJP2Lossless]
+Icon=image-x-generic
 _Name=Convert to JPEG 2000 (Lossless)
 Exec=kim_all convert --format jp2 --jp2-mode lossless -- %F
 
 [Desktop Action 06ConvertJP2Lossy]
+Icon=image-x-generic
 _Name=Convert to JPEG 2000 (Lossy)
 Exec=kim_all convert --format jp2 --jp2-mode lossy -- %F
 
 [Desktop Action 07ConvertJPG]
+Icon=image-x-generic
 _Name=Convert to JPEG
 Exec=kim_all convert --format jpg -- %F
 
 [Desktop Action 08ConvertJXL]
+Icon=image-x-generic
 _Name=Convert to JPEG XL
 Exec=kim_all convert --format jxl -- %F
 
 [Desktop Action 09ConvertPDF]
+Icon=image-x-generic
 _Name=Convert to PDF
 Exec=kim_all convert --format pdf -- %F
 
 [Desktop Action 10ConvertPNG]
+Icon=image-x-generic
 _Name=Convert to PNG
 Exec=kim_all convert --format png -- %F
 
 [Desktop Action 11ConvertTIFF]
+Icon=image-x-generic
 _Name=Convert to TIFF
 Exec=kim_all convert --format tiff -- %F
 
 [Desktop Action 12ConvertWEBP]
+Icon=image-x-generic
 _Name=Convert to WebP
 Exec=kim_all convert --format webp -- %F
 
 [Desktop Action 2001CompressRecommended]
+Icon=document-save
 _Name=Compress Recommended
 Exec=kim_all compress --recommended -- %F
 
 [Desktop Action 2102CompressMaximum]
+Icon=document-save
 _Name=Compress Maximum
 Exec=kim_all compress --maximum -- %F
 
 [Desktop Action 2203CompressCustom]
+Icon=document-save
 _Name=Compress Custom
 Exec=kim_all compress --custom -- %F
 

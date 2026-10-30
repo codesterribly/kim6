@@ -16,6 +16,8 @@ def menu_entries(path):
         if not block.startswith("[Desktop Action "):
             continue
         action_id = block.split("]", 1)[0][len("[Desktop Action "):]
+        if action_id == "_SEPARATOR_":
+            continue
         label = next((line.split("=", 1)[1] for line in block.splitlines()
                       if line.startswith(("_Name=", "Name="))), "")
         command = next((line[5:] for line in block.splitlines() if line.startswith("Exec=")), "")
@@ -91,9 +93,12 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertIn("conceptual examples, not actual application screenshots", manual)
 
         for name in (
-            "kim6-context-menu-illustration.png",
-            "kim6-web-export-illustration.png",
-            "kim6-metadata-illustration.png",
+            "kim6-photo-actions.png",
+            "kim6-video-conversion.png",
+            "kim6-video-utilities.png",
+            "kim6-settings-dialog.png",
+            "kim6-collage-dialog.png",
+            "kim6-animated-gif-dialog.png",
         ):
             self.assertIn(f'images/{name}', manual)
             self.assertTrue(
@@ -106,88 +111,72 @@ class DocumentationContractTests(unittest.TestCase):
 
 
     def test_readme_quick_start_examples_match_real_menu_actions_and_output_names(self):
-        entries = {action_id: (menu_name, label, command)
-                   for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
-                   for menu_name, action_id, label, command in menu_entries(menu)}
         guide = (ROOT / "README.md").read_text(encoding="utf-8")
-        expected = {
-            "Resize1600": ("kim_compressandresize.desktop.in", "Resize (1600x1600 pixels)",
-                           "kim_all resize --size 1600x1600 -- %F",
-                           "KIM6 — Compress, resize and web export"),
-            "Compress70": ("kim_compress.desktop.in", "JPEG quality: 70%",
-                           "kim_all compress --quality 70 -- %F", "KIM6 — JPEG compression"),
-            "ConvertJPG": ("kim_convertandrotate.desktop.in", "Convert to JPEG",
-                           "kim_all convert --format jpg -- %F", "KIM6 — Convert and transform"),
-            "StripGPS": ("kim_publication.desktop.in", "Remove GPS coordinates…",
-                         "kim_all stripmeta --mode gps -- %F", "KIM6 — Publish and organize"),
-        }
-        for action_id, (menu_name, label, command, submenu) in expected.items():
-            with self.subTest(action_id=action_id):
-                self.assertEqual((menu_name, label, command), entries[action_id])
-                self.assertIn(label, guide)
-                self.assertIn(submenu, guide)
-        for output_name in ("lake_resized.jpg", "lake_compressed.jpg", "garden.jpg", "trip_gps.jpg"):
-            self.assertIn(output_name, guide)
-        self.assertIn("choose **Create new files (recommended; originals untouched)**", guide)
-        self.assertIn("legacy and unsupported values now show the safe prompt", guide)
+        entries = []
+        for menu in sorted((ROOT / "src").glob("kim_*.desktop.in")):
+            content = menu.read_text(encoding="utf-8")
+            submenu = re.search(r"^_X-KDE-Submenu=(.*)$", content, re.M)
+            self.assertIsNotNone(submenu, f"Missing submenu: {menu.name}")
+            for _, action_id, label, command in menu_entries(menu):
+                entries.append((submenu.group(1), label, command))
+
+        cases = (
+            ("Resize a photograph", "kim_all resize --size 1600x1600 -- %F", "lake_resized.jpg"),
+            ("Compress a JPEG", "kim_all compress ", "lake_compressed.jpg"),
+            ("Convert PNG to JPEG", "kim_all convert --format jpg -- %F", "garden.jpg"),
+            ("Remove GPS coordinates", "kim_all stripmeta --mode gps -- %F", "trip_gps.jpg"),
+            ("Resize several photographs", "kim_all resize --size 1280x1280 -- %F", "portrait_resized.jpg"),
+        )
+        for task, command, output in cases:
+            with self.subTest(task=task):
+                rows = [line for line in guide.splitlines()
+                        if line.startswith(f"| {task} | ")]
+                self.assertEqual(1, len(rows), f"README row missing: {task}")
+                possibilities = [f"| {task} | {submenu} → {label} |"
+                                 for submenu, label, actual in entries
+                                 if (actual.startswith(command) if task == "Compress a JPEG"
+                                     else actual == command)]
+                self.assertTrue(any(rows[0].startswith(row) for row in possibilities),
+                                f"README action does not match a menu: {task}")
+                self.assertIn(output, rows[0])
+
+        self.assertIn("**Create new files (originals untouched)**", guide)
+        self.assertIn("`KIM_POLICY=prompt`", guide)
 
     def test_authoritative_inventory_matches_all_menu_ids_labels_and_execs(self):
-        import re
-
         document = (ROOT / "docs/ACTIONS.md").read_text(encoding="utf-8")
-        heading_pattern = re.compile(r"^### `(kim_[^`]+\.desktop\.in)`[ \t]*$", re.M)
-        headings = list(heading_pattern.finditer(document))
+        menus = sorted((ROOT / "src").glob("kim_*.desktop.in"))
+        headings = list(re.finditer(
+            r"^### `(kim_[^`]+\.desktop\.in)`[ \t]*$", document, re.M
+        ))
+        self.assertEqual(10, len(menus))
+        self.assertEqual([menu.name for menu in menus],
+                         [heading.group(1) for heading in headings])
 
-        documented = []
-
-        for i, heading in enumerate(headings):
-            end = headings[i + 1].start() if i + 1 < len(headings) else len(document)
-            section = document[heading.end():end]
-
+        total = 0
+        for index, menu in enumerate(menus):
+            end = headings[index + 1].start() if index + 1 < len(headings) else len(document)
+            section = document[headings[index].end():end]
             rows = re.findall(
                 r"^\| `([^`]+)` \| ([^\n|]+) \| `([^`]+)` \|[ \t]*$",
-                section,
-                re.M,
+                section, re.M,
             )
+            text = menu.read_text(encoding="utf-8")
+            declaration = re.search(r"^Actions=(.*)$", text, re.M)
+            self.assertIsNotNone(declaration, f"Missing Actions: {menu.name}")
+            listed = [value for value in declaration.group(1).split(";")
+                      if value and value != "_SEPARATOR_"]
+            actual = menu_entries(menu)
+            by_id = {entry[1]: entry for entry in actual}
+            self.assertEqual(len(actual), len(by_id), menu.name)
+            self.assertEqual(set(listed), set(by_id), menu.name)
+            self.assertEqual([(action_id, by_id[action_id][2], by_id[action_id][3])
+                              for action_id in listed],
+                             [(action_id, label.strip(), command)
+                              for action_id, label, command in rows], menu.name)
+            total += len(actual)
 
-            documented.extend(
-                (heading.group(1), action_id, label.strip(), command)
-                for action_id, label, command in rows
-            )
-
-        expected = []
-
-        for template in sorted((ROOT / "src").glob("kim_*.desktop.in")):
-            contents = template.read_text(encoding="utf-8")
-            groups = list(
-                re.finditer(
-                    r"^\[Desktop Action ([^]]+)\][ \t]*$",
-                    contents,
-                    re.M,
-                )
-            )
-
-            for i, group in enumerate(groups):
-                end = groups[i + 1].start() if i + 1 < len(groups) else len(contents)
-                block = contents[group.end():end]
-
-                name = re.search(r"^_?Name=(.*)$", block, re.M)
-                command = re.search(r"^Exec=(.*)$", block, re.M)
-
-                self.assertIsNotNone(
-                    name, f"Missing action label in {template}: {group.group(1)}"
-                )
-                self.assertIsNotNone(
-                    command, f"Missing Exec in {template}: {group.group(1)}"
-                )
-
-                expected.append(
-                    (template.name, group.group(1), name.group(1), command.group(1))
-                )
-
-        self.assertEqual(len(headings), 5)
-        self.assertEqual(len(documented), 108)
-        self.assertEqual(documented, expected)
+        self.assertEqual(82, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")

@@ -74,6 +74,8 @@ menu_names=(
   kim_organize.desktop
   kim_compressandresize.desktop
   kim_compressandresizevideo.desktop
+  kim_video_h264.desktop
+  kim_video_av1.desktop
   kim_convertandrotate.desktop
   kim_information.desktop
   kim_metadata.desktop
@@ -94,11 +96,22 @@ manual_files=(
   docs/reference/INSTALL.html
   docs/reference/LICENSE.html
   docs/reference/README.html
-  docs/images/kim6-context-menu-illustration.png
-  docs/images/kim6-metadata-illustration.png
-  docs/images/kim6-web-export-illustration.png
+  docs/images/kim6-photo-actions.png
+  docs/images/kim6-video-conversion.png
+  docs/images/kim6-video-utilities.png
+  docs/images/kim6-settings-dialog.png
+  docs/images/kim6-collage-dialog.png
+  docs/images/kim6-animated-gif-dialog.png
 )
-runtime_files=(bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(
+  bin/kim_collage_dialog.py
+  bin/kim_contactsheet_dialog.py
+  bin/kim_video_dialog.py
+  bin/kim_album_dialog.py
+  bin/kim_create_dialog.py
+  bin/kim_settings_dialog.py
+  bin/kim_manual_viewer.py
+bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" .kim6-owned .kim6-manifest)
 die() { echo "uninstall.sh: $*" >&2; exit 1; }
 check_dir() {
@@ -178,7 +191,7 @@ if [ -d "$RUNTIME" ]; then
   fi
 fi
 
-# Delete only the five known menus when their contents identify them as KIM6.
+# Remove recognized KIM6 menus only after verifying their contents.
 for name in "${menu_names[@]}"; do
   path="$PREFIX/$name"
   if menu_is_kim6 "$path"; then rm -f -- "$path"; fi

@@ -24,9 +24,12 @@ MANUAL_FILES = (
     "docs/reference/INSTALL.html",
     "docs/reference/LICENSE.html",
     "docs/reference/README.html",
-    "docs/images/kim6-context-menu-illustration.png",
-    "docs/images/kim6-metadata-illustration.png",
-    "docs/images/kim6-web-export-illustration.png",
+    "docs/images/kim6-photo-actions.png",
+    "docs/images/kim6-video-conversion.png",
+    "docs/images/kim6-video-utilities.png",
+    "docs/images/kim6-settings-dialog.png",
+    "docs/images/kim6-collage-dialog.png",
+    "docs/images/kim6-animated-gif-dialog.png",
 )
 
 
@@ -123,13 +126,11 @@ class ManualInstallationTests(unittest.TestCase):
         dispatcher = self.runtime / "bin/kim_all"
         self.assertTrue(dispatcher.is_file())
 
-        menu_names = (
-            "kim_compress.desktop",
-            "kim_compressandresize.desktop",
-            "kim_convertandrotate.desktop",
-            "kim_compressandresizevideo.desktop",
-            "kim_publication.desktop",
+        menu_names = tuple(
+            path.name.removesuffix(".in")
+            for path in sorted((ROOT / "src").glob("kim_*.desktop.in"))
         )
+        self.assertEqual(10, len(menu_names))
 
         for name in menu_names:
             with self.subTest(menu=name):
@@ -173,7 +174,7 @@ class ManualInstallationTests(unittest.TestCase):
 
     def test_reject_symlinked_illustration_file(self):
         self.run_installer("install.sh")
-        illustration = self.runtime / "docs/images/kim6-web-export-illustration.png"
+        illustration = self.runtime / "docs/images/kim6-settings-dialog.png"
         outside = self.base / "do-not-overwrite.png"
         outside.write_bytes(b"unrelated data\n")
         illustration.unlink()

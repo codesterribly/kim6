@@ -1,7 +1,7 @@
 
 # KIM6 Dolphin Menu Actions
 
-KIM6 provides 94 executable Dolphin actions across eight service-menu files. This document lists each entry, its menu label, and the command it executes.
+KIM6 provides 82 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.
 
 The tables reflect the menu definitions in `src/`. Settings, Manual, License, and About are grouped in the dedicated information service menu.
 
@@ -34,7 +34,7 @@ For detailed command options, dependencies, and output behavior, see [commandcon
 
 ## Complete Menu Action Reference
 
-The following tables list all 94 executable actions from KIM6's eight Dolphin service-menu files.
+The following tables list all 82 executable actions from KIM6's ten Dolphin service-menu files.
 
 Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.
 
@@ -63,35 +63,12 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `Av1Custom` | Custom AV1 settings… | `kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F` |
-| `Av1hd1080Balanced` | AV1 1080p balanced | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `Av1hd1080High` | AV1 1080p high quality | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `Av1hd720Balanced` | AV1 720p balanced | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `Av1hd720High` | AV1 720p high quality | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `Videohd108017264mp4` | Transcode 1080 good H.264 (MP4) | `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F` |
-| `Videohd108017264orig` | Transcode 1080 good H.264 (original container) | `kim_all video --size hd1080 --crf 17 --codec libx264 --container orig -- %F` |
-| `Videohd108017265mp4` | Transcode 1080 good H.265 (MP4) | `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F` |
-| `Videohd108017265orig` | Transcode 1080 good H.265 (original container) | `kim_all video --size hd1080 --crf 17 --codec libx265 --container orig -- %F` |
-| `Videohd108023264mp4` | Transcode 1080 medium H.264 (MP4) | `kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F` |
-| `Videohd108023264orig` | Transcode 1080 medium H.264 (original container) | `kim_all video --size hd1080 --crf 23 --codec libx264 --container orig -- %F` |
-| `Videohd108023265mp4` | Transcode 1080 medium H.265 (MP4) | `kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F` |
-| `Videohd108023265orig` | Transcode 1080 medium H.265 (original container) | `kim_all video --size hd1080 --crf 23 --codec libx265 --container orig -- %F` |
-| `Videohd108029264mp4` | Transcode 1080 smaller file H.264 (MP4) | `kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F` |
-| `Videohd108029264orig` | Transcode 1080 smaller file H.264 (original container) | `kim_all video --size hd1080 --crf 29 --codec libx264 --container orig -- %F` |
-| `Videohd108029265mp4` | Transcode 1080 smaller file H.265 (MP4) | `kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F` |
-| `Videohd108029265orig` | Transcode 1080 smaller file H.265 (original container) | `kim_all video --size hd1080 --crf 29 --codec libx265 --container orig -- %F` |
-| `Videohd72017264mp4` | Transcode 720 good H.264 (MP4) | `kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F` |
-| `Videohd72017264orig` | Transcode 720 good H.264 (original container) | `kim_all video --size hd720 --crf 17 --codec libx264 --container orig -- %F` |
-| `Videohd72017265mp4` | Transcode 720 good H.265 (MP4) | `kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F` |
-| `Videohd72017265orig` | Transcode 720 good H.265 (original container) | `kim_all video --size hd720 --crf 17 --codec libx265 --container orig -- %F` |
-| `Videohd72023264mp4` | Transcode 720 medium H.264 (MP4) | `kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F` |
-| `Videohd72023264orig` | Transcode 720 medium H.264 (original container) | `kim_all video --size hd720 --crf 23 --codec libx264 --container orig -- %F` |
-| `Videohd72023265mp4` | Transcode 720 medium H.265 (MP4) | `kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F` |
-| `Videohd72023265orig` | Transcode 720 medium H.265 (original container) | `kim_all video --size hd720 --crf 23 --codec libx265 --container orig -- %F` |
-| `Videohd72029264mp4` | Transcode 720 smaller file H.264 (MP4) | `kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F` |
-| `Videohd72029264orig` | Transcode 720 smaller file H.264 (original container) | `kim_all video --size hd720 --crf 29 --codec libx264 --container orig -- %F` |
-| `Videohd72029265mp4` | Transcode 720 smaller file H.265 (MP4) | `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F` |
-| `Videohd72029265orig` | Transcode 720 smaller file H.265 (original container) | `kim_all video --size hd720 --crf 29 --codec libx265 --container orig -- %F` |
+| `Videohd108017265mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F` |
+| `Videohd108023265mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F` |
+| `Videohd108029265mp4` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F` |
+| `Videohd72017265mp4` | 720p • High Quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F` |
+| `Videohd72023265mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F` |
+| `Videohd72029265mp4` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F` |
 
 ### `kim_convertandrotate.desktop.in`
 
@@ -148,15 +125,36 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `TiffJoin` | Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
 | `Emailfull` | Send via email… | `kim_all resizeandsend --size full -- %F` |
 
+### `kim_video_av1.desktop.in`
+
+| Action ID | Menu label | Command |
+|---|---|---|
+| `Av1hd1080Balanced` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `Av1hd1080High` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `Av1hd720Balanced` | 720p • Balanced • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `Av1hd720High` | 720p • High Quality • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `Av1Custom` | Custom AV1 Settings… | `kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F` |
+
+### `kim_video_h264.desktop.in`
+
+| Action ID | Menu label | Command |
+|---|---|---|
+| `Videohd108017264mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F` |
+| `Videohd108023264mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F` |
+| `Videohd108029264mp4` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F` |
+| `Videohd72017264mp4` | 720p • High Quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F` |
+| `Videohd72023264mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F` |
+| `Videohd72029264mp4` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F` |
+
 ### `kim_videoutilities.desktop.in`
 
 | Action ID | Menu label | Command |
 |---|---|---|
 | `ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
-| `MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
-| `VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
 | `VideoFrameAt` | Extract frame at timestamp… | `kim_all videoframes --mode single --format png --interactive -- %F` |
 | `VideoThumbnail` | Extract automatic thumbnail | `kim_all videoframes --mode thumbnail --format jpg -- %F` |
+| `MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
+| `VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
 | `VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
 
 ### `kim_webemail.desktop.in`

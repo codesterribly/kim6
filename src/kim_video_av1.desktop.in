@@ -1,0 +1,35 @@
+[Desktop Entry]
+Icon=video-x-generic
+Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=video/*;
+X-KDE-Protocol=file
+Actions=Av1hd1080Balanced;Av1hd1080High;Av1hd720Balanced;Av1hd720High;Av1Custom;
+_X-KDE-Submenu=KIM6 — Convert Video: AV1
+X-KIM6-Managed=true
+
+[Desktop Action Av1hd1080Balanced]
+Icon=image-x-generic
+_Name=1080p • Balanced • MP4
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F
+
+[Desktop Action Av1hd1080High]
+Icon=image-x-generic
+_Name=1080p • High Quality • MP4
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F
+
+[Desktop Action Av1hd720Balanced]
+Icon=image-x-generic
+_Name=720p • Balanced • MP4
+Exec=kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F
+
+[Desktop Action Av1hd720High]
+Icon=image-x-generic
+_Name=720p • High Quality • MP4
+Exec=kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F
+
+[Desktop Action Av1Custom]
+Icon=preferences-system
+_Name=Custom AV1 Settings…
+Exec=kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F

@@ -30,7 +30,7 @@
       <div class="reference-source">KIM6 DOCUMENTATION · docs/ACTIONS.md</div>
       <article class="markdown-body">
 <h1 id="kim6-dolphin-menu-actions">KIM6 Dolphin Menu Actions</h1>
-<p>KIM6 provides 94 executable Dolphin actions across eight service-menu files. This document lists each entry, its menu label, and the command it executes.</p>
+<p>KIM6 provides 82 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.</p>
 <p>The tables reflect the menu definitions in <code>src/</code>. Settings, Manual, License, and About are grouped in the dedicated information service menu.</p>
 <p>For command-line options beyond those available through Dolphin, see <a href="commandconfig.html">commandconfig.md</a>.</p>
 <h2 id="menu-behavior">Menu Behavior</h2>
@@ -54,7 +54,7 @@
 <p><strong>File-safety choices:</strong> <code>KIM_POLICY=create</code> selects separate outputs where supported; <code>KIM_POLICY=prompt</code> displays the output-policy dialog. Create is the default choice. Choosing <strong>Overwrite originals (confirmation required)</strong> requires a second confirmation with an operation-specific warning and selected-file count. Cancellation or an unavailable dialog refuses replacement. Create mode numbers output collisions; publication checks source aliases, symlinks, hardlinks, and destination identity where applicable. Completed batch results remain available if a later item fails.</p>
 <p><strong>Format notes:</strong> Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.</p>
 <h2 id="complete-menu-action-reference">Complete Menu Action Reference</h2>
-<p>The following tables list all 94 executable actions from KIM6's eight Dolphin service-menu files.</p>
+<p>The following tables list all 82 executable actions from KIM6's ten Dolphin service-menu files.</p>
 <p>Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.</p>
 <p>During installation, the <code>kim_all</code> command is replaced with the full path to the installed executable. The <code>%F</code> placeholder is expanded by Dolphin into the selected filenames.</p>
 <p>The mappings are checked against the menu templates by <code>tests/test_documentation.py</code>.</p>
@@ -141,149 +141,34 @@
 </thead>
 <tbody>
 <tr>
-<td><code>Av1Custom</code></td>
-<td>Custom AV1 settings…</td>
-<td><code>kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Av1hd1080Balanced</code></td>
-<td>AV1 1080p balanced</td>
-<td><code>kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Av1hd1080High</code></td>
-<td>AV1 1080p high quality</td>
-<td><code>kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Av1hd720Balanced</code></td>
-<td>AV1 720p balanced</td>
-<td><code>kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Av1hd720High</code></td>
-<td>AV1 720p high quality</td>
-<td><code>kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108017264mp4</code></td>
-<td>Transcode 1080 good H.264 (MP4)</td>
-<td><code>kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108017264orig</code></td>
-<td>Transcode 1080 good H.264 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 17 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd108017265mp4</code></td>
-<td>Transcode 1080 good H.265 (MP4)</td>
+<td>1080p • High Quality • MP4</td>
 <td><code>kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F</code></td>
 </tr>
 <tr>
-<td><code>Videohd108017265orig</code></td>
-<td>Transcode 1080 good H.265 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 17 --codec libx265 --container orig -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108023264mp4</code></td>
-<td>Transcode 1080 medium H.264 (MP4)</td>
-<td><code>kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108023264orig</code></td>
-<td>Transcode 1080 medium H.264 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 23 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd108023265mp4</code></td>
-<td>Transcode 1080 medium H.265 (MP4)</td>
+<td>1080p • Balanced • MP4</td>
 <td><code>kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F</code></td>
 </tr>
 <tr>
-<td><code>Videohd108023265orig</code></td>
-<td>Transcode 1080 medium H.265 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 23 --codec libx265 --container orig -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108029264mp4</code></td>
-<td>Transcode 1080 smaller file H.264 (MP4)</td>
-<td><code>kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd108029264orig</code></td>
-<td>Transcode 1080 smaller file H.264 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 29 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd108029265mp4</code></td>
-<td>Transcode 1080 smaller file H.265 (MP4)</td>
+<td>1080p • Smallest File • MP4</td>
 <td><code>kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F</code></td>
 </tr>
 <tr>
-<td><code>Videohd108029265orig</code></td>
-<td>Transcode 1080 smaller file H.265 (original container)</td>
-<td><code>kim_all video --size hd1080 --crf 29 --codec libx265 --container orig -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72017264mp4</code></td>
-<td>Transcode 720 good H.264 (MP4)</td>
-<td><code>kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72017264orig</code></td>
-<td>Transcode 720 good H.264 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 17 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd72017265mp4</code></td>
-<td>Transcode 720 good H.265 (MP4)</td>
+<td>720p • High Quality • MP4</td>
 <td><code>kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F</code></td>
 </tr>
 <tr>
-<td><code>Videohd72017265orig</code></td>
-<td>Transcode 720 good H.265 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 17 --codec libx265 --container orig -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72023264mp4</code></td>
-<td>Transcode 720 medium H.264 (MP4)</td>
-<td><code>kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72023264orig</code></td>
-<td>Transcode 720 medium H.264 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 23 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd72023265mp4</code></td>
-<td>Transcode 720 medium H.265 (MP4)</td>
+<td>720p • Balanced • MP4</td>
 <td><code>kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F</code></td>
 </tr>
 <tr>
-<td><code>Videohd72023265orig</code></td>
-<td>Transcode 720 medium H.265 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 23 --codec libx265 --container orig -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72029264mp4</code></td>
-<td>Transcode 720 smaller file H.264 (MP4)</td>
-<td><code>kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72029264orig</code></td>
-<td>Transcode 720 smaller file H.264 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 29 --codec libx264 --container orig -- %F</code></td>
-</tr>
-<tr>
 <td><code>Videohd72029265mp4</code></td>
-<td>Transcode 720 smaller file H.265 (MP4)</td>
+<td>720p • Smallest File • MP4</td>
 <td><code>kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F</code></td>
-</tr>
-<tr>
-<td><code>Videohd72029265orig</code></td>
-<td>Transcode 720 smaller file H.265 (original container)</td>
-<td><code>kim_all video --size hd720 --crf 29 --codec libx265 --container orig -- %F</code></td>
 </tr>
 </tbody>
 </table>
@@ -510,6 +395,85 @@
 </tr>
 </tbody>
 </table>
+<h3 id="kim_video_av1desktopin"><code>kim_video_av1.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Menu label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Av1hd1080Balanced</code></td>
+<td>1080p • Balanced • MP4</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Av1hd1080High</code></td>
+<td>1080p • High Quality • MP4</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Av1hd720Balanced</code></td>
+<td>720p • Balanced • MP4</td>
+<td><code>kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Av1hd720High</code></td>
+<td>720p • High Quality • MP4</td>
+<td><code>kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Av1Custom</code></td>
+<td>Custom AV1 Settings…</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_video_h264desktopin"><code>kim_video_h264.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Menu label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Videohd108017264mp4</code></td>
+<td>1080p • High Quality • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108023264mp4</code></td>
+<td>1080p • Balanced • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108029264mp4</code></td>
+<td>1080p • Smallest File • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72017264mp4</code></td>
+<td>720p • High Quality • MP4</td>
+<td><code>kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72023264mp4</code></td>
+<td>720p • Balanced • MP4</td>
+<td><code>kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72029264mp4</code></td>
+<td>720p • Smallest File • MP4</td>
+<td><code>kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+</tbody>
+</table>
 <h3 id="kim_videoutilitiesdesktopin"><code>kim_videoutilities.desktop.in</code></h3>
 <table>
 <thead>
@@ -526,16 +490,6 @@
 <td><code>kim_all videoaudio --mode extract --format m4a --interactive -- %F</code></td>
 </tr>
 <tr>
-<td><code>MuteVideo</code></td>
-<td>Remove audio (copy video)</td>
-<td><code>kim_all videoaudio --mode mute -- %F</code></td>
-</tr>
-<tr>
-<td><code>VideoContactSheet</code></td>
-<td>Create video contact sheet…</td>
-<td><code>kim_all videoframes --mode contact --format jpg --interactive -- %F</code></td>
-</tr>
-<tr>
 <td><code>VideoFrameAt</code></td>
 <td>Extract frame at timestamp…</td>
 <td><code>kim_all videoframes --mode single --format png --interactive -- %F</code></td>
@@ -544,6 +498,16 @@
 <td><code>VideoThumbnail</code></td>
 <td>Extract automatic thumbnail</td>
 <td><code>kim_all videoframes --mode thumbnail --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>MuteVideo</code></td>
+<td>Remove audio (copy video)</td>
+<td><code>kim_all videoaudio --mode mute -- %F</code></td>
+</tr>
+<tr>
+<td><code>VideoContactSheet</code></td>
+<td>Create video contact sheet…</td>
+<td><code>kim_all videoframes --mode contact --format jpg --interactive -- %F</code></td>
 </tr>
 <tr>
 <td><code>VideoToGif</code></td>

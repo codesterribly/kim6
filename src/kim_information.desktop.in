@@ -10,14 +10,17 @@ _X-KDE-Submenu=KIM6 — Settings/About
 X-KIM6-Managed=true
 
 [Desktop Action 02About]
+Icon=help-about
 _Name=About KIM6…
 Exec=kim_all about
 
 [Desktop Action 03License]
+Icon=text-x-generic
 _Name=License
 Exec=kim_all license
 
 [Desktop Action 04Manual]
+Icon=help-contents
 _Name=KIM6 Manual
 Exec=kim_all manual
 

@@ -30,7 +30,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Configuration and Defaults](#configuration-and-defaults)
 - [Still-image actions](#still-image-actions): album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
 - [Video actions](#video-actions): slideshow, video, videoframes, videoaudio, videogif
-- [Information actions](#information-actions): about, license, manual
+- [Information actions](#information-actions): about, license, manual, settings
 
 ## Command Syntax
 
@@ -351,7 +351,7 @@ kim_all video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265 --conta
 kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|custom --container orig|mp4 -- VIDEO...
 ```
 
-H.264/H.265 uses the existing 24 presets. For AV1 encoding, KIM6 uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
+Dolphin exposes six MP4 presets for each of H.264 and H.265 (720p/1080p with three quality choices). Original-container output remains available through the CLI. For AV1 encoding, KIM6 uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
 
 ### `videoframes`
 
@@ -361,7 +361,7 @@ kim_all videoframes --mode thumbnail [--format png|jpg] -- VIDEO...
 kim_all videoframes --mode contact [--grid 3x3|4x4|5x5] [--format png|jpg] -- VIDEO...
 ```
 
-Extracts one frame, a representative midpoint thumbnail (not frame zero), or one labeled contact sheet. Contact sheets use 320×180 fit/pad tiles, sample evenly over duration, and may repeat positions for short videos. Display rotation is applied. Interactive menu entries ask for needed options.
+Extracts one frame, a representative midpoint thumbnail (not frame zero), or one labeled contact sheet. Contact sheets use 320×180 fit/pad tiles, sample evenly over duration, and may repeat positions for short videos. Display rotation is applied. The video contact sheet menu action opens one Qt dialog for grid and image format; single-frame extraction uses a timestamp prompt.
 
 ### `videoaudio`
 
@@ -378,9 +378,17 @@ Extracts the first audio stream to the selected container; additional audio stre
 kim_all videogif --start HH:MM:SS[.sss] --duration SECONDS --fps 10|12|15|24 --width 320|480|640|800 --loop infinite|once -- VIDEO...
 ```
 
-Creates a palette-optimized GIF for the requested interval. Duration is greater than zero and at most 60 seconds, with at most 1440 nominal frames and a 200-million output pixel-frame work bound. Width is a maximum and does not upscale; height follows aspect ratio. At least two output frames are required. Infinite uses GIF loop extension 0; once omits looping.
+Creates a palette-optimized GIF for the requested interval. Duration is greater than zero and at most 15 seconds, with at most 360 nominal frames and a 200-million output pixel-frame work bound. Width is a maximum and does not upscale; height follows aspect ratio. At least two output frames are required. Infinite uses GIF loop extension 0; once omits looping.
 
 ## Information actions
+
+### `settings`
+
+```sh
+kim_all settings
+```
+
+Opens the graphical KIM6 settings dialog. No selected files are required.
 
 ### `about`
 

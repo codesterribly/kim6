@@ -10,50 +10,62 @@ _X-KDE-Submenu=KIM6 — Web Export
 X-KIM6-Managed=true
 
 [Desktop Action 0101WebExport]
+Icon=image-x-generic
 _Name=JPEG · Large (1600 × 1600)
 Exec=kim_all webexport --size 1600x1600 --format jpg -- %F
 
 [Desktop Action 0102WebExport]
+Icon=image-x-generic
 _Name=JPEG · Medium (800 × 800)
 Exec=kim_all webexport --size 800x800 --format jpg -- %F
 
 [Desktop Action 0103WebExport]
+Icon=view-preview
 _Name=JPEG · Thumbnail (128 × 128)
 Exec=kim_all webexport --size 128x128 --format jpg -- %F
 
 [Desktop Action 0201WebExport]
+Icon=image-x-generic
 _Name=PNG · Large (1600 × 1600)
 Exec=kim_all webexport --size 1600x1600 --format png -- %F
 
 [Desktop Action 0202WebExport]
+Icon=image-x-generic
 _Name=PNG · Medium (800 × 800)
 Exec=kim_all webexport --size 800x800 --format png -- %F
 
 [Desktop Action 0203WebExport]
+Icon=view-preview
 _Name=PNG · Thumbnail (128 × 128)
 Exec=kim_all webexport --size 128x128 --format png -- %F
 
 [Desktop Action 0301WebExport]
+Icon=document-export
 _Name=WebP · Large (1600 × 1600)
 Exec=kim_all webexport --size 1600x1600 --format webp -- %F
 
 [Desktop Action 0302WebExport]
+Icon=document-export
 _Name=WebP · Medium (800 × 800)
 Exec=kim_all webexport --size 800x800 --format webp -- %F
 
 [Desktop Action 0303WebExport]
+Icon=view-preview
 _Name=WebP · Thumbnail (128 × 128)
 Exec=kim_all webexport --size 128x128 --format webp -- %F
 
 [Desktop Action 0401WebExport]
+Icon=image-x-generic
 _Name=AVIF · Large (1600 × 1600)
 Exec=kim_all webexport --size 1600x1600 --format avif -- %F
 
 [Desktop Action 0402WebExport]
+Icon=image-x-generic
 _Name=AVIF · Medium (800 × 800)
 Exec=kim_all webexport --size 800x800 --format avif -- %F
 
 [Desktop Action 0403WebExport]
+Icon=view-preview
 _Name=AVIF · Thumbnail (128 × 128)
 Exec=kim_all webexport --size 128x128 --format avif -- %F
 

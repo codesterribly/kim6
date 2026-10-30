@@ -10,29 +10,36 @@ _X-KDE-Submenu=KIM6 — Organize/Metadata
 X-KIM6-Managed=true
 
 [Desktop Action 01Rename]
+Icon=edit-rename
 _Name=Rename Images…
 Exec=kim_all rename interactive -- %F
 
 [Desktop Action 02AdjustCaptureTime]
+Icon=image-x-generic
 _Name=Adjust camera timestamps…
 Exec=kim_all timeshift --interactive -- %F
 
 [Desktop Action 03DateSync]
+Icon=view-calendar-day
 _Name=Synchronize photo/file dates…
 Exec=kim_all datesync --interactive -- %F
 
 [Desktop Action 04SetCopyright]
+Icon=document-edit
 _Name=Set creator and copyright…
 Exec=kim_all copyright --interactive -- %F
 
 [Desktop Action 06StripAI]
+Icon=document-properties
 _Name=Strip AI Metadata…
 Exec=kim_all stripmeta --mode ai -- %F
 
 [Desktop Action 07StripGPS]
+Icon=document-properties
 _Name=Strip GPS Metadata…
 Exec=kim_all stripmeta --mode gps -- %F
 
 [Desktop Action 05StripMetadata]
+Icon=document-properties
 _Name=Strip Metadata…
 Exec=kim_all stripmeta -- %F

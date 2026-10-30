@@ -1,7 +1,7 @@
 
 # Install KIM6
 
-KIM6 adds eight image and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
+KIM6 adds ten image and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
 
 ## Install through Dolphin
 
@@ -35,7 +35,7 @@ Download or clone the KIM6 source code, then open a terminal in the project dire
 
 If you downloaded a source archive, extract it first and run the installer from the extracted folder.
 
-The installer adds KIM6's program files and eight service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
+The installer adds KIM6's program files and ten service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
 
@@ -65,7 +65,7 @@ From the source directory, run:
 ./uninstall.sh
 ```
 
-The uninstaller removes the eight recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.
+The uninstaller removes the ten recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.
 
 ## Advanced installation locations
 

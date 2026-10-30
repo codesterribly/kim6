@@ -12,7 +12,7 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | Eight KDE Dolphin service-menu definitions containing 94 executable actions. |
+| `src/kim_*.desktop.in` | Ten KDE Dolphin service-menu definitions containing 82 executable actions. |
 | `src/gallery/` | Templates used to generate HTML photo galleries. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
@@ -33,7 +33,7 @@ The `docs/` directory contains additional references:
 
 ## Dolphin Service Menus
 
-KIM6 uses eight KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
+KIM6 uses ten KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
 For example:
 
@@ -258,7 +258,7 @@ Installation updates are performed one file at a time. An interrupted installati
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all eight Dolphin service-menu files and their 94 executable action mappings.
+2. Verify all ten Dolphin service-menu files and their 82 executable action mappings.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.

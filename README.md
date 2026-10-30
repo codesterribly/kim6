@@ -53,7 +53,7 @@ See [Command and Configuration Reference](docs/commandconfig.md#configuration-an
 
 ### Video tools
 
-KIM6 also includes video operations directly in Dolphin:
+KIM6 also includes video operations directly in Dolphin. H.264 and H.265 have six MP4 presets each; AV1 has four presets plus custom settings:
 
 - Resize and convert videos using H.264, H.265 (HEVC), and AV1 encoding.
 - Choose from predefined output resolutions and quality settings.

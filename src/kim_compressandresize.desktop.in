@@ -10,50 +10,62 @@ _X-KDE-Submenu=KIM6 — Resize/Rotate
 X-KIM6-Managed=true
 
 [Desktop Action 01Resize1600]
+Icon=transform-scale
 _Name=Resize to 1600 × 1600
 Exec=kim_all resize --size 1600x1600 -- %F
 
 [Desktop Action 02Resize1280]
+Icon=transform-scale
 _Name=Resize to 1280 × 1280
 Exec=kim_all resize --size 1280x1280 -- %F
 
 [Desktop Action 03Resize1024]
+Icon=transform-scale
 _Name=Resize to 1024 × 1024
 Exec=kim_all resize --size 1024x1024 -- %F
 
 [Desktop Action 04ResizePercent]
+Icon=transform-scale
 _Name=Resize by Percentage…
 Exec=kim_all resize --custom-percent -- %F
 
 [Desktop Action 05ResizeCustom]
+Icon=transform-scale
 _Name=Resize to Custom Size…
 Exec=kim_all resize --custom -- %F
 
 [Desktop Action 10Rotate90]
+Icon=object-rotate-right
 _Name=Rotate 90° CW
 Exec=kim_all rotate --angle 90 -- %F
 
 [Desktop Action 11Rotate270]
+Icon=object-rotate-right
 _Name=Rotate 90° CCW
 Exec=kim_all rotate --angle 270 -- %F
 
 [Desktop Action 12Rotate180]
+Icon=object-rotate-right
 _Name=Rotate 180°
 Exec=kim_all rotate --angle 180 -- %F
 
 [Desktop Action 13RotateCustom]
+Icon=object-rotate-right
 _Name=Rotate by Custom Angle…
 Exec=kim_all rotate --custom -- %F
 
 [Desktop Action 14Rotateexif]
+Icon=object-rotate-right
 _Name=Auto-Rotate Using EXIF
 Exec=kim_all rotate --exif -- %F
 
 [Desktop Action 20FlipHorizontal]
+Icon=object-flip-horizontal
 _Name=Flip Horizontally
 Exec=kim_all flipflop flop -- %F
 
 [Desktop Action 21FlipVertical]
+Icon=object-flip-horizontal
 _Name=Flip Vertically
 Exec=kim_all flipflop flip -- %F
 

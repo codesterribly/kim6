@@ -287,6 +287,8 @@ RUNTIME="$PREFIX/kim6"
 menu_names=(
   kim_compressandresize.desktop
   kim_compressandresizevideo.desktop
+  kim_video_h264.desktop
+  kim_video_av1.desktop
   kim_convertandrotate.desktop
   kim_information.desktop
   kim_metadata.desktop
@@ -307,11 +309,14 @@ manual_files=(
   docs/reference/INSTALL.html
   docs/reference/LICENSE.html
   docs/reference/README.html
-  docs/images/kim6-context-menu-illustration.png
-  docs/images/kim6-metadata-illustration.png
-  docs/images/kim6-web-export-illustration.png
+  docs/images/kim6-photo-actions.png
+  docs/images/kim6-video-conversion.png
+  docs/images/kim6-video-utilities.png
+  docs/images/kim6-settings-dialog.png
+  docs/images/kim6-collage-dialog.png
+  docs/images/kim6-animated-gif-dialog.png
 )
-runtime_files=(bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
   README.md
   docs/ACTIONS.md
@@ -419,6 +424,7 @@ for relative in \
     ABOUT README.md \
     src/bin/kim_collage_dialog.py \
     src/bin/kim_contactsheet_dialog.py \
+    src/bin/kim_video_dialog.py \
     src/bin/kim_album_dialog.py \
     src/bin/kim_create_dialog.py \
     src/bin/kim_settings_dialog.py \
@@ -490,6 +496,7 @@ install_file "$SOURCE_DIR/LICENSE.md" "$RUNTIME/LICENSE.md" 0644
 # These must be deployed, not merely listed in the runtime inventory.
 install_file "$SOURCE_DIR/src/bin/kim_collage_dialog.py" "$RUNTIME/bin/kim_collage_dialog.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_contactsheet_dialog.py" "$RUNTIME/bin/kim_contactsheet_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_video_dialog.py" "$RUNTIME/bin/kim_video_dialog.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_album_dialog.py" "$RUNTIME/bin/kim_album_dialog.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_settings_dialog.py" "$RUNTIME/bin/kim_settings_dialog.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_manual_viewer.py" "$RUNTIME/bin/kim_manual_viewer.py" 0644
@@ -581,6 +588,7 @@ fi
 for helper in \
   kim_collage_dialog.py \
   kim_contactsheet_dialog.py \
+  kim_video_dialog.py \
   kim_album_dialog.py \
   kim_create_dialog.py \
   kim_settings_dialog.py \
@@ -626,8 +634,8 @@ for name in "${menu_names[@]}"; do
   ((menu_count += 1))
 done
 
-[ "$menu_count" -eq 8 ] ||
-  die "expected eight desktop menus, found $menu_count"
+[ "$menu_count" -eq "${#menu_names[@]}" ] ||
+  die "expected ${#menu_names[@]} desktop menus, found $menu_count"
 
 echo
 echo "VERIFIED QT HELPERS"
@@ -636,6 +644,7 @@ echo "-------------------"
 for helper in \
   kim_collage_dialog.py \
   kim_contactsheet_dialog.py \
+  kim_video_dialog.py \
   kim_album_dialog.py \
   kim_create_dialog.py \
   kim_settings_dialog.py \
