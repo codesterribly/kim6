@@ -264,27 +264,6 @@ for name in "${menu_names[@]}"; do
   fi
 done
 
-# Keep the offline HTML manual synchronized with its Markdown sources.
-# A writable, non-root development checkout regenerates reference pages
-# automatically. System installations verify rather than modify source files.
-# Pandoc and Python are optional for users installing prebuilt HTML.
-if [ -f "$SOURCE_DIR/tools/build_manual.py" ]; then
-  if command -v python3 >/dev/null 2>&1 &&
-     command -v pandoc >/dev/null 2>&1; then
-    if [ "$(id -u)" -ne 0 ] &&
-       [ -w "$SOURCE_DIR/docs/reference" ]; then
-      echo "install.sh: updating offline HTML documentation..."
-      python3 "$SOURCE_DIR/tools/build_manual.py" ||
-        die "could not regenerate HTML documentation"
-    else
-      python3 "$SOURCE_DIR/tools/build_manual.py" --check ||
-        die "HTML documentation is stale; regenerate it before installing"
-    fi
-  else
-    echo "install.sh: using bundled HTML documentation (Pandoc/Python unavailable)." >&2
-  fi
-fi
-
 # Check the source checkout before creating or replacing runtime files.
 for relative in src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
@@ -307,6 +286,27 @@ for relative in \
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] ||
     die "required file is missing: $SOURCE_DIR/$relative"
 done
+
+# Keep the offline HTML manual synchronized with its Markdown sources.
+# A writable, non-root development checkout regenerates reference pages
+# automatically. System installations verify rather than modify source files.
+# Pandoc and Python are optional for users installing prebuilt HTML.
+if [ -f "$SOURCE_DIR/tools/build_manual.py" ]; then
+  if command -v python3 >/dev/null 2>&1 &&
+     command -v pandoc >/dev/null 2>&1; then
+    if [ "$(id -u)" -ne 0 ] &&
+       [ -w "$SOURCE_DIR/docs/reference" ]; then
+      echo "install.sh: updating offline HTML documentation..."
+      python3 "$SOURCE_DIR/tools/build_manual.py" ||
+        die "could not regenerate HTML documentation"
+    else
+      python3 "$SOURCE_DIR/tools/build_manual.py" --check ||
+        die "HTML documentation is stale; regenerate it before installing"
+    fi
+  else
+    echo "install.sh: using bundled HTML documentation (Pandoc/Python unavailable)." >&2
+  fi
+fi
 
 # Write one file beside its destination, then rename it into place. This keeps
 # individual files intact if copying or compiling is interrupted.
@@ -439,8 +439,14 @@ if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
 
-# Installation is incomplete if either GUI helper is absent.
-for helper in kim_collage_dialog.py kim_contactsheet_dialog.py kim_album_dialog.py; do
+# Installation is incomplete if any required Qt helper is absent.
+for helper in \
+  kim_collage_dialog.py \
+  kim_contactsheet_dialog.py \
+  kim_album_dialog.py \
+  kim_create_dialog.py \
+  kim_settings_dialog.py \
+  kim_manual_viewer.py; do
   installed="$RUNTIME/bin/$helper"
 
   if [ ! -f "$installed" ] || [ -L "$installed" ]; then
