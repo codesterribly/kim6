@@ -250,7 +250,6 @@ KIM6_DEPENDENCIES
 
     printf ' %s' "${optional_packages[@]}"
     printf '\n'
-    echo "Optional packages are not required for installation."
   fi
 
   if [ "${#missing[@]}" -eq 0 ]; then
@@ -607,11 +606,8 @@ KIM6_PY_CHECK
 done
 
 echo
+echo
 echo "======================================================================"
-echo " KIM6 INSTALLATION COMPLETE"
-echo "======================================================================"
-printf 'Installed to: %s\n' "$PREFIX"
-
 echo
 echo "VERIFIED DESKTOP MENUS"
 echo "----------------------"
@@ -630,7 +626,36 @@ for name in "${menu_names[@]}"; do
   ((menu_count += 1))
 done
 
-printf 'PASS: %d desktop menus verified.\n' "$menu_count"
-echo "PASS: Six Qt helpers verified."
-echo "PASS: Bundled HTML manual installed."
-echo "Restart Dolphin to load the service menus."
+[ "$menu_count" -eq 8 ] ||
+  die "expected eight desktop menus, found $menu_count"
+
+echo
+echo "VERIFIED QT HELPERS"
+echo "-------------------"
+
+for helper in \
+  kim_collage_dialog.py \
+  kim_contactsheet_dialog.py \
+  kim_album_dialog.py \
+  kim_create_dialog.py \
+  kim_settings_dialog.py \
+  kim_manual_viewer.py; do
+
+  installed="$RUNTIME/bin/$helper"
+  [ -f "$installed" ] && [ ! -L "$installed" ] ||
+    die "required Qt helper is missing: $installed"
+
+  printf '  %s\n' "$helper"
+done
+
+echo
+echo "Bundled HTML manual installed."
+
+echo
+echo "======================================================================"
+echo " KIM6 INSTALLATION COMPLETE"
+echo "======================================================================"
+echo
+printf 'Installed to: %s\n' "$PREFIX"
+echo
+echo "Please restart Dolphin to see the KIM6 menus."
