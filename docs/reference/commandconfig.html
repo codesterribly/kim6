@@ -44,8 +44,8 @@
 <li><a href="#command-syntax">Command Syntax</a></li>
 <li><a href="#output-and-file-handling">Output and File Handling</a></li>
 <li><a href="#configuration-and-defaults">Configuration and Defaults</a></li>
-<li><a href="#still-image-actions">Still-image actions</a>: album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, collage, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport</li>
-<li><a href="#video-actions">Video actions</a>: slideshow, video, videoframes, videoaudio, videogif</li>
+<li><a href="#still-image-actions">Still-image actions</a>: album, animate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport</li>
+<li><a href="#video-actions">Video actions</a>: slideshow, video, videoaudio, videoframes, videogif</li>
 <li><a href="#information-actions">Information actions</a>: about, license, manual, settings</li>
 </ul>
 <h2 id="command-syntax">Command Syntax</h2>
@@ -192,6 +192,9 @@ kim_all album OUTPUT_DIRECTORY FILE...</code></pre>
 <h3 id="animate"><code>animate</code></h3>
 <pre class="sh"><code>kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...</code></pre>
 <p>Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from <code>videogif</code>, which samples a video segment.</p>
+<h3 id="collage"><code>collage</code></h3>
+<pre class="sh"><code>kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...</code></pre>
+<p>Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are <code>5x4</code>, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.</p>
 <h3 id="compress"><code>compress</code></h3>
 <pre class="sh"><code>kim_all compress --quality 1..100 [--output-dir DIR] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- JPEG...
 kim_all compress --custom -- JPEG...</code></pre>
@@ -219,9 +222,6 @@ kim_all flipflop flop -- FILE...</code></pre>
 <h3 id="gallery"><code>gallery</code></h3>
 <pre class="sh"><code>kim_all gallery -- IMAGE...</code></pre>
 <p>Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting <code>index.html</code> with <code>xdg-open</code> when available.</p>
-<h3 id="collage"><code>collage</code></h3>
-<pre class="sh"><code>kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...</code></pre>
-<p>Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are <code>5x4</code>, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.</p>
 <h3 id="print"><code>print</code></h3>
 <pre class="sh"><code>kim_all print -- IMAGE...
 kim_all print OUTPUT_DIRECTORY IMAGE...</code></pre>
@@ -304,13 +304,13 @@ kim_all rotate --custom -- IMAGE...</code></pre>
 <h3 id="stripmeta"><code>stripmeta</code></h3>
 <pre class="sh"><code>kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...</code></pre>
 <p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal targets recognized coordinate fields; other metadata and visible scene details may still reveal a location. AI removal targets recognized AI-generation metadata, not every possible generator indicator. Unrecognized generator-specific fields and signed C2PA / Content Credentials may remain. ExifTool cannot guarantee their complete removal.</p>
+<h3 id="tiffjoin"><code>tiffjoin</code></h3>
+<pre class="sh"><code>kim_all tiffjoin [--output PATH] [--] IMAGE...</code></pre>
+<p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
 <h3 id="timeshift"><code>timeshift</code></h3>
 <pre class="sh"><code>kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
 kim_all timeshift --interactive -- IMAGE...</code></pre>
 <p>Adds or subtracts the fixed offset from camera date tags. <code>all</code> (default) shifts <code>DateTimeOriginal</code>, <code>CreateDate</code>, and <code>ModifyDate</code>; <code>capture</code> shifts only <code>DateTimeOriginal</code>. Subsecond and timezone-offset tags remain unchanged, as do GPS timestamps and filesystem modification time. This shifts a camera’s wall-clock values; it does not convert time zones or reinterpret local time as UTC.</p>
-<h3 id="tiffjoin"><code>tiffjoin</code></h3>
-<pre class="sh"><code>kim_all tiffjoin [--output PATH] [--] IMAGE...</code></pre>
-<p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
 <h3 id="webexport"><code>webexport</code></h3>
 <pre class="sh"><code>kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|jpeg|png|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...</code></pre>
 <p>Options can also be prompted. Web Export accepts an output directory and selected source files. Default size is 1600×1600, default quality is 95 for JPEG, WebP and AVIF (independently configurable in Settings), format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web Export creates distinct derivatives. Animated APNG input is refused rather than flattened. JPEG scan and optimization options apply only to JPEG output.</p>
@@ -324,22 +324,19 @@ kim_all timeshift --interactive -- IMAGE...</code></pre>
 <pre class="sh"><code>kim_all video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265 --container orig|mp4 -- VIDEO...
 kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|smallest|custom --container orig|mp4 -- VIDEO...</code></pre>
 <p>Dolphin exposes six MP4 presets for each of H.264 and H.265 (720p/1080p with three quality choices). Original-container output remains available through the CLI. For AV1 encoding, KIM6 uses <code>libsvtav1</code> when available or <code>libaom-av1</code> otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, Smallest File CRF 42, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. <code>custom</code> prompts for AV1 quality and speed through the CLI; the Dolphin AV1 menu offers six MP4 presets. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.</p>
+<h3 id="videoaudio"><code>videoaudio</code></h3>
+<pre class="sh"><code>kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
+kim_all videoaudio --mode mute -- VIDEO...</code></pre>
+<p>Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.</p>
 <h3 id="videoframes"><code>videoframes</code></h3>
 <pre class="sh"><code>kim_all videoframes --mode single --at HH:MM:SS[.sss] [--format png|jpg] -- VIDEO...
 kim_all videoframes --mode thumbnail [--format png|jpg] -- VIDEO...
 kim_all videoframes --mode contact [--grid 3x3|4x4|5x5] [--format png|jpg] -- VIDEO...</code></pre>
 <p>Extracts one frame, a representative midpoint thumbnail (not frame zero), or one labeled contact sheet. Contact sheets use 320×180 fit/pad tiles, sample evenly over duration, and may repeat positions for short videos. Display rotation is applied. The video contact sheet menu action opens one Qt dialog for grid and image format; single-frame extraction uses a timestamp prompt.</p>
-<h3 id="videoaudio"><code>videoaudio</code></h3>
-<pre class="sh"><code>kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
-kim_all videoaudio --mode mute -- VIDEO...</code></pre>
-<p>Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.</p>
 <h3 id="videogif"><code>videogif</code></h3>
 <pre class="sh"><code>kim_all videogif --start HH:MM:SS[.sss] --duration SECONDS --fps 10|12|15|24 --width 320|480|640|800 --loop infinite|once -- VIDEO...</code></pre>
 <p>Creates a palette-optimized GIF for the requested interval. Duration is greater than zero and at most 15 seconds, with at most 360 nominal frames and a 200-million output pixel-frame work bound. Width is a maximum and does not upscale; height follows aspect ratio. At least two output frames are required. Infinite uses GIF loop extension 0; once omits looping.</p>
 <h2 id="information-actions">Information actions</h2>
-<h3 id="settings-1"><code>settings</code></h3>
-<pre class="sh"><code>kim_all settings</code></pre>
-<p>Opens the graphical KIM6 settings dialog. No selected files are required.</p>
 <h3 id="about"><code>about</code></h3>
 <pre class="sh"><code>kim_all about</code></pre>
 <p>Shows the installed About text in KDialog.</p>
@@ -349,6 +346,9 @@ kim_all videoaudio --mode mute -- VIDEO...</code></pre>
 <h3 id="manual"><code>manual</code></h3>
 <pre class="sh"><code>kim_all manual</code></pre>
 <p>Opens the installed static manual using <code>xdg-open</code>.</p>
+<h3 id="settings-1"><code>settings</code></h3>
+<pre class="sh"><code>kim_all settings</code></pre>
+<p>Opens the graphical KIM6 settings dialog. No selected files are required.</p>
 <h2 id="troubleshooting">Troubleshooting</h2>
 <p>If an action fails, check the final KDialog report. Confirm that the source is readable, the destination is writable, and the required ImageMagick coder, FFmpeg encoder, or other dependency is installed.</p>
 <p>When running <code>kim_all</code> directly, inspect the terminal output for diagnostics. Previously completed outputs remain available if a later batch item fails.</p>

@@ -28,8 +28,8 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Command Syntax](#command-syntax)
 - [Output and File Handling](#output-and-file-handling)
 - [Configuration and Defaults](#configuration-and-defaults)
-- [Still-image actions](#still-image-actions): album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, collage, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
-- [Video actions](#video-actions): slideshow, video, videoframes, videoaudio, videogif
+- [Still-image actions](#still-image-actions): album, animate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport
+- [Video actions](#video-actions): slideshow, video, videoaudio, videoframes, videogif
 - [Information actions](#information-actions): about, license, manual, settings
 
 ## Command Syntax
@@ -161,6 +161,14 @@ kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE..
 
 Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from `videogif`, which samples a video segment.
 
+### `collage`
+
+```sh
+kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...
+```
+
+Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are `5x4`, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.
+
 ### `compress`
 
 ```sh
@@ -222,14 +230,6 @@ kim_all gallery -- IMAGE...
 ```
 
 Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting `index.html` with `xdg-open` when available.
-
-### `collage`
-
-```sh
-kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...
-```
-
-Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are `5x4`, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.
 
 ### `print`
 
@@ -315,6 +315,14 @@ kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...
 
 Default mode `all` preserves the existing full-strip behavior. `gps` removes recognized coordinate fields; `ai` removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. `--remove-ai` combines recognized AI-field removal with `all` or `gps`. Interactive mode selects a mode. GPS removal targets recognized coordinate fields; other metadata and visible scene details may still reveal a location. AI removal targets recognized AI-generation metadata, not every possible generator indicator. Unrecognized generator-specific fields and signed C2PA / Content Credentials may remain. ExifTool cannot guarantee their complete removal.
 
+### `tiffjoin`
+
+```sh
+kim_all tiffjoin [--output PATH] [--] IMAGE...
+```
+
+Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.
+
 ### `timeshift`
 
 ```sh
@@ -323,14 +331,6 @@ kim_all timeshift --interactive -- IMAGE...
 ```
 
 Adds or subtracts the fixed offset from camera date tags. `all` (default) shifts `DateTimeOriginal`, `CreateDate`, and `ModifyDate`; `capture` shifts only `DateTimeOriginal`. Subsecond and timezone-offset tags remain unchanged, as do GPS timestamps and filesystem modification time. This shifts a camera’s wall-clock values; it does not convert time zones or reinterpret local time as UTC.
-
-### `tiffjoin`
-
-```sh
-kim_all tiffjoin [--output PATH] [--] IMAGE...
-```
-
-Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.
 
 ### `webexport`
 
@@ -363,6 +363,15 @@ kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|smalle
 
 Dolphin exposes six MP4 presets for each of H.264 and H.265 (720p/1080p with three quality choices). Original-container output remains available through the CLI. For AV1 encoding, KIM6 uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, Smallest File CRF 42, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed through the CLI; the Dolphin AV1 menu offers six MP4 presets. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
 
+### `videoaudio`
+
+```sh
+kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
+kim_all videoaudio --mode mute -- VIDEO...
+```
+
+Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.
+
 ### `videoframes`
 
 ```sh
@@ -373,15 +382,6 @@ kim_all videoframes --mode contact [--grid 3x3|4x4|5x5] [--format png|jpg] -- VI
 
 Extracts one frame, a representative midpoint thumbnail (not frame zero), or one labeled contact sheet. Contact sheets use 320×180 fit/pad tiles, sample evenly over duration, and may repeat positions for short videos. Display rotation is applied. The video contact sheet menu action opens one Qt dialog for grid and image format; single-frame extraction uses a timestamp prompt.
 
-### `videoaudio`
-
-```sh
-kim_all videoaudio --mode extract --format m4a|mp3|flac|wav -- VIDEO...
-kim_all videoaudio --mode mute -- VIDEO...
-```
-
-Extracts the first audio stream to the selected container; additional audio streams are not silently claimed as exported. Compatible AAC can be stream-copied to M4A. Mute creates a separate video file without audio tracks. The video stream is copied without re-encoding, preserving its original quality. If the source video has no audio, no new file is created.
-
 ### `videogif`
 
 ```sh
@@ -391,14 +391,6 @@ kim_all videogif --start HH:MM:SS[.sss] --duration SECONDS --fps 10|12|15|24 --w
 Creates a palette-optimized GIF for the requested interval. Duration is greater than zero and at most 15 seconds, with at most 360 nominal frames and a 200-million output pixel-frame work bound. Width is a maximum and does not upscale; height follows aspect ratio. At least two output frames are required. Infinite uses GIF loop extension 0; once omits looping.
 
 ## Information actions
-
-### `settings`
-
-```sh
-kim_all settings
-```
-
-Opens the graphical KIM6 settings dialog. No selected files are required.
 
 ### `about`
 
@@ -423,6 +415,14 @@ kim_all manual
 ```
 
 Opens the installed static manual using `xdg-open`.
+
+### `settings`
+
+```sh
+kim_all settings
+```
+
+Opens the graphical KIM6 settings dialog. No selected files are required.
 
 ## Troubleshooting
 
