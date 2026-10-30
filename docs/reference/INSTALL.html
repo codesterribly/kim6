@@ -46,7 +46,7 @@
 <li><strong>Email application:</strong> Required for KIM6's email features.</li>
 </ul>
 <p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
-<p><strong>Output policy after upgrading:</strong> Only <code>KIM_POLICY=create</code> and <code>KIM_POLICY=prompt</code> are supported. Unset and legacy <code>KIM_POLICY=overwrite</code> settings use the safe prompt rather than automatically replacing originals. With <code>prompt</code>, users must explicitly select <strong>Review overwrite options...</strong> and confirm a second warning. Rotation, EXIF auto-orientation, flip, and flop refuse to run under <code>create</code> because they operate directly on selected originals. See <a href="commandconfig.html#output-and-file-handling">Output and file handling</a>.</p>
+<p><strong>Output policy:</strong> <code>KIM_POLICY=create</code> selects separate outputs without prompting where supported. <code>KIM_POLICY=prompt</code> displays the output-policy dialog. Replacing selected originals requires choosing <strong>Overwrite originals (confirmation required)</strong> and approving a second warning. Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. See <a href="commandconfig.html#output-and-file-handling">Output and file handling</a>.</p>
 <p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
@@ -81,7 +81,7 @@
 <p>The installer identifies existing KIM6 installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
 <p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
-<p>For older-installation compatibility and implementation details, see <a href="DEVELOPMENT.html#installer-compatibility-and-recovery">Installer compatibility and recovery</a>.</p>
+<p>For installer safeguards and recovery procedures, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <h2 id="offline-manual-and-documentation-updates">Offline manual and documentation updates</h2>
 <p>KIM6 installs a complete offline user manual, including its stylesheet, illustrations, and HTML reference pages. The manual is available through the KIM6 User Manual action in Dolphin.</p>
 <p>When Python 3 and Pandoc are installed, running <code>./install.sh</code> from a writable, non-root development checkout automatically regenerates the HTML references from the project's Markdown documentation.</p>

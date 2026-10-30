@@ -21,14 +21,14 @@ File handling depends on the operation:
 
 - **Resize, compress, and convert:** Create new files or overwrite existing files when authorized.
 - **Web export and email:** Create separate output files without changing the selected images.
-- **Rotate, EXIF auto-orient, flip and flop:** These are in-place operations. `KIM_POLICY=create` refuses them; `prompt` requires explicit two-stage confirmation before any selected original is replaced.
+- **Rotate, EXIF auto-orient, flip and flop:** Create mode publishes transformed copies and preserves selected originals. Overwrite mode replaces selected originals only after explicit two-stage confirmation.
 - **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
 
 For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
 
-**File-safety choices:** Only `KIM_POLICY=create` and `KIM_POLICY=prompt` are supported. Unset, invalid, or legacy `overwrite` values use the safe prompt, **not** automatic permission. The choice defaults to **Create new files (recommended; originals untouched)**; choosing **Review overwrite options...** requires a second confirmation with an operation-specific label and selected-file count. Cancellation or an unavailable dialog refuses replacement. Destination collisions use distinct names in create mode; destructive publication is checked for source aliases, symlinks, hardlinks, and destination identity as applicable. Batch results already completed are not undone by later failures.
+**File-safety choices:** `KIM_POLICY=create` selects separate outputs where supported; `KIM_POLICY=prompt` displays the output-policy dialog. Create is the default choice. Choosing **Overwrite originals (confirmation required)** requires a second confirmation with an operation-specific warning and selected-file count. Cancellation or an unavailable dialog refuses replacement. Create mode numbers output collisions; publication checks source aliases, symlinks, hardlinks, and destination identity where applicable. Completed batch results remain available if a later item fails.
 
 **Format notes:** Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.
 

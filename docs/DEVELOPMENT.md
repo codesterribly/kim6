@@ -89,7 +89,7 @@ Recognized environment variables take precedence over their corresponding KConfi
 
 Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.
 
-`KIM_POLICY` is the output-policy setting. Supported values are `create` and `prompt`; an unset, invalid, or legacy `overwrite` value is treated as `prompt`, **never** as unattended authorization. `choose_output_mode()` implements a safe-default radio choice followed by an explicit, action-specific warning before replacement. `confirm_inplace_overwrite()` handles actions that have no create-new path; it refuses them under `create` and requires confirmation under `prompt`. Both paths fail closed when KDialog exits, is unavailable, or returns an unexpected choice.
+`KIM_POLICY` supports `create` and `prompt`. `choose_output_mode()` implements the Create/Overwrite selection and requires a second explicit warning before replacement. `confirm_inplace_overwrite()` handles actions without a Create path. Rotation and flipping use `choose_output_mode()` because both modes are supported. Cancellation, unavailable dialogs, and unexpected responses never authorize replacement.
 
 See [commandconfig.md](commandconfig.md) for the available keys, defaults, and affected actions.
 
@@ -133,7 +133,7 @@ Publication, date, and rename operations perform additional checks involving can
 
 `commit_tmp_to_target()` moves validated output into place using the selected create or authorized overwrite policy.
 
-`atomic_overwrite_file()` remains available as a compatibility wrapper, although current actions use `tmp_for_target()` and `commit_tmp_to_target()`.
+`commit_tmp_to_target()` is used for publishing validated outputs. `atomic_overwrite_file()` is also defined in the dispatcher; current actions use `tmp_for_target()` and `commit_tmp_to_target()`.
 
 ### Progress and cancellation
 
@@ -163,7 +163,7 @@ Different KIM6 actions have different file-handling requirements.
 
 Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.
 
-Rotation, EXIF auto-orientation, flip and flop replace selected originals after validation; they do **not** bypass policy authorization. `KIM_POLICY=create` refuses those operations. Under `prompt`, `confirm_inplace_overwrite()` requests explicit confirmation once for the selected batch before processing starts. An old `KIM_POLICY=overwrite` value does not authorize anything silently.
+Rotation, EXIF auto-orientation, flip, and flop select Create or Overwrite through `choose_output_mode()`. Create publishes validated transformed copies. Overwrite requires explicit two-stage authorization and replaces selected originals only after validation.
 
 ### Metadata and dates
 
@@ -215,7 +215,7 @@ For required tools and installation instructions, see [INSTALL.md](../INSTALL.md
 
 KIM6 uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
 
-Tests cover individual processing functions, file preservation, error handling, cancellation, and installer behavior. The overwrite-policy regression tests exercise both confirmation stages, missing GUI, legacy policy values, batch authorization, and source/destination aliases. Historical tests that intentionally authorize overwrite must simulate both dialog approvals in the test `Workspace` rather than using `KIM_POLICY=overwrite` as a bypass. Their mock for the policy `--radiolist` must be scoped to the policy-specific choice text, so it does not intercept unrelated rename/date dialogs. The APNG fail-closed regression uses a real animation fixture when FFmpeg is available.
+Regression coverage includes processing functions, file preservation, error handling, cancellation, installation, output authorization, and source/destination aliases. Overwrite tests simulate both dialog confirmations using the isolated `Workspace`. The APNG validation cases use animated fixtures when FFmpeg is available.
 
 Run an individual test module while developing:
 
@@ -301,9 +301,9 @@ A KDE service-menu action accepts local files. Remote URL workflows are not sile
 
 Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private photographs or videos without permission.
 
-## Installer Compatibility and Recovery
+## Installer Safety and Recovery
 
-The installer recognizes a runtime from the `kim_all` dispatcher, a recognized KIM menu, or an older `.kim6-owned` marker left by a previous release. It also accepts an otherwise empty runtime directory, which can remain after an interrupted first install. New installs do not create ownership markers or manifests. The uninstaller uses the same recognizable dispatcher/menu checks and accepts the old marker only for compatibility; it does not require one. Both scripts refuse unrelated same-name menu files and symlinked runtime/menu paths. The installer replaces listed files through temporary sibling files and does not select unrelated filenames through broad globs. Unknown runtime files are preserved and prevent removal of their parent directory.
+The installer identifies KIM6 installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.
 
 Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
 

@@ -10,7 +10,7 @@ KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familia
 
 ## Quick Start
 
-Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. When prompted, choose **Create new files (recommended; originals untouched)**. `KIM_POLICY=overwrite` is **not** an automatic overwrite setting: legacy and unsupported values now show the safe prompt. Use `KIM_POLICY=create` to choose separate outputs without prompting where supported.
+Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. Create mode saves separate outputs and preserves selected originals where supported. `KIM_POLICY=create` selects Create mode automatically; `KIM_POLICY=prompt` displays the output-policy dialog.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
@@ -69,9 +69,9 @@ Available video codecs depend on FFmpeg and the encoders installed on your syste
 
 KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
 
-Most resizing, compression, and conversion actions offer **Create new files (recommended; originals untouched)** or **Review overwrite options...**. Overwrite review requires a separate, explicit confirmation describing what may be replaced and how many files are selected; merely setting an environment variable does not approve it. `KIM_POLICY=create` creates separate files where the action supports copies. `KIM_POLICY=prompt` and an unset or legacy `overwrite` value use the safe prompt.
+Most resizing, compression, and conversion actions offer **Create new files (originals untouched)** or **Overwrite originals (confirmation required)**. Replacing originals requires a second explicit confirmation that identifies the affected files and operation. `KIM_POLICY=create` selects separate outputs where supported; `KIM_POLICY=prompt` displays the output-policy dialog.
 
-Rotation, EXIF auto-orientation, flip, and flop **always modify selected originals** and therefore refuse to run under `KIM_POLICY=create`. Under `prompt` they require explicit confirmation once per batch. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export, email preparation, video frame/audio/GIF utilities, and slideshows create derivatives. **Video transcoding** can instead replace an original after explicit overwrite confirmation. Completed batch results remain available if a later item fails, while staged invalid results are not published.
+Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. Create mode saves transformed copies while preserving the selected originals. Overwrite mode replaces the originals only after explicit review and confirmation. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export, email preparation, video frame/audio/GIF utilities, and slideshows create derivatives. **Video transcoding** can instead replace an original after explicit overwrite confirmation. Completed batch results remain available if a later item fails, while staged invalid results are not published.
 
 Create mode numbers occupied output filenames and respects configurable prefix/suffix affix placement (for example, `web_photo.jpg` versus `photo_web.jpg`). Output publication rejects unsafe source aliases and linked destinations where relevant. **Animated APNG is deliberately refused by Resize, Web Export and resized email preparation** rather than being flattened to a still image; dedicated APNG conversion remains available when the required tools support it.
 

@@ -25,7 +25,7 @@ KIM6 uses several common tools to process images and videos:
 
 Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
 
-**Output policy after upgrading:** Only `KIM_POLICY=create` and `KIM_POLICY=prompt` are supported. Unset and legacy `KIM_POLICY=overwrite` settings use the safe prompt rather than automatically replacing originals. With `prompt`, users must explicitly select **Review overwrite options...** and confirm a second warning. Rotation, EXIF auto-orientation, flip, and flop refuse to run under `create` because they operate directly on selected originals. See [Output and file handling](docs/commandconfig.md#output-and-file-handling).
+**Output policy:** `KIM_POLICY=create` selects separate outputs without prompting where supported. `KIM_POLICY=prompt` displays the output-policy dialog. Replacing selected originals requires choosing **Overwrite originals (confirmation required)** and approving a second warning. Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. See [Output and file handling](docs/commandconfig.md#output-and-file-handling).
 
 Download or clone the KIM6 source code, then open a terminal in the project directory and run:
 
@@ -115,8 +115,8 @@ Upgrades replace known KIM6 program and menu files. Save any customizations
 before upgrading. Unknown files are preserved and may prevent their
 containing directory from being removed.
 
-For older-installation compatibility and implementation details, see
-[Installer compatibility and recovery](docs/DEVELOPMENT.md#installer-compatibility-and-recovery).
+For installer safeguards and recovery procedures, see
+[Installer safety and recovery](docs/DEVELOPMENT.md#installer-safety-and-recovery).
 
 ## Offline manual and documentation updates
 

@@ -294,6 +294,20 @@ for name in "${menu_names[@]}"; do
   [[ -f "$SOURCE_DIR/src/$name.in" && ! -L "$SOURCE_DIR/src/$name.in" ]] || die "menu template is missing: $SOURCE_DIR/src/$name.in"
 done
 
+# Verify every additional application helper and root document before
+# installation starts. An incomplete checkout must not partially update KIM6.
+for relative in \
+    ABOUT README.md \
+    src/bin/kim_collage_dialog.py \
+    src/bin/kim_contactsheet_dialog.py \
+    src/bin/kim_album_dialog.py \
+    src/bin/kim_create_dialog.py \
+    src/bin/kim_settings_dialog.py \
+    src/bin/kim_manual_viewer.py; do
+  [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] ||
+    die "required file is missing: $SOURCE_DIR/$relative"
+done
+
 # Write one file beside its destination, then rename it into place. This keeps
 # individual files intact if copying or compiling is interrupted.
 install_file() {
