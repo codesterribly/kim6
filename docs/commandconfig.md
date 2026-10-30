@@ -414,7 +414,7 @@ Opens the installed `LICENSE.md` using `xdg-open`.
 kim_all manual
 ```
 
-Opens the installed static manual using `xdg-open`.
+Opens the installed KIM6 User Guide using `xdg-open`.
 
 ### `settings`
 

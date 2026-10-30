@@ -254,7 +254,7 @@ def main():
             from PySide6.QtWebEngineWidgets import QWebEngineView
             manual_view = QWebEngineView()
             manual_view.setUrl(QUrl.fromLocalFile(str(manual_path)))
-            manual_status.setText("HTML user manual.")
+            manual_status.setText("HTML User Guide.")
         except (ImportError, RuntimeError):
             manual_view = QTextBrowser()
             manual_view.setOpenExternalLinks(True)
@@ -278,12 +278,12 @@ def main():
                     "The installed Markdown guide is unavailable."
                 )
             manual_status.setText(
-                "NOTE: Full HTML rendering is unavailable in this viewer session, so KIM6 is displaying the Markdown version of the README. Use Open in Browser for the complete illustrated manual."
+                "NOTE: Full HTML rendering is unavailable in this viewer session, so KIM6 is displaying the Markdown version of the README. Use Open in Browser for the complete illustrated User Guide."
             )
 
         manual_layout.addWidget(manual_view)
     else:
-        manual_status.setText("Installed HTML manual not found.")
+        manual_status.setText("Installed HTML User Guide not found.")
 
     manual_controls = QHBoxLayout()
     manual_controls.addStretch()
@@ -297,7 +297,7 @@ def main():
         ):
             QMessageBox.warning(
                 dialog,
-                "KIM6 Manual",
+                "KIM6 User Guide",
                 "Could not launch a browser.",
             )
 
@@ -305,10 +305,10 @@ def main():
     manual_controls.addWidget(open_browser)
     manual_layout.addLayout(manual_controls)
 
-    tabs.addTab(manual_tab, "KIM6 Manual")
+    tabs.addTab(manual_tab, "KIM6 User Guide")
 
     def resize_for_tab(index):
-        if tabs.tabText(index) in ("License", "KIM6 Manual"):
+        if tabs.tabText(index) in ("License", "KIM6 User Guide"):
             dialog.resize(max(dialog.width(), 1000), 740)
 
     tabs.currentChanged.connect(resize_for_tab)

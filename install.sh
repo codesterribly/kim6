@@ -433,7 +433,7 @@ for relative in \
     die "required file is missing: $SOURCE_DIR/$relative"
 done
 
-# Keep the offline HTML manual synchronized with its Markdown sources.
+# Keep the offline HTML User Guide synchronized with its Markdown sources.
 # A writable, non-root development checkout regenerates reference pages
 # automatically. System installations verify rather than modify source files.
 # Pandoc and Python are optional for users installing prebuilt HTML.
@@ -658,7 +658,7 @@ for helper in \
 done
 
 echo
-echo "Bundled HTML manual installed."
+echo "Bundled KIM6 User Guide installed."
 
 echo
 echo "======================================================================"

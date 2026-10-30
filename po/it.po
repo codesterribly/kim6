@@ -515,8 +515,8 @@ msgstr "Transcodifica video a 1920x1080, qualità scarsa, x264"
 
 #: ../src/kim_compressandresizevideo.desktop.in.h:26
 #: ../src/kim_publication.desktop.in.h:13
-msgid "KIM 6 Manual"
-msgstr "Manuale di KIM 6"
+msgid "KIM6 User Guide"
+msgstr "Guida utente di KIM6"
 
 #: ../src/kim_compressandresizevideo.desktop.in.h:27
 #: ../src/kim_publication.desktop.in.h:14

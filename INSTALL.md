@@ -92,7 +92,7 @@ The installed components include:
 - Gallery generation resources.
 - Ten Dolphin service-menu definitions.
 - Available compiled translation catalogs.
-- The offline HTML manual, illustrations, stylesheet, and reference pages.
+- The offline HTML User Guide, illustrations, stylesheet, and reference pages.
 
 The installer generates the Dolphin service-menu entries using
 `intltool-merge` and replaces their command references with the absolute
@@ -211,11 +211,11 @@ containing directory from being removed.
 For installer safeguards and recovery procedures, see
 [Installer safety and recovery](docs/DEVELOPMENT.md#installer-safety-and-recovery).
 
-## Offline manual and documentation updates
+## Offline User Guide and documentation updates
 
-KIM6 installs a complete offline user manual, including its stylesheet,
-illustrations, and HTML reference pages. The manual is available through
-the KIM6 User Manual action in Dolphin.
+KIM6 installs a complete offline User Guide, including its stylesheet,
+illustrations, and HTML reference pages. The User Guide is available through
+the KIM6 User Guide action in Dolphin.
 
 When Python 3 and Pandoc are installed, running `./install.sh` from a
 writable, non-root development checkout automatically regenerates the
@@ -226,7 +226,7 @@ not writable, the installer verifies the generated HTML rather than
 modifying the source files, provided both tools are available. If the
 generated pages are outdated, installation stops.
 
-Python 3 and Pandoc are not required to view the manual. If either
+Python 3 and Pandoc are not required to view the User Guide. If either
 build tool is unavailable during installation, KIM6 uses the prebuilt
 HTML pages supplied with the repository.
 

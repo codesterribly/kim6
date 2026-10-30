@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="topbar-inner page-width">
       <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
-      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
   <div class="reference-layout page-width">
@@ -24,7 +24,7 @@
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
-      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+      <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
       <div class="reference-source">KIM6 DOCUMENTATION · INSTALL.md</div>
@@ -78,7 +78,7 @@
 <li>Gallery generation resources.</li>
 <li>Ten Dolphin service-menu definitions.</li>
 <li>Available compiled translation catalogs.</li>
-<li>The offline HTML manual, illustrations, stylesheet, and reference pages.</li>
+<li>The offline HTML User Guide, illustrations, stylesheet, and reference pages.</li>
 </ul>
 <p>The installer generates the Dolphin service-menu entries using <code>intltool-merge</code> and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
 <h3 id="safe-file-replacement">Safe file replacement</h3>
@@ -125,16 +125,16 @@
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
 <p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
 <p>For installer safeguards and recovery procedures, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
-<h2 id="offline-manual-and-documentation-updates">Offline manual and documentation updates</h2>
-<p>KIM6 installs a complete offline user manual, including its stylesheet, illustrations, and HTML reference pages. The manual is available through the KIM6 User Manual action in Dolphin.</p>
+<h2 id="offline-user-guide-and-documentation-updates">Offline User Guide and documentation updates</h2>
+<p>KIM6 installs a complete offline User Guide, including its stylesheet, illustrations, and HTML reference pages. The User Guide is available through the KIM6 User Guide action in Dolphin.</p>
 <p>When Python 3 and Pandoc are installed, running <code>./install.sh</code> from a writable, non-root development checkout automatically regenerates the HTML references from the project's Markdown documentation.</p>
 <p>For root installations or checkouts where the reference directory is not writable, the installer verifies the generated HTML rather than modifying the source files, provided both tools are available. If the generated pages are outdated, installation stops.</p>
-<p>Python 3 and Pandoc are not required to view the manual. If either build tool is unavailable during installation, KIM6 uses the prebuilt HTML pages supplied with the repository.</p>
+<p>Python 3 and Pandoc are not required to view the User Guide. If either build tool is unavailable during installation, KIM6 uses the prebuilt HTML pages supplied with the repository.</p>
 <p>Contributors should commit regenerated HTML reference pages alongside their Markdown changes. The illustrated landing page is maintained separately and is not automatically generated.</p>
 
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>

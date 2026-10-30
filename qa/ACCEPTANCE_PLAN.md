@@ -519,7 +519,7 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_compressandresizevideo.desktop:ExtractVideoAudio` | `ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` | video-multiaudio.mkv | derived |
 | `kim_compressandresizevideo.desktop:MuteVideo` | `MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` | video-multiaudio.mkv | derived |
 | `kim_compressandresizevideo.desktop:VideoToGif` | `VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` | video-audio.mp4 | derived |
-| `kim_compressandresizevideo.desktop:Manual` | `Manual` | KIM6 Manual | `kim_all manual` | video-audio.mp4 | none |
+| `kim_compressandresizevideo.desktop:Manual` | `Manual` | KIM6 User Guide | `kim_all manual` | video-audio.mp4 | none |
 | `kim_compressandresizevideo.desktop:License` | `License` | License | `kim_all license` | video-audio.mp4 | none |
 | `kim_compressandresizevideo.desktop:About` | `About` | About KIM6 | `kim_all about` | video-audio.mp4 | none |
 
@@ -1013,9 +1013,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: GIF fully decodes, has at least two frames, and observed dimensions are reported. Human: inspect timing and loop behavior.
 - **Human inspection:** Check that the menu starts the operation named ‘Create animated GIF from video…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### KIM6 Manual — `kim_compressandresizevideo.desktop:Manual`
+### KIM6 User Guide — `kim_compressandresizevideo.desktop:Manual`
 
-- **Menu path:** KIM6 — Video transcoding → KIM6 Manual
+- **Menu path:** KIM6 — Video transcoding → KIM6 User Guide
 - **Dispatcher contract:** `kim_all manual`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** no (context file only)
@@ -1380,7 +1380,7 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_publication.desktop:Print` | `Print` | Create a print-layout PDF… | `kim_all print -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:TiffJoin` | `TiffJoin` | Join images into a multi-page TIFF… | `kim_all tiffjoin -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:Animation` | `Animation` | Create an animated GIF… | `kim_all animate -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
-| `kim_publication.desktop:Manual` | `Manual` | KIM6 Manual | `kim_all manual` | photo.jpg | none |
+| `kim_publication.desktop:Manual` | `Manual` | KIM6 User Guide | `kim_all manual` | photo.jpg | none |
 | `kim_publication.desktop:License` | `License` | License | `kim_all license` | photo.jpg | none |
 | `kim_publication.desktop:About` | `About` | About KIM6 | `kim_all about` | photo.jpg | none |
 
@@ -1608,9 +1608,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: GIF fully decodes and frame count matches selected input frame count. Human: inspect frame order, delay and loop behavior.
 - **Human inspection:** Check that the menu starts the operation named ‘Create an animated GIF…’. Open the GIF in an animation-capable viewer and check red, green, blue order, delay and looping.
 
-### KIM6 Manual — `kim_publication.desktop:Manual`
+### KIM6 User Guide — `kim_publication.desktop:Manual`
 
-- **Menu path:** KIM6 — Publish and organize → KIM6 Manual
+- **Menu path:** KIM6 — Publish and organize → KIM6 User Guide
 - **Dispatcher contract:** `kim_all manual`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** no (context file only)

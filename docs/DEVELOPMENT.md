@@ -19,7 +19,7 @@ This document covers the project structure, development conventions, testing, an
 | `tests/test_*.py` | Unit and integration tests. |
 | `install.sh`, `uninstall.sh` | Installation and removal scripts. |
 | `po/` | Translation files. |
-| `docs/` | User documentation and HTML manual. |
+| `docs/` | User documentation and HTML User Guide. |
 | `docs/archive/upstream/` | Archived documentation from earlier versions. |
 
 `README.md` provides the project overview, and `INSTALL.md` covers installation and removal.
@@ -29,7 +29,7 @@ The `docs/` directory contains additional references:
 - `ACTIONS.md` - Complete Dolphin menu and action inventory.
 - `commandconfig.md` - detailed descriptions of KIM6 functionality, command-line options and configuration.
 - `FORMATS.md` - Supported image and video formats.
-- `index.html` - HTML user manual with CSS styling (`work.css`).
+- `index.html` - HTML User Guide with CSS styling (`work.css`).
 
 ## Dolphin Service Menus
 
@@ -320,14 +320,14 @@ Check the output before removing the temporary directory. The original synthetic
 
 See [Command and Configuration Reference](commandconfig.md) for additional options.
 
-## Building the offline HTML manual
+## Building the offline HTML User Guide
 
 Markdown is the authoritative documentation source. The illustrated
 landing page is maintained in `docs/index.html`, and the reference
 pages under `docs/reference/` are generated from Markdown.
 
 Pandoc is required to build the reference pages, but is not required
-for users viewing the installed manual.
+for users viewing the installed User Guide.
 
 During a normal non-root installation from a writable checkout,
 `./install.sh` automatically regenerates the HTML reference pages when

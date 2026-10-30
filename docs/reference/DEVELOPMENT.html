@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="topbar-inner page-width">
       <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
-      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
   <div class="reference-layout page-width">
@@ -24,7 +24,7 @@
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
-      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+      <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
       <div class="reference-source">KIM6 DOCUMENTATION · docs/DEVELOPMENT.md</div>
@@ -76,7 +76,7 @@
 </tr>
 <tr>
 <td><code>docs/</code></td>
-<td>User documentation and HTML manual.</td>
+<td>User documentation and HTML User Guide.</td>
 </tr>
 <tr>
 <td><code>docs/archive/upstream/</code></td>
@@ -90,7 +90,7 @@
 <li><code>ACTIONS.md</code> - Complete Dolphin menu and action inventory.</li>
 <li><code>commandconfig.md</code> - detailed descriptions of KIM6 functionality, command-line options and configuration.</li>
 <li><code>FORMATS.md</code> - Supported image and video formats.</li>
-<li><code>index.html</code> - HTML user manual with CSS styling (<code>work.css</code>).</li>
+<li><code>index.html</code> - HTML User Guide with CSS styling (<code>work.css</code>).</li>
 </ul>
 <h2 id="dolphin-service-menus">Dolphin Service Menus</h2>
 <p>KIM6 uses ten KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
@@ -259,9 +259,9 @@ KIM_POLICY=create ./src/bin/kim_all webexport \
 find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
 <p>Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.</p>
 <p>See <a href="commandconfig.html">Command and Configuration Reference</a> for additional options.</p>
-<h2 id="building-the-offline-html-manual">Building the offline HTML manual</h2>
+<h2 id="building-the-offline-html-user-guide">Building the offline HTML User Guide</h2>
 <p>Markdown is the authoritative documentation source. The illustrated landing page is maintained in <code>docs/index.html</code>, and the reference pages under <code>docs/reference/</code> are generated from Markdown.</p>
-<p>Pandoc is required to build the reference pages, but is not required for users viewing the installed manual.</p>
+<p>Pandoc is required to build the reference pages, but is not required for users viewing the installed User Guide.</p>
 <p>During a normal non-root installation from a writable checkout, <code>./install.sh</code> automatically regenerates the HTML reference pages when Python 3 and Pandoc are available. This happens before the files are installed, so a separate documentation build command is not normally necessary.</p>
 <p>If both tools are available but the installer is running as root or the reference directory is not writable, the installer checks the generated pages without modifying the checkout. Stale pages cause installation to stop with an error.</p>
 <p>If Python 3 or Pandoc is unavailable, installation uses the generated HTML already included in the repository. Release builds must therefore include current generated pages.</p>
@@ -278,6 +278,6 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>

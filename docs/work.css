@@ -90,7 +90,7 @@ h1 em { color: #8bdbe9; font-style: normal; }
 /* Reading layout */
 .layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: clamp(2.5rem, 5vw, 5rem); align-items: start; }
 .side-nav { align-self: stretch; border-right: 1px solid var(--line); }
-.side-nav-inner { position: sticky; top: 18px; padding: 43px 20px 50px 0; display: flex; flex-direction: column; gap: 2px; }
+.side-nav-inner { position: sticky; top: 18px; max-height: calc(100vh - 36px); overflow-y: auto; scrollbar-width: thin; padding: 43px 20px 50px 0; display: flex; flex-direction: column; gap: 2px; }
 .nav-heading { font-size: .67rem; font-weight: 820; color: var(--faint); letter-spacing: .13em; margin: 0 0 15px 12px; }
 .side-nav a { display: block; padding: 9px 12px; border-radius: 7px; font-size: .83rem; color: var(--muted); font-weight: 630; text-decoration: none; line-height: 1.35; }
 .side-nav a:hover, .side-nav a:focus-visible { background: var(--surface-soft); color: var(--accent); }
@@ -219,7 +219,7 @@ details[open] .faq-plus::after { transform: rotate(0); }
   .hero-art { max-width: 570px; width: 100%; min-height: auto; }
   .layout { display: block; }
   .side-nav { border-right: 0; border-bottom: 1px solid var(--line); margin-inline: -1.25rem; }
-  .side-nav-inner { position: static; display: flex; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 5px; padding: 12px 1.25rem; scrollbar-width: thin; }
+  .side-nav-inner { position: static; max-height: none; overflow-y: hidden; display: flex; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 5px; padding: 12px 1.25rem; scrollbar-width: thin; }
   .side-nav .nav-heading, .side-nav .nav-separator, .side-nav .nav-external { display: none; }
   .side-nav a { white-space: nowrap; padding: 9px 12px; font-size: .82rem; }
   .main-content { padding-bottom: 35px; }

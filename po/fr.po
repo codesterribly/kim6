@@ -499,7 +499,7 @@ msgstr ""
 
 #: ../src/kim_compressandresizevideo.desktop.in.h:26
 #: ../src/kim_publication.desktop.in.h:13
-msgid "KIM 6 Manual"
+msgid "KIM6 User Guide"
 msgstr ""
 
 #: ../src/kim_compressandresizevideo.desktop.in.h:27

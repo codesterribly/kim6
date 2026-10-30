@@ -3,7 +3,7 @@
 
 KIM6 provides 83 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.
 
-The tables reflect the menu definitions in `src/`. Settings, Manual, License, and About are grouped in the dedicated information service menu.
+The tables reflect the menu definitions in `src/`. Settings, User Guide, License, and About are grouped in the dedicated information service menu.
 
 For command-line options beyond those available through Dolphin, see [commandconfig.md](commandconfig.md).
 
@@ -98,7 +98,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `01Settings` | Settings… | `kim_all settings` |
 | `02About` | About KIM6 | `kim_all about` |
 | `03License` | License | `kim_all license` |
-| `04Manual` | KIM6 Manual | `kim_all manual` |
+| `04Manual` | KIM6 User Guide | `kim_all manual` |
 
 ### `kim_metadata.desktop.in`
 

@@ -6869,8 +6869,8 @@ action_manual() {
   manual_file="$(dispatcher_resource docs/index.html)" || return 1
 
   if [ ! -r "$manual_file" ]; then
-    kdialog --title "KIM6 — User Manual" --error \
-      "The installed KIM6 manual is missing."
+    kdialog --title "KIM6 — User Guide" --error \
+      "The installed KIM6 User Guide is missing."
     return 1
   fi
 
@@ -6893,8 +6893,8 @@ action_manual() {
     return $?
   fi
 
-  kdialog --title "KIM6 — User Manual" --error \
-    "Unable to open the manual. Neither a working browser nor the internal viewer is available."
+  kdialog --title "KIM6 — User Guide" --error \
+    "Unable to open the User Guide. Neither a working browser nor the internal viewer is available."
   return 1
 }
 
@@ -8684,7 +8684,7 @@ Commands:
       embedded ICC profile when the selected output format supports it.
 
   about | license | manual
-      Show About information or open the installed License and Manual.
+      Show About information or open the installed License and User Guide.
 
 Environment:
   KIM_POLICY=create

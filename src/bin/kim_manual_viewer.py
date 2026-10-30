@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""KIM6 offline HTML manual viewer.
+"""KIM6 offline HTML User Guide viewer.
 
 Uses the installed documentation without requiring a web browser.
-Relative HTML links and images resolve from the installed manual.
+Relative HTML links and images resolve from the installed User Guide.
 """
 
 import sys
@@ -27,7 +27,7 @@ def main():
 
     if not manual.is_file():
         print(
-            f"KIM6 manual not found: {manual}",
+            f"KIM6 User Guide not found: {manual}",
             file=sys.stderr,
         )
         return 1
@@ -35,7 +35,7 @@ def main():
     app = QApplication(sys.argv)
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — User Manual")
+    dialog.setWindowTitle("KIM6 — User Guide")
     dialog.resize(1000, 760)
 
     layout = QVBoxLayout(dialog)
@@ -43,7 +43,7 @@ def main():
     browser = QTextBrowser()
     browser.setOpenExternalLinks(True)
     browser.setSearchPaths([str(manual.parent)])
-    # QTextBrowser cannot faithfully render the full HTML manual.
+    # QTextBrowser cannot faithfully render the full HTML User Guide.
     # Use the installed Markdown guide for a readable fallback.
     markdown = manual.parent.parent / "README.md"
 
@@ -75,8 +75,8 @@ def main():
     if not browser.toPlainText().strip():
         QMessageBox.critical(
             dialog,
-            "KIM6 Manual",
-            "The HTML manual could not be displayed.",
+            "KIM6 User Guide",
+            "The User Guide could not be displayed.",
         )
         return 1
 

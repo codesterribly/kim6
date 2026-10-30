@@ -110,14 +110,14 @@ def render(source, names):
   <header class="topbar">
     <div class="topbar-inner page-width">
       <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
-      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
   <div class="reference-layout page-width">
     <aside class="reference-sidebar" aria-label="Documentation sections">
       <p class="nav-heading">REFERENCE</p>
       <nav aria-label="Reference pages">{links}</nav>
-      <a class="back-link" href="../index.html">← Back to the visual guide</a>
+      <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
       <div class="reference-source">KIM6 DOCUMENTATION · {source_label}</div>
@@ -126,7 +126,7 @@ def render(source, names):
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to the user guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>
 '''

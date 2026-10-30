@@ -21,7 +21,7 @@ Exec=kim_all license
 
 [Desktop Action 04Manual]
 Icon=help-contents
-_Name=KIM6 Manual
+_Name=KIM6 User Guide
 Exec=kim_all manual
 
 [Desktop Action 01Settings]
