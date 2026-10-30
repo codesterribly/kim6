@@ -103,7 +103,7 @@
         </div>
         <div class="notice notice-info">
           <span class="notice-symbol" aria-hidden="true">i</span>
-          <p>New to KIM6? Choose <strong>Create new files (recommended; originals untouched)</strong>. A saved <code>KIM_POLICY=overwrite</code> value no longer skips the prompt: only <code>create</code> and <code>prompt</code> are supported. Rotation, EXIF auto-orientation, and flips modify originals, so they are refused under <code>create</code> and require separate confirmation under <code>prompt</code>. <a href="#file-handling">How file handling works</a>.</p>
+          <p>New to KIM6? Choose <strong>Create new files (recommended; originals untouched)</strong>. Create mode publishes separate files, including rotated or flipped copies. Replacing an original requires choosing Overwrite and approving a second confirmation. <a href="#file-handling">How file handling works</a>.</p>
         </div>
       </section>
 
@@ -137,7 +137,7 @@
             <h3>Resize a photo</h3>
             <p>Fit a photo inside a maximum width and height without cropping its proportions. This preset can enlarge smaller images; percentage resize supports 1–1000%.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">Compress, resize and web export <span aria-hidden="true">›</span> <strong>Resize (1600x1600 pixels)</strong></div>
+            <div class="menu-path">Resize/Rotate <span aria-hidden="true">›</span> <strong>Resize to 1600 × 1600</strong></div>
             <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_resized.jpg</strong></div>
           </article>
           <article class="task-card">
@@ -145,7 +145,7 @@
             <h3>Compress a JPEG</h3>
             <p>Create a JPEG using a chosen quality setting. Lower quality may reduce file size, but can lose detail. Custom compression also offers progressive/baseline scans and Huffman optimization.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">JPEG compression <span aria-hidden="true">›</span> <strong>JPEG quality: 70%</strong></div>
+            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Compress Recommended</strong></div>
             <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.jpg</strong></div>
           </article>
           <article class="task-card">
@@ -153,7 +153,7 @@
             <h3>Convert an image</h3>
             <p>Convert between supported formats, including optional JPEG XL, JPEG 2000, AVIF and HEIC/HEIF delegates. JPEG is lossy and cannot preserve transparent PNG areas; codec support is checked before publication.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">Convert and transform <span aria-hidden="true">›</span> <strong>Convert to JPEG</strong></div>
+            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Convert to JPEG</strong></div>
             <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.jpg</strong></div>
           </article>
           <article class="task-card">
@@ -161,7 +161,7 @@
             <h3>Process several files</h3>
             <p>Select several photos and apply the same action. Finished outputs remain available if a later item fails.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">Compress, resize and web export <span aria-hidden="true">›</span> <strong>Resize (800x800 pixels)</strong></div>
+            <div class="menu-path">Resize/Rotate <span aria-hidden="true">›</span> <strong>Resize to 1280 × 1280</strong></div>
             <div class="output"><span>3 selected photos</span><span class="output-arrow" aria-hidden="true">→</span><strong>3 resized files</strong></div>
           </article>
         </div>
@@ -185,7 +185,7 @@
         <div class="split-panel">
           <div>
             <h3>Remove GPS coordinates</h3>
-            <p>Select <strong>Publish and organize › Remove GPS coordinates…</strong> to target recognized GPS fields without removing all other metadata.</p>
+            <p>Select <strong>Organize/Metadata › Strip GPS Metadata…</strong> to target recognized GPS fields without removing all other metadata.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
             <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
           </div>
@@ -257,7 +257,7 @@
         <div class="reference-list">
           <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 108 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 94 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/commandconfig.html"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/FORMATS.html"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/DEVELOPMENT.html"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>

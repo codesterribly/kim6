@@ -14,11 +14,11 @@ Select one or more photographs in Dolphin, right-click, and choose a KIM6 action
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
-| Resize a photograph | KIM6 — Compress, resize and web export → Resize (1600x1600 pixels) | `lake_resized.jpg` |
-| Compress a JPEG | KIM6 — JPEG compression → JPEG quality: 70% | `lake_compressed.jpg` |
-| Convert PNG to JPEG | KIM6 — Convert and transform → Convert to JPEG | `garden.jpg` |
-| Remove GPS coordinates | KIM6 — Publish and organize → Remove GPS coordinates… | `trip_gps.jpg` |
-| Resize several photographs | KIM6 — Compress, resize and web export → Resize (800x800 pixels) | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
+| Resize a photograph | KIM6 — Resize/Rotate → Resize to 1600 × 1600 | `lake_resized.jpg` |
+| Compress a JPEG | KIM6 — Convert/Compress → Compress Recommended | `lake_compressed.jpg` |
+| Convert PNG to JPEG | KIM6 — Convert/Compress → Convert to JPEG | `garden.jpg` |
+| Remove GPS coordinates | KIM6 — Organize/Metadata → Strip GPS Metadata… | `trip_gps.jpg` |
+| Resize several photographs | KIM6 — Resize/Rotate → Resize to 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
 
 These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
 

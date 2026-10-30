@@ -48,78 +48,219 @@ fi
   echo "install.sh: prefix contains a newline" >&2
   exit 2
 }
-# Check runtime tools before installation.
-# Missing tools are reported; packages are never installed automatically.
-# Report runtime dependencies before installing KIM6.
-# Optional format support is checked by the dispatcher when needed.
+# Display required and optional dependencies without installing packages.
+# Distribution-specific package names are suggestions, not guarantees.
 kim6_report_dependencies() {
-  local missing=0
-  local tool package purpose entry command_path
-  local -a packages=()
+  local os_name='Linux' os_id='' os_like='' manager=''
+  local tool label purpose path package group entry
+  local -a installed=() missing=() optional=() packages=()
+  local -a optional_packages=()
+  local -A seen_packages=() seen_optional_packages=()
+
+  if [ -r /etc/os-release ]; then
+    . /etc/os-release
+    os_name="${PRETTY_NAME:-Linux}"
+    os_id="${ID:-}"
+    os_like="${ID_LIKE:-}"
+  fi
+
+  case " $os_id $os_like " in
+    *ubuntu*|*debian*) manager=apt ;;
+    *fedora*|*rhel*|*centos*) manager=dnf ;;
+    *arch*|*manjaro*) manager=pacman ;;
+    *suse*|*opensuse*) manager=zypper ;;
+  esac
+
+  kim6_suggest_package() {
+    local name="$1"
+    case "$manager:$name" in
+      apt:magick) echo imagemagick-7.q16 ;;
+      apt:exiftool) echo libimage-exiftool-perl ;;
+      apt:qdbus) echo qdbus-qt6 ;;
+      apt:xdg-open) echo xdg-utils ;;
+      apt:qtwidgets) echo python3-pyside6.qtwidgets ;;
+      apt:intltool-merge) echo intltool ;;
+      apt:msgfmt) echo gettext ;;
+      apt:kbuildsycoca6) echo libkf6service-bin ;;
+
+      dnf:magick) echo ImageMagick ;;
+      dnf:exiftool) echo perl-Image-ExifTool ;;
+      dnf:qdbus) echo qt6-qttools ;;
+      dnf:xdg-open) echo xdg-utils ;;
+      dnf:qtwidgets) echo python3-pyside6 ;;
+      dnf:intltool-merge) echo intltool ;;
+      dnf:msgfmt) echo gettext ;;
+      dnf:kbuildsycoca6) echo kf6-kservice ;;
+
+      pacman:magick) echo imagemagick ;;
+      pacman:exiftool) echo perl-image-exiftool ;;
+      pacman:qdbus) echo qt6-tools ;;
+      pacman:xdg-open) echo xdg-utils ;;
+      pacman:qtwidgets) echo pyside6 ;;
+      pacman:intltool-merge) echo intltool ;;
+      pacman:msgfmt) echo gettext ;;
+      pacman:kbuildsycoca6) echo kservice ;;
+
+      zypper:magick) echo ImageMagick ;;
+      zypper:exiftool) echo perl-Image-ExifTool ;;
+      zypper:qdbus) echo libqt6-qttools ;;
+      zypper:xdg-open) echo xdg-utils ;;
+      zypper:qtwidgets) echo python3-PySide6 ;;
+      zypper:intltool-merge) echo intltool ;;
+      zypper:msgfmt) echo gettext-tools ;;
+      zypper:kbuildsycoca6) echo kf6-kservice ;;
+
+      *) echo "$name" ;;
+    esac
+  }
 
   echo
   echo "======================================================================"
   echo " KIM6 DEPENDENCY CHECK"
   echo "======================================================================"
-  echo
+  printf 'System: %s\n' "$os_name"
+  printf 'Package manager: %s\n' "${manager:-unknown}"
 
-  while IFS='|' read -r tool package purpose; do
+  while IFS='|' read -r group tool label purpose; do
     [ -n "$tool" ] || continue
+    path=''
 
-    command_path=''
+    case "$tool" in
+      qdbus)
+        path="$(type -P qdbus 2>/dev/null || true)"
+        [ -n "$path" ] || path="$(type -P qdbus6 2>/dev/null || true)"
+        if [ -z "$path" ] && [ -x /usr/lib/qt6/bin/qdbus ]; then
+          path=/usr/lib/qt6/bin/qdbus
+        fi
+        ;;
+      qtwidgets)
+        if python3 -c 'from PySide6.QtWidgets import QApplication, QDialog' \
+             >/dev/null 2>&1; then
+          path="$(command -v python3)"
+          path="$path (PySide6)"
+        fi
+        ;;
+      *)
+        path="$(command -v "$tool" 2>/dev/null || true)"
+        ;;
+    esac
 
-    if [ "$tool" = qdbus ]; then
-      command_path="$(type -P qdbus 2>/dev/null || true)"
-      [ -n "$command_path" ] ||
-        command_path="$(type -P qdbus6 2>/dev/null || true)"
-      [ -n "$command_path" ] ||
-        { [ ! -x /usr/lib/qt6/bin/qdbus ] ||
-          command_path=/usr/lib/qt6/bin/qdbus; }
+    if [ -n "$path" ]; then
+      if [ "$group" = required ]; then
+        installed+=("$label|$path|$purpose")
+      else
+        optional+=("installed|$label|$path|$purpose")
+      fi
     else
-      command_path="$(command -v "$tool" 2>/dev/null || true)"
+      package="$(kim6_suggest_package "$tool")"
+      if [ "$group" = required ]; then
+        missing+=("$label|$package|$purpose")
+        if [ -z "${seen_packages[$package]+yes}" ]; then
+          packages+=("$package")
+          seen_packages["$package"]=1
+        fi
+      else
+        optional+=("missing|$label|$package|$purpose")
+      fi
     fi
-
-    if [ -n "$command_path" ]; then
-      printf '  OK:      %-12s %-25s # %s\n' \
-        "$tool" "$command_path" "$purpose"
-    else
-      printf '  MISSING: %-12s %-25s # %s\n' \
-        "$tool" "package: $package" "$purpose"
-      missing=1
-      packages+=("$package")
-    fi
-
   done <<'KIM6_DEPENDENCIES'
-magick|imagemagick-7.q16|image conversion, resize, compression, and creation
-exiftool|libimage-exiftool-perl|EXIF, timestamps, creator, copyright, and metadata
-kdialog|kdialog|KDE prompts, file pickers, confirmations, and progress
-qdbus|qdbus-qt6|KDE integration and progress communication
-ffmpeg|ffmpeg|video processing, frames, and animation support
-ffprobe|ffmpeg|inspecting video and audio streams
-python3|python3|Qt dialogs and supporting image/metadata helpers
-xdg-open|xdg-utils|opening generated documents, galleries, and outputs
+required|magick|ImageMagick|Image conversion, resize and compression
+required|exiftool|ExifTool|EXIF and metadata operations
+required|kdialog|KDialog|KDE dialogs and progress
+required|qdbus|QtDBus|KDE desktop integration
+required|ffmpeg|FFmpeg|Video and animation processing
+required|ffprobe|FFprobe|Video and audio inspection
+required|python3|Python 3|Application helpers
+required|qtwidgets|PySide6 Qt Widgets|Graphical configuration dialogs
+required|xdg-open|xdg-open|Opening generated output
+required|intltool-merge|intltool|Dolphin menu generation
+optional|pandoc|Pandoc|HTML manual generation
+optional|msgfmt|gettext tools|Translation catalog compilation
+optional|kbuildsycoca6|KDE service cache|Desktop service cache refresh
 KIM6_DEPENDENCIES
 
   echo
+  echo "Installed"
+  echo "---------"
+  for entry in "${installed[@]}"; do
+    IFS='|' read -r label path purpose <<< "$entry"
+    printf '  %-21s %-30s %s\n' "$label" "$path" "$purpose"
+  done
 
-  if [ "$missing" -ne 0 ]; then
-    echo "WARNING: Some KIM6 functionality will be unavailable."
-    echo "Missing tools and their affected features are listed above."
+  if [ "${#missing[@]}" -gt 0 ]; then
     echo
-    echo "Install missing primary dependencies with:"
-    printf '  sudo apt install'
+    echo "Missing Required"
+    echo "----------------"
+    for entry in "${missing[@]}"; do
+      IFS='|' read -r label package purpose <<< "$entry"
+      printf '  %-21s %-30s %s\n' "$label" "Package: $package" "$purpose"
+    done
+
+    echo
+    echo "Suggested installation:"
+    case "$manager" in
+      apt) printf '  sudo apt install' ;;
+      dnf) printf '  sudo dnf install' ;;
+      pacman) printf '  sudo pacman -S' ;;
+      zypper) printf '  sudo zypper install' ;;
+      *) printf '  Use your distribution package manager for:' ;;
+    esac
     printf ' %s' "${packages[@]}"
     printf '\n'
-  else
-    echo "PASS: All primary runtime commands are available."
+    echo "Package availability and names may vary by distribution release."
   fi
 
   echo
-  echo "Optional encoders, PDF support, and format-specific capabilities"
-  echo "are checked by their corresponding KIM6 actions."
+  echo "Optional"
+  echo "--------"
+  for entry in "${optional[@]}"; do
+    IFS='|' read -r group label path purpose <<< "$entry"
+    if [ "$group" = installed ]; then
+      printf '  %-21s %-30s %s\n' "$label" "$path" "$purpose"
+    else
+      printf '  %-21s %-30s %s\n' "$label" "Not installed" "$purpose"
 
-  echo
-  echo "======================================================================"
+      case "$label" in
+        Pandoc) tool=pandoc ;;
+        "gettext tools") tool=msgfmt ;;
+        "KDE service cache") tool=kbuildsycoca6 ;;
+        *) continue ;;
+      esac
+
+      package="$(kim6_suggest_package "$tool")"
+
+      if [ -z "${seen_optional_packages[$package]+yes}" ]; then
+        optional_packages+=("$package")
+        seen_optional_packages["$package"]=1
+      fi
+    fi
+  done
+
+  if [ "${#optional_packages[@]}" -gt 0 ]; then
+    echo
+    printf 'Suggested optional packages for %s:\n' "$os_name"
+
+    case "$manager" in
+      apt) printf '  sudo apt install' ;;
+      dnf) printf '  sudo dnf install' ;;
+      pacman) printf '  sudo pacman -S' ;;
+      zypper) printf '  sudo zypper install' ;;
+      *) printf '  Packages:' ;;
+    esac
+
+    printf ' %s' "${optional_packages[@]}"
+    printf '\n'
+    echo "Optional packages are not required for installation."
+  fi
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    echo
+    echo "PASS: All required dependencies available."
+  else
+    echo
+    echo "WARNING: Some required dependencies are unavailable."
+  fi
+
 }
 
 kim6_report_dependencies
@@ -303,8 +444,6 @@ if [ -f "$SOURCE_DIR/tools/build_manual.py" ]; then
       python3 "$SOURCE_DIR/tools/build_manual.py" --check ||
         die "HTML documentation is stale; regenerate it before installing"
     fi
-  else
-    echo "install.sh: using bundled HTML documentation (Pandoc/Python unavailable)." >&2
   fi
 fi
 
@@ -467,4 +606,31 @@ KIM6_PY_CHECK
   fi
 done
 
-printf '\nKIM6 installed in %s.\nPlease restart Dolphin.\n' "$PREFIX"
+echo
+echo "======================================================================"
+echo " KIM6 INSTALLATION COMPLETE"
+echo "======================================================================"
+printf 'Installed to: %s\n' "$PREFIX"
+
+echo
+echo "VERIFIED DESKTOP MENUS"
+echo "----------------------"
+
+menu_count=0
+for name in "${menu_names[@]}"; do
+  menu="$PREFIX/$name"
+
+  if [ ! -f "$menu" ] || [ -L "$menu" ] ||
+     ! grep -Fxq 'X-KIM6-Managed=true' "$menu" ||
+     ! grep -Fq 'kim6/bin/kim_all' "$menu"; then
+    die "installed menu is missing or invalid: $menu"
+  fi
+
+  printf '  %s\n' "$name"
+  ((menu_count += 1))
+done
+
+printf 'PASS: %d desktop menus verified.\n' "$menu_count"
+echo "PASS: Six Qt helpers verified."
+echo "PASS: Bundled HTML manual installed."
+echo "Restart Dolphin to load the service menus."

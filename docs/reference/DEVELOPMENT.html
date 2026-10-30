@@ -48,7 +48,7 @@
 </tr>
 <tr>
 <td><code>src/kim_*.desktop.in</code></td>
-<td>Five KDE Dolphin service-menu definitions containing 108 actions.</td>
+<td>Eight KDE Dolphin service-menu definitions containing 94 executable actions.</td>
 </tr>
 <tr>
 <td><code>src/gallery/</code></td>
@@ -93,9 +93,9 @@
 <li><code>index.html</code> - HTML user manual with CSS styling (<code>work.css</code>).</li>
 </ul>
 <h2 id="dolphin-service-menus">Dolphin Service Menus</h2>
-<p>KIM6 uses five KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
+<p>KIM6 uses eight KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
 <p>For example:</p>
-<pre class="sh"><code>kim_all compress --quality 70 -- %F</code></pre>
+<pre class="sh"><code>kim_all compress --recommended -- %F</code></pre>
 <p>The <code>%F</code> placeholder supplies the selected file paths. The <code>--</code> separator marks the end of command options so filenames beginning with a hyphen are handled correctly.</p>
 <p>The service-menu definitions use KDE's <code>Type=Service</code>, <code>X-KDE-ServiceTypes=KonqPopupMenu/Plugin</code>, <code>X-KDE-Protocol=file</code>, and <code>X-KDE-Submenu</code> entries.</p>
 <p>When modifying menu actions:</p>
@@ -215,12 +215,12 @@ git --no-pager diff --check</code></pre>
 <h2 id="installation-and-release-testing">Installation and Release Testing</h2>
 <p>The installation scripts support user, system-wide, and custom installation directories.</p>
 <p>The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.</p>
-<p>The uninstaller removes recognized KIM6 files without deleting unrelated files. Existing installations from older versions are also supported where their files can be identified.</p>
+<p>The uninstaller removes recognized KIM6-owned files and leaves unrelated files in place.</p>
 <p>Installation updates are performed one file at a time. An interrupted installation can be completed by running <code>install.sh</code> again.</p>
 <p>Before preparing a release:</p>
 <ol type="1">
 <li>Run the complete test suite and static checks.</li>
-<li>Verify all five Dolphin service menus and their 108 action mappings.</li>
+<li>Verify all eight Dolphin service-menu files and their 94 executable action mappings.</li>
 <li>Test installation, upgrading, and uninstallation using temporary directories.</li>
 <li>Test the menus in Dolphin on a supported KDE Plasma system.</li>
 <li>Review the installation instructions and user documentation.</li>

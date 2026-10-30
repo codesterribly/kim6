@@ -12,7 +12,7 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | Five KDE Dolphin service-menu definitions containing 108 actions. |
+| `src/kim_*.desktop.in` | Eight KDE Dolphin service-menu definitions containing 94 executable actions. |
 | `src/gallery/` | Templates used to generate HTML photo galleries. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
@@ -33,12 +33,12 @@ The `docs/` directory contains additional references:
 
 ## Dolphin Service Menus
 
-KIM6 uses five KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
+KIM6 uses eight KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
 For example:
 
 ```sh
-kim_all compress --quality 70 -- %F
+kim_all compress --recommended -- %F
 ```
 
 The `%F` placeholder supplies the selected file paths. The `--` separator marks the end of command options so filenames beginning with a hyphen are handled correctly.
@@ -251,14 +251,14 @@ The installation scripts support user, system-wide, and custom installation dire
 
 The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.
 
-The uninstaller removes recognized KIM6 files without deleting unrelated files. Existing installations from older versions are also supported where their files can be identified.
+The uninstaller removes recognized KIM6-owned files and leaves unrelated files in place.
 
 Installation updates are performed one file at a time. An interrupted installation can be completed by running `install.sh` again.
 
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all five Dolphin service menus and their 108 action mappings.
+2. Verify all eight Dolphin service-menu files and their 94 executable action mappings.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.

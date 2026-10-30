@@ -30,7 +30,7 @@
       <div class="reference-source">KIM6 DOCUMENTATION · INSTALL.md</div>
       <article class="markdown-body">
 <h1 id="install-kim6">Install KIM6</h1>
-<p>KIM6 adds five image and video service menus to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
+<p>KIM6 adds eight image and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
 <h2 id="install-through-dolphin">Install through Dolphin</h2>
 <p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIM6.</p>
 <p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
@@ -50,7 +50,7 @@
 <p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
-<p>The installer adds KIM6's program files and five service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
+<p>The installer adds KIM6's program files and eight service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
 <p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
 <p>To check the installed program without opening Dolphin:</p>
 <pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all&quot; --help</code></pre>
@@ -63,7 +63,7 @@
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>
-<p>The uninstaller removes the five recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
+<p>The uninstaller removes the eight recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
 <h2 id="advanced-installation-locations">Advanced installation locations</h2>
 <p>To choose a service-menu folder explicitly, use <code>--prefix</code>:</p>
 <pre class="sh"><code>./install.sh --prefix &quot;$HOME/.local/share/kio/servicemenus&quot;</code></pre>
