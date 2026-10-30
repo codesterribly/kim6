@@ -1,0 +1,57 @@
+[Desktop Entry]
+Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/*;
+X-KDE-Protocol=file
+Actions=0101WebExport;0102WebExport;0103WebExport;0201WebExport;0202WebExport;0203WebExport;0301WebExport;0302WebExport;0303WebExport;0401WebExport;0402WebExport;0403WebExport;
+_X-KDE-Submenu=KIM6 — Web Export
+X-KIM6-Managed=true
+
+[Desktop Action 0101WebExport]
+_Name=Export WebP to 1600 × 1600
+Exec=kim_all webexport --size 1600x1600 --format webp -- %F
+
+[Desktop Action 0102WebExport]
+_Name=Export WebP to 800 × 800
+Exec=kim_all webexport --size 800x800 --format webp -- %F
+
+[Desktop Action 0103WebExport]
+_Name=Export WebP Thumbnail (128 × 128)
+Exec=kim_all webexport --size 128x128 --format webp -- %F
+
+[Desktop Action 0201WebExport]
+_Name=Export AVIF to 1600 × 1600
+Exec=kim_all webexport --size 1600x1600 --format avif -- %F
+
+[Desktop Action 0202WebExport]
+_Name=Export AVIF to 800 × 800
+Exec=kim_all webexport --size 800x800 --format avif -- %F
+
+[Desktop Action 0203WebExport]
+_Name=Export AVIF Thumbnail (128 × 128)
+Exec=kim_all webexport --size 128x128 --format avif -- %F
+
+[Desktop Action 0301WebExport]
+_Name=Export JPEG to 1600 × 1600
+Exec=kim_all webexport --size 1600x1600 --format jpg -- %F
+
+[Desktop Action 0302WebExport]
+_Name=Export JPEG to 800 × 800
+Exec=kim_all webexport --size 800x800 --format jpg -- %F
+
+[Desktop Action 0303WebExport]
+_Name=Export JPEG Thumbnail (128 × 128)
+Exec=kim_all webexport --size 128x128 --format jpg -- %F
+
+[Desktop Action 0401WebExport]
+_Name=Export PNG to 1600 × 1600
+Exec=kim_all webexport --size 1600x1600 --format png -- %F
+
+[Desktop Action 0402WebExport]
+_Name=Export PNG to 800 × 800
+Exec=kim_all webexport --size 800x800 --format png -- %F
+
+[Desktop Action 0403WebExport]
+_Name=Export PNG Thumbnail (128 × 128)
+Exec=kim_all webexport --size 128x128 --format png -- %F

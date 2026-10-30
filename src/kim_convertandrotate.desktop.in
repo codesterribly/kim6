@@ -2,88 +2,68 @@
 Type=Service
 Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
-MimeType=image/*;
+MimeType=image/*;image/jpeg;image/png;image/webp;image/avif;
 X-KDE-Protocol=file
-Actions=ConvertJPG;ConvertPNG;ConvertWEBP;ConvertTIFF;ConvertPDF;ConvertHEIC;ConvertAVIF;ConvertGIF;ConvertBMP;ConvertJXL;ConvertJP2Lossless;ConvertJP2Lossy;ConvertCustom;Rotateexif;Rotate90;Rotate180;Rotate270;RotateCustom;FlipVertical;FlipHorizontal;
-_X-KDE-Submenu=KIM6 — Convert and transform
+Actions=01ConvertAVIF;02ConvertBMP;03ConvertGIF;04ConvertHEIC;05ConvertJP2Lossless;06ConvertJP2Lossy;07ConvertJPG;08ConvertJXL;09ConvertPDF;10ConvertPNG;11ConvertTIFF;12ConvertWEBP;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
+_X-KDE-Submenu=KIM6 — Convert/Compress
 X-KIM6-Managed=true
 
-[Desktop Action ConvertJPG]
-_Name=Convert to JPEG
-Exec=kim_all convert --format jpg -- %F
-
-[Desktop Action ConvertPNG]
-_Name=Convert to PNG
-Exec=kim_all convert --format png -- %F
-
-[Desktop Action ConvertGIF]
-_Name=Convert to GIF
-Exec=kim_all convert --format gif -- %F
-
-[Desktop Action ConvertBMP]
-_Name=Convert to BMP5 bitmap
-Exec=kim_all convert --format bmp --bmp5 -- %F
-
-[Desktop Action ConvertTIFF]
-_Name=Convert to TIFF
-Exec=kim_all convert --format tiff -- %F
-
-[Desktop Action ConvertPDF]
-_Name=Convert to PDF
-Exec=kim_all convert --format pdf -- %F
-
-[Desktop Action ConvertWEBP]
-_Name=Convert to WebP
-Exec=kim_all convert --format webp -- %F
-
-[Desktop Action ConvertAVIF]
+[Desktop Action 01ConvertAVIF]
 _Name=Convert to AVIF
 Exec=kim_all convert --format avif -- %F
 
-[Desktop Action ConvertHEIC]
+[Desktop Action 02ConvertBMP]
+_Name=Convert to BMP
+Exec=kim_all convert --format bmp --bmp5 -- %F
+
+[Desktop Action 03ConvertGIF]
+_Name=Convert to GIF
+Exec=kim_all convert --format gif -- %F
+
+[Desktop Action 04ConvertHEIC]
 _Name=Convert to HEIC/HEIF
 Exec=kim_all convert --format heic -- %F
 
-[Desktop Action ConvertJXL]
+[Desktop Action 05ConvertJP2Lossless]
+_Name=Convert to JPEG 2000 (Lossless)
+Exec=kim_all convert --format jp2 --jp2-mode lossless -- %F
+
+[Desktop Action 06ConvertJP2Lossy]
+_Name=Convert to JPEG 2000 (Lossy)
+Exec=kim_all convert --format jp2 --jp2-mode lossy -- %F
+
+[Desktop Action 07ConvertJPG]
+_Name=Convert to JPEG
+Exec=kim_all convert --format jpg -- %F
+
+[Desktop Action 08ConvertJXL]
 _Name=Convert to JPEG XL
 Exec=kim_all convert --format jxl -- %F
 
-[Desktop Action ConvertJP2Lossless]
-_Name=Convert to JPEG 2000 (lossless)
-Exec=kim_all convert --format jp2 --jp2-mode lossless -- %F
+[Desktop Action 09ConvertPDF]
+_Name=Convert to PDF
+Exec=kim_all convert --format pdf -- %F
 
-[Desktop Action ConvertJP2Lossy]
-_Name=Convert to JPEG 2000 (lossy)
-Exec=kim_all convert --format jp2 --jp2-mode lossy -- %F
+[Desktop Action 10ConvertPNG]
+_Name=Convert to PNG
+Exec=kim_all convert --format png -- %F
 
-[Desktop Action ConvertCustom]
-_Name=Convert to custom format…
-Exec=kim_all convert --custom-format -- %F
+[Desktop Action 11ConvertTIFF]
+_Name=Convert to TIFF
+Exec=kim_all convert --format tiff -- %F
 
-[Desktop Action Rotateexif]
-_Name=Auto-rotate using EXIF
-Exec=kim_all rotate --exif -- %F
+[Desktop Action 12ConvertWEBP]
+_Name=Convert to WebP
+Exec=kim_all convert --format webp -- %F
 
-[Desktop Action Rotate90]
-_Name=Rotate 90°
-Exec=kim_all rotate --angle 90 -- %F
+[Desktop Action 2001CompressRecommended]
+_Name=Compress Recommended
+Exec=kim_all compress --recommended -- %F
 
-[Desktop Action Rotate180]
-_Name=Rotate 180°
-Exec=kim_all rotate --angle 180 -- %F
+[Desktop Action 2102CompressMaximum]
+_Name=Compress Maximum
+Exec=kim_all compress --maximum -- %F
 
-[Desktop Action Rotate270]
-_Name=Rotate 270°
-Exec=kim_all rotate --angle 270 -- %F
-
-[Desktop Action RotateCustom]
-_Name=Rotate custom angle…
-Exec=kim_all rotate --custom -- %F
-
-[Desktop Action FlipVertical]
-_Name=Flip vertically
-Exec=kim_all flipflop flip -- %F
-
-[Desktop Action FlipHorizontal]
-_Name=Flip horizontally
-Exec=kim_all flipflop flop -- %F
+[Desktop Action 2203CompressCustom]
+_Name=Compress Custom
+Exec=kim_all compress --custom -- %F

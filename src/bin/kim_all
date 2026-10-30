@@ -120,7 +120,7 @@ load_kim_config() {
     fi
   fi
 
-  : "${KIM_WEB_QUALITY:=75}"
+  : "${KIM_WEB_QUALITY:=95}"
 
   # Webexport output format (create mode).
   # Env: KIM_WEB_FORMAT=jpg|webp|avif|keep
@@ -258,8 +258,8 @@ choose_output_mode() {
   fi
 
   choice="$(kdialog --title "$title" --radiolist "$prompt" \
-    create "$(gettext 'Create new files (recommended; originals untouched)')" on \
-    review "$(gettext 'Review overwrite options...')" off)" || {
+    create "$(gettext 'Create new files (originals untouched)')" on \
+    review "$(gettext 'Overwrite originals (confirmation required)')" off)" || {
     printf '%s\n' cancel
     return 0
   }
@@ -319,8 +319,8 @@ confirm_inplace_overwrite() {
 
   choice="$(kdialog --title "$(gettext 'Kim')" --radiolist \
     "$(gettext 'This action replaces selected original photographs, not copies.')$(printf '\n%s %s\n%s %s' "$(gettext 'Action:')" "$action" "$(gettext 'Selected files:')" "$count")" \
-    cancel "$(gettext 'Keep originals unchanged (recommended)')" on \
-    review "$(gettext 'Review original-file overwrite...')" off)" || return 1
+    cancel "$(gettext 'Keep originals unchanged')" on \
+    review "$(gettext 'Overwrite originals (confirmation required)')" off)" || return 1
 
   [ "$choice" = review ] || return 1
 
@@ -864,6 +864,26 @@ progress_parse_ref() {
   parsed_parts=("$service" "$object")
 }
 
+# Locate Qt 6 D-Bus without requiring a legacy qdbus executable.
+# PATH executables take precedence to preserve isolated test adapters.
+kim6_qdbus_available() {
+  type -P qdbus >/dev/null 2>&1 ||
+    type -P qdbus6 >/dev/null 2>&1 ||
+    [ -x /usr/lib/qt6/bin/qdbus ]
+}
+
+qdbus() {
+  if type -P qdbus >/dev/null 2>&1; then
+    command qdbus "$@"
+  elif type -P qdbus6 >/dev/null 2>&1; then
+    command qdbus6 "$@"
+  elif [ -x /usr/lib/qt6/bin/qdbus ]; then
+    /usr/lib/qt6/bin/qdbus "$@"
+  else
+    return 127
+  fi
+}
+
 progress_call() {
   local ref="$1"
   shift
@@ -981,7 +1001,7 @@ progress_bus_failure() {
 progress_open() {
   local max="$1" text="$2" ref rc=0
   local -a parts=()
-  if ! command -v kdialog >/dev/null 2>&1 || ! command -v qdbus >/dev/null 2>&1; then
+  if ! command -v kdialog >/dev/null 2>&1 || ! kim6_qdbus_available; then
     progress_error "$(gettext 'KDialog or qdbus is unavailable. Processing stopped.')"
     return 1
   fi
@@ -1343,11 +1363,13 @@ action_album() {
 # - KIM_POLICY=overwrite   forces Overwrite mode
 
 action_compress() {
-  local QUALITY='' outdir='' custom=false jpeg_scan='' jpeg_optimize=false
+  local QUALITY='' outdir='' custom=false preset='' jpeg_scan='' jpeg_optimize=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --recommended) preset=recommended; shift ;;
+        --maximum) preset=maximum; shift ;;
         --quality)
           [ "$#" -ge 2 ] || die "compress: --quality needs a value"
           QUALITY="$2"
@@ -1369,20 +1391,7 @@ action_compress() {
         *) die "compress: unknown option $1" ;;
       esac
     done
-    if [ "$custom" = true ]; then
-      [ -z "$QUALITY" ] || die "compress: use --custom or --quality, not both"
-      QUALITY="$(kdialog --inputbox "$(gettext 'JPEG quality (1-100):')" 60)" || return 1
-      if [ -z "$jpeg_scan" ]; then
-        local scan_choice
-        scan_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'JPEG scan mode:')" progressive "$(gettext 'Progressive (current default)')" baseline "$(gettext 'Baseline')")" || return 1
-        [ "$scan_choice" != baseline ] || jpeg_scan=None
-      fi
-      if [ "$jpeg_optimize" != true ]; then
-        local optimize_choice
-        optimize_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Optimize JPEG Huffman coding?')" no "$(gettext 'No additional optimization')" yes "$(gettext 'Optimize coding tables; file-size reduction is not guaranteed')")" || return 1
-        [ "$optimize_choice" != yes ] || jpeg_optimize=true
-      fi
-    fi
+
   else
     QUALITY="${1:-}"
     outdir="${2:-}"
@@ -1390,19 +1399,44 @@ action_compress() {
     raw_files+=("$@")
   fi
 
-  [[ -n "$QUALITY" ]] || die "compress: missing quality"
-  [[ "$QUALITY" =~ ^[0-9]+$ ]] || die "compress: quality must be a number"
-  while [[ "$QUALITY" == 0* ]] && [ "${#QUALITY}" -gt 1 ]; do
-    QUALITY="${QUALITY#0}"
-  done
-  [ "${#QUALITY}" -le 3 ] || die "compress: quality must be between 1 and 100"
-  QUALITY=$((10#$QUALITY))
-  (( QUALITY >= 1 && QUALITY <= 100 )) || die "compress: quality must be between 1 and 100"
-
   local -a files=()
   collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
+
+  local first_format=''
+  first_format="$(identify -ping -format '%m' -- "${files[0]}" 2>/dev/null)" || return 1
+
+  if [ "$custom" = true ]; then
+    if [ "$first_format" = PNG ]; then
+      QUALITY="$(kdialog --inputbox         "$(gettext 'PNG compression level (0-9, lossless):')" 6)" || return 1
+      [[ "$QUALITY" =~ ^[0-9]$ ]] || {
+        progress_error "$(gettext 'PNG compression level must be 0-9.')"
+        return 1
+      }
+      # Preserve custom PNG level separately; a normal quality
+      # value is still needed for mixed-format selections.
+      local custom_png_level="$QUALITY"
+      QUALITY=85
+    else
+      QUALITY="$(kdialog --inputbox         "$(gettext 'Compression quality (1-100):')" 85)" || return 1
+    fi
+  elif [ "$preset" = maximum ]; then
+    QUALITY=70
+  elif [ "$preset" = recommended ]; then
+    QUALITY=85
+  fi
+
+  [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || {
+    progress_error "$(gettext 'Compression quality must be 1-100.')"
+    return 1
+  }
+  QUALITY=$((10#$QUALITY))
+  (( QUALITY >= 1 && QUALITY <= 100 )) || {
+    progress_error "$(gettext 'Compression quality must be 1-100.')"
+    return 1
+  }
+
   [ -n "$outdir" ] || outdir="${files[0]%/*}"
 
   local mode
@@ -1456,7 +1490,7 @@ action_compress() {
     input_info=""
     if [[ "$f" != *$'\n'* ]] &&
        input_info="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$f" 2>/dev/null)" &&
-       [[ "$input_info" =~ ^JPEG\ ([1-9][0-9]*)\ ([1-9][0-9]*)$ ]]; then
+       [[ "$input_info" =~ ^(JPEG|PNG|WEBP|AVIF)\ ([1-9][0-9]*)\ ([1-9][0-9]*)$ ]]; then
       :
     else
       report_fail "$f"
@@ -1484,11 +1518,38 @@ action_compress() {
       break
     fi
     rc=0
-    # Retain EXIF orientation and ICC interpretation without rotating pixels.
-    # EXIF is a container: finer-grained EXIF removal remains a policy decision.
-    local -a jpeg_options=(-interlace "${jpeg_scan:-Plane}" -quality "$QUALITY")
-    [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
-    magick -- "$f" +profile '!{icc,exif}' +set comment "${jpeg_options[@]}" "JPEG:$OUTTMP" >/dev/null 2>&1 || rc=$?
+    # Encode into the source format. Compression is not conversion.
+    # PNG remains lossless; JPEG/WebP/AVIF use their native encoders.
+    local input_kind="${input_info%% *}"
+    local -a encode_options=()
+
+    case "$input_kind" in
+      JPEG)
+        encode_options=(-interlace "${jpeg_scan:-Plane}" -quality "$QUALITY")
+        [ "$jpeg_optimize" != true ] ||
+          encode_options+=(-define jpeg:optimize-coding=true)
+        ;;
+      PNG)
+        local png_level=6
+        [ "$preset" != maximum ] || png_level=9
+        if [ "$custom" = true ]; then
+          if [ -n "${custom_png_level:-}" ]; then
+            png_level="$custom_png_level"
+          else
+            png_level=9
+          fi
+        fi
+        encode_options=(-define "png:compression-level=$png_level")
+        ;;
+      WEBP|AVIF)
+        encode_options=(-quality "$QUALITY")
+        ;;
+      *) rc=1 ;;
+    esac
+
+    if [ "$rc" -eq 0 ]; then
+      magick -- "$f" +profile '!{icc,exif}' +set comment         "${encode_options[@]}" "$input_kind:$OUTTMP"         >/dev/null 2>&1 || rc=$?
+    fi
     actual=""
     if [ "$rc" -eq 0 ] && [ -s "$OUTTMP" ]; then
       actual="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$OUTTMP" 2>/dev/null)" || rc=$?
@@ -2554,17 +2615,39 @@ action_contactsheet() {
   done
 
   if [ "$interactive" = true ]; then
-    paper="$(kdialog --radiolist "$(gettext 'Contact sheet paper:')" letter 'US Letter' on a4 'A4' off)" || return 1
-    orientation="$(kdialog --radiolist "$(gettext 'Contact sheet orientation:')" portrait 'Portrait' on landscape 'Landscape' off)" || return 1
-    grid="$(kdialog --radiolist "$(gettext 'Contact sheet layout:')" 4x5 'Compact (4 × 5)' on 3x4 'Spacious (3 × 4)' off 5x7 'Dense (5 × 7)' off)" || return 1
-    labels="$(kdialog --radiolist "$(gettext 'Contact sheet labels:')" both 'Number + filename' on number 'Number only' off filename 'Filename only' off none 'No labels' off)" || return 1
-    fit="$(kdialog --radiolist "$(gettext 'Contact sheet image placement:')" fit 'Fit (no crop)' on fill 'Fill (center crop)' off)" || return 1
-    background="$(kdialog --radiolist "$(gettext 'Contact sheet background:')" white 'White' on black 'Black' off)" || return 1
-    dpi="$(kdialog --radiolist "$(gettext 'Contact sheet print resolution:')" 300 '300 DPI (print)' on 150 '150 DPI (draft)' off)" || return 1
-    title="$(kdialog --inputbox "$(gettext 'Contact sheet heading:')" 'Contact Sheet')" || return 1
-  fi
+  # Selected Dolphin images are the inputs, without another picker.
+  [ "${#files[@]}" -gt 0 ] || {
+    progress_error "$(gettext 'Contact sheet: select images in Dolphin.')"
+    return 1
+  }
 
-  case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
+  local dialog_script settings_file
+  local -a settings=()
+
+  dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_contactsheet_dialog.py"
+  settings_file="$KIMDIR/contactsheet-settings"
+
+  python3 "$dialog_script" "$settings_file" "${files[@]}" || return 1
+
+  mapfile -d '' -t settings < "$settings_file"
+
+  [ "${#settings[@]}" -eq 9 ] || {
+    progress_error "$(gettext 'Contact sheet: invalid dialog settings.')"
+    return 1
+  }
+
+  paper="${settings[0]}"
+  orientation="${settings[1]}"
+  grid="${settings[2]}"
+  labels="${settings[3]}"
+  fit="${settings[4]}"
+  background="${settings[5]}"
+  dpi="${settings[6]}"
+  title="${settings[7]}"
+  requested="${settings[8]}"
+fi
+
+case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   case "$orientation" in portrait|landscape) ;; *) die 'contactsheet: invalid orientation' ;; esac
   case "$grid" in 3x4|4x5|5x7) ;; *) die 'contactsheet: invalid grid' ;; esac
   case "$labels" in number|filename|both|none) ;; *) die 'contactsheet: invalid labels' ;; esac
@@ -2596,8 +2679,8 @@ action_contactsheet() {
     requested="$(kdialog --getsavefilename "${files[0]%/*}" 'contact-sheet.pdf')" || return 1
     [ -n "$requested" ] || return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Create a new contact-sheet PDF?')" "${#files[@]}" output)"
-  [ "$mode" != cancel ] || return 1
+  # Creation-only output; source images are never overwritten.
+  mode=create
   prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
     return 1
@@ -3840,7 +3923,13 @@ action_resizeandsend() {
     return 1
   fi
 
-  if command -v kmail >/dev/null 2>&1; then
+  if command -v xdg-email >/dev/null 2>&1; then
+    client=xdg-email
+    for out in "${attach_paths[@]}"; do
+      mail_args+=(--attach "$out")
+    done
+    xdg-email "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
+  elif command -v kmail >/dev/null 2>&1; then
     client=kmail
     for out in "${attach_paths[@]}"; do
       mail_args+=(--attach "$out")
@@ -3869,21 +3958,14 @@ action_resizeandsend() {
       attachment_csv+="$uri"
     done
     thunderbird -compose "attachment='$attachment_csv'" >/dev/null 2>&1 || handoff=$?
-  elif command -v xdg-email >/dev/null 2>&1; then
-    client=xdg-email
-    for out in "${attach_paths[@]}"; do
-      mail_args+=(--attach "$out")
-    done
-    xdg-email "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
   fi
 
   if [ -z "$client" ]; then
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:") $persistent_dir"
   elif [ "$handoff" -ne 0 ]; then
-    rm -rf -- "$persistent_dir"
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'The mail client could not accept the prepared attachments.')"
-    report_fail "$client"
-    report_finish_dialog "$(gettext 'Kim')"
+    # A mail-client launch failure is not an image-processing failure.
+    # Retain the prepared attachments for manual use.
+    kdialog --title "$(gettext 'Kim')" --error       "$(gettext 'The mail client did not accept the attachments. They were kept here:') $persistent_dir"
     return 1
   else
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The mail client was opened. Prepared attachments remain here until you delete them:') $persistent_dir"
@@ -3926,7 +4008,9 @@ transform_icc_records() {
       records="${BASH_REMATCH[2]}"
     fi
   done <<< "$json"
-  [ -n "$records" ] || return 1
+  # No embedded ICC profile is valid for an untagged image.
+  # ExifTool may also report "-" for an absent profile.
+  [ "$records" != "-" ] || records=''
   printf '%s' "$records"
 }
 
@@ -3952,11 +4036,19 @@ action_transform_in_place() {
     *) return 1 ;;
   esac
 
-  confirm_inplace_overwrite "$operation_label" "${#files[@]}" || return 1
+  # Use the same output-policy dialog as other image actions.
+  # Creation is the default; overwrite requires explicit review.
+  local mode
+  mode="$(choose_output_mode     "$(gettext 'Kim')"     "$(gettext 'How should KIM6 save the results?')"     "${#files[@]}" originals)" || return 1
+  case "$mode" in
+    create|overwrite) ;;
+    *) return 1 ;;
+  esac
 
   report_init
   local ref i tmp rc interrupted counter=0 source_info actual expected frame format count produced
   local dimensions actual_dimensions identity source_icc actual_icc read_hint fixed_dimensions swap
+  local target dir stem ext affix n
   local -A seen=()
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Transforming images ...')")"
   for i in "${files[@]}"; do
@@ -4025,7 +4117,31 @@ action_transform_in_place() {
       progress_value "$ref" "$counter"
       continue
     fi
-    if ! tmp="$(tmp_for_target "$i")"; then
+    target="$i"
+    if [ "$mode" = create ]; then
+      {
+        IFS= read -r dir
+        IFS= read -r _
+        IFS= read -r stem
+        IFS= read -r ext
+      } < <(split_path "$i")
+
+      case "$operation" in
+        -flop) affix=flipped_horizontal ;;
+        -flip) affix=flipped_vertical ;;
+        -auto-orient) affix=auto_rotated ;;
+        -rotate) affix=rotated ;;
+      esac
+
+      target="$dir/$(affixed_filename "$stem" "$affix" "$ext")"
+      n=1
+      while [ -e "$target" ] || [ -L "$target" ]; do
+        target="$dir/$(affixed_filename "$stem" "$affix" "$ext" "$n")"
+        n=$((n + 1))
+      done
+    fi
+
+    if ! tmp="$(tmp_for_target "$target")"; then
       report_fail "$i"
       progress_value "$ref" "$counter"
       continue
@@ -4079,11 +4195,14 @@ action_transform_in_place() {
       interrupted=true
       rc=1
     fi
-    if [ "$rc" -eq 0 ] && commit_tmp_to_target "$tmp" "$i" overwrite; then
+    if [ "$rc" -eq 0 ] && commit_tmp_to_target "$tmp" "$target" "$mode"; then
       report_ok
       # Atomic replacement changes inode: remember the replacement too so a
       # repeated path or safely resolved parent alias is not transformed again.
-      identity="$(stat -c '%d:%i' -- "$i")" && seen[$identity]=1
+      if [ "$mode" = overwrite ]; then
+        identity="$(stat -c '%d:%i' -- "$i")" &&
+          seen[$identity]=1
+      fi
     else
       report_fail "$i"
     fi
@@ -5592,7 +5711,7 @@ action_datesync() {
 # - Uses <dir> as the export directory, prompting if it is not usable.
 # - Prompts for:
 #   - Maximum image size (example: 1600x1600)
-#   - JPEG quality (1–100), default comes from KIM_WEB_QUALITY (fallback 75)
+#   - JPEG quality (1–100), default comes from KIM_WEB_QUALITY (fallback 95)
 # - Always creates derived exports, regardless of KIM_POLICY.
 # - Writes <name>_web.<ext> by default, or web_<name>.<ext> in prefix mode.
 # - Adds _1, _2, ... for existing names.
@@ -5606,11 +5725,15 @@ action_datesync() {
 action_webexport() {
   # Web export creates validated derivatives with explicit ICC handling.
   # Preserve animation only when the chosen output supports its frames.
-  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false jpeg_scan='' jpeg_optimize=false
+  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false custom=false jpeg_scan='' jpeg_optimize=false
   local -a files=()
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --custom)
+          custom=true
+          shift
+          ;;
         --jpeg-progressive)
           [ -z "$jpeg_scan" ] || {
             progress_error "$(gettext 'Select only one JPEG scan mode.')"
@@ -5660,6 +5783,10 @@ action_webexport() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
+  if [ "$custom" = true ]; then
+    fmt="$(kdialog --title "$(gettext 'KIM6 - Web Export')"       --menu "$(gettext 'Choose output format:')"       jpg JPEG       webp WebP       avif AVIF       png PNG       keep "$(gettext 'Original Format')")" || return 1
+  fi
+
   if [ -z "$size" ]; then
     size="$(kdialog --inputbox "$(gettext 'Max image size (e.g. 1600x1600):')" "1600x1600")" || return 1
   fi
@@ -5668,8 +5795,11 @@ action_webexport() {
   }
   local max_width="${BASH_REMATCH[1]}" max_height="${BASH_REMATCH[2]}"
 
+  if [ "$custom" = true ] && [ "$fmt" = png ]; then
+    quality=100
+  fi
   if [ -z "$quality" ]; then
-    quality="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-75}")" || return 1
+    quality="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-95}")" || return 1
   fi
   [[ "$quality" =~ ^[0-9]{1,3}$ ]] && [ "$quality" -ge 1 ] && [ "$quality" -le 100 ] || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
@@ -5692,20 +5822,20 @@ action_webexport() {
   esac
 
   case "$fmt" in
-    jpg|webp|avif|keep) : ;;
+    jpg|webp|avif|png|keep) : ;;
     *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
   esac
 
   # Always honor the export directory, including under KIM_POLICY=overwrite.
   if [ -z "$outdir" ]; then
-    outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
+    outdir="$(kdialog --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
     [ -n "$outdir" ] || return 1
   elif [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; then
     if [ "$explicit_dir" = true ]; then
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: output directory is not accessible.')"
       return 1
     fi
-    outdir="$(kdialog --getexistingdirectory "${PWD}")" || return 1
+    outdir="$(kdialog --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
     [ -n "$outdir" ] || return 1
   fi
 
@@ -5809,7 +5939,7 @@ action_webexport() {
       if image_extension_matches_format "$ext" "$input_format"; then out_ext="$ext"; fi
     else
       out_ext="$fmt"
-      case "$fmt" in jpg) coder=JPEG ;; webp) coder=WEBP ;; avif) coder=AVIF ;; esac
+      case "$fmt" in jpg) coder=JPEG ;; webp) coder=WEBP ;; avif) coder=AVIF ;; png) coder=PNG ;; esac
     fi
     if [ -z "$coder" ] || [ -z "$out_ext" ]; then
       report_fail "$i"
@@ -5983,8 +6113,8 @@ collage_render_layout() (
     requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
   fi
   [ -n "$requested" ] || return 1
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')" "${#files[@]}" output)" || return 1
-  case "$mode" in create|overwrite) ;; *) return 1 ;; esac
+  # Creation-only output; source images are never overwritten.
+  mode=create
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid or source-aliasing destination.')"
     return 1
@@ -6206,17 +6336,41 @@ action_pelemele() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
   fi
-  # Preserve existing scripted --size/--tile behavior. Dolphin's bare
-  # invocation opens the new layout chooser, with Grid selected by default.
-  if [ -z "$layout" ] && [ -z "$size$tile$overlap_percent$rotation$seed$border_ratio" ]; then
-    interactive_layout=true
-    layout="$(kdialog --radiolist "$(gettext 'Choose a collage layout:')" \
-      grid "$(gettext 'Classic Grid')" on \
-      mosaic "$(gettext 'Mosaic')" off \
-      hero "$(gettext 'Hero + Supporting Photos')" off \
-      scattered "$(gettext 'Scattered / Polaroid')" off \
-      filmstrip "$(gettext 'Filmstrip / Storyboard')" off)" || return 1
+  # Dolphin's bare invocation uses one Qt 6 settings window.
+  # Selected files are the inputs; no additional image picker.
+  if [ -z "$layout" ] &&
+     [ -z "$size$tile$overlap_percent$rotation$seed$border_ratio" ]; then
+    local settings_file="$KIMDIR/collage-settings"
+    local dialog_script
+    dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_collage_dialog.py"
+
+    if ! python3 "$dialog_script" "$settings_file" "${files[@]}"; then
+      return 1
+    fi
+
+    local -a settings=()
+    mapfile -d '' -t settings < "$settings_file"
+    [ "${#settings[@]}" -eq 9 ] || {
+      progress_error "$(gettext 'Collage: invalid dialog settings.')"
+      return 1
+    }
+
+    layout="${settings[0]}"
+    canvas="${settings[1]}"
+    fit="${settings[2]}"
+    gap="${settings[3]}"
+    frame="${settings[4]}"
+    color="${settings[5]}"
+    shadow="${settings[6]}"
+    requested="${settings[7]}"
+
+    if [ "${settings[8]}" = true ]; then
+      shuffle=true
+    else
+      shuffle=false
+    fi
   fi
+
   case "$layout" in
     ''|scattered) ;;
     grid|mosaic|hero|filmstrip)
@@ -6310,8 +6464,8 @@ action_pelemele() {
     requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
   fi
   [ -n "$requested" ] || return 1
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new collage?')" "${#files[@]}" output)" || return 1
-  case "$mode" in create|overwrite) ;; *) return 1 ;; esac
+  # Creation-only output; source images are never overwritten.
+  mode=create
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: output destination is invalid or aliases a selected image.')"
     return 1

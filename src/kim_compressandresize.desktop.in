@@ -4,106 +4,54 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Resize300;Resize600;Resize800;Resize1024;Resize1280;Resize1400;Resize1600;Resize1920;Resize2560;Resize3440;Resize3840;ResizeCustom;ResizePercent;Web128;Web600;Web800;Web1024;Web1600;WebKeep;Emailfull;Email1600x1600;Email1200x1200;Email800x800;Email600x600;Email300x300;
-_X-KDE-Submenu=KIM6 — Compress, resize and web export
+Actions=01Resize1600;02Resize1280;03Resize1024;04ResizePercent;05ResizeCustom;_SEPARATOR_;10Rotate90;11Rotate270;12Rotate180;13RotateCustom;14Rotateexif;_SEPARATOR_;20FlipHorizontal;21FlipVertical;
+_X-KDE-Submenu=KIM6 — Resize/Rotate
 X-KIM6-Managed=true
 
-[Desktop Action Resize300]
-_Name=Resize (300x300 pixels)
-Exec=kim_all resize --size 300x300 -- %F
-
-[Desktop Action Resize600]
-_Name=Resize (600x600 pixels)
-Exec=kim_all resize --size 600x600 -- %F
-
-[Desktop Action Resize800]
-_Name=Resize (800x800 pixels)
-Exec=kim_all resize --size 800x800 -- %F
-
-[Desktop Action Resize1024]
-_Name=Resize (1024x1024 pixels)
-Exec=kim_all resize --size 1024x1024 -- %F
-
-[Desktop Action Resize1280]
-_Name=Resize (1280x1280 pixels)
-Exec=kim_all resize --size 1280x1280 -- %F
-
-[Desktop Action Resize1400]
-_Name=Resize (1400x1400 pixels)
-Exec=kim_all resize --size 1400x1400 -- %F
-
-[Desktop Action Resize1600]
-_Name=Resize (1600x1600 pixels)
+[Desktop Action 01Resize1600]
+_Name=Resize to 1600 × 1600
 Exec=kim_all resize --size 1600x1600 -- %F
 
-[Desktop Action Resize1920]
-_Name=Resize (1920x1920 pixels)
-Exec=kim_all resize --size 1920x1920 -- %F
+[Desktop Action 02Resize1280]
+_Name=Resize to 1280 × 1280
+Exec=kim_all resize --size 1280x1280 -- %F
 
-[Desktop Action Resize2560]
-_Name=Resize (2560x2560 pixels)
-Exec=kim_all resize --size 2560x2560 -- %F
+[Desktop Action 03Resize1024]
+_Name=Resize to 1024 × 1024
+Exec=kim_all resize --size 1024x1024 -- %F
 
-[Desktop Action Resize3440]
-_Name=Resize (3440x3440 pixels)
-Exec=kim_all resize --size 3440x3440 -- %F
-
-[Desktop Action Resize3840]
-_Name=Resize (3840x3840 pixels)
-Exec=kim_all resize --size 3840x3840 -- %F
-
-[Desktop Action ResizeCustom]
-_Name=Resize custom…
-Exec=kim_all resize --custom -- %F
-
-[Desktop Action ResizePercent]
-_Name=Resize by percentage…
+[Desktop Action 04ResizePercent]
+_Name=Resize by Percentage…
 Exec=kim_all resize --custom-percent -- %F
 
-[Desktop Action Web128]
-_Name=Web thumbnail: 128x128 at 75 %
-Exec=kim_all webexport --size 128x128 --quality 75 -- %F
+[Desktop Action 05ResizeCustom]
+_Name=Resize to Custom Size…
+Exec=kim_all resize --custom -- %F
 
-[Desktop Action Web600]
-_Name=Web export: 600x600 at 75 %
-Exec=kim_all webexport --size 600x600 --quality 75 -- %F
+[Desktop Action 10Rotate90]
+_Name=Rotate 90° CW
+Exec=kim_all rotate --angle 90 -- %F
 
-[Desktop Action Web800]
-_Name=Web export: 800x800 at 75 %
-Exec=kim_all webexport --size 800x800 --quality 75 -- %F
+[Desktop Action 11Rotate270]
+_Name=Rotate 90° CCW
+Exec=kim_all rotate --angle 270 -- %F
 
-[Desktop Action Web1024]
-_Name=Web export: 1024x1024 at 75 %
-Exec=kim_all webexport --size 1024x1024 --quality 75 -- %F
+[Desktop Action 12Rotate180]
+_Name=Rotate 180°
+Exec=kim_all rotate --angle 180 -- %F
 
-[Desktop Action Web1600]
-_Name=Web export: 1600x1600 at 75 %
-Exec=kim_all webexport --size 1600x1600 --quality 75 -- %F
+[Desktop Action 13RotateCustom]
+_Name=Rotate by Custom Angle…
+Exec=kim_all rotate --custom -- %F
 
-[Desktop Action WebKeep]
-_Name=Web export, keep input format…
-Exec=kim_all webexport --size 1600x1600 --quality 75 --format keep -- %F
+[Desktop Action 14Rotateexif]
+_Name=Auto-Rotate Using EXIF
+Exec=kim_all rotate --exif -- %F
 
-[Desktop Action Emailfull]
-_Name=Send by mail: Send original by mail
-Exec=kim_all resizeandsend --size full -- %F
+[Desktop Action 20FlipHorizontal]
+_Name=Flip Horizontally
+Exec=kim_all flipflop flop -- %F
 
-[Desktop Action Email1600x1600]
-_Name=Send by mail: Resize to 1600px and email
-Exec=kim_all resizeandsend --size 1600x1600 -- %F
-
-[Desktop Action Email1200x1200]
-_Name=Send by mail: Resize to 1200px and email
-Exec=kim_all resizeandsend --size 1200x1200 -- %F
-
-[Desktop Action Email800x800]
-_Name=Send by mail: Resize to 800px and email
-Exec=kim_all resizeandsend --size 800x800 -- %F
-
-[Desktop Action Email600x600]
-_Name=Send by mail: Resize to 600px and email
-Exec=kim_all resizeandsend --size 600x600 -- %F
-
-[Desktop Action Email300x300]
-_Name=Send by mail: Resize to 300px and email
-Exec=kim_all resizeandsend --size 300x300 -- %F
+[Desktop Action 21FlipVertical]
+_Name=Flip Vertically
+Exec=kim_all flipflop flip -- %F

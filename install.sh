@@ -48,6 +48,77 @@ fi
   echo "install.sh: prefix contains a newline" >&2
   exit 2
 }
+# Check runtime tools before installation.
+# Missing tools are reported; packages are never installed automatically.
+# Report runtime dependencies before installing KIM6.
+# Optional format support is checked by the dispatcher when needed.
+kim6_report_dependencies() {
+  local missing=0
+  local tool package
+
+  echo
+  echo "===== KIM6 RUNTIME DEPENDENCIES ====="
+
+  # These commands are used by the existing KIM6 runtime.
+  # Report unavailable capabilities before installing files.
+  for entry in \
+    "magick:imagemagick-7.q16" \
+    "exiftool:libimage-exiftool-perl" \
+    "kdialog:kdialog" \
+    "qdbus:qdbus-qt6" \
+    "ffmpeg:ffmpeg" \
+    "ffprobe:ffmpeg" \
+    "python3:python3" \
+    "xdg-open:xdg-utils"; do
+
+    tool="${entry%%:*}"
+    package="${entry#*:}"
+
+    if { [ "$tool" = qdbus ] &&
+         { type -P qdbus >/dev/null 2>&1 ||
+           type -P qdbus6 >/dev/null 2>&1 ||
+           [ -x /usr/lib/qt6/bin/qdbus ]; }; } ||
+       { [ "$tool" != qdbus ] &&
+         command -v "$tool" >/dev/null 2>&1; }; then
+      printf '  OK: %-12s %s\n' "$tool" "$(command -v "$tool")"
+    else
+      printf '  MISSING: %-12s package: %s\n' "$tool" "$package"
+      missing=1
+    fi
+  done
+
+
+  echo
+  if [ "$missing" -ne 0 ]; then
+    echo "WARNING: KIM6 has missing runtime dependencies."
+    echo "Some actions cannot run until these are installed."
+    echo
+    echo "Kubuntu 26.04 packages:"
+    echo "  sudo apt install imagemagick-7.q16 libimage-exiftool-perl kdialog qdbus-qt6 ffmpeg python3 xdg-utils"
+  else
+    echo "PASS: All primary runtime commands found."
+  fi
+
+  echo
+  echo "Optional encoder, PDF and document capabilities"
+  echo "are validated by the corresponding KIM6 actions."
+}
+
+kim6_report_dependencies
+
+# Both graphical configuration dialogs require PySide6 Qt Widgets.
+if ! python3 -c 'from PySide6.QtWidgets import QApplication, QDialog' >/dev/null 2>&1; then
+  echo "install.sh: missing Python Qt 6 Widgets dependency." >&2
+  echo "Install: sudo apt install python3-pyside6.qtwidgets" >&2
+  exit 1
+fi
+
+if ! python3 -c 'from PySide6.QtWidgets import QApplication' >/dev/null 2>&1; then
+  echo "WARNING: Collage GUI requires python3-pyside6.qtwidgets"
+  echo "Install with: sudo apt install python3-pyside6.qtwidgets"
+fi
+
+
 command -v intltool-merge >/dev/null 2>&1 || {
   echo "install.sh: install intltool-merge to render translated Dolphin menus" >&2
   exit 1
@@ -57,8 +128,16 @@ mkdir -p -- "$PREFIX"
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 RUNTIME="$PREFIX/kim6"
 
-menu_names=(kim_compress.desktop kim_compressandresize.desktop kim_convertandrotate.desktop
-  kim_compressandresizevideo.desktop kim_publication.desktop)
+menu_names=(
+  kim_compressandresize.desktop
+  kim_compressandresizevideo.desktop
+  kim_convertandrotate.desktop
+  kim_information.desktop
+  kim_metadata.desktop
+  kim_publication.desktop
+  kim_videoutilities.desktop
+  kim_webemail.desktop
+)
 languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
   kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
@@ -76,7 +155,7 @@ manual_files=(
   docs/images/kim6-metadata-illustration.png
   docs/images/kim6-web-export-illustration.png
 )
-runtime_files=(bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}")
 temporary=''
 die() { echo "install.sh: $*" >&2; exit 1; }
@@ -233,6 +312,12 @@ install_file "$SOURCE_DIR/src/gallery/index.part1" "$RUNTIME/gallery/index.part1
 install_file "$SOURCE_DIR/src/gallery/index.part2" "$RUNTIME/gallery/index.part2" 0644
 install_file "$SOURCE_DIR/ABOUT" "$RUNTIME/ABOUT" 0644
 install_file "$SOURCE_DIR/LICENSE.md" "$RUNTIME/LICENSE.md" 0644
+
+# Install Qt 6 configuration dialogs used by Collage and Contact Sheet.
+# These must be deployed, not merely listed in the runtime inventory.
+install_file "$SOURCE_DIR/src/bin/kim_collage_dialog.py" "$RUNTIME/bin/kim_collage_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_contactsheet_dialog.py" "$RUNTIME/bin/kim_contactsheet_dialog.py" 0644
+
 install_file "$SOURCE_DIR/INSTALL.md" "$RUNTIME/INSTALL.md" 0644
 install_file "$SOURCE_DIR/docs/index.html" "$RUNTIME/docs/index.html" 0644
 install_file "$SOURCE_DIR/docs/work.css" "$RUNTIME/docs/work.css" 0644
@@ -265,7 +350,7 @@ for name in "${menu_names[@]}"; do
     echo "install.sh: rendered menu does not reference the installed dispatcher: $name" >&2
     exit 1
   fi
-  chmod 0644 -- "$temporary"
+  chmod 0755 -- "$temporary"
   if ! mv -f -- "$temporary" "$destination"; then
     echo "install.sh: could not install menu $destination" >&2
     exit 1
@@ -280,7 +365,56 @@ for name in "${legacy_names[@]}"; do
 done
 rm -f -- "$RUNTIME/.kim6-owned" "$RUNTIME/.kim6-manifest"
 
+
+# Remove only obsolete KIM6-owned menus after replacement.
+# Never delete an unrelated file that happens to have the name.
+kim6_retire_consolidated_menus() {
+  local name path
+
+  for name in kim_compress.desktop kim_organize.desktop; do
+    path="$PREFIX/$name"
+
+    [ -e "$path" ] || continue
+    [ ! -L "$path" ] || {
+      echo "install.sh: refusing symlinked old menu: $path" >&2
+      return 1
+    }
+
+    if grep -Fxq 'X-KIM6-Managed=true' "$path"; then
+      rm -f -- "$path"
+    else
+      echo "install.sh: obsolete menu is not marked KIM6-owned: $path" >&2
+      return 1
+    fi
+  done
+}
+
+kim6_retire_consolidated_menus
+
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
+
+# Installation is incomplete if either GUI helper is absent.
+for helper in kim_collage_dialog.py kim_contactsheet_dialog.py; do
+  installed="$RUNTIME/bin/$helper"
+
+  if [ ! -f "$installed" ] || [ -L "$installed" ]; then
+    echo "install.sh: required GUI helper was not installed: $installed" >&2
+    exit 1
+  fi
+
+  if ! python3 - "$installed" <<'KIM6_PY_CHECK'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+compile(path.read_bytes(), str(path), "exec")
+KIM6_PY_CHECK
+  then
+    echo "install.sh: invalid installed GUI helper: $installed" >&2
+    exit 1
+  fi
+done
+
 printf 'KIM6 installed in %s. Restart Dolphin if the menus are not visible.\n' "$PREFIX"

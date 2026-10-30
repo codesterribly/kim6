@@ -1,0 +1,37 @@
+[Desktop Entry]
+Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/*;
+X-KDE-Protocol=file
+Actions=01Rename;10AdjustCaptureTime;11DateSync;12SetCopyright;13RemoveAIMetadata;14StripGPS;15StripMetadata;
+_X-KDE-Submenu=KIM6 — Organize/Metadata
+X-KIM6-Managed=true
+
+[Desktop Action 01Rename]
+_Name=Rename Images…
+Exec=kim_all rename interactive -- %F
+
+[Desktop Action 10AdjustCaptureTime]
+_Name=Adjust camera timestamps…
+Exec=kim_all timeshift --interactive -- %F
+
+[Desktop Action 11DateSync]
+_Name=Synchronize photo/file dates…
+Exec=kim_all datesync --interactive -- %F
+
+[Desktop Action 12SetCopyright]
+_Name=Set creator and copyright…
+Exec=kim_all copyright --interactive -- %F
+
+[Desktop Action 13RemoveAIMetadata]
+_Name=Remove AI metadata…
+Exec=kim_all stripmeta --mode ai -- %F
+
+[Desktop Action 14StripGPS]
+_Name=Remove GPS metadata…
+Exec=kim_all stripmeta --mode gps -- %F
+
+[Desktop Action 15StripMetadata]
+_Name=Strip metadata…
+Exec=kim_all stripmeta -- %F

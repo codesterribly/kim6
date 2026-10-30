@@ -1,0 +1,33 @@
+[Desktop Entry]
+Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=video/*;
+X-KDE-Protocol=file
+Actions=ExtractVideoAudio;MuteVideo;VideoContactSheet;VideoFrameAt;VideoThumbnail;VideoToGif;
+_X-KDE-Submenu=KIM6 — Video Utilities
+X-KIM6-Managed=true
+
+[Desktop Action ExtractVideoAudio]
+_Name=Extract audio…
+Exec=kim_all videoaudio --mode extract --format m4a --interactive -- %F
+
+[Desktop Action MuteVideo]
+_Name=Remove audio (copy video)
+Exec=kim_all videoaudio --mode mute -- %F
+
+[Desktop Action VideoContactSheet]
+_Name=Create video contact sheet…
+Exec=kim_all videoframes --mode contact --format jpg --interactive -- %F
+
+[Desktop Action VideoFrameAt]
+_Name=Extract frame at timestamp…
+Exec=kim_all videoframes --mode single --format png --interactive -- %F
+
+[Desktop Action VideoThumbnail]
+_Name=Extract automatic thumbnail
+Exec=kim_all videoframes --mode thumbnail --format jpg -- %F
+
+[Desktop Action VideoToGif]
+_Name=Create animated GIF from video…
+Exec=kim_all videogif --interactive -- %F

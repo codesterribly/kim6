@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Service
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/*;video/*;
+X-KDE-Protocol=file
+Actions=About;License;Manual;
+_X-KDE-Submenu=KIM6 — ⁠About KIM6
+X-KIM6-Managed=true
+
+[Desktop Action About]
+_Name=About KIM6
+Exec=kim_all about
+
+[Desktop Action License]
+_Name=License
+Exec=kim_all license
+
+[Desktop Action Manual]
+_Name=KIM6 Manual
+Exec=kim_all manual

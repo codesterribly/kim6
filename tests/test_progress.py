@@ -200,7 +200,10 @@ done
 
     def test_missing_qdbus_does_not_open_dialog(self):
         (self.w.bin / 'qdbus').unlink()
-        result = self.run_helpers('ref="$(progress_open 2 Working)"')
+        result = self.run_helpers(
+            'kim6_qdbus_available() { return 1; }; '
+            'ref="$(progress_open 2 Working)"'
+        )
         self.assertNotEqual(result.returncode, 0)
         self.assert_error(result)
         self.assertFalse(any(c['tool'] == 'kdialog' and '--progressbar' in c['argv'] for c in result.calls))

@@ -4,82 +4,42 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=Gallery;Collage;Rename;SortByDate;StripMetadata;StripGPS;RemoveAIMetadata;SetCopyright;AdjustCaptureTime;DateSync;Slideshow;Album;ContactSheet;Print;TiffJoin;Animation;Manual;License;About;
-_X-KDE-Submenu=KIM6 — Publish and organize
+Actions=Album;Animation;Collage;ContactSheet;Gallery;Print;Slideshow;TiffJoin;Emailfull;
+_X-KDE-Submenu=KIM6 — Create/Publish
 X-KIM6-Managed=true
-
-[Desktop Action Gallery]
-_Name=Create an HTML gallery…
-Exec=kim_all gallery -- %F
-
-[Desktop Action Collage]
-_Name=Create a photo collage…
-Exec=kim_all pelemele -- %F
-
-[Desktop Action Rename]
-_Name=Rename images…
-Exec=kim_all rename interactive -- %F
-
-[Desktop Action SortByDate]
-_Name=Rename by EXIF date…
-Exec=kim_all rename exifdate -- %F
-
-[Desktop Action StripMetadata]
-_Name=Strip metadata…
-Exec=kim_all stripmeta -- %F
-
-[Desktop Action StripGPS]
-_Name=Remove GPS coordinates…
-Exec=kim_all stripmeta --mode gps -- %F
-
-[Desktop Action RemoveAIMetadata]
-_Name=Remove recognized AI metadata…
-Exec=kim_all stripmeta --mode ai -- %F
-
-[Desktop Action SetCopyright]
-_Name=Set creator and copyright…
-Exec=kim_all copyright --interactive -- %F
-
-[Desktop Action AdjustCaptureTime]
-_Name=Adjust camera timestamps…
-Exec=kim_all timeshift --interactive -- %F
-
-[Desktop Action DateSync]
-_Name=Synchronize photo/file dates…
-Exec=kim_all datesync --interactive -- %F
-
-[Desktop Action Slideshow]
-_Name=Create MP4 slideshow…
-Exec=kim_all slideshow --interactive -- %F
 
 [Desktop Action Album]
 _Name=Create a PDF album…
 Exec=kim_all album -- %F
 
+[Desktop Action Animation]
+_Name=Create an animated GIF…
+Exec=kim_all animate -- %F
+
+[Desktop Action Collage]
+_Name=Create a photo collage…
+Exec=kim_all pelemele -- %F
+
 [Desktop Action ContactSheet]
 _Name=Create a photo contact sheet…
 Exec=kim_all contactsheet -- %F
+
+[Desktop Action Gallery]
+_Name=Create an HTML gallery…
+Exec=kim_all gallery -- %F
 
 [Desktop Action Print]
 _Name=Create a print-layout PDF…
 Exec=kim_all print -- %F
 
+[Desktop Action Slideshow]
+_Name=Create a video slideshow…
+Exec=kim_all slideshow --interactive -- %F
+
 [Desktop Action TiffJoin]
-_Name=Join images into a multi-page TIFF…
+_Name=Create a multi-page TIFF…
 Exec=kim_all tiffjoin -- %F
 
-[Desktop Action Animation]
-_Name=Create an animated GIF…
-Exec=kim_all animate -- %F
-
-[Desktop Action Manual]
-_Name=KIM6 Manual
-Exec=kim_all manual
-
-[Desktop Action License]
-_Name=License
-Exec=kim_all license
-
-[Desktop Action About]
-_Name=About KIM6
-Exec=kim_all about
+[Desktop Action Emailfull]
+_Name=Send via email…
+Exec=kim_all resizeandsend --size full -- %F

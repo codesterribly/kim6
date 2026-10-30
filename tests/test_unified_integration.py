@@ -28,7 +28,7 @@ def action_entries(path):
 
 class MenuContractTests(unittest.TestCase):
     def test_each_menu_action_uses_unified_dispatcher_and_local_argument_boundary(self):
-        self.assertEqual(5, len(MENU_TEMPLATES))
+        self.assertEqual(11, len(MENU_TEMPLATES))
         entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
         self.assertGreater(len(entries), 60)
         for path in MENU_TEMPLATES:
@@ -214,12 +214,12 @@ class InstallWorkflowTests(unittest.TestCase):
                 installed,
             )
         menu_files = list(self.prefix.glob("kim_*.desktop"))
-        self.assertEqual(5, len(menu_files))
+        self.assertEqual(11, len(menu_files))
         for path in menu_files:
             self.assertNotRegex(path.read_text(), r"Exec=.*\bkim_(?!all\b)[A-Za-z0-9_]*")
         second = self.run_install()
         self.assertEqual(0, second.returncode, second.stdout + second.stderr)
-        self.assertEqual(5, len(list(self.prefix.glob("kim_*.desktop"))))
+        self.assertEqual(11, len(list(self.prefix.glob("kim_*.desktop"))))
         installed_dispatcher = runtime / "bin/kim_all"
         for menu in self.prefix.glob("kim_*.desktop"):
             for _, command, _ in action_entries(menu):

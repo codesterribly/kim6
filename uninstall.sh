@@ -68,8 +68,19 @@ PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 RUNTIME="$PREFIX/kim6"
 runtime_known=false
 
-menu_names=(kim_compress.desktop kim_compressandresize.desktop kim_convertandrotate.desktop
-  kim_compressandresizevideo.desktop kim_publication.desktop)
+legacy_consolidated_menu_names=(kim_compress.desktop kim_organize.desktop)
+menu_names=(
+  kim_compress.desktop
+  kim_organize.desktop
+  kim_compressandresize.desktop
+  kim_compressandresizevideo.desktop
+  kim_convertandrotate.desktop
+  kim_information.desktop
+  kim_metadata.desktop
+  kim_publication.desktop
+  kim_videoutilities.desktop
+  kim_webemail.desktop
+)
 languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
   kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
