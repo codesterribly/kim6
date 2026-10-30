@@ -81,90 +81,14 @@ mk_workdir() {
 }
 
 # ---------------------------------------------------------------------------
-# Configuration (KConfig file, env overrides)
+# KIM6 configuration
 # ---------------------------------------------------------------------------
 
-# KIM uses a shared config file
-#   ${XDG_CONFIG_HOME:-~/.config}/kim_kdeimagemenu   group "<default>"
+# Persistent settings:
+#   ${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf
 #
-# Env vars always win over config values.
-
-KIM_CONFIG_FILE="${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}"
-
-_cfg_get() {
-  local key="$1"
-  command -v kreadconfig6 >/dev/null 2>&1 || return 0
-  [ -f "$KIM_CONFIG_FILE" ] || return 0
-  kreadconfig6 --file "$KIM_CONFIG_FILE" --group "<default>" --key "$key" 2>/dev/null || true
-}
-
-load_kim_config() {
-  local v
-
-  # Naming: prefix or suffix for web/compressed/resized/stripped outputs.
-  # Env: KIM_NAME_AFFIX_POSITION=prefix|suffix
-  if [ -z "${KIM_NAME_AFFIX_POSITION:-}" ]; then
-    v="$(_cfg_get NAME_AFFIX_POSITION)"
-    case "$v" in
-      prefix|suffix) KIM_NAME_AFFIX_POSITION="$v" ;;
-    esac
-  fi
-  : "${KIM_NAME_AFFIX_POSITION:=suffix}"
-
-  # Webexport quality default (only used as the default value in the prompt here).
-  # Env: KIM_WEB_QUALITY=1..100
-  if [ -z "${KIM_WEB_QUALITY:-}" ]; then
-    v="$(_cfg_get WEB_EXPORT_QUALITY)"
-    if [[ "$v" =~ ^[0-9]{1,3}$ ]] && [ "$v" -ge 1 ] && [ "$v" -le 100 ]; then
-      KIM_WEB_QUALITY="$v"
-    fi
-  fi
-
-  : "${KIM_WEB_QUALITY:=95}"
-
-  # Webexport output format (create mode).
-  # Env: KIM_WEB_FORMAT=jpg|webp|avif|keep
-  if [ -z "${KIM_WEB_FORMAT:-}" ]; then
-    v="$(_cfg_get WEB_EXPORT_FORMAT)"
-    case "$v" in
-      jpg|jpeg|webp|avif|keep) KIM_WEB_FORMAT="$v" ;;
-    esac
-  fi
-  : "${KIM_WEB_FORMAT:=jpg}"
-
-  # Web export color policy: sRGB by default, or preserve the source profile.
-  # Env: KIM_WEB_COLOR_MODE=srgb|preserve
-  # Environment overrides KConfig WEB_COLOR_MODE.
-  if [ -z "${KIM_WEB_COLOR_MODE:-}" ]; then
-    v="$(_cfg_get WEB_COLOR_MODE)"
-    case "$v" in srgb|preserve) KIM_WEB_COLOR_MODE="$v" ;; esac
-  fi
-  : "${KIM_WEB_COLOR_MODE:=srgb}"
-
-  # Optional copyright metadata: creator, notice, and usage rights.
-  # Environment overrides KConfig; unspecified fields remain unset.
-  if [ -z "${KIM_COPYRIGHT_CREATOR:-}" ]; then
-    v="$(_cfg_get COPYRIGHT_CREATOR)"
-    [ -z "$v" ] || KIM_COPYRIGHT_CREATOR="$v"
-  fi
-  if [ -z "${KIM_COPYRIGHT_NOTICE:-}" ]; then
-    v="$(_cfg_get COPYRIGHT_NOTICE)"
-    [ -z "$v" ] || KIM_COPYRIGHT_NOTICE="$v"
-  fi
-  if [ -z "${KIM_COPYRIGHT_USAGE_RIGHTS:-}" ]; then
-    v="$(_cfg_get COPYRIGHT_USAGE_RIGHTS)"
-    [ -z "$v" ] || KIM_COPYRIGHT_USAGE_RIGHTS="$v"
-  fi
-
-  # Only create and prompt are supported configuration policies.
-  # Legacy overwrite settings cannot authorize unattended replacement.
-  if [ -z "${KIM_POLICY:-}" ]; then
-    v="$(_cfg_get KIM_POLICY)"
-    case "$v" in
-      create|prompt) KIM_CFG_POLICY="$v" ;;
-    esac
-  fi
-}
+# Settings are parsed as validated data, not executed.
+# Explicit environment variables override saved preferences.
 
 # ---------------------------------------------------------------------------
 # Policy handling
@@ -172,7 +96,7 @@ load_kim_config() {
 
 # No configuration value can silently authorize an overwrite.
 policy_mode() {
-  local p="${KIM_POLICY:-${KIM_CFG_POLICY:-}}"
+  local p="${KIM_POLICY:-prompt}"
   case "$p" in
     create) echo "create" ;;
     *) echo "prompt" ;;
@@ -1087,6 +1011,75 @@ progress_value() {
 
 # Check and canonicalize one ordered image selection for a derived artifact.
 # Symlinked and hardlinked selected inputs are ambiguous and are refused.
+
+# Offer additional images when a Create/Publish operation starts with one.
+# The caller validates the resulting selection before creating output.
+# Return 1 for cancellation, invalid selection, or picker failure.
+kim6_create_select_more() {
+  local -n selected_ref="$1"
+  local action_title="$2"
+  local choice selection chosen initial_dir
+  local -a additions=()
+  local -A seen=()
+  local item
+
+  [ "${#selected_ref[@]}" -eq 1 ] || return 0
+
+  # Allow automated tests to suppress graphical selection.
+  [ "${KIM6_CREATE_PICK_MORE:-1}" = 1 ] || return 0
+
+  initial_dir="$(dirname -- "${selected_ref[0]}")"
+  [ -d "$initial_dir" ] || initial_dir="$PWD"
+
+  kdialog \
+    --title "KIM6 — ${action_title}" \
+    --yes-label "Select More Images" \
+    --no-label "Use One Image" \
+    --yesnocancel \
+    "Only one image was selected.
+
+Would you like to select more images for this operation,
+or continue with the selected image?"
+
+  choice=$?
+
+  case "$choice" in
+    0) ;;
+    1) return 0 ;;
+    *) return 1 ;;
+  esac
+
+  selection="$(
+    kdialog \
+      --title "KIM6 — Select Images for ${action_title}" \
+      --getopenfilename "$initial_dir" \
+      'Images (*.jpg *.jpeg *.jpe *.png *.webp *.avif *.avifs *.heic *.heif *.tif *.tiff *.bmp *.gif *.jxl *.jp2 *.j2k *.jpf *.apng *.JPG *.JPEG *.PNG *.WEBP *.AVIF *.HEIC *.HEIF *.TIF *.TIFF *.BMP *.GIF *.JXL *.JP2)' \
+      --multiple --separate-output
+  )" || return 1
+
+  [ -n "$selection" ] || return 1
+
+  while IFS= read -r chosen; do
+    [ -n "$chosen" ] || continue
+    additions+=("$chosen")
+  done <<< "$selection"
+
+  [ "${#additions[@]}" -gt 0 ] || return 1
+
+  for item in "${selected_ref[@]}"; do
+    seen["$item"]=1
+  done
+
+  for item in "${additions[@]}"; do
+    if [ -z "${seen[$item]+x}" ]; then
+      selected_ref+=("$item")
+      seen["$item"]=1
+    fi
+  done
+
+  return 0
+}
+
 collect_publication_inputs() {
   local -n result_ref="$1"
   shift
@@ -1292,15 +1285,60 @@ action_album() {
     ''|--*) dir="${files[0]%/*}" ;;
   esac
   [ -d "$dir" ] || dir="${files[0]%/*}"
-  nb="$(kdialog --radiolist "$(gettext 'Kim - Select album type:')" \
-    1 "$(gettext '1x1 portrait album')" off \
-    2 "$(gettext '1x1 landscape album')" off \
-    3 "$(gettext '1x2 landscape album')" off \
-    4 "$(gettext '2x1 portrait album')" off \
-    5 "$(gettext '2x2 landscape album')" on \
-    6 "$(gettext '3x2 portrait album')" off \
-    7 "$(gettext '3x4 landscape album')" off \
-    8 "$(gettext '4x4 landscape album')" off)" || return 1
+
+  # Dolphin supplies multiple selected images through %F. Preserve them.
+  # With a single image selected, offer a genuine multiselect source picker.
+  if [ "${#files[@]}" -eq 1 ]; then
+    local selection='' chosen=''
+    local -a selected_images=()
+
+    selection="$(kdialog --title "$(gettext 'Select Album Images')" \
+      --getopenfilename "$dir" \
+      'Images (*.jpg *.jpeg *.jpe *.png *.webp *.avif *.avifs *.heic *.heif *.tif *.tiff *.bmp *.gif *.jxl *.jp2 *.j2k *.jpf *.apng *.JPG *.JPEG *.PNG *.WEBP *.AVIF *.HEIC *.HEIF *.TIF *.TIFF *.BMP *.GIF *.JXL *.JP2)' --multiple --separate-output)" || return 1
+
+    [ -n "$selection" ] || return 1
+
+    while IFS= read -r chosen; do
+      [ -n "$chosen" ] || continue
+      selected_images+=("$chosen")
+    done <<< "$selection"
+
+    if ! collect_publication_inputs files "${selected_images[@]}"; then
+      kdialog --title "$(gettext 'Kim')" --error \
+        "$(gettext 'Album: select valid, distinct image files.')"
+      return 1
+    fi
+  fi
+
+  # Collect layout and output filename in a single Qt dialog.
+  local album_dialog settings_file
+  local -a album_choices=()
+
+  album_dialog="$(dirname -- "${BASH_SOURCE[0]}")/kim_album_dialog.py"
+  if [ ! -r "$album_dialog" ]; then
+    kdialog --title "KIM6" --error       "The PDF Album settings dialog is not installed."
+    return 1
+  fi
+
+  settings_file="$(mktemp)" || return 1
+
+  if ! python3 "$album_dialog" "$settings_file" "${files[@]}"; then
+    rm -f -- "$settings_file"
+    return 1
+  fi
+
+  mapfile -d '' -t album_choices < "$settings_file"
+  rm -f -- "$settings_file"
+
+  if [ "${#album_choices[@]}" -ne 2 ]; then
+    kdialog --title "KIM6" --error       "The PDF Album settings are incomplete."
+    return 1
+  fi
+
+  nb="${album_choices[0]}"
+  outpdf="${album_choices[1]}"
+
+  [ -n "$outpdf" ] || return 1
   case "$nb" in
     1) tile=1x1; geometry=575x820+5+5; page=595x842; width=595; height=842 ;;
     2) tile=1x1; geometry=820x575+5+5; page=842x595; width=842; height=595 ;;
@@ -1319,10 +1357,9 @@ action_album() {
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new PDF?')" "${#files[@]}" output)"
-  [ "$mode" != cancel ] || return 1
-  outpdf="$(kdialog --getsavefilename "$dir" "album.pdf")" || return 1
-  [ -n "$outpdf" ] || return 1
+  # Creation-only output; selected sources are protected.
+  mode=create
+  # Output filename was selected in the Qt settings dialog.
   prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: invalid or unsafe output destination.')"
     return 1
@@ -2284,24 +2321,57 @@ action_gallery() {
   local start_dir="${1:-}" base_dir target_dir base_name timestamp number=1
   shift || true
   local -a files=() image_assets=() thumb_assets=()
-  collect_publication_inputs files "$@" || {
+  local -a kim6_selected_inputs=("$@")
+  kim6_create_select_more kim6_selected_inputs "HTML Gallery" || return 1
+  collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
     return 1
   }
   local nbfiles="${#files[@]}" TITLE AUTHOR COLUMNS
-  TITLE="$(kdialog --inputbox "$(gettext 'Kim - Title:')" "$(gettext 'My title ...')")" || return 1
-  AUTHOR="$(kdialog --inputbox "$(gettext 'Kim - Author:')" "${USER:-}")" || return 1
-  COLUMNS="$(kdialog --inputbox "$(gettext 'Kim - Number of columns:')" "4")" || return 1
-  local gallery_theme
-  gallery_theme="$(kdialog --radiolist "$(gettext 'Gallery appearance:')" \
-    dark "$(gettext 'Dark Portfolio (default)')" on \
-    light "$(gettext 'Clean Light')" off)" || return 1
-  case "$gallery_theme" in dark|light) ;; *) return 1 ;; esac
-  local gallery_max
-  gallery_max="$(kdialog --radiolist "$(gettext 'Gallery image resolution:')" \
-    1920 "$(gettext 'Standard — up to 1920 pixels')" on \
-    3840 "$(gettext 'High resolution — up to 3840 pixels')" off)" || return 1
-  case "$gallery_max" in 1920|3840) ;; *) return 1 ;; esac
+  local gallery_theme gallery_max
+  local dialog_script settings_file
+  local -a selections=()
+
+  # The Qt dialog replaces all individual configuration prompts.
+  dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
+
+  [ -r "$dialog_script" ] || {
+    kdialog --title "KIM6 — HTML Gallery" --error       "The HTML Gallery settings dialog is not installed."
+    return 1
+  }
+
+  if [ -z "$start_dir" ] || [ ! -d "$start_dir" ]; then
+    start_dir="${files[0]%/*}"
+  fi
+
+  settings_file="$(mktemp)" || return 1
+
+  if ! python3 "$dialog_script" gallery "$settings_file"     "$start_dir" "$nbfiles"; then
+    rm -f -- "$settings_file"
+    return 1
+  fi
+
+  mapfile -d '' -t selections < "$settings_file"
+  rm -f -- "$settings_file"
+
+  [ "${#selections[@]}" -eq 6 ] || return 1
+
+  TITLE="${selections[0]}"
+  AUTHOR="${selections[1]}"
+  COLUMNS="${selections[2]}"
+  gallery_theme="${selections[3]}"
+  gallery_max="${selections[4]}"
+  base_dir="${selections[5]}"
+
+  case "$gallery_theme" in
+    dark|light) ;;
+    *) return 1 ;;
+  esac
+
+  case "$gallery_max" in
+    1920|3840) ;;
+    *) return 1 ;;
+  esac
 
   if ! [[ "$COLUMNS" =~ ^[0-9]{1,4}$ ]] || [ "$COLUMNS" -le 0 ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: columns must be a positive number.')"
@@ -2310,8 +2380,7 @@ action_gallery() {
   if [ -z "$start_dir" ] || [ ! -d "$start_dir" ]; then
     start_dir="$PWD"
   fi
-  base_dir="$(kdialog --getexistingdirectory "$start_dir")" || return 1
-  [ -n "$base_dir" ] || return 1
+  # The gallery parent directory was selected in the Qt dialog.
   base_dir="$(cd -P -- "$base_dir" && pwd -P)" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: selected output folder is unavailable.')"
     return 1
@@ -2614,6 +2683,8 @@ action_contactsheet() {
     esac
   done
 
+  kim6_create_select_more files "Contact Sheet" || return 1
+
   if [ "$interactive" = true ]; then
   # Selected Dolphin images are the inputs, without another picker.
   [ "${#files[@]}" -gt 0 ] || {
@@ -2805,7 +2876,9 @@ action_print() {
   local -a files=()
   dir="${1:-}"
   shift || true
-  if ! collect_publication_inputs files "$@"; then
+  if ! local -a kim6_selected_inputs=("$@")
+  kim6_create_select_more kim6_selected_inputs "Print Layout" || return 1
+  collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
     return 1
   fi
@@ -2840,9 +2913,9 @@ action_print() {
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new print PDF?')" "${#files[@]}" output)"
-  [ "$mode" != cancel ] || return 1
-  outpdf="$(kdialog --getsavefilename "$dir" "print.pdf")" || return 1
+  # Creation-only output; selected sources are protected.
+  mode=create
+  outpdf="$(kdialog --title "KIM6 — Save Print Layout PDF" --getsavefilename "$dir" "print.pdf")" || return 1
   [ -n "$outpdf" ] || return 1
   prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
@@ -2887,7 +2960,9 @@ action_tiffjoin() {
       *) break ;;
     esac
   done
-  collect_publication_inputs files "$@" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
+  local -a kim6_selected_inputs=("$@")
+  kim6_create_select_more kim6_selected_inputs "Multi-page TIFF" || return 1
+  collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
   dir="${files[0]%/*}"
   for file in "${files[@]}"; do
     info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || {
@@ -2908,10 +2983,10 @@ action_tiffjoin() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"
     return 1
   }
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new joined TIFF?')" "${#files[@]}" output)"
-  [ "$mode" != cancel ] || return 1
+  # Creation-only output; selected sources are protected.
+  mode=create
   if [ -z "$requested" ]; then
-    requested="$(kdialog --getsavefilename "$dir" "my_images.tiff")" || return 1
+    requested="$(kdialog --title "KIM6 — Save Multi-page TIFF" --getsavefilename "$dir" "my_images.tiff")" || return 1
   fi
   [ -n "$requested" ] || return 1
   local extension=tiff
@@ -2990,24 +3065,53 @@ action_animate() {
       *) break ;;
     esac
   done
-  collect_publication_inputs files "$@" || {
+  local -a kim6_selected_inputs=("$@")
+  kim6_create_select_more kim6_selected_inputs "Animated GIF" || return 1
+  collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: select regular, unambiguous image files.')"
     return 1
   }
   dir="${files[0]%/*}"
-  if [ -z "$delay" ]; then
-    delay="$(kdialog --inputbox "$(gettext 'Delay between images in centiseconds (100 is one second):')" "${KIM_GIF_DELAY:-100}")" || return 1
+
+  # Collect all GIF options and the destination in one Qt dialog.
+  # Explicit CLI options remain supported without opening a dialog.
+  if [ -z "$delay" ] || [ -z "$loops" ] || [ -z "$requested" ]; then
+    local settings_file dialog_script
+    local -a selections=()
+
+    dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
+    [ -r "$dialog_script" ] || {
+      kdialog --title "KIM6 — Animated GIF" --error         "The Animated GIF settings dialog is not installed."
+      return 1
+    }
+
+    settings_file="$(mktemp)" || return 1
+
+    if ! python3 "$dialog_script" gif "$settings_file"       "$dir" "${#files[@]}"; then
+      rm -f -- "$settings_file"
+      return 1
+    fi
+
+    mapfile -d '' -t selections < "$settings_file"
+    rm -f -- "$settings_file"
+
+    [ "${#selections[@]}" -eq 3 ] || return 1
+
+    : "${delay:=${selections[0]}}"
+    : "${loops:=${selections[1]}}"
+    : "${requested:=${selections[2]}}"
   fi
-  if ! [[ "$delay" =~ ^[0-9]{1,5}$ ]] || ((10#$delay > 65535)); then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: delay must be an integer from 0 to 65535 centiseconds.')"
+
+  if ! [[ "$delay" =~ ^[0-9]{1,5}$ ]] ||
+     ((10#$delay > 65535)); then
+    kdialog --title "KIM6 — Animated GIF" --error       "Delay must be between 0 and 65535 centiseconds."
     return 1
   fi
   delay=$((10#$delay))
-  if [ -z "$loops" ]; then
-    loops="$(kdialog --inputbox "$(gettext 'Animation loop count (0 means infinite):')" 0)" || return 1
-  fi
-  if ! [[ "$loops" =~ ^[0-9]{1,5}$ ]] || ((10#$loops > 65535)); then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: loop count must be an integer from 0 to 65535.')"
+
+  if ! [[ "$loops" =~ ^[0-9]{1,5}$ ]] ||
+     ((10#$loops > 65535)); then
+    kdialog --title "KIM6 — Animated GIF" --error       "Loop count must be between 0 and 65535."
     return 1
   fi
   loops=$((10#$loops))
@@ -3030,11 +3134,9 @@ action_animate() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"
     return 1
   }
-  mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create a new GIF animation?')" "${#files[@]}" output)"
-  [ "$mode" != cancel ] || return 1
-  if [ -z "$requested" ]; then
-    requested="$(kdialog --getsavefilename "$dir" "my_animation.gif")" || return 1
-  fi
+  # Creation-only output; selected sources are protected.
+  mode=create
+  # Destination already supplied by CLI or Qt dialog.
   [ -n "$requested" ] || return 1
   prepare_derived_target "$requested" gif "$mode" "${files[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: invalid or unsafe output destination.')"; return 1; }
   output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
@@ -3130,16 +3232,64 @@ action_rename() {
   [ "$#" -gt 0 ] || rename_abort "rename: no selected files"
   local prefix='' suffix='' from='' to='' date_format='' preset action_mode
   local number=1 padding=3 sequence_base='' destination_choice
-  if [ "$mode" = interactive ]; then
-    interactive=true
-    mode="$(kdialog --radiolist "$(gettext 'Rename mode:')" \
-      sequential "$(gettext 'Sequential numbering')" on \
-      exifdate "$(gettext 'EXIF date')" off \
-      lowercase "$(gettext 'Lowercase')" off uppercase "$(gettext 'Uppercase')" off \
-      spacestodash "$(gettext 'Spaces to dashes')" off dashestospace "$(gettext 'Dashes to spaces')" off \
-      addprefix "$(gettext 'Add prefix')" off addsuffix "$(gettext 'Add suffix')" off \
-      overwrite "$(gettext 'Replace text')" off)" || return 1
-  fi
+  # Select a method and preflight date-based renames before any file
+  # operations or destination dialogs. No source file is changed here.
+  while :; do
+    if [ "$mode" = interactive ]; then
+      interactive=true
+      mode="$(kdialog --title "$(gettext 'Rename Images')" \
+        --radiolist "$(gettext 'Choose a rename method:')" \
+        sequential "$(gettext 'Sequential numbering')" on \
+        exifdate "$(gettext 'EXIF date')" off \
+        lowercase "$(gettext 'All lowercase')" off \
+        uppercase "$(gettext 'All Uppercase')" off \
+        spacestodash "$(gettext 'Spaces to Dashes')" off \
+      spacestounderscore "$(gettext 'Spaces to Underscores')" off \
+      underscorestospace "$(gettext 'Underscores to Spaces')" off \
+        dashestospace "$(gettext 'Dashes to Spaces')" off \
+        addprefix "$(gettext 'Add prefix')" off \
+        addsuffix "$(gettext 'Add suffix')" off \
+        overwrite "$(gettext 'Replace Text')" off)" || return 1
+    fi
+
+    [ "$mode" = exifdate ] || break
+
+    if ! command -v exiftool >/dev/null 2>&1; then
+      kdialog --title "$(gettext 'Rename Images')" --error \
+        "$(gettext 'ExifTool is required for EXIF-date renaming.')"
+      return 1
+    fi
+
+    local missing_count=0 checked_file checked_date checked_tag
+
+    for checked_file in "$@"; do
+      checked_date=''
+      for checked_tag in DateTimeOriginal CreateDate ModifyDate; do
+        checked_date="$(exiftool -s3 "-$checked_tag" \
+          -- "$checked_file" 2>/dev/null)" || checked_date=''
+        [ -z "$checked_date" ] || break
+      done
+
+      if [ -z "$checked_date" ]; then
+        missing_count=$((missing_count + 1))
+      fi
+    done
+
+    [ "$missing_count" -gt 0 ] || break
+
+    if kdialog --title "$(gettext 'Missing EXIF Dates')" \
+      --warningyesno \
+      "$missing_count selected image(s) have no usable EXIF date.
+
+No files have been renamed.
+
+Would you like to choose another rename method?"; then
+      mode=interactive
+      continue
+    fi
+
+    return 1
+  done
   case "$mode" in
     addprefix) prefix="$(kdialog --inputbox "$(gettext 'Prefix to add:')" '')" || return 1 ;;
     addsuffix) suffix="$(kdialog --inputbox "$(gettext 'Suffix to add:')" '')" || return 1 ;;
@@ -3174,25 +3324,23 @@ action_rename() {
       [ "${#number}" -le 18 ] && [ "${#padding}" -le 2 ] || rename_abort "rename: numbering exceeds supported integer range"
       number=$((10#$number)); padding=$((10#$padding))
       (( padding >= 1 && padding <= 18 )) || rename_abort "rename: number width must be 1-18" ;;
-    lowercase|uppercase|spacestodash|dashestospace) ;;
+    lowercase|uppercase|spacestodash|spacestounderscore|underscorestospace|dashestospace) ;;
     *) rename_abort "rename: unknown mode" ;;
   esac
-  if [ "$mode" = exifdate ] && ! command -v exiftool >/dev/null 2>&1; then
-    progress_error "$(gettext 'ExifTool is required for EXIF-date renaming.')"
-    return 1
-  fi
+
   action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
   [ "$action_mode" != cancel ] || return 1
+  # Interactive renames go directly to the directory picker.
+  # Explicit --output-dir takes precedence. Noninteractive calls without
+  # a destination continue to use each source file's own directory.
   if [ -z "$output_dir" ] && { [ "$interactive" = true ] || [ "$mode" = sequential ]; }; then
-    destination_choice="$(kdialog --radiolist "$(gettext 'Rename destination:')" \
-      source "$(gettext 'Each source directory')" on \
-      directory "$(gettext 'Choose a destination directory')" off)" || return 1
-    case "$destination_choice" in
-      source) ;;
-      directory) output_dir="$(kdialog --getexistingdirectory "$PWD")" || return 1
-                 [ -n "$output_dir" ] || return 1 ;;
-      *) return 1 ;;
-    esac
+    local rename_start_dir
+    rename_start_dir="$(dirname -- "$1")"
+    [ -d "$rename_start_dir" ] || rename_start_dir="$PWD"
+
+    output_dir="$(kdialog --title "$(gettext 'Rename destination')" \
+      --getexistingdirectory "$rename_start_dir")" || return 1
+    [ -n "$output_dir" ] || return 1
   fi
   # LF/CR names cannot be represented safely in the existing dialogs and path
   # helper protocol. Reject the ENTIRE selection before any filesystem changes.
@@ -3251,6 +3399,8 @@ action_rename() {
       lowercase) newstem="$(printf '%s' "$stem" | tr '[:upper:]' '[:lower:]')" ;;
       uppercase) newstem="$(printf '%s' "$stem" | tr '[:lower:]' '[:upper:]')" ;;
       spacestodash) newstem="${stem// /-}" ;;
+      spacestounderscore) newstem="${stem// /_}" ;;
+      underscorestospace) newstem="${stem//_/ }" ;;
       dashestospace) newstem="${stem//-/ }" ;;
       addprefix) newstem="$prefix$stem" ;;
       addsuffix) newstem="$stem$suffix" ;;
@@ -5722,6 +5872,23 @@ action_datesync() {
 # Notes:
 # - Uses `magick` for resize and compression.
 
+# Calculate Web Export dimensions without enlarging smaller sources.
+# The preset dimensions are maximum bounds, not target dimensions.
+# Keep the original dimensions when both axes already fit.
+resize_fit_dimensions_no_upscale() {
+  local dimensions="$1" max_width="$2" max_height="$3"
+  local width="${dimensions%x*}" height="${dimensions#*x}"
+
+  [[ "$width" =~ ^[1-9][0-9]*$ &&
+     "$height" =~ ^[1-9][0-9]*$ ]] || return 1
+
+  if (( width <= max_width && height <= max_height )); then
+    printf '%sx%s\n' "$width" "$height"
+  else
+    resize_fit_dimensions "$dimensions" "$max_width" "$max_height"
+  fi
+}
+
 action_webexport() {
   # Web export creates validated derivatives with explicit ICC handling.
   # Preserve animation only when the chosen output supports its frames.
@@ -5798,8 +5965,16 @@ action_webexport() {
   if [ "$custom" = true ] && [ "$fmt" = png ]; then
     quality=100
   fi
+  # Preset exports are noninteractive. Use format-appropriate defaults.
+  # An explicit --quality option still takes precedence.
   if [ -z "$quality" ]; then
-    quality="$(kdialog --inputbox "$(gettext 'Quality (1-100):')" "${KIM_WEB_QUALITY:-95}")" || return 1
+    case "${fmt,,}" in
+      jpg|jpeg) quality="${KIM_WEB_QUALITY_JPEG:-95}" ;;
+      webp) quality="${KIM_WEB_QUALITY_WEBP:-95}" ;;
+      avif) quality="${KIM_WEB_QUALITY_AVIF:-95}" ;;
+      png) quality=100 ;;
+      *) quality="${KIM_WEB_QUALITY:-95}" ;;
+    esac
   fi
   [[ "$quality" =~ ^[0-9]{1,3}$ ]] && [ "$quality" -ge 1 ] && [ "$quality" -le 100 ] || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
@@ -5828,14 +6003,14 @@ action_webexport() {
 
   # Always honor the export directory, including under KIM_POLICY=overwrite.
   if [ -z "$outdir" ]; then
-    outdir="$(kdialog --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
+    outdir="$(kdialog --title "KIM6 — Web Export Destination" --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
     [ -n "$outdir" ] || return 1
   elif [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; then
     if [ "$explicit_dir" = true ]; then
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: output directory is not accessible.')"
       return 1
     fi
-    outdir="$(kdialog --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
+    outdir="$(kdialog --title "KIM6 — Web Export Destination" --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
     [ -n "$outdir" ] || return 1
   fi
 
@@ -5979,14 +6154,14 @@ action_webexport() {
         # With an embedded profile ImageMagick performs an ICC transform;
         # without one, applying the sRGB profile records the documented RGB
         # working-space assumption without changing sample values.
-        magick - -auto-orient -profile "$srgb_profile" -resize "$size" "${jpeg_options[@]}" \
+        magick - -auto-orient -profile "$srgb_profile" -resize "${size}>" "${jpeg_options[@]}" \
           -quality "$quality" -strip -profile "$srgb_profile" "$coder:$OUTTMP" \
           < "$i" >/dev/null 2>&1 || rc=$?
       elif [ -n "$profile_path" ]; then
-        magick - -auto-orient -resize "$size" -quality "$quality" "${jpeg_options[@]}" -strip \
+        magick - -auto-orient -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" -strip \
           -profile "$profile_path" "$coder:$OUTTMP" < "$i" >/dev/null 2>&1 || rc=$?
       else
-        magick - -auto-orient -strip -resize "$size" -quality "$quality" "${jpeg_options[@]}" "$coder:$OUTTMP" \
+        magick - -auto-orient -strip -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" "$coder:$OUTTMP" \
           < "$i" >/dev/null 2>&1 || rc=$?
       fi
     else
@@ -6005,7 +6180,7 @@ action_webexport() {
       IFS='|' read -r actual_format actual_width actual_height _ _ _ <<< "$record"
       expected_format="$(image_format_class "$coder")"
       actual_format="$(image_format_class "$actual_format")"
-      expected_dimensions="$(resize_fit_dimensions "${input_dimensions[actual_frames]}" "$max_width" "$max_height")"
+      expected_dimensions="$(resize_fit_dimensions_no_upscale "${input_dimensions[actual_frames]}" "$max_width" "$max_height")"
       if [ "$actual_format" != "$expected_format" ] ||
          ! [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_height" =~ ^[1-9][0-9]*$ ]] ||
          [ "${actual_width}x${actual_height}" != "$expected_dimensions" ]; then
@@ -6332,6 +6507,7 @@ action_pelemele() {
       *) files+=("$@"); break ;;
     esac
   done
+  kim6_create_select_more files "Photo Collage" || return 1
   if ! collect_publication_inputs files "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
@@ -6552,11 +6728,107 @@ dispatcher_resource() {
   printf '%s/../%s\n' "$script_dir" "$1"
 }
 
+
+# KIM6_SETTINGS_V1: load user preferences without sourcing shell code.
+kim6_load_user_settings() {
+  local config line key value
+  config="${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf"
+
+  [ -f "$config" ] && [ ! -L "$config" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    case "$key" in
+      KIM_POLICY)
+        case "$value" in
+          prompt|create)
+            [ -n "${KIM_POLICY+x}" ] || KIM_POLICY="$value"
+            ;;
+        esac
+        ;;
+      KIM_NAME_AFFIX_POSITION)
+        case "$value" in
+          prefix|suffix)
+            [ -n "${KIM_NAME_AFFIX_POSITION+x}" ] ||
+              KIM_NAME_AFFIX_POSITION="$value"
+            ;;
+        esac
+        ;;
+      KIM_COPYRIGHT_CREATOR|KIM_COPYRIGHT_NOTICE|KIM_COPYRIGHT_USAGE_RIGHTS)
+        [ "${#value}" -le 500 ] || continue
+
+        case "$key" in
+          KIM_COPYRIGHT_CREATOR)
+            [ -n "${KIM_COPYRIGHT_CREATOR+x}" ] ||
+              KIM_COPYRIGHT_CREATOR="$value"
+            ;;
+          KIM_COPYRIGHT_NOTICE)
+            [ -n "${KIM_COPYRIGHT_NOTICE+x}" ] ||
+              KIM_COPYRIGHT_NOTICE="$value"
+            ;;
+          KIM_COPYRIGHT_USAGE_RIGHTS)
+            [ -n "${KIM_COPYRIGHT_USAGE_RIGHTS+x}" ] ||
+              KIM_COPYRIGHT_USAGE_RIGHTS="$value"
+            ;;
+        esac
+        ;;
+
+      KIM_WEB_QUALITY_JPEG|KIM_WEB_QUALITY_WEBP|KIM_WEB_QUALITY_AVIF)
+        if [[ "$value" =~ ^[0-9]{1,3}$ ]] &&
+           [ "$value" -ge 1 ] && [ "$value" -le 100 ]; then
+          case "$key" in
+            KIM_WEB_QUALITY_JPEG)
+              [ -n "${KIM_WEB_QUALITY_JPEG+x}" ] ||
+                KIM_WEB_QUALITY_JPEG="$value" ;;
+            KIM_WEB_QUALITY_WEBP)
+              [ -n "${KIM_WEB_QUALITY_WEBP+x}" ] ||
+                KIM_WEB_QUALITY_WEBP="$value" ;;
+            KIM_WEB_QUALITY_AVIF)
+              [ -n "${KIM_WEB_QUALITY_AVIF+x}" ] ||
+                KIM_WEB_QUALITY_AVIF="$value" ;;
+          esac
+        fi
+        ;;
+    esac
+  done < "$config"
+}
+
+kim6_load_user_settings
+
+: "${KIM_NAME_AFFIX_POSITION:=suffix}"
+: "${KIM_WEB_QUALITY:=95}"
+: "${KIM_WEB_FORMAT:=jpg}"
+: "${KIM_WEB_COLOR_MODE:=srgb}"
+
 action_about() {
   local about_file
+
   about_file="$(dispatcher_resource ABOUT)" || return 1
-  [ -r "$about_file" ] || { kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed About resource is missing.')"; return 1; }
-  kdialog --title "$(gettext 'About KIM6')" --msgbox "$(<"$about_file")"
+
+  if [ ! -r "$about_file" ]; then
+    kdialog --title "KIM6" --error       "The installed About resource is missing."
+    return 1
+  fi
+
+  kdialog --title "About KIM6"     --msgbox "$(<"$about_file")"
+}
+
+action_settings() {
+  local about_file dialog_script
+
+  about_file="$(dispatcher_resource ABOUT)" || return 1
+
+  dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_settings_dialog.py"
+
+  if [ ! -r "$about_file" ] || [ ! -r "$dialog_script" ]; then
+    kdialog --title "KIM6" --error       "The installed Settings resources are missing."
+    return 1
+  fi
+
+  python3 "$dialog_script" "$about_file"
 }
 
 action_license() {
@@ -6573,16 +6845,38 @@ action_license() {
 }
 
 action_manual() {
-  local manual_file
+  local manual_file viewer_script
+
   manual_file="$(dispatcher_resource docs/index.html)" || return 1
-  if [ ! -r "$manual_file" ] || ! command -v xdg-open >/dev/null 2>&1; then
-    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed manual or xdg-open is unavailable.')"
+
+  if [ ! -r "$manual_file" ]; then
+    kdialog --title "KIM6 — User Manual" --error \
+      "The installed KIM6 manual is missing."
     return 1
   fi
-  xdg-open "$manual_file" >/dev/null 2>&1 || {
-    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'Could not open the KIM6 manual.')"
-    return 1
-  }
+
+  viewer_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_manual_viewer.py"
+
+  # SSH-forwarded browsers can detach successfully without opening
+  # a visible window. Prefer the internal viewer in SSH sessions.
+  if [ -z "${SSH_CONNECTION:-}${SSH_CLIENT:-}${SSH_TTY:-}" ]; then
+    if command -v xdg-open >/dev/null 2>&1; then
+      if xdg-open "$manual_file"; then
+        return 0
+      fi
+    fi
+  fi
+
+  # Internal viewer is also the fallback when xdg-open fails.
+  if [ -r "$viewer_script" ] &&
+     command -v python3 >/dev/null 2>&1; then
+    python3 "$viewer_script" "$manual_file"
+    return $?
+  fi
+
+  kdialog --title "KIM6 — User Manual" --error \
+    "Unable to open the manual. Neither a working browser nor the internal viewer is available."
+  return 1
 }
 
 # Video helpers are kept local to the video action so the shared image
@@ -8367,7 +8661,6 @@ EOF
 
 main() {
   [[ $# -ge 1 ]] || { usage; exit 1; }
-  load_kim_config
   cmd="$1"
   shift || true
 
@@ -8408,6 +8701,7 @@ main() {
     videoaudio)      mk_workdir; action_videoaudio "$@" ;;
     videogif)        mk_workdir; action_videogif "$@" ;;
     webexport)       mk_workdir; action_webexport "$@" ;;
+    settings)        action_settings "$@" ;;
     about)           action_about "$@" ;;
     license)         action_license "$@" ;;
     manual)          action_manual "$@" ;;

@@ -1,5 +1,6 @@
 [Desktop Entry]
 Type=Service
+Icon=document-new
 Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;

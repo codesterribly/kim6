@@ -1,10 +1,11 @@
 [Desktop Entry]
 Type=Service
+Icon=image-x-generic
 Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/jpeg;image/png;image/webp;image/avif;
 X-KDE-Protocol=file
-Actions=01ConvertAVIF;02ConvertBMP;03ConvertGIF;04ConvertHEIC;05ConvertJP2Lossless;06ConvertJP2Lossy;07ConvertJPG;08ConvertJXL;09ConvertPDF;10ConvertPNG;11ConvertTIFF;12ConvertWEBP;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
+Actions=01ConvertAVIF;02ConvertBMP;03ConvertGIF;04ConvertHEIC;05ConvertJP2Lossless;06ConvertJP2Lossy;07ConvertJPG;08ConvertJXL;09ConvertPDF;10ConvertPNG;11ConvertTIFF;12ConvertWEBP;_SEPARATOR_;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
 _X-KDE-Submenu=KIM6 — Convert/Compress
 X-KIM6-Managed=true
 
@@ -67,3 +68,6 @@ Exec=kim_all compress --maximum -- %F
 [Desktop Action 2203CompressCustom]
 _Name=Compress Custom
 Exec=kim_all compress --custom -- %F
+
+[Desktop Action _SEPARATOR_]
+Name=Separator

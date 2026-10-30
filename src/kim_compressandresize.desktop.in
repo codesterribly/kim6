@@ -1,5 +1,6 @@
 [Desktop Entry]
 Type=Service
+Icon=transform-scale
 Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
@@ -55,3 +56,6 @@ Exec=kim_all flipflop flop -- %F
 [Desktop Action 21FlipVertical]
 _Name=Flip Vertically
 Exec=kim_all flipflop flip -- %F
+
+[Desktop Action _SEPARATOR_]
+Name=Separator
