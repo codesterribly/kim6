@@ -55,8 +55,8 @@ for i in "$@";do
             -background  none   -rotate $((RANDOM % 31 - 15)) \
             -background  black  \( +clone -shadow 60x4+4+4 \) +swap \
             -background  none   -flatten \
-            -depth 8  -quality 95 "$KIMDIR/pelemele_$RANDOM_NUM.png"
+            -depth 8  -quality 95 "$KIMDIR/collage_$RANDOM_NUM.png"
         qdbus $dbusRef org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value $counter
     fi
 done
-montage -background "$COLOR" -tile "$TILE" -geometry "-$OVER-$OVER" -- "$KIMDIR"/pelemele_*.png `kdialog --getsavefilename ~ *.png`
+montage -background "$COLOR" -tile "$TILE" -geometry "-$OVER-$OVER" -- "$KIMDIR"/collage_*.png `kdialog --getsavefilename ~ *.png`

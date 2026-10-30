@@ -6261,7 +6261,7 @@ action_webexport() {
 
 # Render a fixed-canvas collage from staged, validated images.
 # Action-local options support presets; the legacy scattered layout
-# remains in action_pelemele. Selected source files are never changed.
+# remains in action_collage. Selected source files are never changed.
 collage_render_layout() (
   # Compute fixed-canvas layout inside a subshell with staged tiles.
   # Validate each tile before montage and publish only the final result.
@@ -6491,7 +6491,7 @@ collage_render_layout() (
   report_finish_dialog "$(gettext 'Kim')"
 )
 
-action_pelemele() {
+action_collage() {
   local size='' tile='' overlap_percent='' color='' border_ratio='' rotation='' random_rotation=15
   local seed='' shadow=true requested='' mode='' output='' tmp='' ref='' tile_dir=''
   local width height columns rows overlap border angle file index=0 rc=0 record
@@ -8554,7 +8554,7 @@ Commands:
       The output includes images (up to 1920px), thumbnails (up to 360px),
       and a self-contained index.html with a keyboard-accessible photo viewer.
 
-  pelemele -- <files...>
+  collage -- <files...>
       Prompt for a collage layout: Grid, Mosaic, Hero, Scattered, Filmstrip.
       --layout grid|mosaic|hero|filmstrip|scattered bypasses the layout chooser.
       Modern layouts prompt for background, shadows, order, and canvas.
@@ -8723,7 +8723,7 @@ main() {
   shift || true
 
   case "$cmd" in
-    album|animate|compress|contactsheet|gallery|pelemele|print|resize|tiffjoin)
+    album|animate|compress|contactsheet|gallery|collage|print|resize|tiffjoin)
       require_action_tools "$cmd" magick identify || exit 1 ;;
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
@@ -8743,7 +8743,7 @@ main() {
     datesync)        mk_workdir; action_datesync "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
     gallery)         mk_workdir; action_gallery "$@" ;;
-    pelemele)        mk_workdir; action_pelemele "$@" ;;
+    collage)        mk_workdir; action_collage "$@" ;;
     print)           mk_workdir; action_print "$@" ;;
     rename)          mk_workdir; action_rename "$@" ;;
     resize)          mk_workdir; action_resize "$@" ;;

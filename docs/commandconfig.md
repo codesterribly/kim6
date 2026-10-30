@@ -28,7 +28,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Command Syntax](#command-syntax)
 - [Output and File Handling](#output-and-file-handling)
 - [Configuration and Defaults](#configuration-and-defaults)
-- [Still-image actions](#still-image-actions): album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, pelemele, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
+- [Still-image actions](#still-image-actions): album, animate, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, collage, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, timeshift, tiffjoin, webexport
 - [Video actions](#video-actions): slideshow, video, videoframes, videoaudio, videogif
 - [Information actions](#information-actions): about, license, manual, settings
 
@@ -223,10 +223,10 @@ kim_all gallery -- IMAGE...
 
 Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting `index.html` with `xdg-open` when available.
 
-### `pelemele`
+### `collage`
 
 ```sh
-kim_all pelemele [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...
+kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...
 ```
 
 Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are `5x4`, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.

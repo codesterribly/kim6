@@ -90,7 +90,7 @@ class PolicyOutputContextTests(unittest.TestCase):
             "action_tiffjoin",
             "action_animate",
             "collage_render_layout",
-            "action_pelemele",
+            "action_collage",
         )
 
         for name in action_names:

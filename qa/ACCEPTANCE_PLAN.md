@@ -1365,7 +1365,7 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | Case ID | Action ID | Visible label | Dispatcher command | Sources | Source policy |
 |---|---|---|---|---|---|
 | `kim_publication.desktop:Gallery` | `Gallery` | Create an HTML gallery… | `kim_all gallery -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
-| `kim_publication.desktop:Collage` | `Collage` | Create a photo collage… | `kim_all pelemele -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
+| `kim_publication.desktop:Collage` | `Collage` | Create a photo collage… | `kim_all collage -- %F` | sequence-red.png, sequence-green.png, sequence-blue.png | derived |
 | `kim_publication.desktop:Rename` | `Rename` | Rename images… | `kim_all rename interactive -- %F` | dated-photo.jpg, sequence-red.png, -leading ü [1].jpg | rename |
 | `kim_publication.desktop:SortByDate` | `SortByDate` | Rename by EXIF date… | `kim_all rename exifdate -- %F` | dated-photo.jpg, sequence-red.png, -leading ü [1].jpg | rename |
 | `kim_publication.desktop:StripMetadata` | `StripMetadata` | Strip metadata… | `kim_all stripmeta -- %F` | metadata.jpg | authorized_overwrite |
@@ -1401,7 +1401,7 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 ### Create a photo collage… — `kim_publication.desktop:Collage`
 
 - **Menu path:** KIM6 — Publish and organize → Create a photo collage…
-- **Dispatcher contract:** `kim_all pelemele -- %F`
+- **Dispatcher contract:** `kim_all collage -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
 - **Interactive choices:** Choose canvas/image size, layout, background, border, spacing/overlap and rotation/shadow options.

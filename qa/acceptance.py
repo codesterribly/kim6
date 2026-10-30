@@ -142,7 +142,7 @@ def _fixture_class(route: str, args: list[str], action_id: str, menu: str = "") 
         if route == "videoaudio" and ("mute" in action_id.lower() or action_id == "ExtractVideoAudio"):
             return ["video-multiaudio.mkv"]
         return ["video-audio.mp4"]
-    if route in {"album", "print", "contactsheet", "tiffjoin", "animate", "pelemele", "slideshow", "gallery"}:
+    if route in {"album", "print", "contactsheet", "tiffjoin", "animate", "collage", "slideshow", "gallery"}:
         return ["sequence-red.png", "sequence-green.png", "sequence-blue.png"]
     if route == "rename":
         return ["dated-photo.jpg", "sequence-red.png", "-leading ü [1].jpg"]
@@ -181,7 +181,7 @@ def _source_behavior(route: str) -> str:
     if route == "rename":
         return "rename"
     if route in {"webexport", "resizeandsend", "videoframes", "videoaudio", "videogif", "slideshow",
-                 "gallery", "pelemele", "album", "print", "contactsheet", "tiffjoin", "animate"}:
+                 "gallery", "collage", "album", "print", "contactsheet", "tiffjoin", "animate"}:
         return "derived"
     return "authorized_overwrite"
 
@@ -208,7 +208,7 @@ def _expected(route: str, args: list[str]) -> str:
         "print": "A print-layout PDF in the chosen case directory.",
         "contactsheet": "A printable PDF contact sheet with the selected grid, labels and page size.",
         "gallery": "A complete gallery directory containing index.html, main images and thumbnails.",
-        "pelemele": "A validated collage image in the chosen case directory.",
+        "collage": "A validated collage image in the chosen case directory.",
         "tiffjoin": "A multi-page TIFF in the chosen case directory, in selection order.",
         "animate": "An animated GIF in the chosen case directory, with the selected delay and loop behavior.",
         "video": "A validated encoded video in the case directory, with the selected codec/container preset.",
@@ -233,7 +233,7 @@ def _dependencies(route: str) -> list[str]:
             "datesync": ["exiftool", "magick", "qdbus", "kdialog"],
             "rename": ["qdbus", "kdialog", "optional exiftool for EXIF-date mode"],
             "gallery": ["magick", "identify", "qdbus", "kdialog", "optional xdg-open"],
-            "pelemele": ["magick", "identify", "qdbus", "kdialog"],
+            "collage": ["magick", "identify", "qdbus", "kdialog"],
             "album": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
             "print": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
             "contactsheet": ["magick", "identify", "qdbus", "kdialog", "PDF delegate"],
@@ -271,7 +271,7 @@ def _checks(route: str) -> list[str]:
         "print": ["Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page orientation and print layout to the chosen options."],
         "contactsheet": ["Automated: pdfinfo reports readable pages and correct physical size. Human: inspect image order, number/filename labels, grid and pagination."],
         "gallery": ["index.html and all relative image/thumbnail references exist."],
-        "pelemele": ["Image decodes and selected tile ordering/layout is visible."],
+        "collage": ["Image decodes and selected tile ordering/layout is visible."],
         "tiffjoin": ["Automated: TIFF fully decodes and page count matches selected input frame count. Human: inspect page order."],
         "animate": ["Automated: GIF fully decodes and frame count matches selected input frame count. Human: inspect frame order, delay and loop behavior."],
         "video": ["ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality."],
@@ -301,7 +301,7 @@ def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
         "print": ["Choose one of the supported print layouts and page settings."],
         "contactsheet": ["Choose page size/orientation, grid, labels, image fit, background, resolution and title."],
         "gallery": ["Enter gallery title/author and layout/output options."],
-        "pelemele": ["Choose canvas/image size, layout, background, border, spacing/overlap and rotation/shadow options."],
+        "collage": ["Choose canvas/image size, layout, background, border, spacing/overlap and rotation/shadow options."],
         "tiffjoin": ["Choose the output location/name; selected order is used."],
         "animate": ["Choose frame delay and animation settings."],
         "video": ["Create or overwrite mode when asked."],
@@ -368,7 +368,7 @@ def _human_checks(route: str, label: str) -> list[str]:
         base += ["Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality."]
     elif route == "flipflop":
         base += ["Open the result beside its input and use the asymmetric colored shapes to confirm which axis changed."]
-    elif route in {"compress", "resize", "convert", "webexport", "pelemele", "rotate", "rotatewithexif"}:
+    elif route in {"compress", "resize", "convert", "webexport", "collage", "rotate", "rotatewithexif"}:
         base += ["Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality."]
     elif route in {"stripmeta", "copyright", "timeshift", "datesync"}:
         base += ["Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case."]
@@ -1533,7 +1533,7 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
         return "Choose `11.5x15 cm: 1x2 images, portrait` (the default), then save the PDF in this case folder.", "A print-layout PDF with portrait physical pages and the selected images."
     if route == "gallery":
         return "Enter title `KIM6 acceptance`, author `QA`, and 3 columns; choose this case folder for the gallery output if asked.", "A gallery directory with an index, full-size images and thumbnails."
-    if route == "pelemele":
+    if route == "collage":
         return "Use the defaults shown: 400x400 image size, 5x4 grid, 15% overlap and grey background; save in this case folder.", "A PNG collage containing all three colored source images."
     if route == "tiffjoin":
         return "Accept the suggested TIFF output name and choose this case folder if a destination is requested.", "A multi-page TIFF whose pages follow the selected red, green, blue order."
@@ -2207,7 +2207,7 @@ def _check_isolated_install(generated: Path) -> int:
         print("Missing installed KIM6 resource(s): " + ", ".join(missing_resources), file=sys.stderr)
         return 1
     legacy_names = {"kim_album", "kim_compress", "kim_convert", "kim_flipflop", "kim_galery", "kim_multiburst",
-                    "kim_other", "kim_pelemele", "kim_print", "kim_rename", "kim_resize", "kim_resizeandsend",
+                    "kim_other", "kim_collage", "kim_print", "kim_rename", "kim_resize", "kim_resizeandsend",
                     "kim_rotate", "kim_rotatewithexif", "kim_sortbydate", "kim_stripmeta", "kim_treatment",
                     "kim_video", "kim_webexport"}
     legacy_active = []

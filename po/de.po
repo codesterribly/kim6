@@ -107,7 +107,7 @@ msgstr ""
 
 #: ../src/bin/kim_compress:34 ../src/bin/kim_compress:54
 #: ../src/bin/kim_convert:31 ../src/bin/kim_flipflop:30
-#: ../src/bin/kim_galery:39 ../src/bin/kim_pelemele:37 ../src/bin/kim_print:31
+#: ../src/bin/kim_galery:39 ../src/bin/kim_collage:37 ../src/bin/kim_print:31
 #: ../src/bin/kim_rename:33 ../src/bin/kim_rename:61 ../src/bin/kim_resize:34
 #: ../src/bin/kim_resize:55 ../src/bin/kim_resizeandsend:35
 #: ../src/bin/kim_rotate:30 ../src/bin/kim_rotatewithexif:30
@@ -159,23 +159,23 @@ msgstr ""
 msgid "Kim — Treatment of file: "
 msgstr ""
 
-#: ../src/bin/kim_pelemele:29
+#: ../src/bin/kim_collage:29
 msgid "Size of small images:"
 msgstr "Größe der kleinen Bilder:"
 
-#: ../src/bin/kim_pelemele:30
+#: ../src/bin/kim_collage:30
 msgid "Number of rows and columns:"
 msgstr "Anzahl der Reihen und Spalten:"
 
-#: ../src/bin/kim_pelemele:31
+#: ../src/bin/kim_collage:31
 msgid "Overlaping ratio in percent:"
 msgstr "Überlappungs-Ratio in Prozent:"
 
-#: ../src/bin/kim_pelemele:32
+#: ../src/bin/kim_collage:32
 msgid "Background color:"
 msgstr "Hintergrundfarbe:"
 
-#: ../src/bin/kim_pelemele:63 ../src/bin/kim_print:46
+#: ../src/bin/kim_collage:63 ../src/bin/kim_print:46
 msgid "Kim — resizing file: "
 msgstr ""
 
@@ -727,13 +727,13 @@ msgstr ""
 #~ msgid "Creating multipages TIFF"
 #~ msgstr "mehrere Bilder in einer TIFF-Datei zusammenfassen"
 
-#~ msgid "Kim pelemele"
+#~ msgid "Kim collage"
 #~ msgstr "Kim Collagen erstellen"
 
 #~ msgid "resizing of file :"
 #~ msgstr "Größenveränderung der Datei:"
 
-#~ msgid "Making pelemele"
+#~ msgid "Making collage"
 #~ msgstr "Collage erstellen"
 
 #~ msgid "Creating album ..."

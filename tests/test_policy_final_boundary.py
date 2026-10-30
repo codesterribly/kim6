@@ -24,7 +24,7 @@ class FinalPublicationBoundaryTests(unittest.TestCase):
 
     def collage(self, destination):
         return self.w.dispatch(
-            "pelemele", "--layout", "grid",
+            "collage", "--layout", "grid",
             "--canvas", "400x300",
             "--fit", "fit", "--gap", "12",
             "--frame", "none", "--no-shadow",

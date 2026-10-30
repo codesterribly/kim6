@@ -109,7 +109,7 @@ class MenuContractTests(unittest.TestCase):
         self.assertEqual(6, sum(command.startswith("kim_all compress ") for command in commands))
         self.assertEqual(13, sum(command.startswith("kim_all resize ") for command in commands))
         for required in ("webexport", "resizeandsend", "rename", "album", "print", "gallery",
-                         "pelemele", "tiffjoin", "animate", "stripmeta", "copyright", "timeshift",
+                         "collage", "tiffjoin", "animate", "stripmeta", "copyright", "timeshift",
                          "rotate", "flipflop", "convert", "about", "license", "manual"):
             self.assertTrue(any(re.search(rf"\b{required}\b", command) for command in commands), required)
         self.assertTrue(any("bmp5" in command for command in commands))

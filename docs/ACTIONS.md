@@ -118,7 +118,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 |---|---|---|
 | `Album` | Create a PDF album… | `kim_all album -- %F` |
 | `Animation` | Create an animated GIF… | `kim_all animate -- %F` |
-| `Collage` | Create a photo collage… | `kim_all pelemele -- %F` |
+| `Collage` | Create a photo collage… | `kim_all collage -- %F` |
 | `ContactSheet` | Create a photo contact sheet… | `kim_all contactsheet -- %F` |
 | `Gallery` | Create an HTML gallery… | `kim_all gallery -- %F` |
 | `Print` | Create a print-layout PDF… | `kim_all print -- %F` |

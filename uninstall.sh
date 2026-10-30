@@ -85,7 +85,7 @@ menu_names=(
 )
 languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
-  kim_other kim_pelemele kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
+  kim_other kim_collage kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
   kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
 manual_files=(
   docs/reference/ABOUT.html
@@ -125,7 +125,7 @@ check_file() {
 # KIM6. These names include both the unified menus and their legacy commands.
 menu_is_kim6() {
   [ -f "$1" ] && [ ! -L "$1" ] &&
-    grep -Eq '^X-KIM6-Managed=true$|^Exec=.*(kim_all|kim_(album|compress|convert|flipflop|galery|multiburst|other|pelemele|print|rename|resize|resizeandsend|rotate|rotatewithexif|sortbydate|stripmeta|treatment|video|webexport))(["[:space:]]|$)' "$1"
+    grep -Eq '^X-KIM6-Managed=true$|^Exec=.*(kim_all|kim_(album|compress|convert|flipflop|galery|multiburst|other|collage|print|rename|resize|resizeandsend|rotate|rotatewithexif|sortbydate|stripmeta|treatment|video|webexport))(["[:space:]]|$)' "$1"
 }
 dispatcher_is_kim6() {
   [ -f "$1" ] && [ ! -L "$1" ] && grep -Fq '# One entrypoint for KIM actions' "$1"

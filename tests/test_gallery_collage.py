@@ -33,7 +33,7 @@ class GalleryCollageTests(unittest.TestCase):
         output = self.w.path('out/grid.png')
         before = (self.w.observe(self.source), self.w.observe(other))
         result = self.w.dispatch(
-            'pelemele', '--layout', 'grid', '--canvas', '400x300',
+            'collage', '--layout', 'grid', '--canvas', '400x300',
             '--fit', 'fit', '--gap', '12', '--frame', 'none',
             '--no-shadow', '--output', output, '--', self.source, other,
         )
@@ -51,7 +51,7 @@ class GalleryCollageTests(unittest.TestCase):
         before = tuple(self.w.observe(source) for source in inputs)
         output = self.w.path(f'out/{layout}.png')
         result = self.w.dispatch(
-            'pelemele', '--layout', layout, '--canvas', '400x300',
+            'collage', '--layout', layout, '--canvas', '400x300',
             '--gap', '12', '--fit', 'fill', '--frame', 'thin',
             '--no-shadow', '--output', output, '--', *inputs,
         )
@@ -81,7 +81,7 @@ class GalleryCollageTests(unittest.TestCase):
         old = self.w.observe(target)
         self.w.approve_overwrite()
         self.w.respond('magick', status=1)
-        result = self.w.dispatch('pelemele', '--layout', 'grid', '--canvas', '400x300',
+        result = self.w.dispatch('collage', '--layout', 'grid', '--canvas', '400x300',
                                  '--no-shadow', '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), old)
@@ -99,7 +99,7 @@ class GalleryCollageTests(unittest.TestCase):
         self.w.respond_to('kdialog', 'Drop shadows:', {'stdout': 'false\n'})
         self.w.respond_to('kdialog', 'Photo order:', {'stdout': 'selected\n'})
         self.w.respond_to('kdialog', '--getsavefilename', {'stdout': str(target) + '\n'})
-        result = self.w.dispatch('pelemele', '--', self.source)
+        result = self.w.dispatch('collage', '--', self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(target.is_file())
         dialogs = [call['argv'] for call in result.calls if call['tool'] == 'kdialog']
@@ -138,16 +138,16 @@ class GalleryCollageTests(unittest.TestCase):
         self.w.use_real_gallery_collage()
         output = self.w.path('out/invalid.png')
         result = self.w.dispatch(
-            'pelemele', '--layout', 'mosaic', '--canvas', '400x0',
+            'collage', '--layout', 'mosaic', '--canvas', '400x0',
             '--no-shadow', '--output', output, '--', self.source,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(output.exists())
 
-    def test_pelemele_dispatcher_creates_a_collage_artifact(self):
+    def test_collage_dispatcher_creates_a_collage_artifact(self):
         self.w.use_real_gallery_collage()
         output = self.w.path('out/collage.png')
-        result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', output,
                                  '--', self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -253,7 +253,7 @@ class GalleryCollageTests(unittest.TestCase):
         original = self.w.observe(target)
         self.w.approve_overwrite()
         self.w.respond('magick', status=0, output_base64=base64.b64encode(b'invalid').decode())
-        result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), original)
@@ -268,7 +268,7 @@ class GalleryCollageTests(unittest.TestCase):
         original = self.w.observe(target)
         self.w.approve_overwrite()
         self.w.respond('magick', passthrough=True, interrupt='gone')
-        result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source, second)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), original)
@@ -283,7 +283,7 @@ class GalleryCollageTests(unittest.TestCase):
         before = self.w.observe(target)
         self.w.approve_overwrite()
         self.w.respond_to('mv', str(target), {'status': 73, 'stderr': 'injected publication failure'})
-        result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '40x40', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), before)
@@ -297,7 +297,7 @@ class GalleryCollageTests(unittest.TestCase):
         signatures = []
         for name in ('random-one.png', 'random-two.png'):
             output = self.w.path('out/' + name)
-            result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '2x1',
+            result = self.w.dispatch('collage', '--size', '40x40', '--tile', '2x1',
                                      '--overlap', '0', '--background', '#ffffff', '--border', '2',
                                      '--random-rotation', '15', '--seed', '1234', '--shadow',
                                      '--output', output, '--', self.source, second)
@@ -319,7 +319,7 @@ class GalleryCollageTests(unittest.TestCase):
         red.write_bytes(b'P6\n2 2\n255\n' + bytes([255, 0, 0] * 4))
         green.write_bytes(b'P6\n2 2\n255\n' + bytes([0, 255, 0] * 4))
         output = self.w.path('out/ordered.png')
-        result = self.w.dispatch('pelemele', '--size', '10x10', '--tile', '2x1',
+        result = self.w.dispatch('collage', '--size', '10x10', '--tile', '2x1',
                                  '--overlap', '0', '--background', 'white', '--border', '0',
                                  '--rotation', '0', '--no-shadow', '--output', output, '--', red, green)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -332,7 +332,7 @@ class GalleryCollageTests(unittest.TestCase):
     def test_collage_accepts_spaced_safe_background_colors(self):
         self.w.use_real_gallery_collage()
         output = self.w.path('out/spaced-color.png')
-        result = self.w.dispatch('pelemele', '--size', '20x20', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '20x20', '--tile', '1x1',
                                  '--overlap', '0', '--background', 'light goldenrod',
                                  '--rotation', '0', '--no-shadow', '--output', output, '--', self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -346,7 +346,7 @@ class GalleryCollageTests(unittest.TestCase):
         output = self.w.path('out/collage.png')
         output.write_bytes(b'user destination')
         prior = self.w.observe(output)
-        result = self.w.dispatch('pelemele', '--size', '40x40', '--tile', '2x1',
+        result = self.w.dispatch('collage', '--size', '40x40', '--tile', '2x1',
                                  '--overlap', '0', '--background', 'white', '--border', '0',
                                  '--rotation', '0', '--no-shadow', '--output', output, '--',
                                  self.source, second)
@@ -367,7 +367,7 @@ class GalleryCollageTests(unittest.TestCase):
         sentinel.write_bytes(b'user-owned target')
         link = self.w.path('out/link.png')
         link.symlink_to(sentinel)
-        result = self.w.dispatch('pelemele', '--size', '20x20', '--tile', '1x1',
+        result = self.w.dispatch('collage', '--size', '20x20', '--tile', '1x1',
                                  '--rotation', '0', '--no-shadow', '--output', link, '--', self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(link.is_symlink())
@@ -378,7 +378,7 @@ class GalleryCollageTests(unittest.TestCase):
         selected_png.write_bytes(self.source.read_bytes())
         before = self.w.observe(selected_png)
         self.w.approve_overwrite()
-        alias = self.w.dispatch('pelemele', '--size', '20x20', '--tile', '1x1',
+        alias = self.w.dispatch('collage', '--size', '20x20', '--tile', '1x1',
                                 '--rotation', '0', '--no-shadow', '--output', selected_png,
                                 '--', selected_png)
         self.assertNotEqual(alias.returncode, 0)

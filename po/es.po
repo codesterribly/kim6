@@ -103,7 +103,7 @@ msgstr "Reemplazar existentes"
 
 #: ../src/bin/kim_compress:34 ../src/bin/kim_compress:54
 #: ../src/bin/kim_convert:31 ../src/bin/kim_flipflop:30
-#: ../src/bin/kim_galery:39 ../src/bin/kim_pelemele:37 ../src/bin/kim_print:31
+#: ../src/bin/kim_galery:39 ../src/bin/kim_collage:37 ../src/bin/kim_print:31
 #: ../src/bin/kim_rename:33 ../src/bin/kim_rename:61 ../src/bin/kim_resize:34
 #: ../src/bin/kim_resize:55 ../src/bin/kim_resizeandsend:35
 #: ../src/bin/kim_rotate:30 ../src/bin/kim_rotatewithexif:30
@@ -155,23 +155,23 @@ msgstr "Kim — Número de columnas:"
 msgid "Kim — Treatment of file: "
 msgstr "Kim — Tratamiento del archivo: "
 
-#: ../src/bin/kim_pelemele:29
+#: ../src/bin/kim_collage:29
 msgid "Size of small images:"
 msgstr "Tamaño de las imágenes pequeñas:"
 
-#: ../src/bin/kim_pelemele:30
+#: ../src/bin/kim_collage:30
 msgid "Number of rows and columns:"
 msgstr "Número de filas y columnas:"
 
-#: ../src/bin/kim_pelemele:31
+#: ../src/bin/kim_collage:31
 msgid "Overlaping ratio in percent:"
 msgstr "Porcentaje de superposición:"
 
-#: ../src/bin/kim_pelemele:32
+#: ../src/bin/kim_collage:32
 msgid "Background color:"
 msgstr "Color de fondo:"
 
-#: ../src/bin/kim_pelemele:63 ../src/bin/kim_print:46
+#: ../src/bin/kim_collage:63 ../src/bin/kim_print:46
 msgid "Kim — resizing file: "
 msgstr "Kim — Redimensionando archivo: "
 

@@ -105,7 +105,7 @@ msgstr ""
 
 #: ../src/bin/kim_compress:34 ../src/bin/kim_compress:54
 #: ../src/bin/kim_convert:31 ../src/bin/kim_flipflop:30
-#: ../src/bin/kim_galery:39 ../src/bin/kim_pelemele:37 ../src/bin/kim_print:31
+#: ../src/bin/kim_galery:39 ../src/bin/kim_collage:37 ../src/bin/kim_print:31
 #: ../src/bin/kim_rename:33 ../src/bin/kim_rename:61 ../src/bin/kim_resize:34
 #: ../src/bin/kim_resize:55 ../src/bin/kim_resizeandsend:35
 #: ../src/bin/kim_rotate:30 ../src/bin/kim_rotatewithexif:30
@@ -158,23 +158,23 @@ msgstr "Kim — 欄數："
 msgid "Kim — Treatment of file: "
 msgstr "Kim — 檔案處理方式："
 
-#: ../src/bin/kim_pelemele:29
+#: ../src/bin/kim_collage:29
 msgid "Size of small images:"
 msgstr "小影像的大小："
 
-#: ../src/bin/kim_pelemele:30
+#: ../src/bin/kim_collage:30
 msgid "Number of rows and columns:"
 msgstr "列數與欄數："
 
-#: ../src/bin/kim_pelemele:31
+#: ../src/bin/kim_collage:31
 msgid "Overlaping ratio in percent:"
 msgstr "覆蓋比例（百分比）："
 
-#: ../src/bin/kim_pelemele:32
+#: ../src/bin/kim_collage:32
 msgid "Background color:"
 msgstr "背景顏色："
 
-#: ../src/bin/kim_pelemele:63 ../src/bin/kim_print:46
+#: ../src/bin/kim_collage:63 ../src/bin/kim_print:46
 msgid "Kim — resizing file: "
 msgstr "Kim — 調整此檔案大小中："
 

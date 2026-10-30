@@ -22,7 +22,7 @@ Exec=kim_all animate -- %F
 [Desktop Action Collage]
 Icon=folder-pictures
 _Name=Create a photo collage…
-Exec=kim_all pelemele -- %F
+Exec=kim_all collage -- %F
 
 [Desktop Action ContactSheet]
 Icon=view-grid

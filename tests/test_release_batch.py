@@ -93,7 +93,7 @@ class PackagingTests(unittest.TestCase):
         for name in (
             "action_contactsheet",
             "collage_render_layout",
-            "action_pelemele",
+            "action_collage",
         ):
             with self.subTest(action=name):
                 self.assertRegex(
