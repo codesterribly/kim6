@@ -64,7 +64,7 @@
           <div class="result-name">lake_resized.jpg</div>
           <div class="result-detail">Original stays untouched in Create new mode.</div>
         </div>
-        <div class="art-caption">Illustration of an output example, not a Dolphin screenshot.</div>
+
       </div>
     </div>
   </div>
@@ -183,7 +183,7 @@
         <h2 id="sharing-title">Share without changing the source.</h2>
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
         <div class="feature-pair">
-          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the selected original. Animated APNG inputs are refused to prevent a still-frame export; ordinary PNG remains supported.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, PNG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the selected original. Animated APNG inputs are refused to prevent a still-frame export; ordinary PNG remains supported.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
           <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare resized attachments or attach selected files at full size, depending on the action. Prepared copies remain in a persistent attachment folder because mail applications may read them later.</p><p>Review attachments before sending and clean up prepared copies when you no longer need them.</p></article>
         </div>
       </section>
@@ -194,18 +194,19 @@
         <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIM6 gives you targeted ways to work with it.</p>
         <div class="split-panel">
           <div>
-            <h3>Remove GPS coordinates</h3>
-            <p>Select <strong>Organize/Metadata › Strip GPS Metadata…</strong> to target recognized GPS fields without removing all other metadata.</p>
+            <h3>Remove GPS and AI metadata</h3>
+            <p>Select <strong>Organize/Metadata › Strip GPS Metadata</strong> to remove recognized GPS coordinate fields while retaining unrelated metadata.</p>
+            <p>Select <strong>Organize/Metadata › Strip AI Metadata</strong> to remove recognized AI-generation fields, including supported IPTC AI prompt and system information, without stripping all other metadata.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
             <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
           </div>
           <div>
             <h3>Copyright and capture times</h3>
-            <p>Add creator and copyright information, shift recorded camera times, or synchronize embedded timestamps and filesystem modification times in either direction. A fixed time shift is not a timezone conversion.</p>
+            <p>Add creator and copyright information, shift recorded camera times, or synchronize embedded timestamps and filesystem modification times in either direction.</p>
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
-        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p>GPS-only removal does <strong>not</strong> guarantee complete location anonymization. Other metadata or visible scene details may still reveal a location. Metadata removal also cannot guarantee complete removal of signed provenance records.</p></div>
+        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>GPS removal:</strong> Removing recognized coordinates does not guarantee complete location anonymization. Other metadata or visible scene details may still reveal where a photograph was taken. <strong>AI metadata removal:</strong> KIM6 removes recognized AI-generation fields, but unrecognized generator-specific metadata and signed C2PA / Content Credentials may remain. Neither operation guarantees complete removal of the information it targets.</p></div>
       </section>
 
       <section id="collections" class="content-section" aria-labelledby="collections-title">
@@ -245,7 +246,9 @@
           <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Select <strong>Overwrite originals (confirmation required)</strong>, then confirm the separate warning identifying originals, renamed files, or derived outputs and the selected-file count. Cancel is safe.</p></article>
           <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Transform images</h3><p>Rotation, EXIF auto-orientation, flip and flop support both output modes. Create saves transformed copies and preserves originals. Overwrite replaces originals only after explicit confirmation and output validation.</p></article>
         </div>
-        <p class="section-footnote"><code>KIM_POLICY=create</code> selects separate outputs where supported; <code>KIM_POLICY=prompt</code> displays the output-policy dialog. Create mode numbers colliding output names, while authorized publication validates outputs and checks unsafe symlinks, hardlinks and source aliases. Completed batch outputs survive later failures. Web exports, email copies, galleries, albums, slideshows and video frame/audio/GIF utilities leave selected sources intact. Video transcoding may replace originals only after explicit overwrite confirmation. See <a href="reference/commandconfig.html">file-handling and configuration details <span aria-hidden="true">↗</span></a>.</p>
+        <p><strong>Choose your defaults in Settings.</strong> In Dolphin, right-click a supported image or video and open <strong>Actions → KIM6 — Settings/About → Settings</strong>. Choose whether supported operations should create separate files automatically or ask how to proceed. Save your preferences to use them for subsequent operations.</p>
+<p><strong>Protecting original files.</strong> When an operation supports replacing an original, KIM6 requires explicit overwrite authorization and confirmation. Many operations, including web export, email preparation, galleries, albums, slideshows, and video frame, audio and GIF utilities, always create separate results. Video transcoding can replace an original only after explicit confirmation.</p>
+<p><strong>Existing filenames and processing failures.</strong> KIM6 avoids silently overwriting existing results. Where supported, it adds a number to resolve filename conflicts. It checks generated output before publishing it, and successfully completed results remain available if a later item in the batch fails. See <a href="reference/commandconfig.html#output-and-file-handling">file-handling and configuration details</a>.</p>
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
@@ -279,7 +282,7 @@
   <footer class="site-footer">
     <div class="page-width footer-inner">
       <div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Image and video tools for KDE Dolphin.</p></div>
-      <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="reference/ABOUT.html">Credits</a><span aria-hidden="true">·</span><a href="reference/LICENSE.html">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/KIM-6/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
+      <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="reference/ABOUT.html">Credits</a><span aria-hidden="true">·</span><a href="reference/LICENSE.html">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/codesterribly/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
     </div>
   </footer>
 </body>

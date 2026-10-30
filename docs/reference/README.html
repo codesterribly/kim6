@@ -35,7 +35,7 @@
 <p>Select one file or an entire group of files, right-click, and choose what you want to do.</p>
 <p>KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.</p>
 <h2 id="quick-start">Quick Start</h2>
-<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. Create mode saves separate outputs and preserves selected originals where supported. <code>KIM_POLICY=create</code> selects Create mode automatically; <code>KIM_POLICY=prompt</code> displays the output-policy dialog.</p>
+<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open <strong>Actions → KIM6 — Settings/About → Settings</strong>. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals.</p>
 <table>
 <thead>
 <tr>
@@ -62,8 +62,13 @@
 </tr>
 <tr>
 <td>Remove GPS coordinates</td>
-<td>KIM6 — Organize/Metadata → Strip GPS Metadata…</td>
+<td>KIM6 — Organize/Metadata → Strip GPS Metadata</td>
 <td><code>trip_gps.jpg</code></td>
+</tr>
+<tr>
+<td>Remove recognized AI metadata</td>
+<td>KIM6 — Organize/Metadata → Strip AI Metadata</td>
+<td><code>portrait_ai.jpg</code></td>
 </tr>
 <tr>
 <td>Resize several photographs</td>
@@ -73,20 +78,20 @@
 </tbody>
 </table>
 <p>These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.</p>
-<p>GPS removal targets recognized coordinate fields but does not guarantee complete location anonymization. If no matching fields are present, no new copy is created. Completed batch outputs remain available even if a later item fails.</p>
-<p>See <a href="commandconfig.html#configuration-and-defaults">Command and Configuration Reference</a> for filename and output-policy settings.</p>
+<p>GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.</p>
+<p>Use <strong>KIM6 — Settings/About → Settings</strong> to change your defaults. For advanced configuration and command-line overrides, see <a href="commandconfig.html#configuration-and-defaults">Command and Configuration Reference</a>.</p>
 <h2 id="features">Features</h2>
 <h3 id="resize-compress-and-convert-images">Resize, compress, and convert images</h3>
 <ul>
 <li><strong>Resize images:</strong> Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.</li>
 <li><strong>Compress JPEGs:</strong> Select a JPEG quality level, progressive or baseline encoding, and optional Huffman-table optimization. Smaller files are not guaranteed at every setting.</li>
-<li><strong>Prepare images for the web:</strong> Resize and optimize photographs, with options for output quality and color profiles.</li>
+<li><strong>Prepare images for the web:</strong> Export JPEG, PNG, WebP, or AVIF derivatives. JPEG, WebP and AVIF have separate quality defaults in Settings; PNG remains lossless. Color-profile handling can also be configured.</li>
 <li><strong>Convert formats:</strong> Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.</li>
 <li><strong>Rotate and flip:</strong> Rotate images manually or use their EXIF orientation information.</li>
 </ul>
 <h3 id="organize-photographs-and-manage-metadata">Organize photographs and manage metadata</h3>
 <ul>
-<li><strong>Manage privacy and metadata:</strong> Remove recognized GPS coordinates, AI-generation fields, or all supported metadata. GPS-only cleanup is not complete location anonymization; C2PA/Content Credentials removal cannot be guaranteed.</li>
+<li><strong>Manage privacy and metadata:</strong> Use <strong>Strip GPS Metadata</strong> to remove recognized coordinates, <strong>Strip AI Metadata</strong> to remove recognized AI-generation fields, or <strong>Strip Metadata</strong> for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.</li>
 <li><strong>Manage photo dates:</strong> Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.</li>
 <li><strong>Update copyright information:</strong> Add or modify copyright metadata across multiple photographs.</li>
 <li><strong>Control what gets preserved:</strong> Choose appropriate metadata and output behavior for different operations.</li>
@@ -113,7 +118,7 @@
 <p>Available video codecs depend on FFmpeg and the encoders installed on your system.</p>
 <h2 id="how-kim6-works">How KIM6 works</h2>
 <p>KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.</p>
-<p>Most resizing, compression, and conversion actions offer <strong>Create new files (originals untouched)</strong> or <strong>Overwrite originals (confirmation required)</strong>. Replacing originals requires a second explicit confirmation that identifies the affected files and operation. <code>KIM_POLICY=create</code> selects separate outputs where supported; <code>KIM_POLICY=prompt</code> displays the output-policy dialog.</p>
+<p>Most resizing, compression, and conversion actions offer <strong>Create new files (originals untouched)</strong> or <strong>Overwrite originals (confirmation required)</strong>. Use <strong>Actions → KIM6 — Settings/About → Settings</strong> in Dolphin to choose the default behavior. Replacing originals requires an additional explicit confirmation identifying the operation and affected files.</p>
 <p>Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. Create mode saves transformed copies while preserving the selected originals. Overwrite mode replaces the originals only after explicit review and confirmation. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export, email preparation, video frame/audio/GIF utilities, and slideshows create derivatives. <strong>Video transcoding</strong> can instead replace an original after explicit overwrite confirmation. Completed batch results remain available if a later item fails, while staged invalid results are not published.</p>
 <p>Create mode numbers occupied output filenames and respects configurable prefix/suffix affix placement (for example, <code>web_photo.jpg</code> versus <code>photo_web.jpg</code>). Output publication rejects unsafe source aliases and linked destinations where relevant. <strong>Animated APNG is deliberately refused by Resize, Web Export and resized email preparation</strong> rather than being flattened to a still image; dedicated APNG conversion remains available when the required tools support it.</p>
 <p>See <a href="#quick-start">Getting Started</a> for examples, <a href="commandconfig.html#output-and-file-handling">Safe Handling</a> for details, and <a href="FORMATS.html">Supported Formats</a> for decoder and encoder limits.</p>
@@ -134,7 +139,7 @@
 <li><a href="commandconfig.html">Configuration</a> — Customizing KIM6's behavior.</li>
 <li><a href="DEVELOPMENT.html">Development</a> — Technical information and contributing.</li>
 </ul>
-<p>You can also report bugs or suggest improvements through the project's <a href="https://github.com/KIM-6/kim6/issues">GitHub Issues</a>.</p>
+<p>For source and project updates, see <a href="https://github.com/codesterribly/kim6">this KIM6 rewrite</a>. Report bugs or suggest improvements through <a href="https://github.com/codesterribly/kim6/issues">GitHub Issues</a>. The original project remains credited in the history section below.</p>
 <h2 id="project-history">Project history</h2>
 <p>KIM, the KDE Image Menu, began during the KDE 3 era in the mid-2000s. Its goal was simple: provide useful image-processing tools from the file manager without requiring users to open a separate application.</p>
 <p>The project continued through KDE 4, KDE 5, and KDE 6, with contributions from multiple developers and maintainers.</p>

@@ -70,112 +70,120 @@
 </ul>
 <p>The output-policy prompt defaults to <strong>Create new files (originals untouched)</strong>. Selecting <strong>Overwrite originals (confirmation required)</strong> requires a second, action-specific warning identifying the selected-file count. Canceling either dialog or losing access to KDialog refuses replacement. Authorization applies to the selected batch.</p>
 <p>Some metadata and timestamp operations have additional rules. Each command section describes its applicable behavior.</p>
-<p>See <a href="commandconfig.html#output-and-file-handling">File handling</a> for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.</p>
+<p>See <a href="#output-and-file-handling">File handling</a> for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.</p>
 <h3 id="file-preservation-details">File preservation details</h3>
 <p>Compression, conversion, resizing, and metadata changes support Create or explicitly authorized Overwrite behavior according to the action. Rotation, EXIF auto-orientation, flipping, and flopping can publish separate copies or replace originals after confirmation. Rename preflights conflicts before moving or copying files. Exports, email preparations, extracted video media, slideshows, galleries, and other derived publications preserve selected sources. Video transcoding can replace a selected original after explicit confirmation.</p>
 <p>Metadata-only edits do not recompress image pixels. Rotation preserves source modification time, while flipping gives the changed file a fresh modification time. EXIF-to-filesystem date synchronization deliberately changes filesystem modification time; file-to-EXIF synchronization edits embedded timestamps instead. There is no global promise to preserve every metadata field or filesystem timestamp.</p>
 <p>Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a>.</p>
 <p>For compression, conversion, resizing, metadata stripping and copyright editing, duplicate file identities (including aliases to the same file) cause the entire selection to be rejected before processing. Rotation and flipping instead report a repeated source as a failed item without transforming it again; camera-time shifting skips repeated paths and canonical-parent aliases after a successful update. All these actions reject filenames containing line breaks before processing. A processing failure returns a nonzero exit status even when other files in that batch were completed successfully; already published outputs are retained.</p>
 <h2 id="configuration-and-defaults">Configuration and Defaults</h2>
-<p>KIM6 reads optional defaults from a KConfig file and environment variables. When an action accepts an explicit command-line option, that option takes precedence for the invocation. Otherwise, an environment variable takes precedence over the corresponding KConfig key, followed by the built-in default.</p>
-<p>The default configuration file is <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu</code>. Set <code>KIM_CONFIG_FILE</code> to use a different file. The KConfig group is literally named <code>&lt;default&gt;</code>. The dispatcher reads supported KConfig values when it starts, so changes to the file apply to subsequent invocations. If the file is unavailable or unreadable, the dispatcher uses environment values and action defaults.</p>
+<p><strong>For normal use, open Settings in Dolphin:</strong> Right-click a supported file and choose <strong>Actions → KIM6 — Settings/About → Settings</strong>. Choose whether actions prompt about replacement or automatically create separate copies where supported. You can also set filename affix position, separate JPEG/WebP/AVIF web-export quality defaults, and copyright details. Click <strong>Save</strong>. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.</p>
 <h3 id="settings">Settings</h3>
+<p>The graphical Settings dialog writes <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code> (normally <code>~/.config/kim6/settings.conf</code>). It is a simple validated <code>KEY=value</code> text file, <strong>not</strong> KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.</p>
 <table>
 <thead>
 <tr>
-<th>Environment variable</th>
-<th>KConfig key</th>
+<th>Setting / environment variable</th>
 <th>Default</th>
-<th>Accepted values and purpose</th>
+<th>Behavior</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>KIM_CONFIG_FILE</code></td>
-<td>—</td>
-<td><code>${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu</code></td>
-<td>Path to the KConfig file; environment-only setting.</td>
-</tr>
-<tr>
-<td><code>KIM_POLICY</code></td>
 <td><code>KIM_POLICY</code></td>
 <td><code>prompt</code></td>
-<td><code>create</code> selects separate outputs where supported; <code>prompt</code> displays the output-policy dialog.</td>
+<td><code>prompt</code> asks for Create or Overwrite where supported. <code>create</code> automatically selects separate outputs where supported and prevents actions requiring original-file replacement.</td>
 </tr>
 <tr>
 <td><code>KIM_NAME_AFFIX_POSITION</code></td>
-<td><code>NAME_AFFIX_POSITION</code></td>
 <td><code>suffix</code></td>
-<td><code>prefix</code> or <code>suffix</code> for generated filename tags.</td>
+<td>Generated name tags appear after (<code>photo_web.jpg</code>) or before (<code>web_photo.jpg</code>) the filename stem.</td>
 </tr>
 <tr>
-<td><code>KIM_WEB_QUALITY</code></td>
-<td><code>WEB_EXPORT_QUALITY</code></td>
-<td><code>75</code></td>
-<td>Integer 1–100 for web export quality.</td>
+<td><code>KIM_WEB_QUALITY_JPEG</code></td>
+<td><code>95</code></td>
+<td>Default JPEG web-export quality (1–100).</td>
 </tr>
 <tr>
-<td><code>KIM_WEB_FORMAT</code></td>
-<td><code>WEB_EXPORT_FORMAT</code></td>
-<td><code>jpg</code></td>
-<td><code>jpg</code>, <code>jpeg</code>, <code>webp</code>, <code>avif</code>, or <code>keep</code> for web export.</td>
+<td><code>KIM_WEB_QUALITY_WEBP</code></td>
+<td><code>95</code></td>
+<td>Default WebP web-export quality (1–100).</td>
 </tr>
 <tr>
-<td><code>KIM_WEB_COLOR_MODE</code></td>
-<td><code>WEB_COLOR_MODE</code></td>
-<td><code>srgb</code></td>
-<td><code>srgb</code> or <code>preserve</code> for web export color handling.</td>
+<td><code>KIM_WEB_QUALITY_AVIF</code></td>
+<td><code>95</code></td>
+<td>Default AVIF web-export quality (1–100).</td>
 </tr>
 <tr>
 <td><code>KIM_COPYRIGHT_CREATOR</code></td>
-<td><code>COPYRIGHT_CREATOR</code></td>
 <td>Empty</td>
-<td>Default creator or artist text.</td>
+<td>Default creator/artist for copyright editing.</td>
 </tr>
 <tr>
 <td><code>KIM_COPYRIGHT_NOTICE</code></td>
-<td><code>COPYRIGHT_NOTICE</code></td>
 <td>Empty</td>
-<td>Default copyright notice; supports <code>{YEAR}</code>.</td>
+<td>Default copyright notice; supports <code>{YEAR}</code> replacement.</td>
 </tr>
 <tr>
 <td><code>KIM_COPYRIGHT_USAGE_RIGHTS</code></td>
-<td><code>COPYRIGHT_USAGE_RIGHTS</code></td>
 <td>Empty</td>
 <td>Default usage-rights text.</td>
 </tr>
+</tbody>
+</table>
+<p>PNG export uses lossless compression, so no lossy PNG quality setting is provided. Empty copyright defaults do not request clearing existing fields.</p>
+<h3 id="validation-and-behavior">Validation and behavior</h3>
+<ul>
+<li><strong>Output policy:</strong> <code>create</code> uses separate copies wherever supported. <code>prompt</code> defaults to <strong>Create new files (originals untouched)</strong> and requires a second explicit confirmation before replacing originals. Derived-only actions preserve selected sources.</li>
+<li><strong>Filename affixes:</strong> Prefix/suffix tags apply to generated names for compression, resizing, web export and metadata stripping where applicable; rename operations have their own naming rules. Collision numbering remains before the extension.</li>
+<li><strong>Web quality:</strong> The dialog accepts integers from 1 to 100. Saved invalid values are ignored and the respective default of 95 applies. Explicit command-line <code>--quality</code> is validated for its invocation.</li>
+<li><strong>Web format and color:</strong> Unsupported values cause failure rather than silent format substitution. <code>keep</code> retains the original format when supported; <code>srgb</code> needs compatible ICC handling.</li>
+<li><strong>Copyright:</strong> Empty input fields leave corresponding metadata unchanged. <code>{YEAR}</code> in a notice is resolved by the copyright action as documented under <a href="#copyright">copyright</a>.</li>
+</ul>
+<h3 id="advanced-command-line-overrides">Advanced command-line overrides</h3>
+<p>These environment-only options are <strong>not</strong> stored by the Settings dialog:</p>
+<table>
+<thead>
 <tr>
-<td><code>KIM_GIF_DELAY</code></td>
-<td>—</td>
-<td><code>100</code></td>
-<td>Default animation delay in centiseconds (0–65535), used by the interactive <code>animate</code> dialog.</td>
+<th>Setting / environment variable</th>
+<th>Default</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KIM_WEB_FORMAT</code></td>
+<td><code>jpg</code></td>
+<td>Default web-export format if not specified: <code>jpg</code>, <code>jpeg</code>, <code>png</code>, <code>webp</code>, <code>avif</code>, or <code>keep</code> where supported.</td>
+</tr>
+<tr>
+<td><code>KIM_WEB_COLOR_MODE</code></td>
+<td><code>srgb</code></td>
+<td><code>srgb</code> converts supported profiles for web export; <code>preserve</code> retains a compatible embedded profile.</td>
+</tr>
+<tr>
+<td><code>KIM_WEB_QUALITY</code></td>
+<td><code>95</code></td>
+<td>Fallback quality when no format-specific value applies; JPEG/WebP/AVIF presets use their separate quality settings.</td>
 </tr>
 </tbody>
 </table>
-<p><code>KIM_CONFIG_FILE</code> is an environment-only setting; it chooses the file containing the KConfig keys above. <code>KIM_GIF_DELAY</code> is also environment-only and is range-checked when the animation is requested. KIM6 uses <code>KIM_POLICY</code> alone for output policy; it does not support <code>KIM_MODE</code> as an alias.</p>
-<h3 id="validation-and-behavior">Validation and behavior</h3>
-<ul>
-<li><strong>Output policy:</strong> Supported values are <code>create</code> and <code>prompt</code>. Create mode generates collision-safe output names where the action supports copies. Prompt mode requires explicit review and a second confirmation before replacing existing files. Derived-only actions preserve selected sources.</li>
-<li><strong>Filename tags:</strong> <code>prefix</code> places a generated tag before the complete filename stem; <code>suffix</code> places it after the stem. The extension stays at the end, and collision numbering remains before the extension. This setting applies to compression, resize, web export, and full metadata stripping, not to rename. Only the exact value <code>prefix</code> selects prefix mode; otherwise suffix behavior is used. KConfig accepts the two documented values.</li>
-<li><strong>Web quality:</strong> Invalid KConfig values fall back to <code>75</code>. An invalid <code>KIM_WEB_QUALITY</code> environment value can appear as the dialog default but is rejected if submitted; an explicit <code>--quality</code> argument is validated for that invocation.</li>
-<li><strong>Web format and color:</strong> Invalid KConfig entries fall back to <code>jpg</code> and <code>srgb</code>, respectively. Unsupported environment or command-line values cause the action to fail rather than silently choosing another format or color mode. <code>keep</code> retains the source format when supported.</li>
-<li><strong>Copyright fields:</strong> Empty defaults mean no value is supplied. An empty field in the interactive dialog leaves that metadata field unchanged rather than clearing it. <code>{YEAR}</code> in a copyright notice is resolved as described under <a href="#copyright"><code>copyright</code></a>.</li>
-</ul>
-<h3 id="example-kconfig-file">Example KConfig file</h3>
-<p>Create or edit <code>~/.config/kim_kdeimagemenu</code>:</p>
-<pre class="ini"><code>[&lt;default&gt;]
-KIM_POLICY=create
-NAME_AFFIX_POSITION=suffix
-WEB_EXPORT_QUALITY=75
-WEB_EXPORT_FORMAT=jpg
-WEB_COLOR_MODE=srgb
-COPYRIGHT_CREATOR=Example Photographer
-COPYRIGHT_NOTICE=Copyright © {YEAR} Example Photographer
-COPYRIGHT_USAGE_RIGHTS=</code></pre>
-<p>Environment overrides must be present in the environment that launches Dolphin, or can be set for an individual terminal command. For example:</p>
-<pre class="sh"><code>KIM_POLICY=create KIM_NAME_AFFIX_POSITION=prefix kim_all resize --size 1600x1600 -- photo.jpg
-KIM_WEB_COLOR_MODE=preserve kim_all webexport --size 1600x1600 -- photo.jpg</code></pre>
-<p>When running from a source checkout, replace <code>kim_all</code> in those examples with <code>./src/bin/kim_all</code>. See <a href="commandconfig.html#output-and-file-handling">File handling</a> for action-specific metadata and timestamp rules.</p>
+<p>Explicit options, including <code>--quality</code>, <code>--format</code>, and <code>--color</code>, take precedence for that invocation. Environment overrides must be present in the running command's environment (or Dolphin's environment). <code>KIM_POLICY=prompt</code> does not itself permit overwriting: a second explicit confirmation is required.</p>
+<h3 id="example-saved-settings">Example saved settings</h3>
+<p>The Settings dialog creates a file like this, shown with default and empty demonstration values:</p>
+<pre class="ini"><code># KIM6 user preferences
+# Environment variables take precedence.
+KIM_POLICY=prompt
+KIM_NAME_AFFIX_POSITION=suffix
+KIM_WEB_QUALITY_JPEG=95
+KIM_WEB_QUALITY_WEBP=95
+KIM_WEB_QUALITY_AVIF=95
+KIM_COPYRIGHT_CREATOR=
+KIM_COPYRIGHT_NOTICE=
+KIM_COPYRIGHT_USAGE_RIGHTS=</code></pre>
+<p>For a temporary command-line filename-prefix override:</p>
+<pre class="sh"><code>KIM_NAME_AFFIX_POSITION=prefix ./src/bin/kim_all resize --size 1600x1600 -- photo.jpg</code></pre>
+<p>See <a href="#output-and-file-handling">Output and File Handling</a>, <a href="#copyright">copyright</a>, and <a href="#webexport">webexport</a> for action-specific details.</p>
 <h2 id="still-image-actions">Still-image actions</h2>
 <h3 id="album"><code>album</code></h3>
 <pre class="sh"><code>kim_all album -- FILE...
@@ -283,7 +291,7 @@ kim_all resize --custom-percent -- IMAGE...</code></pre>
 <p>Geometry uses ImageMagick’s supported resize grammar and preserves aspect ratio for the menu presets. Percentage is an integer 1–1000; 100% keeps dimensions, values above 100% explicitly enlarge. ImageMagick rounding is used, with dimensions clamped to at least one pixel. Existing presets are maximum width/height bounds, not forced exact dimensions. Create mode uses <code>_resized</code>; authorized overwrite replaces only after validation. Animated APNG input is refused without changing the original, rather than risking silent frame loss; ordinary PNG is supported.</p>
 <h3 id="resizeandsend"><code>resizeandsend</code></h3>
 <pre class="sh"><code>kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...</code></pre>
-<p>Without <code>--size</code>, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; <code>--size full</code> preserves the original animation by copying its bytes. KMail, Thunderbird, or <code>xdg-email</code> is used if available. Attachments are retained in <code>${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments</code> because clients may read asynchronously; see <a href="commandconfig.html#output-and-file-handling">File handling</a>.</p>
+<p>Without <code>--size</code>, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; <code>--size full</code> preserves the original animation by copying its bytes. KMail, Thunderbird, or <code>xdg-email</code> is used if available. Attachments are retained in <code>${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments</code> because clients may read asynchronously; see <a href="#output-and-file-handling">File handling</a>.</p>
 <p>KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.</p>
 <h3 id="rotate"><code>rotate</code></h3>
 <pre class="sh"><code>kim_all rotate --angle DEGREES -- IMAGE...
@@ -295,7 +303,7 @@ kim_all rotate --custom -- IMAGE...</code></pre>
 <p>Retained dispatcher alias for EXIF-based orientation. The Dolphin menu uses <code>rotate --exif</code>.</p>
 <h3 id="stripmeta"><code>stripmeta</code></h3>
 <pre class="sh"><code>kim_all stripmeta [--mode all|gps|ai] [--remove-ai] [--interactive] -- IMAGE...</code></pre>
-<p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal is not a guarantee of complete location anonymization. ExifTool cannot guarantee removal of signed C2PA Content Credentials.</p>
+<p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal targets recognized coordinate fields; other metadata and visible scene details may still reveal a location. AI removal targets recognized AI-generation metadata, not every possible generator indicator. Unrecognized generator-specific fields and signed C2PA / Content Credentials may remain. ExifTool cannot guarantee their complete removal.</p>
 <h3 id="timeshift"><code>timeshift</code></h3>
 <pre class="sh"><code>kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
 kim_all timeshift --interactive -- IMAGE...</code></pre>
@@ -304,8 +312,8 @@ kim_all timeshift --interactive -- IMAGE...</code></pre>
 <pre class="sh"><code>kim_all tiffjoin [--output PATH] [--] IMAGE...</code></pre>
 <p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
 <h3 id="webexport"><code>webexport</code></h3>
-<pre class="sh"><code>kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...</code></pre>
-<p>Options can also be prompted. Web Export accepts an output directory and selected source files. Default size is 1600×1600, default quality is 75, format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web Export creates distinct derivatives. Animated APNG input is refused rather than flattened. JPEG scan and optimization options apply only to JPEG output.</p>
+<pre class="sh"><code>kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|jpeg|png|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...</code></pre>
+<p>Options can also be prompted. Web Export accepts an output directory and selected source files. Default size is 1600×1600, default quality is 95 for JPEG, WebP and AVIF (independently configurable in Settings), format defaults to <code>KIM_WEB_FORMAT</code> (normally JPEG), and color defaults to ICC-managed sRGB. <code>keep</code> retains source format when supported. Web Export creates distinct derivatives. Animated APNG input is refused rather than flattened. JPEG scan and optimization options apply only to JPEG output.</p>
 <p>With <code>--color srgb</code> (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. <code>--color preserve</code> retains embedded color profiles where supported.</p>
 <h2 id="video-actions">Video actions</h2>
 <h3 id="slideshow"><code>slideshow</code></h3>

@@ -10,21 +10,22 @@ KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familia
 
 ## Quick Start
 
-Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. Create mode saves separate outputs and preserves selected originals where supported. `KIM_POLICY=create` selects Create mode automatically; `KIM_POLICY=prompt` displays the output-policy dialog.
+Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open **Actions → KIM6 — Settings/About → Settings**. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
 | Resize a photograph | KIM6 — Resize/Rotate → Resize to 1600 × 1600 | `lake_resized.jpg` |
 | Compress a JPEG | KIM6 — Convert/Compress → Compress Recommended | `lake_compressed.jpg` |
 | Convert PNG to JPEG | KIM6 — Convert/Compress → Convert to JPEG | `garden.jpg` |
-| Remove GPS coordinates | KIM6 — Organize/Metadata → Strip GPS Metadata… | `trip_gps.jpg` |
+| Remove GPS coordinates | KIM6 — Organize/Metadata → Strip GPS Metadata | `trip_gps.jpg` |
+| Remove recognized AI metadata | KIM6 — Organize/Metadata → Strip AI Metadata | `portrait_ai.jpg` |
 | Resize several photographs | KIM6 — Resize/Rotate → Resize to 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
 
 These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
 
-GPS removal targets recognized coordinate fields but does not guarantee complete location anonymization. If no matching fields are present, no new copy is created. Completed batch outputs remain available even if a later item fails.
+GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.
 
-See [Command and Configuration Reference](docs/commandconfig.md#configuration-and-defaults) for filename and output-policy settings.
+Use **KIM6 — Settings/About → Settings** to change your defaults. For advanced configuration and command-line overrides, see [Command and Configuration Reference](docs/commandconfig.md#configuration-and-defaults).
 
 ## Features
 
@@ -32,13 +33,13 @@ See [Command and Configuration Reference](docs/commandconfig.md#configuration-an
 
 - **Resize images:** Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.
 - **Compress JPEGs:** Select a JPEG quality level, progressive or baseline encoding, and optional Huffman-table optimization. Smaller files are not guaranteed at every setting.
-- **Prepare images for the web:** Resize and optimize photographs, with options for output quality and color profiles.
+- **Prepare images for the web:** Export JPEG, PNG, WebP, or AVIF derivatives. JPEG, WebP and AVIF have separate quality defaults in Settings; PNG remains lossless. Color-profile handling can also be configured.
 - **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.
 - **Rotate and flip:** Rotate images manually or use their EXIF orientation information.
 
 ### Organize photographs and manage metadata
 
-- **Manage privacy and metadata:** Remove recognized GPS coordinates, AI-generation fields, or all supported metadata. GPS-only cleanup is not complete location anonymization; C2PA/Content Credentials removal cannot be guaranteed.
+- **Manage privacy and metadata:** Use **Strip GPS Metadata** to remove recognized coordinates, **Strip AI Metadata** to remove recognized AI-generation fields, or **Strip Metadata** for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.
 - **Manage photo dates:** Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.
 - **Update copyright information:** Add or modify copyright metadata across multiple photographs.
 - **Control what gets preserved:** Choose appropriate metadata and output behavior for different operations.
@@ -69,7 +70,7 @@ Available video codecs depend on FFmpeg and the encoders installed on your syste
 
 KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
 
-Most resizing, compression, and conversion actions offer **Create new files (originals untouched)** or **Overwrite originals (confirmation required)**. Replacing originals requires a second explicit confirmation that identifies the affected files and operation. `KIM_POLICY=create` selects separate outputs where supported; `KIM_POLICY=prompt` displays the output-policy dialog.
+Most resizing, compression, and conversion actions offer **Create new files (originals untouched)** or **Overwrite originals (confirmation required)**. Use **Actions → KIM6 — Settings/About → Settings** in Dolphin to choose the default behavior. Replacing originals requires an additional explicit confirmation identifying the operation and affected files.
 
 Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. Create mode saves transformed copies while preserving the selected originals. Overwrite mode replaces the originals only after explicit review and confirmation. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export, email preparation, video frame/audio/GIF utilities, and slideshows create derivatives. **Video transcoding** can instead replace an original after explicit overwrite confirmation. Completed batch results remain available if a later item fails, while staged invalid results are not published.
 
@@ -104,7 +105,7 @@ To uninstall KIM6, run `./uninstall.sh` from the source directory. See [Installa
 - [Configuration](docs/commandconfig.md) — Customizing KIM6's behavior.
 - [Development](docs/DEVELOPMENT.md) — Technical information and contributing.
 
-You can also report bugs or suggest improvements through the project's [GitHub Issues](https://github.com/KIM-6/kim6/issues).
+For source and project updates, see [this KIM6 rewrite](https://github.com/codesterribly/kim6). Report bugs or suggest improvements through [GitHub Issues](https://github.com/codesterribly/kim6/issues). The original project remains credited in the history section below.
 
 ## Project history
 

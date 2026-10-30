@@ -23,12 +23,13 @@ File handling depends on the operation:
 - **Web export and email:** Create separate output files without changing the selected images.
 - **Rotate, EXIF auto-orient, flip and flop:** Create mode publishes transformed copies and preserves selected originals. Overwrite mode replaces selected originals only after explicit two-stage confirmation.
 - **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
+- **Targeted GPS and AI cleanup:** **Strip GPS Metadata** removes recognized coordinate fields; **Strip AI Metadata** removes recognized AI-generation fields. Neither operation guarantees complete removal of its targeted information. Other location indicators, generator-specific AI metadata, and signed C2PA / Content Credentials may remain.
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
 
 For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
 
-**File-safety choices:** `KIM_POLICY=create` selects separate outputs where supported; `KIM_POLICY=prompt` displays the output-policy dialog. Create is the default choice. Choosing **Overwrite originals (confirmation required)** requires a second confirmation with an operation-specific warning and selected-file count. Cancellation or an unavailable dialog refuses replacement. Create mode numbers output collisions; publication checks source aliases, symlinks, hardlinks, and destination identity where applicable. Completed batch results remain available if a later item fails.
+**File-safety choices:** Open **Actions → KIM6 — Settings/About → Settings** in Dolphin to choose the default output behavior. Supported operations can create separate copies or ask whether to replace originals. When prompted, **Create new files (originals untouched)** is the default selection. Overwriting requires an additional confirmation identifying the operation and selected-file count. Cancellation or an unavailable dialog refuses replacement. Where applicable, KIM6 numbers occupied output filenames and checks source aliases, linked paths and destination safety before publication. Completed results remain available if a later batch item fails.
 
 **Format notes:** Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.
 

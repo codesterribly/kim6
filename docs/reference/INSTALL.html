@@ -43,10 +43,10 @@
 <li><strong>ExifTool:</strong> Metadata management, photo dates, and copyright information.</li>
 <li><strong>FFmpeg and ffprobe:</strong> Video conversion, audio extraction, animations, and slideshows.</li>
 <li><strong>KDialog and qdbus:</strong> Dialogs, progress reporting, and interaction with KDE.</li>
-<li><strong>Email application:</strong> Required for KIM6's email features.</li>
+<li><strong>Email application (optional):</strong> Required only to open a draft automatically. KIM6 can still prepare attachment files and report their location for manual attachment.</li>
 </ul>
 <p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
-<p><strong>Output policy:</strong> <code>KIM_POLICY=create</code> selects separate outputs without prompting where supported. <code>KIM_POLICY=prompt</code> displays the output-policy dialog. Replacing selected originals requires choosing <strong>Overwrite originals (confirmation required)</strong> and approving a second warning. Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. See <a href="commandconfig.html#output-and-file-handling">Output and file handling</a>.</p>
+<p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIM6 — Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
 <p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>

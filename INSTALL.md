@@ -21,11 +21,11 @@ KIM6 uses several common tools to process images and videos:
 - **ExifTool:** Metadata management, photo dates, and copyright information.
 - **FFmpeg and ffprobe:** Video conversion, audio extraction, animations, and slideshows.
 - **KDialog and qdbus:** Dialogs, progress reporting, and interaction with KDE.
-- **Email application:** Required for KIM6's email features.
+- **Email application (optional):** Required only to open a draft automatically. KIM6 can still prepare attachment files and report their location for manual attachment.
 
 Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
 
-**Output policy:** `KIM_POLICY=create` selects separate outputs without prompting where supported. `KIM_POLICY=prompt` displays the output-policy dialog. Replacing selected originals requires choosing **Overwrite originals (confirmation required)** and approving a second warning. Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. See [Output and file handling](docs/commandconfig.md#output-and-file-handling).
+**Output policy:** In Dolphin, open **Actions → KIM6 — Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
 
 Download or clone the KIM6 source code, then open a terminal in the project directory and run:
 

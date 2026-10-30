@@ -77,21 +77,11 @@ See [FORMATS.md](FORMATS.md) for details about supported formats and dependencie
 
 ## Configuration
 
-`load_kim_config` reads configuration from:
+The user-facing entry point is **Actions → KIM6 — Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
 
-```sh
-${KIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kim_kdeimagemenu}
-```
+`kim6_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. The eight persisted keys are `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, `KIM_WEB_QUALITY_JPEG`, `KIM_WEB_QUALITY_WEBP`, `KIM_WEB_QUALITY_AVIF`, `KIM_COPYRIGHT_CREATOR`, `KIM_COPYRIGHT_NOTICE`, and `KIM_COPYRIGHT_USAGE_RIGHTS`. The three quality defaults are 95. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
-Configuration is read using `kreadconfig6`, from the `<default>` group.
-
-Recognized environment variables take precedence over their corresponding KConfig values.
-
-Invalid KConfig values fall back to defaults where a setting has a constrained value. Invalid environment values follow the validation or fallback behavior of the corresponding action.
-
-`KIM_POLICY` supports `create` and `prompt`. `choose_output_mode()` implements the Create/Overwrite selection and requires a second explicit warning before replacement. `confirm_inplace_overwrite()` handles actions without a Create path. Rotation and flipping use `choose_output_mode()` because both modes are supported. Cancellation, unavailable dialogs, and unexpected responses never authorize replacement.
-
-See [commandconfig.md](commandconfig.md) for the available keys, defaults, and affected actions.
+`KIM_POLICY` accepts `create` or `prompt`. `choose_output_mode()` implements the Create/Overwrite choice and the second overwrite warning. `confirm_inplace_overwrite()` handles operations that require original-file modification. No setting silently authorizes replacement. See [Configuration and Defaults](commandconfig.md#configuration-and-defaults).
 
 ## File Safety and Error Handling
 
@@ -167,7 +157,7 @@ Rotation, EXIF auto-orientation, flip, and flop select Create or Overwrite throu
 
 ### Metadata and dates
 
-Metadata-only operations use ExifTool and verify the resulting metadata while preserving image pixels, color profiles, permissions, and modification times as appropriate.
+Metadata operations use ExifTool where appropriate, alongside native PNG, JPEG/WebP and GIF metadata engines and TIFF/ISOBMFF verification helpers. Result checks preserve image pixels, color profiles, permissions, and modification times where supported. Selective GPS removal targets recognized coordinate tags. Selective AI removal targets recognized IPTC AI prompt and system tags and removes `DigitalSourceType` only for recognized AI classifications. Neither selective mode guarantees removal of all related information; unrecognized generator-specific fields and signed C2PA / Content Credentials may remain.
 
 Date synchronization supports separate operations for filesystem timestamps and embedded image metadata. Before a direct original-file mtime update, the selected source's link count, device and inode are checked to detect unexpected path replacement. The create-copy path must not explicitly restore atime on the selected original. Camera-time shifting changes wall-clock date tags, not timezone interpretation; subsecond and timezone-offset metadata follow the documented per-action contract.
 

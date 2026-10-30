@@ -88,7 +88,7 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertNotIn("manifest", install.lower())
 
         self.assertIn('id="file-handling"', manual)
-        self.assertIn("Illustration of an output example, not a Dolphin screenshot.", manual)
+        self.assertNotIn("Illustration of an output example, not a Dolphin screenshot.", manual)
         # The manual includes generated illustrations, not actual screenshots.
         self.assertNotIn("conceptual examples, not actual application screenshots", manual)
 
@@ -141,7 +141,7 @@ class DocumentationContractTests(unittest.TestCase):
                 self.assertIn(output, rows[0])
 
         self.assertIn("**Create new files (originals untouched)**", guide)
-        self.assertIn("`KIM_POLICY=prompt`", guide)
+        self.assertIn("Settings/About → Settings", guide)
 
     def test_authoritative_inventory_matches_all_menu_ids_labels_and_execs(self):
         document = (ROOT / "docs/ACTIONS.md").read_text(encoding="utf-8")
@@ -191,10 +191,12 @@ class DocumentationContractTests(unittest.TestCase):
         config = (ROOT / "docs/commandconfig.md").read_text(encoding="utf-8")
         documented = set(re.findall(r"^\| `(KIM_[A-Z0-9_]+)` \|", config, re.M))
         self.assertEqual({
-            "KIM_CONFIG_FILE", "KIM_POLICY", "KIM_NAME_AFFIX_POSITION",
-            "KIM_WEB_QUALITY", "KIM_WEB_FORMAT", "KIM_WEB_COLOR_MODE",
+            "KIM_POLICY", "KIM_NAME_AFFIX_POSITION",
+            "KIM_WEB_QUALITY_JPEG", "KIM_WEB_QUALITY_WEBP",
+            "KIM_WEB_QUALITY_AVIF", "KIM_WEB_QUALITY",
+            "KIM_WEB_FORMAT", "KIM_WEB_COLOR_MODE",
             "KIM_COPYRIGHT_CREATOR", "KIM_COPYRIGHT_NOTICE",
-            "KIM_COPYRIGHT_USAGE_RIGHTS", "KIM_GIF_DELAY",
+            "KIM_COPYRIGHT_USAGE_RIGHTS",
         }, documented)
 
     def test_documentation_links_and_html_anchors_resolve(self):
