@@ -68,15 +68,21 @@ Available video codecs depend on FFmpeg and the encoders installed on your syste
 
 ## How KIM6 works
 
-KIM6 appears in Dolphin's context menu when you right-click supported image or video files. Select several files to apply supported operations to a group.
+KIM6 adds image and video tools to Dolphin's right-click menu. Select a photo or video, right-click it, and choose what you want to do. You can also select multiple files to process them together.
 
-Most resizing, compression, and conversion actions offer **Create new files (originals untouched)** or **Overwrite originals (confirmation required)**. Use **Actions → KIM6 — Settings/About → Settings** in Dolphin to choose the default behavior. Replacing originals requires an additional explicit confirmation identifying the operation and affected files.
+**Keeping your originals safe**
 
-Rotation, EXIF auto-orientation, flip, and flop support both Create and Overwrite modes. Create mode saves transformed copies while preserving the selected originals. Overwrite mode replaces the originals only after explicit review and confirmation. Metadata editing and renaming have their own create/overwrite handling, including warnings when original filenames will be removed. Web export, email preparation, video frame/audio/GIF utilities, and slideshows create derivatives. **Video transcoding** can instead replace an original after explicit overwrite confirmation. Completed batch results remain available if a later item fails, while staged invalid results are not published.
+KIM6 can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under **Actions → KIM6 — Settings/About → Settings**. Replacing original files requires an additional confirmation, so KIM6 won't silently overwrite them.
 
-Create mode numbers occupied output filenames and respects configurable prefix/suffix affix placement (for example, `web_photo.jpg` versus `photo_web.jpg`). Output publication rejects unsafe source aliases and linked destinations where relevant. **Animated APNG is deliberately refused by Resize, Web Export and resized email preparation** rather than being flattened to a still image; dedicated APNG conversion remains available when the required tools support it.
+Resizing, compression, conversion, rotation, and flipping follow these settings where supported. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Video transcoding can also replace an original, but only with explicit confirmation.
 
-See [Getting Started](#quick-start) for examples, [Safe Handling](docs/commandconfig.md#output-and-file-handling) for details, and [Supported Formats](docs/FORMATS.md) for decoder and encoder limits.
+**Filenames and batch processing**
+
+When KIM6 creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. You can also choose whether descriptive labels appear before or after the filename, such as `web_photo.jpg` or `photo_web.jpg`.
+
+When processing several files, KIM6 keeps the results that completed successfully, even if a later file fails. Failed or invalid results are not published as completed files.
+
+For examples, see [Getting Started](#quick-start). More detailed information about file protection and settings is available under [Safe Handling](docs/commandconfig.md#output-and-file-handling), while [Supported Formats](docs/FORMATS.md) explains format compatibility, encoder requirements, and restrictions.
 
 ## Installation
 
