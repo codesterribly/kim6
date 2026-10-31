@@ -78,7 +78,7 @@ Resizing, compression, conversion, rotation, and flipping follow these settings 
 
 **Filenames and batch processing**
 
-When KIM6 creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. You can also choose whether descriptive labels appear before or after the filename, such as `web_photo.jpg` or `photo_web.jpg`.
+When KIM6 creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. Open **Settings → Output Filenames** to customize descriptive labels, such as changing `photo_compressed.jpg` to `photo_com.jpg`. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged.
 
 When processing several files, KIM6 keeps the results that completed successfully, even if a later file fails. Failed or invalid results are not published as completed files.
 

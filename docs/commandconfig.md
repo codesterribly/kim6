@@ -78,7 +78,7 @@ For compression, conversion, resizing, metadata stripping and copyright editing,
 
 ## Configuration and Defaults
 
-**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIM6 — Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. You can also set filename affix position, separate JPEG/WebP/AVIF web-export quality defaults, and copyright details. Click **Save**. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
+**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIM6 — Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. The **Output Filenames** tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click **Save**. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
 
 ### Settings
 
@@ -88,6 +88,7 @@ The graphical Settings dialog writes `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/set
 |---|---|---|
 | `KIM_POLICY` | `prompt` | `prompt` asks for Create or Overwrite where supported. `create` automatically selects separate outputs where supported and prevents actions requiring original-file replacement. |
 | `KIM_NAME_AFFIX_POSITION` | `suffix` | Generated name tags appear after (`photo_web.jpg`) or before (`web_photo.jpg`) the filename stem. |
+| `KIM_AFFIX_*` | See below | User-configurable labels for automatically generated output filenames. |
 | `KIM_WEB_QUALITY_JPEG` | `95` | Default JPEG web-export quality (1–100). |
 | `KIM_WEB_QUALITY_WEBP` | `95` | Default WebP web-export quality (1–100). |
 | `KIM_WEB_QUALITY_AVIF` | `95` | Default AVIF web-export quality (1–100). |
@@ -95,12 +96,44 @@ The graphical Settings dialog writes `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/set
 | `KIM_COPYRIGHT_NOTICE` | Empty | Default copyright notice; supports `{YEAR}` replacement. |
 | `KIM_COPYRIGHT_USAGE_RIGHTS` | Empty | Default usage-rights text. |
 
+### Custom output filename labels
+
+In **Settings → Output Filenames**, customize the descriptive labels KIM6 adds when it automatically names an output. Defaults are shown below. For example, the compression label can change from `compressed` to `com`, producing `photo_com.jpg` or `com_photo.jpg`, depending on prefix/suffix placement. The tab previews each filename and includes Restore Defaults.
+
+| Operation | Configuration key | Default label |
+|---|---|---|
+| Compression | `KIM_AFFIX_COMPRESSED` | `compressed` |
+| Resize | `KIM_AFFIX_RESIZED` | `resized` |
+| Web export | `KIM_AFFIX_WEB` | `web` |
+| Rotate | `KIM_AFFIX_ROTATED` | `rotated` |
+| Auto-rotate | `KIM_AFFIX_AUTO_ROTATED` | `auto_rotated` |
+| Flip horizontally | `KIM_AFFIX_FLIPPED_HORIZONTAL` | `flipped_horizontal` |
+| Flip vertically | `KIM_AFFIX_FLIPPED_VERTICAL` | `flipped_vertical` |
+| Remove all metadata | `KIM_AFFIX_STRIPPED` | `stripped` |
+| Remove GPS metadata | `KIM_AFFIX_GPS` | `gps` |
+| Remove AI metadata | `KIM_AFFIX_AI` | `ai` |
+| Copyright information | `KIM_AFFIX_COPYRIGHT` | `copyright` |
+| Shift capture time | `KIM_AFFIX_TIMESHIFT` | `timeshift` |
+| Synchronize dates | `KIM_AFFIX_DATESYNC` | `datesync` |
+| Video transcode | `KIM_AFFIX_TRANSCODED` | `transcoded` |
+| Extract video frame | `KIM_AFFIX_FRAME` | `frame` |
+| Video thumbnail | `KIM_AFFIX_THUMBNAIL` | `thumbnail` |
+| Video contact sheet | `KIM_AFFIX_CONTACT_SHEET` | `contact-sheet` |
+| Extract audio | `KIM_AFFIX_AUDIO` | `audio` |
+| Remove video audio | `KIM_AFFIX_MUTED` | `muted` |
+| GIF from video | `KIM_AFFIX_ANIMATED` | `animated` |
+| Slideshow from photos | `KIM_AFFIX_SLIDESHOW` | `slideshow` |
+
+Labels must contain 1–32 ASCII letters, digits, underscores or hyphens, beginning with a letter or digit. Invalid labels are rejected by the UI and ignored by the runtime. Existing collision numbering and protections against overwriting remain unchanged. Compound GPS/AI labels use both customized parts; video frame names keep their timestamp.
+
+These options affect automatically named output files, not names explicitly chosen in a Save/Create dialog, ordinary format conversion, temporary files, or the Rename Images feature. Existing filename separators remain unchanged, including `clip-transcoded.mp4` and `clip-audio.mp3`.
+
 PNG export uses lossless compression, so no lossy PNG quality setting is provided. Empty copyright defaults do not request clearing existing fields.
 
 ### Validation and behavior
 
 - **Output policy:** `create` uses separate copies wherever supported. `prompt` defaults to **Create new files (originals untouched)** and requires a second explicit confirmation before replacing originals. Derived-only actions preserve selected sources.
-- **Filename affixes:** Prefix/suffix tags apply to generated names for compression, resizing, web export and metadata stripping where applicable; rename operations have their own naming rules. Collision numbering remains before the extension.
+- **Filename affixes:** The Output Filenames tab controls descriptive labels and their position for automatically named image, metadata and video results. User-chosen filenames and Rename Images have their own rules. Collision numbering remains before the extension and never silently replaces an existing file.
 - **Web quality:** The dialog accepts integers from 1 to 100. Saved invalid values are ignored and the respective default of 95 applies. Explicit command-line `--quality` is validated for its invocation.
 - **Web format and color:** Unsupported values cause failure rather than silent format substitution. `keep` retains the original format when supported; `srgb` needs compatible ICC handling.
 - **Copyright:** Empty input fields leave corresponding metadata unchanged. `{YEAR}` in a notice is resolved by the copyright action as documented under [copyright](#copyright).

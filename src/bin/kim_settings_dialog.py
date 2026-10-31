@@ -2,6 +2,7 @@
 """KIM6 persistent settings and About dialog."""
 
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -12,12 +13,44 @@ from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QLabel, QMessageBox,
     QPushButton, QSpinBox, QTabWidget, QTextEdit, QTextBrowser, QLineEdit,
-    QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget, QScrollArea,
 )
+
+# Logical action label, Settings description, preview extension, separator.
+AFFIX_ITEMS = (
+    ('compressed', 'Compression', 'jpg', '_'),
+    ('resized', 'Resize', 'jpg', '_'),
+    ('web', 'Web export', 'jpg', '_'),
+    ('rotated', 'Rotate', 'jpg', '_'),
+    ('auto_rotated', 'Auto-rotate', 'jpg', '_'),
+    ('flipped_horizontal', 'Flip horizontally', 'jpg', '_'),
+    ('flipped_vertical', 'Flip vertically', 'jpg', '_'),
+    ('stripped', 'Remove all metadata', 'jpg', '_'),
+    ('gps', 'Remove GPS metadata', 'jpg', '_'),
+    ('ai', 'Remove AI metadata', 'jpg', '_'),
+    ('copyright', 'Copyright information', 'jpg', '_'),
+    ('timeshift', 'Shift capture time', 'jpg', '_'),
+    ('datesync', 'Synchronize dates', 'jpg', '_'),
+    ('transcoded', 'Video transcode', 'mp4', '-'),
+    ('frame', 'Extract video frame', 'png', '_'),
+    ('thumbnail', 'Video thumbnail', 'jpg', '_'),
+    ('contact-sheet', 'Video contact sheet', 'jpg', '_'),
+    ('audio', 'Extract audio', 'mp3', '-'),
+    ('muted', 'Remove video audio', 'mp4', '-'),
+    ('animated', 'GIF from video', 'gif', '_'),
+    ('slideshow', 'Slideshow from photos', 'mp4', '_'),
+)
+AFFIX_DEFAULTS = {
+    "KIM_AFFIX_" + tag.upper().replace("-", "_"): tag
+    for tag, _description, _extension, _separator in AFFIX_ITEMS
+}
+AFFIX_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
+
 
 DEFAULTS = {
     "KIM_POLICY": "prompt",
     "KIM_NAME_AFFIX_POSITION": "suffix",
+    **AFFIX_DEFAULTS,
     "KIM_WEB_QUALITY_JPEG": "95",
     "KIM_WEB_QUALITY_WEBP": "95",
     "KIM_WEB_QUALITY_AVIF": "95",
@@ -60,6 +93,8 @@ def load_settings(path):
         if key == "KIM_POLICY" and value in VALID_POLICIES:
             settings[key] = value
         elif key == "KIM_NAME_AFFIX_POSITION" and value in VALID_AFFIXES:
+            settings[key] = value
+        elif key in AFFIX_DEFAULTS and AFFIX_PATTERN.fullmatch(value):
             settings[key] = value
         elif key.startswith("KIM_WEB_QUALITY_"):
             if value.isascii() and value.isdecimal():
@@ -148,15 +183,6 @@ def main():
     explanation.setWordWrap(True)
     settings_layout.addWidget(explanation)
 
-    affix = combo(
-        "Filename affix:",
-        [
-            ("Suffix (photo_web.jpg)", "suffix"),
-            ("Prefix (web_photo.jpg)", "prefix"),
-        ],
-        values["KIM_NAME_AFFIX_POSITION"],
-    )
-
     quality = {}
 
     for key, label in (
@@ -192,6 +218,91 @@ def main():
 
     settings_layout.addStretch()
     tabs.addTab(settings_tab, "Settings")
+
+    # Keep general preferences separate from output filename customization.
+    names_tab = QWidget()
+    names_layout = QVBoxLayout(names_tab)
+    names_intro = QLabel(
+        "Customize the labels KIM6 adds to filenames automatically. "
+        "Filenames you choose yourself are not changed."
+    )
+    names_intro.setWordWrap(True)
+    names_layout.addWidget(names_intro)
+
+    affix = QComboBox()
+    affix.addItem("Suffix (photo_web.jpg)", "suffix")
+    affix.addItem("Prefix (web_photo.jpg)", "prefix")
+    affix.setCurrentIndex(
+        max(0, affix.findData(values["KIM_NAME_AFFIX_POSITION"]))
+    )
+    names_layout.addWidget(QLabel("Label position:"))
+    names_layout.addWidget(affix)
+
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    content = QWidget()
+    names_form = QFormLayout(content)
+    affix_widgets = {}
+    affix_previews = {}
+
+    for tag, description, extension, separator in AFFIX_ITEMS:
+        key = "KIM_AFFIX_" + tag.upper().replace("-", "_")
+        label_widget = QLineEdit(values[key])
+        label_widget.setMaxLength(32)
+        label_widget.setToolTip(
+            "1–32 characters: letters, numbers, _ and -"
+        )
+
+        preview = QLabel()
+        preview.setWordWrap(True)
+
+        row = QWidget()
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.addWidget(label_widget)
+        row_layout.addWidget(preview)
+
+        names_form.addRow(description + ":", row)
+        affix_widgets[key] = label_widget
+        affix_previews[key] = (preview, extension, separator, tag)
+
+    scroll.setWidget(content)
+    names_layout.addWidget(scroll)
+
+    def update_filename_previews(*_unused):
+        prefix = affix.currentData() == "prefix"
+
+        for key, widget in affix_widgets.items():
+            preview, extension, separator, tag = affix_previews[key]
+            value = widget.text()
+
+            if not AFFIX_PATTERN.fullmatch(value):
+                preview.setText(
+                    "Invalid label: use 1–32 letters, digits, _ or -"
+                )
+                continue
+
+            sample = "video" if tag in {
+                "transcoded", "frame", "thumbnail", "contact-sheet",
+                "audio", "muted", "animated",
+            } else "photo"
+
+            if tag == "frame":
+                value += "-00-01-30"
+
+            filename = (
+                f"{value}{separator}{sample}.{extension}"
+                if prefix else
+                f"{sample}{separator}{value}.{extension}"
+            )
+            preview.setText("Example: " + filename)
+
+    affix.currentIndexChanged.connect(update_filename_previews)
+    for widget in affix_widgets.values():
+        widget.textChanged.connect(update_filename_previews)
+
+    update_filename_previews()
+    tabs.addTab(names_tab, "Output Filenames")
 
     about_tab = QWidget()
     about_layout = QVBoxLayout(about_tab)
@@ -331,6 +442,8 @@ def main():
         affix.setCurrentIndex(
             affix.findData(DEFAULTS["KIM_NAME_AFFIX_POSITION"])
         )
+        for key, widget in affix_widgets.items():
+            widget.setText(DEFAULTS[key])
         for key, widget in quality.items():
             widget.setValue(int(DEFAULTS[key]))
 
@@ -344,6 +457,19 @@ def main():
             "KIM_POLICY": policy.currentData(),
             "KIM_NAME_AFFIX_POSITION": affix.currentData(),
         }
+        for key, widget in affix_widgets.items():
+            value = widget.text()
+            if not AFFIX_PATTERN.fullmatch(value):
+                tabs.setCurrentWidget(names_tab)
+                QMessageBox.warning(
+                    dialog, "Invalid output filename label",
+                    "Each label must contain 1–32 ASCII letters, numbers, "
+                    "underscores or hyphens.",
+                )
+                widget.setFocus()
+                return
+            updated[key] = value
+
         for key, widget in quality.items():
             updated[key] = str(widget.value())
 
@@ -370,7 +496,7 @@ def main():
     # Save, Cancel, and Restore Defaults apply only to Settings.
     # About, License, and Manual are read-only tabs.
     def update_settings_buttons(index):
-        is_settings = tabs.tabText(index) == "Settings"
+        is_settings = tabs.tabText(index) in ("Settings", "Output Filenames")
         restore.setVisible(is_settings)
         buttons.setVisible(is_settings)
 

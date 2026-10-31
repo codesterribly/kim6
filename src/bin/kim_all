@@ -284,12 +284,44 @@ split_path() {
 }
 
 # Place an action tag around the complete stem; keep numbering before the extension.
-affixed_filename() {
-  local stem="$1" tag="$2" ext="$3" number="${4:-}" separator="${5:-_}" name
-  if [ "$KIM_NAME_AFFIX_POSITION" = "prefix" ]; then
-    name="${tag}_${stem}"
+# Only fixed, supported label keys can be read from settings.
+kim6_known_affix_key() {
+  case "$1" in
+    KIM_AFFIX_COMPRESSED|KIM_AFFIX_RESIZED|KIM_AFFIX_WEB|KIM_AFFIX_ROTATED|KIM_AFFIX_AUTO_ROTATED|KIM_AFFIX_FLIPPED_HORIZONTAL|KIM_AFFIX_FLIPPED_VERTICAL|KIM_AFFIX_STRIPPED|KIM_AFFIX_GPS|KIM_AFFIX_AI|KIM_AFFIX_COPYRIGHT|KIM_AFFIX_TIMESHIFT|KIM_AFFIX_DATESYNC|KIM_AFFIX_TRANSCODED|KIM_AFFIX_FRAME|KIM_AFFIX_THUMBNAIL|KIM_AFFIX_CONTACT_SHEET|KIM_AFFIX_AUDIO|KIM_AFFIX_MUTED|KIM_AFFIX_ANIMATED|KIM_AFFIX_SLIDESHOW) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve a logical action label to the configured filename label.
+# Invalid environment overrides fall back to the original default.
+kim6_affix_value() {
+  local default="$1" key="KIM_AFFIX_${1^^}" value
+  local LC_ALL=C
+  key="${key//-/_}"
+  if ! kim6_known_affix_key "$key"; then
+    printf '%s\n' "$default"
+    return
+  fi
+  value="${!key-}"
+  if [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$ ]]; then
+    printf '%s\n' "$value"
   else
-    name="${stem}_${tag}"
+    printf '%s\n' "$default"
+  fi
+}
+
+# Apply configured labels while retaining extension, position and numbering.
+affixed_filename() {
+  local stem="$1" tag="$2" ext="$3" number="${4:-}" separator="${5:-_}" joiner="${6:-_}" name
+  case "$tag" in
+    frame-*) tag="$(kim6_affix_value frame)-${tag#frame-}" ;;
+    gps_ai|ai_ai) tag="$(kim6_affix_value "${tag%_ai}")_$(kim6_affix_value ai)" ;;
+    *) tag="$(kim6_affix_value "$tag")" ;;
+  esac
+  if [ "$KIM_NAME_AFFIX_POSITION" = "prefix" ]; then
+    name="${tag}${joiner}${stem}"
+  else
+    name="${stem}${joiner}${tag}"
   fi
   [ -z "$number" ] || name="${name}${separator}${number}"
   [ -z "$ext" ] || name="${name}.${ext}"
@@ -6751,6 +6783,7 @@ dispatcher_resource() {
 # KIM6_SETTINGS_V1: load user preferences without sourcing shell code.
 kim6_load_user_settings() {
   local config line key value
+  local LC_ALL=C
   config="${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf"
 
   [ -f "$config" ] && [ ! -L "$config" ] || return 0
@@ -6775,6 +6808,13 @@ kim6_load_user_settings() {
               KIM_NAME_AFFIX_POSITION="$value"
             ;;
         esac
+        ;;
+      KIM_AFFIX_*)
+        if kim6_known_affix_key "$key" &&
+           [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$ ]] &&
+           [ -z "${!key+x}" ]; then
+          printf -v "$key" '%s' "$value"
+        fi
         ;;
       KIM_COPYRIGHT_CREATOR|KIM_COPYRIGHT_NOTICE|KIM_COPYRIGHT_USAGE_RIGHTS)
         [ "${#value}" -le 500 ] || continue
@@ -7299,10 +7339,10 @@ action_video() {
     else
       stem="${source##*/}"
       if [[ "$stem" == *.* ]]; then stem="${stem%.*}"; fi
-      target="$directory/${stem}-transcoded.$ext"
+      target="$directory/$(affixed_filename "$stem" transcoded "$ext" "" "_" "-")"
       target_number=1
       while [ -e "$target" ] || [ -L "$target" ]; do
-        target="$directory/${stem}-transcoded_${target_number}.$ext"
+        target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
         target_number=$((target_number + 1))
       done
     fi
@@ -7387,7 +7427,7 @@ action_video() {
       if [ "$mode" = create ] && { [ -e "$target" ] || [ -L "$target" ]; } && [ "$retry" -lt 1000 ]; then
         retry=$((retry + 1))
         while :; do
-          target="$directory/${stem}-transcoded_${target_number}.$ext"
+          target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
           target_number=$((target_number + 1))
           [ ! -e "$target" ] && [ ! -L "$target" ] && break
         done
@@ -7457,7 +7497,7 @@ video_utility_image_valid() {
 # Choose a sibling filename without replacing an existing file or symlink.
 # Publication separately handles collisions that arise after this check.
 video_utility_target() {
-  local source="$1" tag="$2" extension="$3" number=1 directory base stem target
+  local source="$1" tag="$2" extension="$3" joiner="${4:-_}" number=1 directory base stem target
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
   base="${source##*/}"
@@ -7466,9 +7506,9 @@ video_utility_target() {
   else
     stem="$base"
   fi
-  target="$directory/$(affixed_filename "$stem" "$tag" "$extension")"
+  target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "" "_" "$joiner")"
   while [ -e "$target" ] || [ -L "$target" ]; do
-    target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number")"
+    target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number" "_" "$joiner")"
     number=$((number + 1))
   done
   VIDEO_UTILITY_TARGET="$target"
@@ -7477,7 +7517,7 @@ video_utility_target() {
 # Publish without clobbering a file that appeared after target selection.
 # Retry an exclusive create with a numbered name when a collision races us.
 video_utility_publish() {
-  local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" retry=0 number=1 directory base stem target
+  local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" joiner="${6:-_}" retry=0 number=1 directory base stem target
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
   base="${source##*/}"
@@ -7486,7 +7526,7 @@ video_utility_publish() {
   else
     stem="$base"
   fi
-  target="$directory/$(affixed_filename "$stem" "$tag" "$extension")"
+  target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "" "_" "$joiner")"
   while :; do
     if progress_cancelled "$ref"; then
       return 130
@@ -7496,7 +7536,7 @@ video_utility_publish() {
     fi
     if { [ -e "$target" ] || [ -L "$target" ]; } && [ "$retry" -lt 1000 ]; then
       retry=$((retry + 1))
-      target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number")"
+      target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number" "_" "$joiner")"
       number=$((number + 1))
       continue
     fi
@@ -7856,7 +7896,8 @@ action_videoaudio() {
       esac
       tag=audio
       target="$source"
-      target="${target%.*}-audio.$extension"
+      video_utility_target "$source" "$tag" "$extension" "-"
+      target="$VIDEO_UTILITY_TARGET"
     else
       if [ "$VU_AUDIO_COUNT" -eq 0 ]; then
         report_ok
@@ -7886,7 +7927,8 @@ action_videoaudio() {
           esac
           ;;
       esac
-      target="${source%.*}-muted.$extension"
+      video_utility_target "$source" "$tag" "$extension" "-"
+      target="$VIDEO_UTILITY_TARGET"
     fi
     # Resolve an available sibling path; create-mode publication rechecks it
     # atomically, so a concurrent file cannot be overwritten.
@@ -7975,7 +8017,7 @@ action_videoaudio() {
       progress_value "$ref" "$index"
       continue
     fi
-    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension"; then
+    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension" "-"; then
       report_ok
     else
       report_fail "$source — $(gettext 'publication failed or operation interrupted')"
@@ -8345,7 +8387,8 @@ action_slideshow() {
     [ ! -e "$output" ] && [ ! -L "$output" ] || { progress_error "$(gettext 'Slideshow destination is occupied; choose a new path.')"; return 1; }
     target="$output"
   else
-    target="$(video_utility_target "${ordered[0]}" slideshow mp4)"
+    video_utility_target "${ordered[0]}" slideshow mp4
+    target="$VIDEO_UTILITY_TARGET"
   fi
   # Convert photo profiles through sRGB to a Rec. 709 video frame profile;
   # fail rather than publish untagged or ambiguously converted output.

@@ -77,7 +77,7 @@
 <p>Existing destinations are protected by staged validation and publication checks. For symlink, hardlink, cancellation, atomic-replacement and race-condition limitations, see <a href="DEVELOPMENT.html#file-publication-and-cancellation">File publication and cancellation</a>.</p>
 <p>For compression, conversion, resizing, metadata stripping and copyright editing, duplicate file identities (including aliases to the same file) cause the entire selection to be rejected before processing. Rotation and flipping instead report a repeated source as a failed item without transforming it again; camera-time shifting skips repeated paths and canonical-parent aliases after a successful update. All these actions reject filenames containing line breaks before processing. A processing failure returns a nonzero exit status even when other files in that batch were completed successfully; already published outputs are retained.</p>
 <h2 id="configuration-and-defaults">Configuration and Defaults</h2>
-<p><strong>For normal use, open Settings in Dolphin:</strong> Right-click a supported file and choose <strong>Actions → KIM6 — Settings/About → Settings</strong>. Choose whether actions prompt about replacement or automatically create separate copies where supported. You can also set filename affix position, separate JPEG/WebP/AVIF web-export quality defaults, and copyright details. Click <strong>Save</strong>. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.</p>
+<p><strong>For normal use, open Settings in Dolphin:</strong> Right-click a supported file and choose <strong>Actions → KIM6 — Settings/About → Settings</strong>. Choose whether actions prompt about replacement or automatically create separate copies where supported. The <strong>Output Filenames</strong> tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click <strong>Save</strong>. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.</p>
 <h3 id="settings">Settings</h3>
 <p>The graphical Settings dialog writes <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code> (normally <code>~/.config/kim6/settings.conf</code>). It is a simple validated <code>KEY=value</code> text file, <strong>not</strong> KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.</p>
 <table>
@@ -98,6 +98,11 @@
 <td><code>KIM_NAME_AFFIX_POSITION</code></td>
 <td><code>suffix</code></td>
 <td>Generated name tags appear after (<code>photo_web.jpg</code>) or before (<code>web_photo.jpg</code>) the filename stem.</td>
+</tr>
+<tr>
+<td><code>KIM_AFFIX_*</code></td>
+<td>See below</td>
+<td>User-configurable labels for automatically generated output filenames.</td>
 </tr>
 <tr>
 <td><code>KIM_WEB_QUALITY_JPEG</code></td>
@@ -131,11 +136,131 @@
 </tr>
 </tbody>
 </table>
+<h3 id="custom-output-filename-labels">Custom output filename labels</h3>
+<p>In <strong>Settings → Output Filenames</strong>, customize the descriptive labels KIM6 adds when it automatically names an output. Defaults are shown below. For example, the compression label can change from <code>compressed</code> to <code>com</code>, producing <code>photo_com.jpg</code> or <code>com_photo.jpg</code>, depending on prefix/suffix placement. The tab previews each filename and includes Restore Defaults.</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Configuration key</th>
+<th>Default label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compression</td>
+<td><code>KIM_AFFIX_COMPRESSED</code></td>
+<td><code>compressed</code></td>
+</tr>
+<tr>
+<td>Resize</td>
+<td><code>KIM_AFFIX_RESIZED</code></td>
+<td><code>resized</code></td>
+</tr>
+<tr>
+<td>Web export</td>
+<td><code>KIM_AFFIX_WEB</code></td>
+<td><code>web</code></td>
+</tr>
+<tr>
+<td>Rotate</td>
+<td><code>KIM_AFFIX_ROTATED</code></td>
+<td><code>rotated</code></td>
+</tr>
+<tr>
+<td>Auto-rotate</td>
+<td><code>KIM_AFFIX_AUTO_ROTATED</code></td>
+<td><code>auto_rotated</code></td>
+</tr>
+<tr>
+<td>Flip horizontally</td>
+<td><code>KIM_AFFIX_FLIPPED_HORIZONTAL</code></td>
+<td><code>flipped_horizontal</code></td>
+</tr>
+<tr>
+<td>Flip vertically</td>
+<td><code>KIM_AFFIX_FLIPPED_VERTICAL</code></td>
+<td><code>flipped_vertical</code></td>
+</tr>
+<tr>
+<td>Remove all metadata</td>
+<td><code>KIM_AFFIX_STRIPPED</code></td>
+<td><code>stripped</code></td>
+</tr>
+<tr>
+<td>Remove GPS metadata</td>
+<td><code>KIM_AFFIX_GPS</code></td>
+<td><code>gps</code></td>
+</tr>
+<tr>
+<td>Remove AI metadata</td>
+<td><code>KIM_AFFIX_AI</code></td>
+<td><code>ai</code></td>
+</tr>
+<tr>
+<td>Copyright information</td>
+<td><code>KIM_AFFIX_COPYRIGHT</code></td>
+<td><code>copyright</code></td>
+</tr>
+<tr>
+<td>Shift capture time</td>
+<td><code>KIM_AFFIX_TIMESHIFT</code></td>
+<td><code>timeshift</code></td>
+</tr>
+<tr>
+<td>Synchronize dates</td>
+<td><code>KIM_AFFIX_DATESYNC</code></td>
+<td><code>datesync</code></td>
+</tr>
+<tr>
+<td>Video transcode</td>
+<td><code>KIM_AFFIX_TRANSCODED</code></td>
+<td><code>transcoded</code></td>
+</tr>
+<tr>
+<td>Extract video frame</td>
+<td><code>KIM_AFFIX_FRAME</code></td>
+<td><code>frame</code></td>
+</tr>
+<tr>
+<td>Video thumbnail</td>
+<td><code>KIM_AFFIX_THUMBNAIL</code></td>
+<td><code>thumbnail</code></td>
+</tr>
+<tr>
+<td>Video contact sheet</td>
+<td><code>KIM_AFFIX_CONTACT_SHEET</code></td>
+<td><code>contact-sheet</code></td>
+</tr>
+<tr>
+<td>Extract audio</td>
+<td><code>KIM_AFFIX_AUDIO</code></td>
+<td><code>audio</code></td>
+</tr>
+<tr>
+<td>Remove video audio</td>
+<td><code>KIM_AFFIX_MUTED</code></td>
+<td><code>muted</code></td>
+</tr>
+<tr>
+<td>GIF from video</td>
+<td><code>KIM_AFFIX_ANIMATED</code></td>
+<td><code>animated</code></td>
+</tr>
+<tr>
+<td>Slideshow from photos</td>
+<td><code>KIM_AFFIX_SLIDESHOW</code></td>
+<td><code>slideshow</code></td>
+</tr>
+</tbody>
+</table>
+<p>Labels must contain 1–32 ASCII letters, digits, underscores or hyphens, beginning with a letter or digit. Invalid labels are rejected by the UI and ignored by the runtime. Existing collision numbering and protections against overwriting remain unchanged. Compound GPS/AI labels use both customized parts; video frame names keep their timestamp.</p>
+<p>These options affect automatically named output files, not names explicitly chosen in a Save/Create dialog, ordinary format conversion, temporary files, or the Rename Images feature. Existing filename separators remain unchanged, including <code>clip-transcoded.mp4</code> and <code>clip-audio.mp3</code>.</p>
 <p>PNG export uses lossless compression, so no lossy PNG quality setting is provided. Empty copyright defaults do not request clearing existing fields.</p>
 <h3 id="validation-and-behavior">Validation and behavior</h3>
 <ul>
 <li><strong>Output policy:</strong> <code>create</code> uses separate copies wherever supported. <code>prompt</code> defaults to <strong>Create new files (originals untouched)</strong> and requires a second explicit confirmation before replacing originals. Derived-only actions preserve selected sources.</li>
-<li><strong>Filename affixes:</strong> Prefix/suffix tags apply to generated names for compression, resizing, web export and metadata stripping where applicable; rename operations have their own naming rules. Collision numbering remains before the extension.</li>
+<li><strong>Filename affixes:</strong> The Output Filenames tab controls descriptive labels and their position for automatically named image, metadata and video results. User-chosen filenames and Rename Images have their own rules. Collision numbering remains before the extension and never silently replaces an existing file.</li>
 <li><strong>Web quality:</strong> The dialog accepts integers from 1 to 100. Saved invalid values are ignored and the respective default of 95 applies. Explicit command-line <code>--quality</code> is validated for its invocation.</li>
 <li><strong>Web format and color:</strong> Unsupported values cause failure rather than silent format substitution. <code>keep</code> retains the original format when supported; <code>srgb</code> needs compatible ICC handling.</li>
 <li><strong>Copyright:</strong> Empty input fields leave corresponding metadata unchanged. <code>{YEAR}</code> in a notice is resolved by the copyright action as documented under <a href="#copyright">copyright</a>.</li>
