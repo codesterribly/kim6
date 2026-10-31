@@ -1318,22 +1318,12 @@ action_album() {
   esac
   [ -d "$dir" ] || dir="${files[0]%/*}"
 
-  # Dolphin supplies multiple selected images through %F. Preserve them.
-  # With a single image selected, offer a genuine multiselect source picker.
+  # Preserve all Dolphin-selected images. When exactly one is selected,
+  # offer the choice to use it alone or add more images to the album.
   if [ "${#files[@]}" -eq 1 ]; then
-    local selection='' chosen=''
-    local -a selected_images=()
+    local -a selected_images=("${files[@]}")
 
-    selection="$(kdialog --title "$(gettext 'Select Album Images')" \
-      --getopenfilename "$dir" \
-      'Images (*.jpg *.jpeg *.jpe *.png *.webp *.avif *.avifs *.heic *.heif *.tif *.tiff *.bmp *.gif *.jxl *.jp2 *.j2k *.jpf *.apng *.JPG *.JPEG *.PNG *.WEBP *.AVIF *.HEIC *.HEIF *.TIF *.TIFF *.BMP *.GIF *.JXL *.JP2)' --multiple --separate-output)" || return 1
-
-    [ -n "$selection" ] || return 1
-
-    while IFS= read -r chosen; do
-      [ -n "$chosen" ] || continue
-      selected_images+=("$chosen")
-    done <<< "$selection"
+    kim6_create_select_more selected_images "PDF Album" || return 1
 
     if ! collect_publication_inputs files "${selected_images[@]}"; then
       kdialog --title "$(gettext 'Kim')" --error \
