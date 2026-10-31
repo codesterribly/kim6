@@ -37,8 +37,8 @@
     <div class="hero-inner page-width">
       <div class="hero-copy">
         <div class="hero-kicker"><span class="kicker-dot" aria-hidden="true"></span> Made for KDE Plasma 6 &amp; Dolphin</div>
-        <h1>Photo work,<br><em>one right-click away.</em></h1>
-        <p class="hero-lede">Resize, convert, prepare, and organize your images and videos without opening a full editor. This guide shows you where to start and what happens to your files.</p>
+        <h1>Photo utilities,<br><em>at your fingertips.</em></h1>
+        <p class="hero-lede">Resize, convert, prepare, and organize your images and videos without having to open a full editor. This guide shows you where to start and how to use KIM6 to improve your workflow.</p>
         <div class="hero-actions">
           <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
           <a class="hero-secondary" href="#photos">Explore what KIM6 can do <span aria-hidden="true">↓</span></a>
@@ -46,7 +46,7 @@
         <div class="hero-facts" aria-label="Key facts">
           <span><span class="fact-check" aria-hidden="true">✓</span> Works from Dolphin</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Batch-friendly</span>
-          <span><span class="fact-check" aria-hidden="true">✓</span> Create-new option</span>
+          <span><span class="fact-check" aria-hidden="true">✓</span> Originals protected</span>
         </div>
       </div>
       <div class="hero-art" aria-label="Example showing a photograph and its resized copy">
@@ -106,7 +106,7 @@
         </div>
         <div class="notice notice-info">
           <span class="notice-symbol" aria-hidden="true">i</span>
-          <p>New to KIM6? Choose <strong>Create new files (recommended; originals untouched)</strong>. Create mode publishes separate files, including rotated or flipped copies. Replacing an original requires choosing Overwrite and approving a second confirmation. <a href="#file-handling">How file handling works</a>.</p>
+          <p>KIM6 is designed to protect your originals. When an action offers a choice, <strong>Create new files (originals untouched)</strong> is selected by default. Replacing an original requires choosing Overwrite and confirming a separate warning. <a href="#file-handling">How file handling works</a>.</p>
         </div>
       </section>
 
@@ -143,31 +143,31 @@
 <section id="photos" class="content-section" aria-labelledby="photos-title">
         <p class="section-eyebrow"><span class="section-index">02</span> EVERYDAY EDITS</p>
         <h2 id="photos-title">Your most useful photo actions.</h2>
-        <p class="section-intro">These are actual menu examples. Output names assume the default suffix naming convention and <strong>Create new</strong> mode when that choice is offered.</p>
+        <p class="section-intro">These examples show common KIM6 actions and the filenames they produce using the default settings. Your originals remain untouched when <strong>Create new</strong> is selected.</p>
         <div class="task-grid">
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-resize" aria-hidden="true">↗</span><span class="task-type">SIZE</span></div>
-            <h3>Resize a photo</h3>
-            <p>Fit a photo inside a maximum width and height without cropping its proportions. This preset can enlarge smaller images; percentage resize supports 1–1000%.</p>
+            <h3>Resize an image</h3>
+            <p>Resize an image to fit within a chosen width and height while keeping its proportions. Use a preset size, enter your own dimensions, or resize by percentage.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">Resize/Rotate <span aria-hidden="true">›</span> <strong>Resize to 1600 × 1600</strong></div>
             <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_resized.jpg</strong></div>
           </article>
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-compress" aria-hidden="true">≋</span><span class="task-type">QUALITY</span></div>
-            <h3>Compress a JPEG</h3>
-            <p>Create a JPEG using a chosen quality setting. Lower quality may reduce file size, but can lose detail. Custom compression also offers progressive/baseline scans and Huffman optimization.</p>
+            <h3>Compress an image</h3>
+            <p>Compress JPEG, PNG, WebP, or AVIF images using settings appropriate for each format. PNG compression is lossless, while other formats can trade some image detail for smaller files.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Compress Recommended</strong></div>
-            <div class="output"><span>lake.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.jpg</strong></div>
+            <div class="output"><span>lake.webp</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.webp</strong></div>
           </article>
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-convert" aria-hidden="true">⇄</span><span class="task-type">FORMAT</span></div>
             <h3>Convert an image</h3>
-            <p>Convert between supported formats, including optional JPEG XL, JPEG 2000, AVIF and HEIC/HEIF delegates. JPEG is lossy and cannot preserve transparent PNG areas; codec support is checked before publication.</p>
+            <p>Convert images between formats such as JPEG, PNG, WebP, AVIF, TIFF, and more. KIM6 checks whether the necessary format support is available before creating the result.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Convert to JPEG</strong></div>
-            <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.jpg</strong></div>
+            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Convert to WebP</strong></div>
+            <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.webp</strong></div>
           </article>
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-batch" aria-hidden="true">▦</span><span class="task-type">BATCH</span></div>
@@ -186,8 +186,8 @@
         <h2 id="sharing-title">Share without changing the source.</h2>
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
         <div class="feature-pair">
-          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Save a resized JPEG, PNG, WebP, or AVIF derivative to a chosen folder. Web export never replaces the selected original. Animated APNG inputs are refused to prevent a still-frame export; ordinary PNG remains supported.</p><p>By default, usable embedded color profiles are converted to sRGB. You can instead choose to preserve a compatible profile.</p></article>
-          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare resized attachments or attach selected files at full size, depending on the action. Prepared copies remain in a persistent attachment folder because mail applications may read them later.</p><p>Review attachments before sending and clean up prepared copies when you no longer need them.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Prepare images for websites or sharing. Choose JPEG, PNG, WebP, or AVIF, select the output size, and save the results in a folder of your choice without changing your originals.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare photos for email at their original size or resize them to make sharing easier. KIM6 prepares the attachments for your email application without changing your original images.</p></article>
         </div>
       </section>
 
@@ -199,7 +199,7 @@
           <div>
             <h3>Remove GPS and AI metadata</h3>
             <p>Select <strong>Organize/Metadata › Strip GPS Metadata</strong> to remove recognized GPS coordinate fields while retaining unrelated metadata.</p>
-            <p>Select <strong>Organize/Metadata › Strip AI Metadata</strong> to remove recognized AI-generation fields, including supported IPTC AI prompt and system information, without stripping all other metadata.</p>
+            <p>Select <strong>Organize/Metadata › Strip AI Metadata</strong> to remove recognized AI-generation information while keeping unrelated metadata.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
             <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
           </div>
@@ -209,13 +209,13 @@
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
-        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>GPS removal:</strong> Removing recognized coordinates does not guarantee complete location anonymization. Other metadata or visible scene details may still reveal where a photograph was taken. <strong>AI metadata removal:</strong> KIM6 removes recognized AI-generation fields, but unrecognized generator-specific metadata and signed C2PA / Content Credentials may remain. Neither operation guarantees complete removal of the information it targets.</p></div>
+        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>Privacy note:</strong> KIM6 removes recognized GPS coordinates and AI-generation metadata, but some information may remain. These tools cannot guarantee complete removal of location or AI-related information.</p></div>
       </section>
 
       <section id="collections" class="content-section" aria-labelledby="collections-title">
         <p class="section-eyebrow"><span class="section-index">05</span> MAKE SOMETHING NEW</p>
         <h2 id="collections-title">From pictures to collections.</h2>
-        <p class="section-intro">Combine selected photos into a finished file or collection. These workflows create derivatives rather than replacing your originals.</p>
+        <p class="section-intro">Turn your photos into galleries, collages, albums, animations, or slideshows. KIM6 saves the results separately, leaving your original images untouched.</p>
         <div class="collection-grid">
           <div><span class="collection-symbol" aria-hidden="true">▤</span><strong>HTML gallery</strong><span>A browsable photo gallery.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">▦</span><strong>Collage</strong><span>Several pictures in one image.</span></div>
@@ -242,22 +242,22 @@
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
         <p class="section-eyebrow"><span class="section-index">07</span> BEFORE YOU CLICK</p>
-        <h2 id="handling-title">Know what happens to the original.</h2>
-        <p class="section-intro">Not every action has the same output policy. These are the distinctions that matter most.</p>
+        <h2 id="handling-title">Your originals stay protected.</h2>
+        <p class="section-intro">KIM6 protects your original files by default. When an action could replace an original, you must explicitly approve the change. Nothing is silently overwritten.</p>
         <div class="policy-grid">
-          <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>Where the action offers this choice, the result gets a separate filename and your original remains unchanged.</p></article>
-          <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Authorized overwrite</h3><p>Select <strong>Overwrite originals (confirmation required)</strong>, then confirm the separate warning identifying originals, renamed files, or derived outputs and the selected-file count. Cancel is safe.</p></article>
-          <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Transform images</h3><p>Rotation, EXIF auto-orientation, flip and flop support both output modes. Create saves transformed copies and preserves originals. Overwrite replaces originals only after explicit confirmation and output validation.</p></article>
+          <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>KIM6 creates a separate file and leaves your original unchanged. When you are asked to choose, this is the default selection.</p></article>
+          <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Overwrite protection</h3><p>Replacing an original requires deliberately choosing Overwrite and approving a separate confirmation warning. You can cancel without changing the file.</p></article>
+          <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Rotate and flip safely</h3><p>Rotate or flip images as separate copies, or choose to replace the originals after explicit confirmation. Automatic EXIF rotation has the same protection.</p></article>
         </div>
         <p><strong>Choose your defaults in Settings.</strong> In Dolphin, right-click a supported image or video and open <strong>Actions → KIM6 — Settings/About → Settings</strong>. Choose whether supported operations should create separate files automatically or ask how to proceed. Save your preferences to use them for subsequent operations.</p>
-<p><strong>Protecting original files.</strong> When an operation supports replacing an original, KIM6 requires explicit overwrite authorization and confirmation. Many operations, including web export, email preparation, galleries, albums, slideshows, and video frame, audio and GIF utilities, always create separate results. Video transcoding can replace an original only after explicit confirmation.</p>
+<p><strong>Actions that create separate files.</strong> Web export, email preparation, galleries, albums, slideshows, and video frame, audio, and GIF tools leave your originals untouched. Video transcoding can also replace an original, but only after explicit confirmation.</p>
 <p><strong>Existing filenames and processing failures.</strong> KIM6 avoids silently overwriting existing results. Where supported, it adds a number to resolve filename conflicts. It checks generated output before publishing it, and successfully completed results remain available if a later item in the batch fails. See <a href="reference/commandconfig.html#output-and-file-handling">file-handling and configuration details</a>.</p>
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
         <p class="section-eyebrow"><span class="section-index">08</span> WHEN SOMETHING GOES WRONG</p>
-        <h2 id="troubleshooting-title">Find a fix.</h2>
-        <p class="section-intro">Check these common causes first. No need to test a failing action by overwriting a valuable photograph.</p>
+        <h2 id="troubleshooting-title">Troubleshooting common problems.</h2>
+        <p class="section-intro">If a menu is missing or an action fails, these common checks can help you identify and resolve the problem.</p>
         <div class="faq-list">
           <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="reference/INSTALL.html">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
           <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Animated APNG conversion needs FFmpeg; Resize and Web Export deliberately refuse animated APNG to avoid losing frames. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
@@ -268,8 +268,8 @@
 
       <section id="references" class="content-section references-section" aria-labelledby="references-title">
         <p class="section-eyebrow"><span class="section-index">09</span> GO DEEPER</p>
-        <h2 id="references-title">Everything else is documented.</h2>
-        <p class="section-intro">This page covers everyday use. For specific actions, detailed arguments, or developer information, use the focused references.</p>
+        <h2 id="references-title">Everything is documented.</h2>
+        <p class="section-intro">This page covers everyday use. For additional information about features, settings, installation, or development, please check the resources below.</p>
         <div class="reference-list">
           <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
