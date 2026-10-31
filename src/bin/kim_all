@@ -2908,9 +2908,9 @@ action_print() {
   local -a files=()
   dir="${1:-}"
   shift || true
-  if ! local -a kim6_selected_inputs=("$@")
+  local -a kim6_selected_inputs=("$@")
   kim6_create_select_more kim6_selected_inputs "Print Layout" || return 1
-  collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
+  if ! collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
     return 1
   fi
@@ -3216,7 +3216,7 @@ action_animate() {
 # - overwrite (literal text replacement), exifdate, sequential, interactive
 #
 # Behavior:
-# - KIM_POLICY=create copies; overwrite moves; otherwise prompts.
+# - KIM_POLICY=create creates copies; prompt allows a separately confirmed rename.
 # - Copies or moves within each source directory or an explicit destination.
 # - Create mode numbers collisions; EXIF-date and sequential moves also number.
 # - overwrite mode safety:
@@ -3225,8 +3225,8 @@ action_animate() {
 # - Uses a progress dialog and supports Cancel.
 #
 # Policy:
-# - KIM_POLICY=create|overwrite forces the corresponding mode.
-# - Otherwise shows the Create vs overwrite prompt.
+# - KIM_POLICY=create selects Create mode.
+# - KIM_POLICY=prompt offers Create or a separately confirmed rename.
 #
 # Notes:
 # - Preserves file bytes and filesystem metadata; never re-encodes images.
@@ -3263,7 +3263,7 @@ action_rename() {
   done
   [ "$#" -gt 0 ] || rename_abort "rename: no selected files"
   local prefix='' suffix='' from='' to='' date_format='' preset action_mode
-  local number=1 padding=3 sequence_base='' destination_choice
+  local number=1 padding=3 sequence_base=''
   # Select a method and preflight date-based renames before any file
   # operations or destination dialogs. No source file is changed here.
   while :; do
