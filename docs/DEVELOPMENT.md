@@ -265,7 +265,7 @@ Preserve historical author notices and GPL license headers.
 
 Translations are maintained in `po/` using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
 
-Historical development and release documentation is preserved in the [upstream archive](archive/upstream/ARCHIVE.md).
+For the project's origins and earlier contributors, see [Project history](../README.md#project-history). More detailed upstream material remains in the source repository under `docs/archive/upstream/` and is not bundled with the offline User Guide.
 
 ## File Publication and Cancellation
 

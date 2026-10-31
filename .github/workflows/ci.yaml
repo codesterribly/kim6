@@ -2,9 +2,9 @@ name: KIM6 fast checks
 
 on:
   push:
-    branches: [kim-all]
+    branches: [recovery/kim-all]
   pull_request:
-    branches: [kim-all]
+    branches: [recovery/kim-all]
 
 permissions:
   contents: read
@@ -43,6 +43,7 @@ jobs:
           paths = sorted(Path("tests").glob("*.py"))
           paths += sorted(Path("qa").glob("*.py"))
           paths += sorted(Path("tools").glob("*.py"))
+          paths += sorted(Path("src/bin").glob("*.py"))
 
           for path in paths:
               ast.parse(

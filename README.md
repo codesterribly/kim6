@@ -32,7 +32,7 @@ Use **KIM6 — Settings/About → Settings** to change your defaults. For advanc
 ### Resize, compress, and convert images
 
 - **Resize images:** Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.
-- **Compress JPEGs:** Select a JPEG quality level, progressive or baseline encoding, and optional Huffman-table optimization. Smaller files are not guaranteed at every setting.
+- **Compress images:** Compress JPEG, PNG, WebP, and AVIF files. JPEG supports adjustable quality, progressive or baseline scans, and optional Huffman-table optimization. PNG compression is lossless; WebP and AVIF support adjustable quality. Compression does not guarantee a smaller file.
 - **Prepare images for the web:** Export JPEG, PNG, WebP, or AVIF derivatives. JPEG, WebP and AVIF have separate quality defaults in Settings; PNG remains lossless. Color-profile handling can also be configured.
 - **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.
 - **Rotate and flip:** Rotate images manually or use their EXIF orientation information.
@@ -105,7 +105,7 @@ To uninstall KIM6, run `./uninstall.sh` from the source directory. See [Installa
 ## Documentation
 
 - [Getting Started](#quick-start) — Common tasks and examples.
-- [User Guide](docs/index.html) — Using KIM6's image and video tools.
+- [Online User Guide](https://codesterribly.github.io/kim6/) — Using KIM6's image and video tools.
 - [Complete Action List](docs/ACTIONS.md) — Available Dolphin menu actions.
 - [Supported Formats](docs/FORMATS.md) — Image and video format support.
 - [Configuration](docs/commandconfig.md) — Customizing KIM6's behavior.

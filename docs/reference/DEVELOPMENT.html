@@ -227,7 +227,7 @@ git --no-pager diff --check</code></pre>
 <p>Changes to file-processing operations should explain how existing source and destination files are preserved, particularly when error handling or overwriting is involved.</p>
 <p>Preserve historical author notices and GPL license headers.</p>
 <p>Translations are maintained in <code>po/</code> using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.</p>
-<p>Historical development and release documentation is preserved in the <a href="../archive/upstream/ARCHIVE.md">upstream archive</a>.</p>
+<p>For the project's origins and earlier contributors, see <a href="README.html#project-history">Project history</a>. More detailed upstream material remains in the source repository under <code>docs/archive/upstream/</code> and is not bundled with the offline User Guide.</p>
 <h2 id="file-publication-and-cancellation">File Publication and Cancellation</h2>
 <h3 id="staging-and-publication">Staging and publication</h3>
 <p>Generated media is first written to invocation-owned staging on the destination filesystem. The action checks the producer result and validates the staged artifact before publication. Create-new publication uses a no-clobber operation. Authorized replacement uses atomic replacement on supported local Linux filesystems. A failed rename is not followed by a destructive copy-over fallback.</p>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install KIM6's unified dispatcher, resources, translations, and five menus.
+# Install KIM6's unified dispatcher, resources, translations, and ten menus.
 # Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY]. The default user path
 # is ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus; root uses the first
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
