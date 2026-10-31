@@ -47,6 +47,7 @@
           <span><span class="fact-check" aria-hidden="true">✓</span> Works from Dolphin</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Batch-friendly</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Originals protected</span>
+          <span><span class="fact-check" aria-hidden="true">✓</span> Custom filename labels</span>
         </div>
       </div>
       <div class="hero-art" aria-label="Example showing a photograph and its resized copy">
@@ -76,6 +77,7 @@
         <a href="#start">Start here</a>
         <a href="#visual-guide">Illustrated walkthrough</a>
         <a href="#photos">Everyday photo tasks</a>
+        <a href="#filenames">Custom output filenames</a>
         <a href="#sharing">Share and export</a>
         <a href="#metadata">Metadata and dates</a>
         <a href="#collections">Albums and collections</a>
@@ -118,9 +120,9 @@
       <img src="images/kim6-photo-actions.png" alt="KIM6 photo actions in Dolphin" loading="lazy" decoding="async" width="1448" height="1086">
       <figcaption><strong>1. Photo actions in Dolphin.</strong> Access image conversion, creation, metadata, resizing, and export tools from the right-click menu.</figcaption>
     </figure>
-    <figure class="manual-shot">
-      <img src="images/kim6-settings-dialog.png" alt="KIM6 configuration dialog" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>2. Configure KIM6.</strong> Review output naming, defaults, and processing preferences.</figcaption>
+    <figure class="manual-shot manual-shot-wide" id="settings-screenshot">
+      <img src="images/kim6-settings-dialog.png" alt="KIM6 Settings and Output Filenames dialogs showing general preferences and customizable filename labels" loading="lazy" decoding="async" width="1536" height="1024">
+      <figcaption><strong>2. Settings and Output Filenames.</strong> Configure file handling and export quality, then customize the labels KIM6 adds to automatically generated filenames. Choose prefixes or suffixes and preview the results before saving.</figcaption>
     </figure>
     <figure class="manual-shot">
       <img src="images/kim6-collage-dialog.png" alt="KIM6 photo collage dialog" loading="lazy" decoding="async" width="1448" height="1086">
@@ -178,11 +180,43 @@
             <div class="output"><span>3 selected photos</span><span class="output-arrow" aria-hidden="true">→</span><strong>3 resized files</strong></div>
           </article>
         </div>
-        <p class="section-footnote">If an output filename already exists, KIM6 adds a number to avoid overwriting it. You can also choose whether descriptive labels appear before or after the filename. For example, compressed images can be named <code>filename_compressed.jpg</code> (the default), <code>compressed_filename.jpg</code>, or <code>filename_com.jpg</code> with your own label. Change labels and their position under <strong>Settings → Output Filenames</strong>, with a live preview. <a href="reference/commandconfig.html">Naming and command options <span aria-hidden="true">↗</span></a></p>
+        <p class="section-footnote">KIM6 adds a number when an output filename already exists, rather than replacing that file. <a href="#filenames">See how to customize your output filenames <span aria-hidden="true">↓</span></a>.</p>
+      </section>
+
+      <section id="filenames" class="content-section" aria-labelledby="filenames-title">
+        <p class="section-eyebrow"><span class="section-index">03</span> CUSTOM OUTPUT FILENAMES</p>
+        <h2 id="filenames-title">Name your output files your way.</h2>
+        <p class="section-intro">KIM6 lets you customize the labels it automatically adds to image and video filenames. Keep the familiar defaults or choose names that better fit your workflow.</p>
+
+        <div class="feature-pair">
+          <article class="feature-block">
+            <div class="feature-symbol" aria-hidden="true">Aa</div>
+            <h3>Choose your own labels</h3>
+            <p>Shorten <code>compressed</code> to <code>com</code>, change <code>resized</code> to <code>res</code>, or customize the labels used for web export, metadata, and video tools.</p>
+            <div class="output">
+              <span>photo_compressed.jpg</span>
+              <span class="output-arrow" aria-hidden="true">→</span>
+              <strong>photo_com.jpg</strong>
+            </div>
+          </article>
+
+          <article class="feature-block">
+            <div class="feature-symbol" aria-hidden="true">↔</div>
+            <h3>Prefix or suffix? Your choice.</h3>
+            <p>Put the label before or after the original filename. The Output Filenames tab shows a live preview, so you can see exactly how your files will be named.</p>
+            <div class="output">
+              <span>photo_com.jpg</span>
+              <span class="output-arrow" aria-hidden="true">↔</span>
+              <strong>com_photo.jpg</strong>
+            </div>
+          </article>
+        </div>
+
+        <p class="section-footnote">Open <strong>Actions → KIM6 — Settings/About → Settings → Output Filenames</strong> in Dolphin to customize all 21 labels or restore their defaults. Your originals remain protected, and filenames you explicitly choose yourself are unaffected. KIM6 also adds a number when necessary to avoid overwriting an existing file. <a href="#settings-screenshot">View the Settings screenshot</a>. <a href="reference/commandconfig.html#custom-output-filename-labels">See all available labels and settings <span aria-hidden="true">↗</span></a></p>
       </section>
 
       <section id="sharing" class="content-section" aria-labelledby="sharing-title">
-        <p class="section-eyebrow"><span class="section-index">03</span> READY TO SEND</p>
+        <p class="section-eyebrow"><span class="section-index">04</span> READY TO SEND</p>
         <h2 id="sharing-title">Share without changing the source.</h2>
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
         <div class="feature-pair">
@@ -192,7 +226,7 @@
       </section>
 
       <section id="metadata" class="content-section" aria-labelledby="metadata-title">
-        <p class="section-eyebrow"><span class="section-index">04</span> INFORMATION INSIDE YOUR FILES</p>
+        <p class="section-eyebrow"><span class="section-index">05</span> INFORMATION INSIDE YOUR FILES</p>
         <h2 id="metadata-title">Control metadata and dates.</h2>
         <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIM6 gives you targeted ways to work with it.</p>
         <div class="split-panel">
@@ -213,7 +247,7 @@
       </section>
 
       <section id="collections" class="content-section" aria-labelledby="collections-title">
-        <p class="section-eyebrow"><span class="section-index">05</span> MAKE SOMETHING NEW</p>
+        <p class="section-eyebrow"><span class="section-index">06</span> MAKE SOMETHING NEW</p>
         <h2 id="collections-title">From pictures to collections.</h2>
         <p class="section-intro">Turn your photos into galleries, collages, albums, animations, or slideshows. KIM6 saves the results separately, leaving your original images untouched.</p>
         <div class="collection-grid">
@@ -228,7 +262,7 @@
       </section>
 
       <section id="video" class="content-section" aria-labelledby="video-title">
-        <p class="section-eyebrow"><span class="section-index">06</span> VIDEO WORKFLOWS</p>
+        <p class="section-eyebrow"><span class="section-index">07</span> VIDEO WORKFLOWS</p>
         <h2 id="video-title">Useful video tools, right in Dolphin.</h2>
         <p class="section-intro">Re-encode video, extract useful parts, or generate previews using the codecs available on your system.</p>
         <div class="video-list">
@@ -241,7 +275,7 @@
       </section>
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
-        <p class="section-eyebrow"><span class="section-index">07</span> BEFORE YOU CLICK</p>
+        <p class="section-eyebrow"><span class="section-index">08</span> BEFORE YOU CLICK</p>
         <h2 id="handling-title">Your originals stay protected.</h2>
         <p class="section-intro">KIM6 protects your original files by default. When an action could replace an original, you must explicitly approve the change. Nothing is silently overwritten.</p>
         <div class="policy-grid">
@@ -255,7 +289,7 @@
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
-        <p class="section-eyebrow"><span class="section-index">08</span> WHEN SOMETHING GOES WRONG</p>
+        <p class="section-eyebrow"><span class="section-index">09</span> WHEN SOMETHING GOES WRONG</p>
         <h2 id="troubleshooting-title">Troubleshooting common problems.</h2>
         <p class="section-intro">If a menu is missing or an action fails, these common checks can help you identify and resolve the problem.</p>
         <div class="faq-list">
@@ -267,7 +301,7 @@
       </section>
 
       <section id="references" class="content-section references-section" aria-labelledby="references-title">
-        <p class="section-eyebrow"><span class="section-index">09</span> GO DEEPER</p>
+        <p class="section-eyebrow"><span class="section-index">10</span> GO DEEPER</p>
         <h2 id="references-title">Everything is documented.</h2>
         <p class="section-intro">This page covers everyday use. For additional information about features, settings, installation, or development, please check the resources below.</p>
         <div class="reference-list">
