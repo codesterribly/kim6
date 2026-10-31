@@ -1,5 +1,6 @@
 Unreleased (KIM6 rewrite)
-- Consolidate Dolphin image and video operations in kim_all and document all 108 menu actions.
+- Consolidate image and video operations in kim_all with 83 executable actions across ten Dolphin service-menu files.
+- Add Settings for output policies, customizable filename labels and prefix/suffix placement, web-export quality and copyright defaults.
 - Add modern image codecs, animation safeguards, color-profile checks, collages and contact sheets.
 - Add video transcoding, frame/audio tools, GIF conversion and photo-to-MP4 slideshows.
 - Expand metadata privacy, copyright, date synchronization and renaming features.

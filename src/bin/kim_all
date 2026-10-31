@@ -1414,13 +1414,13 @@ action_album() {
 
 
 ####################
-# Compress images to a specified JPEG quality using ImageMagick.
+# Compress JPEG, PNG, WebP and AVIF images using ImageMagick.
 #
 # Usage: compress <quality> <dir> <files...>
 #
 # Behavior:
 # - Prompts for Create vs overwrite (unless KIM_POLICY forces a mode).
-# - Create mode: writes new files into <dir> using (suffix default):
+# - Create mode: writes beside each source unless --output-dir is specified.
 #     <name>_compressed.<ext>   (or <name>_compressed if no extension)
 #   NAME_AFFIX_POSITION=prefix places compressed before the complete stem.
 #   Never overwrites: adds _1, _2, ... if needed.
@@ -1429,7 +1429,7 @@ action_album() {
 #
 # Policy:
 # - KIM_POLICY=create    forces Create mode
-# - KIM_POLICY=overwrite   forces Overwrite mode
+# - KIM_POLICY=prompt   offers explicitly confirmed overwrite
 
 action_compress() {
   local QUALITY='' outdir='' custom=false preset='' jpeg_scan='' jpeg_optimize=false
@@ -1506,7 +1506,6 @@ action_compress() {
     return 1
   }
 
-  [ -n "$outdir" ] || outdir="${files[0]%/*}"
 
   local mode
   mode="$(choose_output_mode \
@@ -1518,10 +1517,11 @@ action_compress() {
     return 1
   fi
 
-  # Only required in create mode.
-  if [ "$mode" = "create" ]; then
-    [[ -n "$outdir" ]] || die "compress: missing output dir"
+  # Without --output-dir, create derivatives beside each source.
+  if [ "$mode" = "create" ] && [ -n "$outdir" ]; then
     [[ -d "$outdir" ]] || die "compress: output dir does not exist: $outdir"
+    [[ -w "$outdir" && -x "$outdir" ]] ||
+      die "compress: output dir is inaccessible: $outdir"
   fi
 
   report_init
@@ -1570,10 +1570,10 @@ action_compress() {
     if [ "$mode" = "overwrite" ]; then
       OUTFILE="$f"
     else
-      OUTFILE="$outdir/$(affixed_filename "$stem" compressed "$ext")"
+      OUTFILE="${outdir:-$dir}/$(affixed_filename "$stem" compressed "$ext")"
       n=1
       while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="$outdir/$(affixed_filename "$stem" compressed "$ext" "$n")"
+        OUTFILE="${outdir:-$dir}/$(affixed_filename "$stem" compressed "$ext" "$n")"
         n=$((n + 1))
       done
     fi
@@ -1664,7 +1664,7 @@ action_compress() {
 #
 # Policy:
 # - KIM_POLICY=create      forces Create mode
-# - KIM_POLICY=overwrite   forces overwrite mode
+# - KIM_POLICY=prompt   offers explicitly confirmed overwrite
 #
 # Notes:
 # - Uses ImageMagick `magick` to write explicit outputs.
@@ -3682,7 +3682,6 @@ action_resize() {
   collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
-  [ -n "$outdir" ] || outdir="${files[0]%/*}"
 
 
   local mode
@@ -4468,8 +4467,8 @@ action_rotatewithexif() {
 # Behavior:
 # - Create vs overwrite is controlled by:
 #   - KIM_POLICY=create   forces create mode
-#   - KIM_POLICY=overwrite  forces overwrite mode
-#   - otherwise prompts the user (Create new / overwrite existing / Cancel)
+#   - KIM_POLICY=prompt offers explicitly confirmed overwrite
+#   - unrecognized policy values also use the safe prompt
 # - overwrite mode:
 #   - Writes to a temp output file, then overwrites the original if output looks valid.
 #   - Preserves original timestamps best-effort.
@@ -5994,6 +5993,13 @@ action_webexport() {
   }
   local max_width="${BASH_REMATCH[1]}" max_height="${BASH_REMATCH[2]}"
 
+  # Resolve format before applying saved quality defaults.
+  fmt="${fmt:-${KIM_WEB_FORMAT:-jpg}}"
+  fmt="${fmt,,}"
+  case "$fmt" in
+    jpeg) fmt="jpg" ;;
+  esac
+
   if [ "$custom" = true ] && [ "$fmt" = png ]; then
     quality=100
   fi
@@ -6012,12 +6018,6 @@ action_webexport() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
   }
 
-  # Export format is independent of the policy used for image-editing actions.
-  fmt="${fmt:-${KIM_WEB_FORMAT:-jpg}}"
-  fmt="${fmt,,}"
-  case "$fmt" in
-    jpeg) fmt="jpg" ;;
-  esac
   if { [ -n "$jpeg_scan" ] || [ "$jpeg_optimize" = true ]; } && [ "$fmt" != jpg ] && [ "$fmt" != keep ]; then
     progress_error "$(gettext 'JPEG scan and optimization options require JPEG output.')"; return 2
   fi
@@ -6033,7 +6033,7 @@ action_webexport() {
     *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
   esac
 
-  # Always honor the export directory, including under KIM_POLICY=overwrite.
+  # Web export always creates derivatives in the chosen output directory.
   if [ -z "$outdir" ]; then
     outdir="$(kdialog --title "KIM6 — Web Export Destination" --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
     [ -n "$outdir" ] || return 1
@@ -8570,10 +8570,10 @@ Commands:
   compress --quality 1..100 [--output-dir DIR] [--jpeg-progressive|--jpeg-baseline]
            [--jpeg-optimize] -- <files...>
   compress --custom -- <files...>
-      Compress JPEG images at the selected quality. Create mode writes
-      *_compressed files beside each input by default. Progressive is the
-      established default; baseline selects sequential JPEG. Huffman coding
-      optimization may reduce size, but does not guarantee a smaller file.
+      Compress JPEG, PNG, WebP and AVIF images. PNG compression is lossless.
+      Create mode writes *_compressed files beside each source by default.
+      JPEG defaults to progressive; baseline selects sequential scans. Huffman
+      optimization may reduce size but cannot guarantee a smaller file.
 
   convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy]
           [--jp2-quality 1..100] [--jpeg-progressive|--jpeg-baseline]
@@ -8640,7 +8640,7 @@ Commands:
       values use system local time, never UTC; explicit offsets are honored.
       DST-gap local times reject. Metadata updates preserve pixels, ICC and mtime.
 
-  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
+  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|png|webp|avif|keep]
             [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- <files...>
       JPEG scan and Huffman options apply only when the selected output is JPEG.
 
@@ -8715,12 +8715,12 @@ Commands:
 
   webexport [<dir>] <files...>
       Prepare images for web use.
-      Prompts for max size and quality. Existing dispatcher form remains supported.
-  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|webp|avif|keep]
+      Prompts for max size when omitted. Positional directory syntax remains supported.
+  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|png|webp|avif|keep]
             [--color srgb|preserve] [--output-dir DIR] -- <files...>
       Action-local arguments expose size, quality, format, and output choices.
       Web export always creates derived files; KIM_POLICY never replaces originals.
-      Always creates distinct *_web files into the chosen output directory.
+      Creates uniquely named derivatives using configured filename labels.
       Output format uses KIM_WEB_FORMAT (default: jpg).
       Color defaults to an ICC-managed sRGB transform. Untagged RGB is
       assumed sRGB; untagged CMYK is rejected. --color preserve retains an
@@ -8738,25 +8738,28 @@ Environment:
       Overwrite requires a separate confirmation.
 
   If KIM_POLICY is unset or has another value:
-      Use the safe prompt. Legacy overwrite is not automatic.
+      Use the safe prompt. No setting silently authorizes replacement.
+
+  KIM_WEB_QUALITY_JPEG, KIM_WEB_QUALITY_WEBP, KIM_WEB_QUALITY_AVIF
+      Format-specific web-export quality defaults (1..100).
+      Each defaults to 95 and can be saved through Settings.
 
   KIM_WEB_QUALITY=1..100
-      Default value for the web-export quality prompt.
-      Does not suppress the prompt. Fallback: 75.
+      Fallback quality when no format-specific setting applies.
+      Default: 95.
 
-  KIM_WEB_FORMAT=jpg|webp|avif|keep
+  KIM_WEB_FORMAT=jpg|png|webp|avif|keep
       Output format for webexport. Default: jpg.
       keep uses the source file extension.
 
   KIM_WEB_COLOR_MODE=srgb|preserve
       Default web-export color policy. Default: srgb.
-      KConfig key: WEB_COLOR_MODE. Environment takes precedence.
+      Environment-only override; not saved through Settings.
 
   KIM_COPYRIGHT_CREATOR, KIM_COPYRIGHT_NOTICE,
   KIM_COPYRIGHT_USAGE_RIGHTS
-      Defaults for the copyright editor. KConfig keys:
-      COPYRIGHT_CREATOR, COPYRIGHT_NOTICE, COPYRIGHT_USAGE_RIGHTS.
-      Environment values take precedence.
+      Defaults for the copyright editor, also available in Settings.
+      Explicit environment values take precedence over saved preferences.
 EOF
 }
 
