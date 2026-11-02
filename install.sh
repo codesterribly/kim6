@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install KIM6's unified dispatcher, resources, translations, and ten menus.
+# Install KIM6's unified dispatcher, resources, translations, and eleven menus.
 # Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY]. The default user path
 # is ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus; root uses the first
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
@@ -293,6 +293,7 @@ menu_names=(
   kim_information.desktop
   kim_metadata.desktop
   kim_publication.desktop
+  kim_recipes.desktop
   kim_videoutilities.desktop
   kim_webemail.desktop
 )
@@ -315,8 +316,14 @@ manual_files=(
   docs/images/kim6-settings-dialog.png
   docs/images/kim6-collage-dialog.png
   docs/images/kim6-animated-gif-dialog.png
+  docs/reference/RECIPES.html
+  docs/images/kim6-recipes-menu.png
+  docs/images/kim6-recipe-editor.png
+  docs/images/kim6-convert-menu.png
+  docs/images/kim6-metadata-menu.png
+  docs/images/kim6-settings-general.png
 )
-runtime_files=(bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
   README.md
   docs/ACTIONS.md
@@ -383,7 +390,7 @@ fi
 
 # Check every path we will touch before copying. Unknown files elsewhere in the
 # runtime stay in place; known destinations must be ordinary files/directories.
-for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
+for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
   check_dir "$directory"
 done
 for relative in "${runtime_files[@]}" .kim6-owned .kim6-manifest; do
@@ -410,7 +417,7 @@ for name in "${menu_names[@]}"; do
 done
 
 # Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
+for relative in src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -480,8 +487,23 @@ compile_translation() {
   temporary=''
 }
 
-mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
+mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
 install_file "$SOURCE_DIR/src/bin/kim_all" "$RUNTIME/bin/kim_all" 0755
+install_file "$SOURCE_DIR/src/bin/kim_filename.py" "$RUNTIME/bin/kim_filename.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_ui.py" "$RUNTIME/bin/kim_ui.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_date_tools.py" "$RUNTIME/bin/kim_date_tools.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_date_dialog.py" "$RUNTIME/bin/kim_date_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_job.py" "$RUNTIME/bin/kim_job.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_job_process.py" "$RUNTIME/bin/kim_job_process.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_action_dialog.py" "$RUNTIME/bin/kim_action_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_menu.py" "$RUNTIME/bin/kim_recipe_menu.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_run.py" "$RUNTIME/bin/kim_recipe_run.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_core.py" "$RUNTIME/bin/kim_recipe_core.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_image.py" "$RUNTIME/bin/kim_recipe_image.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_dates.py" "$RUNTIME/bin/kim_recipe_dates.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_psd_source.py" "$RUNTIME/bin/kim_psd_source.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_recipe_dialog.py" "$RUNTIME/bin/kim_recipe_dialog.py" 0644
+install_file "$SOURCE_DIR/src/recipes/builtins.json" "$RUNTIME/recipes/builtins.json" 0644
 install_file "$SOURCE_DIR/src/bin/kim_png_metadata.py" "$RUNTIME/bin/kim_png_metadata.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_jpeg_webp_metadata.py" "$RUNTIME/bin/kim_jpeg_webp_metadata.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_gif_metadata.py" "$RUNTIME/bin/kim_gif_metadata.py" 0644
@@ -547,6 +569,8 @@ for name in "${menu_names[@]}"; do
   temporary=''
 done
 
+python3 "$RUNTIME/bin/kim_recipe_core.py" --sync-menu || { echo "install.sh: Recipes shortcuts were not synchronized; retry using the installed dispatcher recipe --sync-menu" >&2; }
+
 # Retire only the known KIM legacy command names after the new menus are in place.
 for name in "${legacy_names[@]}"; do
   path="$RUNTIME/bin/$name"
@@ -592,6 +616,10 @@ for helper in \
   kim_album_dialog.py \
   kim_create_dialog.py \
   kim_settings_dialog.py \
+  kim_ui.py \
+  kim_date_dialog.py \
+  kim_action_dialog.py \
+  kim_recipe_dialog.py \
   kim_manual_viewer.py; do
   installed="$RUNTIME/bin/$helper"
 
@@ -648,6 +676,10 @@ for helper in \
   kim_album_dialog.py \
   kim_create_dialog.py \
   kim_settings_dialog.py \
+  kim_ui.py \
+  kim_date_dialog.py \
+  kim_action_dialog.py \
+  kim_recipe_dialog.py \
   kim_manual_viewer.py; do
 
   installed="$RUNTIME/bin/$helper"

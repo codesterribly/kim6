@@ -106,7 +106,8 @@ class DocumentationContractTests(unittest.TestCase):
                 f"Missing manual illustration: {name}",
             )
 
-        for private_detail in ("/home/coolian", "natacha", "/mnt/"):
+        import os
+        for private_detail in (str(Path.home()), os.uname().nodename, "/mnt/"):
             self.assertNotIn(private_detail, readme + install + manual)
 
 
@@ -149,7 +150,7 @@ class DocumentationContractTests(unittest.TestCase):
         headings = list(re.finditer(
             r"^### `(kim_[^`]+\.desktop\.in)`[ \t]*$", document, re.M
         ))
-        self.assertEqual(10, len(menus))
+        self.assertEqual(11, len(menus))
         self.assertEqual([menu.name for menu in menus],
                          [heading.group(1) for heading in headings])
 
@@ -176,7 +177,7 @@ class DocumentationContractTests(unittest.TestCase):
                               for action_id, label, command in rows], menu.name)
             total += len(actual)
 
-        self.assertEqual(83, total)
+        self.assertEqual(87, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")
@@ -186,6 +187,22 @@ class DocumentationContractTests(unittest.TestCase):
         for route in routes:
             with self.subTest(route=route):
                 self.assertRegex(cli, rf"(?m)^#{{1,6}} `{re.escape(route)}`$")
+
+    def test_recipe_cli_arguments_and_create_only_publications_are_documented(self):
+        cli = (ROOT / 'docs/commandconfig.md').read_text()
+        section = cli.split('### `recipe`', 1)[1].split('## Still-image actions', 1)[0]
+        source = (ROOT / 'src/bin/kim_recipe_core.py').read_text().split('def main():', 1)[1]
+        accepted = set(re.findall(r"parser.add_argument\('(--[^']+)'", source))
+        documented = set(re.findall(r'--[a-z][a-z-]*', section)) - {'--help'}
+        self.assertEqual(accepted, documented)
+        for action in ('album', 'tiffjoin'):
+            section = cli.split('### `' + action + '`', 1)[1].split('### ', 1)[0]
+            self.assertIn('regardless of `KIM_POLICY`', section)
+            self.assertIn('occupied names are numbered', section)
+            self.assertNotIn('create/overwrite', section)
+        for relative in ('docs/RECIPES.md', 'docs/commandconfig.md'):
+            self.assertNotIn('name and description', (ROOT / relative).read_text())
+            self.assertNotIn('name, description,', (ROOT / relative).read_text())
 
     def test_configuration_reference_covers_dispatcher_settings(self):
         config = (ROOT / "docs/commandconfig.md").read_text(encoding="utf-8")

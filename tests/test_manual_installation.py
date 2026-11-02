@@ -30,6 +30,12 @@ MANUAL_FILES = (
     "docs/images/kim6-settings-dialog.png",
     "docs/images/kim6-collage-dialog.png",
     "docs/images/kim6-animated-gif-dialog.png",
+    "docs/reference/RECIPES.html",
+    "docs/images/kim6-recipes-menu.png",
+    "docs/images/kim6-recipe-editor.png",
+    "docs/images/kim6-convert-menu.png",
+    "docs/images/kim6-metadata-menu.png",
+    "docs/images/kim6-settings-general.png",
 )
 
 
@@ -96,6 +102,21 @@ class ManualInstallationTests(unittest.TestCase):
     def test_install_upgrade_uninstall_and_preserve_unrelated_file(self):
         self.run_installer("install.sh")
         self.assert_manual_matches_checkout()
+        helpers=('kim_ui','kim_date_tools','kim_date_dialog','kim_filename','kim_job','kim_job_process','kim_action_dialog')
+        for helper in helpers:
+            self.assertEqual((self.runtime/'bin'/(helper+'.py')).read_bytes(),(ROOT/'src/bin'/(helper+'.py')).read_bytes())
+        import sys
+        # Pass the isolated installed runtime explicitly, never the checkout.
+        imported=subprocess.run([sys.executable,'-B','-c',
+            'import sys;sys.path.insert(0,sys.argv[1]);'+ ';'.join('import '+helper for helper in helpers),str(self.runtime/'bin')],
+            cwd=self.base,env=self.env,capture_output=True,text=True)
+        self.assertEqual(imported.returncode,0,imported.stderr)
+        self.assertEqual((self.runtime / 'bin/kim_psd_source.py').read_bytes(),
+                         (ROOT / 'src/bin/kim_psd_source.py').read_bytes())
+        for name in ('kim_convertandrotate.desktop', 'kim_publication.desktop', 'kim_webemail.desktop', 'kim_recipes.desktop'):
+            menu = (self.prefix / name).read_text()
+            self.assertIn('image/vnd.adobe.photoshop;', menu)
+            self.assertIn('application/x-photoshop;', menu)
         engine = self.runtime / "bin/kim_png_metadata.py"
         self.assertEqual(engine.read_bytes(),
                          (ROOT / "src/bin/kim_png_metadata.py").read_bytes())
@@ -130,7 +151,7 @@ class ManualInstallationTests(unittest.TestCase):
             path.name.removesuffix(".in")
             for path in sorted((ROOT / "src").glob("kim_*.desktop.in"))
         )
-        self.assertEqual(10, len(menu_names))
+        self.assertEqual(11, len(menu_names))
 
         for name in menu_names:
             with self.subTest(menu=name):
@@ -153,6 +174,40 @@ class ManualInstallationTests(unittest.TestCase):
                         command.startswith(f'Exec="{dispatcher}" '),
                         command,
                     )
+
+    def test_installed_recipe_manual_and_referenced_screenshots_are_packaged(self):
+        self.run_installer('install.sh')
+        # The installed overview links to Recipes, and the new guide uses all
+        # five screenshots. Compare bytes so placeholders cannot satisfy this.
+        references = (
+            'docs/reference/RECIPES.html',
+            'docs/images/kim6-recipes-menu.png',
+            'docs/images/kim6-recipe-editor.png',
+            'docs/images/kim6-convert-menu.png',
+            'docs/images/kim6-metadata-menu.png',
+            'docs/images/kim6-settings-general.png',
+        )
+        for relative in references:
+            with self.subTest(file=relative):
+                source = ROOT / relative
+                self.assertTrue(source.is_file(), relative)
+                installed = self.runtime / relative
+                self.assertTrue(installed.is_file(), 'Not installed: ' + relative)
+                self.assertFalse(installed.is_symlink(), relative)
+                self.assertEqual(installed.read_bytes(), source.read_bytes())
+
+    def test_new_manual_assets_uninstall_preserves_unrecognized_neighbors(self):
+        self.run_installer('install.sh')
+        self.assert_manual_matches_checkout()
+        neighbors = [self.runtime / 'docs/images/user-photo.png',
+                     self.runtime / 'docs/reference/user-guide.html']
+        for path in neighbors:
+            path.write_bytes(b'not managed by KIM6')
+        self.run_installer('uninstall.sh')
+        for relative in MANUAL_FILES:
+            self.assertFalse((self.runtime / relative).exists(), relative)
+        for path in neighbors:
+            self.assertEqual(path.read_bytes(), b'not managed by KIM6')
 
     def test_reject_symlinked_reference_directory(self):
         self.run_installer("install.sh")

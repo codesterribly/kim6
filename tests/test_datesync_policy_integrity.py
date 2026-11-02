@@ -49,6 +49,7 @@ class DateSyncPolicyIntegrityTests(unittest.TestCase):
                 "-overwrite_original",
                 "-DateTimeOriginal=2024:02:29 23:59:58",
                 "-SubSecTimeOriginal=123456789",
+                "-OffsetTimeOriginal=-05:00",
                 str(self.source),
             ],
             check=True,

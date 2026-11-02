@@ -21,6 +21,7 @@
       <nav aria-label="Reference pages"><a href="README.html">Overview</a>
 <a href="INSTALL.html">Installation</a>
 <a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
@@ -133,10 +134,16 @@
 <td>Page count and layout are checked. Untrusted PDF input remains subject to local delegate/security policy.</td>
 </tr>
 <tr>
-<td>PSD/PSB</td>
-<td>ImageMagick decoder when installed</td>
-<td>Coder-dependent; no dedicated menu output</td>
-<td>Layers and document structure may be flattened. Use an editor for layer-preserving work.</td>
+<td>PSD</td>
+<td>KIM6 Photoshop source preparation for supported photo workflows</td>
+<td>No PSD output</td>
+<td>Supported 8- or 16-bit RGB, grayscale, or profiled CMYK PSD input, subject to canvas and decoding limits. Layers are rendered, not retained as an editable document. Recipes require a supported output format.</td>
+</tr>
+<tr>
+<td>PSB</td>
+<td>Rejected</td>
+<td>Not supported</td>
+<td>Large Photoshop Document (PSB) files are explicitly refused; do not assume they are interchangeable with PSD.</td>
 </tr>
 <tr>
 <td>Radiance HDR / OpenEXR</td>
@@ -152,6 +159,11 @@
 </tr>
 </tbody>
 </table>
+<h2 id="photoshop-psd-inputs">Photoshop PSD Inputs</h2>
+<p>KIM6 accepts supported Photoshop PSD files as <strong>read-only sources</strong> for applicable image actions, including Recipes and supported publication workflows. <strong>PSB is not supported.</strong> PSD preparation accepts supported 8- and 16-bit grayscale, RGB and profiled CMYK documents within its size limits. A PSD is prepared as a rendered image for processing. This is not an editable Photoshop round trip: layers and other document-specific structure are not reproduced in the derivative.</p>
+<p><strong>Recipes never save PSD output.</strong> If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers <strong>Fix Recipe…</strong>, where <strong>Convert Format</strong> can be added and a supported format selected. KIM6 does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.</p>
+<p>Some PSDs contain CMYK data, transparency, embedded ICC profiles, or higher bit depths. KIM6 checks source and output capabilities and applies operation-specific profile, alpha, and precision handling. The output's format and properties must be inspected rather than assuming the source document's characteristics will be preserved identically.</p>
+<p>For the full workflow, see <a href="RECIPES.html#photoshop-psd-inputs-and-fix-recipe">Recipes</a>.</p>
 <h2 id="frame-preservation">Frame Preservation</h2>
 <p>KIM6 distinguishes still images, animations, and multi-page documents. Conversion rejects known frame loss rather than silently flattening unsupported animations. APNG has a dedicated FFmpeg path; other multi-frame formats depend on the installed coder and the selected action.</p>
 <p>Operations that preserve frames validate expected input and output frame counts. A format's ability to contain multiple frames does not guarantee that every KIM6 operation supports them.</p>

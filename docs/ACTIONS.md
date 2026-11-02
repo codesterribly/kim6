@@ -1,7 +1,7 @@
 
 # KIM6 Dolphin Menu Actions
 
-KIM6 provides 83 executable Dolphin actions across ten service-menu files. This document lists each entry, its menu label, and the command it executes.
+KIM6 provides 87 executable Dolphin actions across 11 service-menu files. This document lists each entry, its menu label, and the command it executes.
 
 The tables reflect the menu definitions in `src/`. Settings, User Guide, License, and About are grouped in the dedicated information service menu.
 
@@ -13,6 +13,7 @@ Dolphin displays KIM6 submenus according to broad MIME-type filters, not whether
 
 - **Image actions:** Conversion, compression, resizing, metadata, and publication menus appear for image files.
 - **Video actions:** Video conversion and utility menus appear for video files.
+- **Recipes:** The **KIM6 Recipes** submenu has **Run a Recipe…** (which selects built-in and saved recipes) and **Recipe Editor…**. Only user recipes assigned to **Root** are also published as direct Dolphin shortcuts. Other saved recipes are available in the runner and editor, grouped by folder or Unfiled.
 - **Compression:** JPEG, PNG, WebP, and AVIF are supported, using format-specific compression settings and encoders.
 
 Individual conversion targets are not dynamically hidden according to the selected image format. For example, **Convert to JPEG** remains available when a JPEG is selected. In Create new mode, this can produce a separately encoded JPEG. In Overwrite mode, converting a JPEG to JPEG without special encoding options is treated as a successful no-op.
@@ -25,11 +26,14 @@ File handling depends on the operation:
 
 - **Resize, compress, and convert:** Create new files or overwrite existing files when authorized.
 - **Web export and email:** Create separate output files without changing the selected images.
+- **Recipes:** Always create derivatives; the selected source photographs are never overwritten. Preflight checks selected photos before Run is enabled.
 - **Rotate, EXIF auto-orient, flip and flop:** Create mode publishes transformed copies and preserves selected originals. Overwrite mode replaces selected originals only after explicit two-stage confirmation.
 - **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
 - **Targeted GPS and AI cleanup:** **Strip GPS Metadata** removes recognized coordinate fields; **Strip AI Metadata** removes recognized AI-generation fields. Neither operation guarantees complete removal of its targeted information. Other location indicators, generator-specific AI metadata, and signed C2PA / Content Credentials may remain.
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
+
+For recipe selection, building, and execution, see [RECIPES.md](RECIPES.md).
 
 For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
 
@@ -39,7 +43,7 @@ For detailed command options, dependencies, and output behavior, see [commandcon
 
 ## Complete Menu Action Reference
 
-The following tables list all 83 executable actions from KIM6's ten Dolphin service-menu files.
+The following tables list the 87 static executable actions from KIM6's 11 Dolphin service-menu templates. Root-assigned user recipes can add runtime-generated shortcuts; those entries depend on the user's recipe library and are not counted in the static inventory.
 
 Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.
 
@@ -48,6 +52,8 @@ During installation, the `kim_all` command is replaced with the full path to the
 The mappings are checked against the menu templates by `tests/test_documentation.py`.
 
 ### `kim_compressandresize.desktop.in`
+
+**Dolphin submenu:** KIM6 — Resize/Rotate
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -66,6 +72,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_compressandresizevideo.desktop.in`
 
+**Dolphin submenu:** KIM6 — Convert Video: H.265
+
 | Action ID | Menu label | Command |
 |---|---|---|
 | `Videohd108017265mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F` |
@@ -76,6 +84,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `Videohd72029265mp4` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F` |
 
 ### `kim_convertandrotate.desktop.in`
+
+**Dolphin submenu:** KIM6 — Convert/Compress
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -97,6 +107,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_information.desktop.in`
 
+**Dolphin submenu:** KIM6 — Settings/About
+
 | Action ID | Menu label | Command |
 |---|---|---|
 | `01Settings` | Settings… | `kim_all settings` |
@@ -106,17 +118,23 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_metadata.desktop.in`
 
+**Dolphin submenu:** KIM6 — Organize/Metadata
+
 | Action ID | Menu label | Command |
 |---|---|---|
 | `01Rename` | Rename Images… | `kim_all rename interactive -- %F` |
-| `02AdjustCaptureTime` | Adjust camera timestamps… | `kim_all timeshift --interactive -- %F` |
-| `03DateSync` | Synchronize photo/file dates… | `kim_all datesync --interactive -- %F` |
+| `02SetCaptureDate` | Set Photo Capture Date… | `kim_all capturedate --interactive -- %F` |
+| `02AdjustCaptureTime` | Adjust Photo Capture Date… | `kim_all timeshift --interactive -- %F` |
+| `03DateSync` | Set File Date from Photo Capture Date… | `kim_all datesync --direction exif-to-file --interactive -- %F` |
+| `03CaptureFromFile` | Set Photo Capture Date from File Date… | `kim_all datesync --direction file-to-exif --interactive -- %F` |
 | `04SetCopyright` | Set creator and copyright… | `kim_all copyright --interactive -- %F` |
-| `05StripMetadata` | Strip Metadata | `kim_all stripmeta -- %F` |
-| `06StripAI` | Strip AI Metadata | `kim_all stripmeta --mode ai -- %F` |
-| `07StripGPS` | Strip GPS Metadata | `kim_all stripmeta --mode gps -- %F` |
+| `05StripMetadata` | Strip Metadata | `kim_all stripmeta --interactive -- %F` |
+| `06StripAI` | Strip AI Metadata | `kim_all stripmeta --mode ai --interactive -- %F` |
+| `07StripGPS` | Strip GPS Metadata | `kim_all stripmeta --mode gps --interactive -- %F` |
 
 ### `kim_publication.desktop.in`
+
+**Dolphin submenu:** KIM6 — Create/Publish
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -130,7 +148,18 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `TiffJoin` | Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
 | `Emailfull` | Send via email… | `kim_all resizeandsend --size full -- %F` |
 
+### `kim_recipes.desktop.in`
+
+**Dolphin submenu:** KIM6 Recipes
+
+| Action ID | Menu label | Command |
+|---|---|---|
+| `KIMRecipe0Run` | Run a Recipe… | `kim_all recipe --choose -- %F` |
+| `KIMRecipe1Editor` | Recipe Editor… | `kim_all recipe --editor` |
+
 ### `kim_video_av1.desktop.in`
+
+**Dolphin submenu:** KIM6 — Convert Video: AV1
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -143,6 +172,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_video_h264.desktop.in`
 
+**Dolphin submenu:** KIM6 — Convert Video: H.264
+
 | Action ID | Menu label | Command |
 |---|---|---|
 | `Videohd108017264mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F` |
@@ -154,6 +185,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_videoutilities.desktop.in`
 
+**Dolphin submenu:** KIM6 — Video Utilities
+
 | Action ID | Menu label | Command |
 |---|---|---|
 | `A01ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
@@ -164,6 +197,8 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `z02VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
 
 ### `kim_webemail.desktop.in`
+
+**Dolphin submenu:** KIM6 — Web Export
 
 | Action ID | Menu label | Command |
 |---|---|---|

@@ -63,11 +63,11 @@ class TransformTests(unittest.TestCase):
         return subprocess.run([shutil.which('identify'), '-format', '%m %w %h\n', str(path)],
                               check=True, capture_output=True, text=True).stdout.strip()
 
-    def assert_failed_unchanged(self, result, before):
+    def assert_failed_unchanged(self, result, before, expected='Failed: 1'):
         for path, state in before.items():
             self.assertEqual(self.w.observe(path), state, result.stderr)
         self.assertEqual(result.outputs, {})
-        self.assertTrue(any('Failed: 1' in ' '.join(c['argv']) for c in result.calls), result.calls)
+        self.assertTrue(any(expected in ' '.join(c['argv']) for c in result.calls), result.calls)
         self.assertFalse(any(c['tool'] == 'mogrify' for c in result.calls))
         self.clean()
 
@@ -288,7 +288,7 @@ def interruption_case(action, argument, phase, state):
         elif phase == 'metadata':
             self.w.respond('chmod', **injection)
         result = self.w.dispatch(action, argument, self.source, second)
-        self.assert_failed_unchanged(result, before)
+        self.assert_failed_unchanged(result, before,'Cancelled: 1' if state=='cancelled' and phase!='before' else 'Failed: 1')
         self.assertFalse(any(c['tool'] in ('mv', 'ln') for c in result.calls))
         self.assertLessEqual(len([c for c in result.calls if c['tool'] == 'magick']),
                              0 if phase in ('before', 'input') else 1)

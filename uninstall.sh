@@ -80,6 +80,7 @@ menu_names=(
   kim_information.desktop
   kim_metadata.desktop
   kim_publication.desktop
+  kim_recipes.desktop
   kim_videoutilities.desktop
   kim_webemail.desktop
 )
@@ -102,8 +103,15 @@ manual_files=(
   docs/images/kim6-settings-dialog.png
   docs/images/kim6-collage-dialog.png
   docs/images/kim6-animated-gif-dialog.png
+  docs/reference/RECIPES.html
+  docs/images/kim6-recipes-menu.png
+  docs/images/kim6-recipe-editor.png
+  docs/images/kim6-convert-menu.png
+  docs/images/kim6-metadata-menu.png
+  docs/images/kim6-settings-general.png
 )
 runtime_files=(
+  bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json
   bin/kim_collage_dialog.py
   bin/kim_contactsheet_dialog.py
   bin/kim_video_dialog.py
@@ -154,7 +162,7 @@ if [ -L "$RUNTIME" ] || { [ -e "$RUNTIME" ] && [ ! -d "$RUNTIME" ]; }; then
   exit 1
 fi
 if [ -d "$RUNTIME" ]; then
-  for directory in "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
+  for directory in "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
     check_dir "$directory"
   done
   for relative in "${runtime_files[@]}"; do
@@ -218,7 +226,7 @@ if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
     rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" "$RUNTIME/locale/$language" 2>/dev/null || true
   done
   rmdir -- "$RUNTIME/docs/images" "$RUNTIME/docs/reference" 2>/dev/null || true
-    rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME" 2>/dev/null || true
+    rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME" 2>/dev/null || true
 fi
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then

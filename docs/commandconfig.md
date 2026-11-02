@@ -27,8 +27,9 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 
 - [Command Syntax](#command-syntax)
 - [Output and File Handling](#output-and-file-handling)
+- [Recipes](#recipes)
 - [Configuration and Defaults](#configuration-and-defaults)
-- [Still-image actions](#still-image-actions): album, animate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport
+- [Still-image actions](#still-image-actions): album, animate, capturedate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport
 - [Video actions](#video-actions): slideshow, video, videoaudio, videoframes, videogif
 - [Information actions](#information-actions): about, license, manual, settings
 
@@ -175,6 +176,35 @@ KIM_NAME_AFFIX_POSITION=prefix ./src/bin/kim_all resize --size 1600x1600 -- phot
 
 See [Output and File Handling](#output-and-file-handling), [copyright](#copyright), and [webexport](#webexport) for action-specific details.
 
+## Recipes
+
+The **KIM6 Recipes** submenu in Dolphin provides **Run a Recipe…** and **Recipe Editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+
+Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides **Load Photos & Run**. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
+
+Recipes are derivative-only: originals are never replaced. They support output filename patterns such as `{filename}_recipe`, where `{filename}` is the input basename without its extension. Previously saved `{stem}` patterns remain valid. The final extension is set by the output format and occupied names are numbered to avoid collisions.
+
+PSD sources are readable in supported workflows, but KIM6 cannot publish PSD output. A missing required format causes a preflight problem and can be corrected through **Fix Recipe…** by adding **Convert Format** and choosing an available output type. KIM6 does not silently choose a fallback encoder.
+
+The supplied **Web Export** recipe auto-orients the input, fits it within 1600 × 1600 pixels without upscaling, applies sRGB color handling, converts to JPEG at quality 95, strips all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each original. Set Creator / Artist, Set Copyright Notice, and Set Usage Rights are present but disabled in the shipped recipe. The destination is configured in the recipe; an output-directory picker appears only for recipes configured to ask on run.
+
+For every supported step, editor behavior, folder organization, preview, safety rules, and troubleshooting, see the [Recipes reference](RECIPES.md).
+
+### `recipe`
+
+```sh
+kim_all recipe --list
+kim_all recipe --editor [-- FILE...]
+kim_all recipe --choose [-- FILE...]
+kim_all recipe --run-id ID [-- FILE...]
+kim_all recipe --recipe ID_OR_JSON_FILE [--preview] [--destination DIR] -- FILE...
+kim_all recipe --sync-menu
+```
+
+`--list` prints built-in and saved user recipe definitions as JSON. `--editor` opens Recipe Editor; omitting `--recipe` also opens the editor. `--choose` opens Run a Recipe with no recipe selected. `--run-id` opens confirmation for a saved recipe ID; opening it does not execute the recipe automatically. These graphical forms accept an optional initial file selection.
+
+`--recipe` selects a built-in or saved user recipe by ID, or reads one recipe from a JSON file, and requires at least one input file. It executes directly and prints per-file results as JSON. `--preview` instead prints planned outputs and problems as JSON without publishing files. `--destination` supplies or overrides the directory for a recipe with a directory destination, including one configured to ask on run; beside-source and subfolder destinations use the recipe definition. Preflight problems or execution failures return a nonzero status. `--sync-menu` rebuilds installed Root shortcuts from the saved library. `--help` shows the accepted arguments. Recipes always create derivatives and number occupied output names.
+
 ## Still-image actions
 
 ### `album`
@@ -184,7 +214,7 @@ kim_all album -- FILE...
 kim_all album OUTPUT_DIRECTORY FILE...
 ```
 
-Prompts for one of eight PDF album layouts and a PDF destination. The optional first argument chooses the initial output directory. Produces an ordered, validated multi-page A4 PDF (portrait or landscape according to the chosen preset). Existing targets require the configured create/overwrite choice.
+Prompts for one of eight PDF album layouts and a PDF destination. The optional first argument chooses the initial output directory. Produces an ordered, validated multi-page A4 PDF (portrait or landscape according to the chosen preset). Albums always create new files, regardless of `KIM_POLICY`; occupied names are numbered without replacing existing targets.
 
 ### `animate`
 
@@ -194,6 +224,20 @@ kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE..
 
 Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from `videogif`, which samples a video segment.
 
+### `capturedate`
+
+```sh
+kim_all capturedate --interactive -- FILE...
+kim_all capturedate --datetime 'YYYY-MM-DD HH:MM:SS' --timezone unknown|UTC|+HH:MM -- FILE...
+kim_all capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM] [--seconds INTEGER] [--fields capture|all] -- FILE...
+```
+
+The **Set Photo Capture Date…** command edits camera capture-date metadata. The related photo-date actions
+can adjust an existing capture date, derive a capture date from the file modification time, or synchronize
+the file modification time with the recorded photo capture date. Unknown camera time zones are not assumed
+to be UTC or the computer local time.
+
+See also [`datesync`](#datesync) and [`timeshift`](#timeshift).
 ### `collage`
 
 ```sh
@@ -354,7 +398,7 @@ Default mode `all` preserves the existing full-strip behavior. `gps` removes rec
 kim_all tiffjoin [--output PATH] [--] IMAGE...
 ```
 
-Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.
+Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output when `--output` is omitted. Always creates a new file, regardless of `KIM_POLICY`; occupied names are numbered without replacing existing targets. Sources are preserved; output is staged and validated.
 
 ### `timeshift`
 

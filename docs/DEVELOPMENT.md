@@ -12,7 +12,7 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | Ten KDE Dolphin service-menu definitions containing 83 executable actions. |
+| `src/kim_*.desktop.in` | 11 KDE Dolphin service-menu definitions containing 87 executable actions. |
 | `src/gallery/` | Templates used to generate HTML photo galleries. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
@@ -29,11 +29,23 @@ The `docs/` directory contains additional references:
 - `ACTIONS.md` - Complete Dolphin menu and action inventory.
 - `commandconfig.md` - detailed descriptions of KIM6 functionality, command-line options and configuration.
 - `FORMATS.md` - Supported image and video formats.
+- `RECIPES.md` - The Recipes submenu, editor, step definitions, preflight and derivative-only outputs.
 - `index.html` - HTML User Guide with CSS styling (`work.css`).
+- `reference/` - Generated HTML pages from the Markdown sources; never edit generated pages directly.
+
+## Recipe Architecture
+
+The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in `src/bin/` include `kim_recipe_core.py`, `kim_recipe_image.py`, `kim_recipe_dialog.py`, `kim_recipe_run.py`, and `kim_recipe_menu.py`; the shipped definitions are kept under `src/recipes/`.
+
+The Recipes submenu has two static entries, Run a Recipe and Recipe Editor; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.
+
+**Safety contract:** Recipes publish derivatives only, never overwrite selected source photographs, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected photographs. Cancellation or failed publication must never be presented as success.
+
+See [RECIPES.md](RECIPES.md) for user-facing behavior and [ACTIONS.md](ACTIONS.md) for service-menu entry points.
 
 ## Dolphin Service Menus
 
-KIM6 uses ten KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
+KIM6 uses 11 KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
 For example:
 
@@ -248,7 +260,7 @@ Installation updates are performed one file at a time. An interrupted installati
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all ten Dolphin service-menu files and their 83 executable action mappings.
+2. Verify all 11 Dolphin service-menu files and their 87 executable action mappings.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.

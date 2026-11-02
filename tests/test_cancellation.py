@@ -88,7 +88,7 @@ class CancellationTests(unittest.TestCase):
             summaries = [c for c in result.calls if c['tool'] == 'kdialog' and '--error' in c['argv']]
             self.assertEqual(len(summaries), 1)
             self.assertIn('Succeeded: 1', ' '.join(summaries[0]['argv']))
-            self.assertIn('Failed: 1', ' '.join(summaries[0]['argv']))
+            self.assertIn('Cancelled: 1' if state=='cancelled' else 'Failed: 1', ' '.join(summaries[0]['argv']))
             return
         self.assertFalse(publication, publication)
         self.assertEqual(sorted(result.outputs), [])
@@ -96,7 +96,7 @@ class CancellationTests(unittest.TestCase):
             self.assertEqual(w.observe(path), entry, str(path))
         self.assertEqual(len(producers), 0 if phase in ('before', 'input') else 1)
         summaries = [c for c in result.calls if c['tool'] == 'kdialog'
-                     and '--error' in c['argv'] and 'Failed: 1' in ' '.join(c['argv'])]
+                     and '--error' in c['argv'] and ('Cancelled: 1' if state=='cancelled' else 'Failed: 1') in ' '.join(c['argv'])]
         self.assertEqual(len(summaries), 1, result.calls)
         self.assertIn('Succeeded: 0', ' '.join(summaries[0]['argv']))
         errors = [c for c in result.calls if c['tool'] == 'kdialog' and '--error' in c['argv']

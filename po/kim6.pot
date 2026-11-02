@@ -608,3 +608,359 @@ msgstr ""
 #: ../src/kim_publication.desktop.in.h:12
 msgid "Add text annotation"
 msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "JPEG · Large (1600 × 1600)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "JPEG · Medium (800 × 800)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "JPEG · Thumbnail (128 × 128)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "PNG · Large (1600 × 1600)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "PNG · Medium (800 × 800)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "PNG · Thumbnail (128 × 128)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "WebP · Large (1600 × 1600)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "WebP · Medium (800 × 800)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "WebP · Thumbnail (128 × 128)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "AVIF · Large (1600 × 1600)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "AVIF · Medium (800 × 800)"
+msgstr ""
+
+#: ../src/kim_webemail.desktop.in
+msgid "AVIF · Thumbnail (128 × 128)"
+msgstr ""
+
+#: ../src/kim_information.desktop.in
+msgid "About KIM6"
+msgstr ""
+
+#: ../src/kim_information.desktop.in
+msgid "Settings…"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Resize to 1600 × 1600"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Resize to 1280 × 1280"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Resize to 1024 × 1024"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Resize by Percentage…"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Resize to Custom Size…"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Rotate 90° CW"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Rotate 90° CCW"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Rotate 180°"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Rotate by Custom Angle…"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Auto-Rotate Using EXIF"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Flip Horizontally"
+msgstr ""
+
+#: ../src/kim_compressandresize.desktop.in
+msgid "Flip Vertically"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "1080p • High Quality • MP4"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "1080p • Balanced • MP4"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "1080p • Smallest File • MP4"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "720p • High Quality • MP4"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "720p • Balanced • MP4"
+msgstr ""
+
+#: ../src/kim_video_h264.desktop.in
+msgid "720p • Smallest File • MP4"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Extract audio…"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Extract frame at timestamp…"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Extract automatic thumbnail"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Remove audio (copy video)"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Create video contact sheet…"
+msgstr ""
+
+#: ../src/kim_videoutilities.desktop.in
+msgid "Create animated GIF from video…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Rename Images…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Adjust Photo Capture Date…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Set File Date from Photo Capture Date…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Set creator and copyright…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Strip AI Metadata"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Strip GPS Metadata"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Strip Metadata"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Set Photo Capture Date…"
+msgstr ""
+
+#: ../src/kim_metadata.desktop.in
+msgid "Set Photo Capture Date from File Date…"
+msgstr ""
+
+#: ../src/kim_recipes.desktop.in
+msgid "Run a Recipe…"
+msgstr ""
+
+#: ../src/kim_recipes.desktop.in
+msgid "Recipe Editor…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a PDF album…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create an animated GIF…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a photo collage…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a photo contact sheet…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create an HTML gallery…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a print-layout PDF…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a video slideshow…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Create a multi-page TIFF…"
+msgstr ""
+
+#: ../src/kim_publication.desktop.in
+msgid "Send via email…"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to AVIF"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to BMP"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to HEIC/HEIF"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to JPEG 2000 (Lossless)"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to JPEG 2000 (Lossy)"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to JPEG XL"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Convert to WebP"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Compress Recommended"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Compress Maximum"
+msgstr ""
+
+#: ../src/kim_convertandrotate.desktop.in
+msgid "Compress Custom…"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Photo Capture Date"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "The date and time the photograph was taken, stored inside the image as metadata. This is different from the file's modification date."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Camera Timezone"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "The timezone where the photograph was taken. If you don't know it, choose Unknown. KIM6 won't guess based on your computer's timezone."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Date Fields / All Dates"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Choose which dates inside the photograph to update. This doesn't change the file's modification date unless you also select that operation."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Reset from Settings"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Use the value from KIM6 Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Color Profile / sRGB"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Color profiles tell applications how colors should appear. sRGB is a good choice for web sharing and general compatibility. KIM6 converts colors using the original profile when available."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Compression Quality"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Higher quality generally preserves more detail but creates larger files. Lower quality generally makes smaller files but may lose detail. Results vary by image and format."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Resize to Fit / Exact Dimensions"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Resize to Fit keeps the original proportions within your chosen dimensions. Exact Dimensions forces the specified width and height, which can stretch the image."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Remove All Metadata"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Removes embedded information such as camera details, dates, GPS, copyright and color profiles. Use the more specific removal options if you want to keep other information."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Output Filename / Location"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "KIM6 saves new files without replacing existing ones. If a filename is taken, it adds a number. The final name is checked again when saving."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "PSD Compatibility"
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "KIM6 uses Photoshop's saved composite when available, or ImageMagick's best-effort reconstruction. Complex layers and effects may look different. Your original PSD is never modified."
+msgstr ""
+
+#: ../src/bin/kim_ui.py
+msgid "Use the current value from KIM6 Settings for this batch instead of your custom value. The preview shows the value that will be applied."
+msgstr ""

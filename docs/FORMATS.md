@@ -22,9 +22,20 @@ KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A re
 | PNM family (PBM/PGM/PPM/PAM/PNM) | ImageMagick decoder | Available PNM coders | Typically still images with limited profile and metadata support. |
 | SVG/SVGZ | Rasterized through the installed SVG delegate and security policy | Coder-dependent; conversion is primarily raster-oriented | Rasterization loses vector structure. Do not weaken delegate security restrictions for untrusted files. |
 | PDF | ImageMagick PDF delegate when local policy allows | Validated PDF output; `album` and `print` generate PDFs | Page count and layout are checked. Untrusted PDF input remains subject to local delegate/security policy. |
-| PSD/PSB | ImageMagick decoder when installed | Coder-dependent; no dedicated menu output | Layers and document structure may be flattened. Use an editor for layer-preserving work. |
+| PSD | KIM6 Photoshop source preparation for supported photo workflows | No PSD output | Supported 8- or 16-bit RGB, grayscale, or profiled CMYK PSD input, subject to canvas and decoding limits. Layers are rendered, not retained as an editable document. Recipes require a supported output format. |
+| PSB | Rejected | Not supported | Large Photoshop Document (PSB) files are explicitly refused; do not assume they are interchangeable with PSD. |
 | Radiance HDR / OpenEXR | Coder-dependent decoder | Coder-dependent encoder | No promised automatic HDR-to-SDR color-managed conversion. `slideshow` rejects HDR input. |
 | Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, others) | Installed ImageMagick RAW delegate, if available | No dedicated RAW development or output workflow | Demosaicing and color depend on the delegate. RAW metadata editing is rejected; conversion must not overwrite RAW originals. Use a dedicated RAW processor for development. |
+
+## Photoshop PSD Inputs
+
+KIM6 accepts supported Photoshop PSD files as **read-only sources** for applicable image actions, including Recipes and supported publication workflows. **PSB is not supported.** PSD preparation accepts supported 8- and 16-bit grayscale, RGB and profiled CMYK documents within its size limits. A PSD is prepared as a rendered image for processing. This is not an editable Photoshop round trip: layers and other document-specific structure are not reproduced in the derivative.
+
+**Recipes never save PSD output.** If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers **Fix Recipe…**, where **Convert Format** can be added and a supported format selected. KIM6 does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.
+
+Some PSDs contain CMYK data, transparency, embedded ICC profiles, or higher bit depths. KIM6 checks source and output capabilities and applies operation-specific profile, alpha, and precision handling. The output's format and properties must be inspected rather than assuming the source document's characteristics will be preserved identically.
+
+For the full workflow, see [Recipes](RECIPES.md#photoshop-psd-inputs-and-fix-recipe).
 
 ## Frame Preservation
 

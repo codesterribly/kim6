@@ -1,0 +1,162 @@
+"""Shared job state and source-based diagnostic grouping, independent of Qt."""
+from dataclasses import dataclass, field
+import os
+from pathlib import Path
+
+
+@dataclass
+class JobStatus:
+    action: str
+    total: int
+    index: int = 0
+    source: str = ''
+    stage: str = 'Inspecting source'
+    results: list = field(default_factory=list)
+    cancelling: bool = False
+
+    def start(self, source, index):
+        self.source, self.index = str(source), index
+
+    def finish(self, result): self.results.append(result)
+
+    def counts(self):
+        succeeded=sum(r.get('ok',False) for r in self.results)
+        cancelled=sum(r.get('cancelled',False) for r in self.results)
+        skipped=sum(r.get('skipped',False) for r in self.results)
+        failed=len(self.results)-succeeded-cancelled-skipped
+        return succeeded,failed,cancelled,skipped,max(0,self.total-len(self.results))
+
+    def label(self):
+        ok,failed,cancelled,skipped,remaining=self.counts()
+        stage='Cancelling current operation…' if self.cancelling else self.stage
+        return (f'{self.action} — file {self.index} of {self.total}: {Path(self.source).name}\n'
+                f'{self.source}\n{stage}\nSucceeded: {ok}; failed: {failed}; cancelled: {cancelled}; skipped: {skipped}; remaining: {remaining}')
+
+
+def warning_category(warning):
+    if warning.startswith('PSD compatibility:'): return 'psd'
+    if 'IPTC digest' in warning or 'IPTCDigest' in warning: return 'digest'
+    if warning.startswith('Unprofiled RGB/grayscale'): return 'unprofiled'
+    return warning
+
+
+def grouped_warnings(rows):
+    """Deduplicate by original source identity, never by a derived/staging path."""
+    categories={}
+    for row in rows:
+        source=os.path.realpath(row.source)
+        try:
+            st=os.stat(source); identity=(st.st_dev,st.st_ino)
+        except OSError: identity=source
+        for warning in row.warnings:
+            category=warning_category(warning)
+            files=categories.setdefault(category,{})
+            entry=files.setdefault(identity,{'source':source,'details':[]})
+            if warning not in entry['details']: entry['details'].append(warning)
+    result=[]
+    for category,files in categories.items():
+        n=len(files)
+        caption={'psd':f'{n} PSD file(s) used Photoshop composites / best-effort reconstruction',
+                 'digest':f'{n} source file(s) emitted an IPTC staging digest notice',
+                 'unprofiled':f'{n} unprofiled RGB/grayscale source file(s) assumed sRGB'}.get(category,f'{n} source file(s): {category}')
+        details='\n\n'.join(entry['source']+'\n'+'\n'.join(entry['details']) for entry in files.values())
+        result.append((caption,details))
+    return result
+
+
+def shell_warning_rows(directory):
+    import json
+    from types import SimpleNamespace
+    path=Path(directory)/'warnings.jsonl'
+    if not path.exists(): return []
+    return [SimpleNamespace(source=entry['source'],warnings=[entry['warning']])
+            for line in path.read_text().splitlines() if line.strip()
+            for entry in [json.loads(line)]]
+
+
+def completion_dialog(action, outputs, groups):
+    """One modeless result window. Advisory details open only on an explicit click."""
+    from PySide6.QtCore import QUrl, Qt
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QPlainTextEdit,QLayout,QSizePolicy)
+    dialog=QDialog(); dialog.setWindowTitle('KIM6 — '+action)
+    dialog.setModal(False); layout=QVBoxLayout(dialog)
+    # Hidden diagnostics must contribute no initial size. Qt's intrinsic layout
+    # then gives the same compact geometry before and after every expansion.
+    layout.setSizeConstraint(QLayout.SetFixedSize)
+    dialog.result_label=QLabel(action+' created successfully'); dialog.result_label.setWordWrap(True)
+    layout.addWidget(dialog.result_label)
+    saved=QLabel('Saved as: '+'\n'.join(outputs)); saved.setTextFormat(Qt.PlainText)
+    saved.setWordWrap(True); saved.setMinimumWidth(0)
+    saved.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Preferred)
+    saved.setMaximumWidth(dialog.screen().availableGeometry().width()*3//4)
+    saved.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.TextSelectableByKeyboard)
+    layout.addWidget(saved); dialog.saved_label=saved
+    dialog.details=QPlainTextEdit(); dialog.details.setReadOnly(True)
+    dialog.details.setPlainText('\n\n'.join(caption+'\n'+details for caption,details in groups))
+    dialog.details.hide(); layout.addWidget(dialog.details)
+    dialog.copy=QPushButton('Copy Details'); dialog.copy.hide(); layout.addWidget(dialog.copy)
+    dialog.details_button=QPushButton(f'Details ({len(groups)})'); dialog.details_button.setCheckable(True)
+    dialog.details_button.setAccessibleName(f'Details ({len(groups)})')
+    dialog.details_button.setVisible(bool(groups))
+    def expand(opened):
+        dialog.details.setVisible(opened); dialog.copy.setVisible(opened)
+        layout.invalidate(); layout.activate(); dialog.adjustSize()
+    dialog.details_button.toggled.connect(expand)
+    from PySide6.QtWidgets import QApplication
+    dialog.copy.clicked.connect(lambda:QApplication.clipboard().setText(dialog.details.toPlainText()))
+    buttons=QHBoxLayout(); folder=QPushButton('Open Folder'); dialog.done_button=QPushButton('Done')
+    folder.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(outputs[0]).parent))))
+    buttons.addWidget(folder); buttons.addStretch(1); buttons.addWidget(dialog.details_button); buttons.addWidget(dialog.done_button); layout.addLayout(buttons)
+    dialog.done_button.clicked.connect(dialog.accept); dialog.done_button.setDefault(True)
+    dialog.ensurePolished(); layout.activate(); dialog.adjustSize()
+    return dialog
+
+
+def publication_result(directory, action, outputs, status, graphical=None):
+    groups=grouped_warnings(shell_warning_rows(directory))
+    import sys
+    # Only a successful, validated publication is a success. Failures retain
+    # their existing action error UI; the EXIT adapter never adds a notice modal.
+    if status!='success' or not outputs:
+        if outputs: print('Saved results retained: '+'; '.join(outputs),file=sys.stderr)
+        for caption,details in groups: print(caption+'\n'+details,file=sys.stderr)
+        return None
+    if graphical is None: graphical=bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
+    # Other quick publications retain their quiet completion when no advisory
+    # exists. Album always gets one primary result, never a second notice window.
+    if action!='PDF Album' and not groups: return None
+    if not graphical:
+        print(action+' created successfully\nSaved as: '+'; '.join(outputs),file=sys.stderr)
+        for caption,details in groups: print(caption+'\n'+details,file=sys.stderr)
+        return None
+    from PySide6.QtWidgets import QApplication
+    app=QApplication.instance() or QApplication([])
+    dialog=completion_dialog(action,outputs,groups); dialog.show()
+    app.exec()
+    return dialog
+
+
+def show_shell_warnings(directory):
+    rows=shell_warning_rows(directory); groups=grouped_warnings(rows)
+    if not groups: return
+    if not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+        import sys
+        for caption,details in groups: print(caption+'\n'+details,file=sys.stderr)
+        return
+    from PySide6.QtWidgets import QApplication,QDialog,QVBoxLayout,QDialogButtonBox
+    from kim_recipe_run import WarningView
+    app=QApplication.instance() or QApplication([]); dialog=QDialog(); dialog.setWindowTitle('KIM6 — Source notices')
+    layout=QVBoxLayout(dialog); view=WarningView(); view.set_rows(rows); layout.addWidget(view)
+    buttons=QDialogButtonBox(QDialogButtonBox.Close); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
+    dialog.resize(660,220); dialog.exec()
+
+
+if __name__=='__main__':
+    import sys
+    if len(sys.argv)>2 and sys.argv[2]=='--publication':
+        directory,_,action,status,manifest=sys.argv[1:]
+        path=Path(manifest)
+        outputs=[os.fsdecode(name) for name in path.read_bytes().split(b'\0') if name] if path.exists() else []
+        publication_result(directory,action,outputs,status)
+    else: show_shell_warnings(sys.argv[1])

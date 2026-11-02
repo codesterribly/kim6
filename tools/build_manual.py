@@ -87,6 +87,7 @@ def render(source, names):
         ("Overview", ROOT / "README.md"),
         ("Installation", ROOT / "INSTALL.md"),
         ("All actions", DOC_DIR / "ACTIONS.md"),
+        ("Recipes", DOC_DIR / "RECIPES.md"),
         ("Commands & settings", DOC_DIR / "commandconfig.md"),
         ("Formats", DOC_DIR / "FORMATS.md"),
         ("Development", DOC_DIR / "DEVELOPMENT.md"),

@@ -41,7 +41,7 @@
         <p class="hero-lede">Resize, convert, prepare, and organize your images and videos without having to open a full editor. This guide shows you where to start and how to use KIM6 to improve your workflow.</p>
         <div class="hero-actions">
           <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
-          <a class="hero-secondary" href="#photos">Explore what KIM6 can do <span aria-hidden="true">↓</span></a>
+          <a class="hero-secondary" href="#recipes">Explore Recipes <span aria-hidden="true">↓</span></a>
         </div>
         <div class="hero-facts" aria-label="Key facts">
           <span><span class="fact-check" aria-hidden="true">✓</span> Works from Dolphin</span>
@@ -75,6 +75,7 @@
       <nav class="side-nav-inner" aria-label="Main navigation">
         <p class="nav-heading">ON THIS PAGE</p>
         <a href="#start">Start here</a>
+        <a href="#recipes">Recipes</a>
         <a href="#visual-guide">Illustrated walkthrough</a>
         <a href="#photos">Everyday photo tasks</a>
         <a href="#filenames">Custom output filenames</a>
@@ -89,6 +90,7 @@
         <p class="nav-heading">REFERENCE</p>
         <a class="nav-external" href="reference/README.html">Project overview <span aria-hidden="true">↗</span></a>
         <a class="nav-external" href="reference/INSTALL.html">Installation <span aria-hidden="true">↗</span></a>
+        <a class="nav-external" href="reference/RECIPES.html">Recipes reference <span aria-hidden="true">↗</span></a>
         <a class="nav-external" href="reference/ACTIONS.html">All menu actions <span aria-hidden="true">↗</span></a>
         <a class="nav-external" href="reference/commandconfig.html">Commands &amp; settings <span aria-hidden="true">↗</span></a>
         <a class="nav-external" href="reference/FORMATS.html">Supported formats <span aria-hidden="true">↗</span></a>
@@ -112,6 +114,71 @@
         </div>
       </section>
 
+
+      <section id="recipes" class="content-section" aria-labelledby="recipes-title">
+        <p class="section-eyebrow"><span class="section-index">02</span> REUSABLE PHOTO WORKFLOWS</p>
+        <h2 id="recipes-title">Your photo workflow, one recipe.</h2>
+        <p class="section-intro">KIM6 now has a dedicated <strong>KIM6 Recipes</strong> menu in Dolphin. Instead of repeating several operations on the same photographs, combine them into a reusable recipe and run the entire workflow from the right-click menu.</p>
+
+                <div class="screen-gallery">
+    <figure class="manual-shot manual-shot-wide" id="recipes-menu-screenshot">
+      <img src="images/kim6-recipes-menu.png" alt="KDE Dolphin KIM6 Recipes submenu with saved recipe shortcuts, Run a Recipe, and Recipe Editor" loading="lazy" decoding="async" width="1448" height="1086">
+      <figcaption><strong>Recipes in Dolphin.</strong> Run a Root recipe directly, choose Run a Recipe, or open Recipe Editor.</figcaption>
+    </figure>
+    <figure class="manual-shot manual-shot-wide" id="recipe-editor-screenshot">
+      <img src="images/kim6-recipe-editor.png" alt="KIM6 Recipe Editor with ordered processing steps, destination, and output preview" loading="lazy" decoding="async" width="1448" height="1086">
+      <figcaption><strong>Recipe Editor.</strong> Edit and enable processing steps, assign folders, and inspect planned output and metadata.</figcaption>
+    </figure>
+        </div>
+        <div class="steps" aria-label="Running a recipe from Dolphin">
+          <div class="step">
+            <span class="step-number">1</span>
+            <div>
+              <h3>Select your photos</h3>
+              <p>Select one or more photographs in Dolphin, right-click, and open <strong>KIM6 Recipes</strong>.</p>
+            </div>
+          </div>
+          <div class="step">
+            <span class="step-number">2</span>
+            <div>
+              <h3>Choose a recipe</h3>
+              <p>Choose <strong>Run a Recipe…</strong> to select built-in <strong>Web Export</strong> or browse your saved recipes. Recipes assigned to <strong>Root</strong> can also appear directly in Dolphin.</p>
+            </div>
+          </div>
+          <div class="step">
+            <span class="step-number">3</span>
+            <div>
+              <h3>Preview and run</h3>
+              <p>Review the selected files, processing steps, planned outputs, and configured destination. Choose a folder only when the recipe requests one; run when every file is ready.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="feature-pair">
+          <article class="feature-block">
+            <div class="feature-symbol" aria-hidden="true">↗</div>
+            <h3>Web Export, ready to use</h3>
+            <p>Inside <strong>Run a Recipe…</strong>, the built-in <strong>Web Export</strong> auto-orients and fits photographs within 1600 × 1600 pixels without upscaling, applies sRGB, saves JPEG at quality 95, and removes all metadata. Results go into a <strong>Web</strong> subfolder beside each original.</p>
+            <div class="output">
+              <span>vacation.jpg</span>
+              <span class="output-arrow" aria-hidden="true">→</span>
+              <strong>Web/vacation_web.jpg</strong>
+            </div>
+          </article>
+
+          <article class="feature-block">
+            <div class="feature-symbol" aria-hidden="true">⚙</div>
+            <h3>Create your own recipes</h3>
+            <p>Open <strong>Recipe Editor…</strong> to create, edit, or duplicate recipes. Combine steps such as resizing, format conversion, metadata removal, and output renaming. Enable or disable individual steps, and organize saved recipes into folders in the selector. Assign a recipe to Root to add a direct Dolphin shortcut.</p>
+            <p>Use output filename patterns such as <code>{filename}_recipe</code> and preview the resulting filenames before processing.</p>
+          </article>
+        </div>
+
+        <p class="section-footnote"><strong>Know what will happen before running.</strong> Run a Recipe checks the selected photographs and previews the planned results. Files requiring attention are identified before processing. For example, a Photoshop PSD that needs an output conversion format can offer <strong>Fix Recipe…</strong> to open the existing recipe editor and correct the problem.</p>
+
+        <p class="section-footnote"><strong>Your originals stay untouched.</strong> Recipes always create separate output files, never overwrite the selected source photographs, and protect existing output filenames from collisions. <a href="reference/RECIPES.html">Read the complete Recipes reference <span aria-hidden="true">↗</span></a>.</p>
+      </section>
+
       <section id="visual-guide" class="content-section" aria-labelledby="visual-guide-title">
   <p class="section-eyebrow">SEE HOW IT WORKS</p>
   <h2 id="visual-guide-title">KIM6 in Dolphin.</h2>
@@ -120,30 +187,42 @@
       <img src="images/kim6-photo-actions.png" alt="KIM6 photo actions in Dolphin" loading="lazy" decoding="async" width="1448" height="1086">
       <figcaption><strong>1. Photo actions in Dolphin.</strong> Access image conversion, creation, metadata, resizing, and export tools from the right-click menu.</figcaption>
     </figure>
+        <figure class="manual-shot manual-shot-wide">
+      <img src="images/kim6-convert-menu.png" alt="Dolphin Convert and Compress menu listing output formats and image compression options" loading="lazy" decoding="async" width="1448" height="1086">
+      <figcaption><strong>2. Convert and compress.</strong> Use the Dolphin submenu to select formats or image compression.</figcaption>
+    </figure>
+    <figure class="manual-shot manual-shot-wide">
+      <img src="images/kim6-metadata-menu.png" alt="Dolphin Organize and Metadata menu showing rename, photo-date, and metadata operations" loading="lazy" decoding="async" width="1448" height="1086">
+      <figcaption><strong>3. Organize and metadata.</strong> Rename, correct photo capture dates, synchronize file dates, and remove selected metadata.</figcaption>
+    </figure>
+    <figure class="manual-shot manual-shot-wide">
+      <img src="images/kim6-settings-general.png" alt="KIM6 Settings window with output policy, image quality, and creator and copyright fields" loading="lazy" decoding="async" width="1448" height="1086">
+      <figcaption><strong>4. Settings and copyright.</strong> Configure output policy, compression quality, and creator and rights information.</figcaption>
+    </figure>
     <figure class="manual-shot manual-shot-wide" id="settings-screenshot">
       <img src="images/kim6-settings-dialog.png" alt="KIM6 Settings and Output Filenames dialogs showing general preferences and customizable filename labels" loading="lazy" decoding="async" width="1536" height="1024">
-      <figcaption><strong>2. Settings and Output Filenames.</strong> Configure file handling and export quality, then customize the labels KIM6 adds to automatically generated filenames. Choose prefixes or suffixes and preview the results before saving.</figcaption>
+      <figcaption><strong>5. Settings and Output Filenames.</strong> Configure file handling and export quality, then customize the labels KIM6 adds to automatically generated filenames. Choose prefixes or suffixes and preview the results before saving.</figcaption>
     </figure>
     <figure class="manual-shot">
       <img src="images/kim6-collage-dialog.png" alt="KIM6 photo collage dialog" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>3. Create a photo collage.</strong> Choose the layout, canvas, spacing, background, and output filename.</figcaption>
+      <figcaption><strong>6. Create a photo collage.</strong> Choose the layout, canvas, spacing, background, and output filename.</figcaption>
     </figure>
     <figure class="manual-shot manual-shot-wide">
       <img src="images/kim6-video-conversion.png" alt="KIM6 video conversion menu" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>4. Convert video.</strong> Choose H.264, H.265, or AV1 encoding, with simplified MP4 presets.</figcaption>
+      <figcaption><strong>7. Convert video.</strong> Choose H.264, H.265, or AV1 encoding, with simplified MP4 presets.</figcaption>
     </figure>
     <figure class="manual-shot manual-shot-wide">
       <img src="images/kim6-video-utilities.png" alt="KIM6 video utilities menu" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>5. Video utilities.</strong> Extract audio or frames, remove audio, create contact sheets, or generate animated GIFs.</figcaption>
+      <figcaption><strong>8. Video utilities.</strong> Extract audio or frames, remove audio, create contact sheets, or generate animated GIFs.</figcaption>
     </figure>
     <figure class="manual-shot">
       <img src="images/kim6-animated-gif-dialog.png" alt="KIM6 animated GIF dialog" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>6. Create an animated GIF.</strong> Choose the starting time, duration, frame rate, maximum width, and looping behavior.</figcaption>
+      <figcaption><strong>9. Create an animated GIF.</strong> Choose the starting time, duration, frame rate, maximum width, and looping behavior.</figcaption>
     </figure>
   </div>
 </section>
 <section id="photos" class="content-section" aria-labelledby="photos-title">
-        <p class="section-eyebrow"><span class="section-index">02</span> EVERYDAY EDITS</p>
+        <p class="section-eyebrow"><span class="section-index">03</span> EVERYDAY EDITS</p>
         <h2 id="photos-title">Your most useful photo actions.</h2>
         <p class="section-intro">These examples show common KIM6 actions and the filenames they produce using the default settings. Your originals remain untouched when <strong>Create new</strong> is selected.</p>
         <div class="task-grid">
@@ -184,7 +263,7 @@
       </section>
 
       <section id="filenames" class="content-section" aria-labelledby="filenames-title">
-        <p class="section-eyebrow"><span class="section-index">03</span> CUSTOM OUTPUT FILENAMES</p>
+        <p class="section-eyebrow"><span class="section-index">04</span> CUSTOM OUTPUT FILENAMES</p>
         <h2 id="filenames-title">Name your output files your way.</h2>
         <p class="section-intro">KIM6 lets you customize the labels it automatically adds to image and video filenames. Keep the familiar defaults or choose names that better fit your workflow.</p>
 
@@ -216,7 +295,7 @@
       </section>
 
       <section id="sharing" class="content-section" aria-labelledby="sharing-title">
-        <p class="section-eyebrow"><span class="section-index">04</span> READY TO SEND</p>
+        <p class="section-eyebrow"><span class="section-index">05</span> READY TO SEND</p>
         <h2 id="sharing-title">Share without changing the source.</h2>
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
         <div class="feature-pair">
@@ -226,7 +305,7 @@
       </section>
 
       <section id="metadata" class="content-section" aria-labelledby="metadata-title">
-        <p class="section-eyebrow"><span class="section-index">05</span> INFORMATION INSIDE YOUR FILES</p>
+        <p class="section-eyebrow"><span class="section-index">06</span> INFORMATION INSIDE YOUR FILES</p>
         <h2 id="metadata-title">Control metadata and dates.</h2>
         <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIM6 gives you targeted ways to work with it.</p>
         <div class="split-panel">
@@ -239,7 +318,7 @@
           </div>
           <div>
             <h3>Copyright and capture times</h3>
-            <p>Add creator and copyright information, shift recorded camera times, or synchronize embedded timestamps and filesystem modification times in either direction.</p>
+            <p>Add creator and copyright information, adjust or set a photo capture date, set capture dates from filesystem dates, or set file modification dates from photo capture dates. Use <strong>Organize/Metadata</strong> in Dolphin to choose the appropriate action.</p>
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
@@ -247,7 +326,7 @@
       </section>
 
       <section id="collections" class="content-section" aria-labelledby="collections-title">
-        <p class="section-eyebrow"><span class="section-index">06</span> MAKE SOMETHING NEW</p>
+        <p class="section-eyebrow"><span class="section-index">07</span> MAKE SOMETHING NEW</p>
         <h2 id="collections-title">From pictures to collections.</h2>
         <p class="section-intro">Turn your photos into galleries, collages, albums, animations, or slideshows. KIM6 saves the results separately, leaving your original images untouched.</p>
         <div class="collection-grid">
@@ -258,11 +337,11 @@
           <div><span class="collection-symbol" aria-hidden="true">◉</span><strong>Animated GIF</strong><span>Animation from selected frames.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Photos in natural filename order.</span></div>
         </div>
-        <p class="section-footnote">Collages include grid, mosaic, hero, filmstrip and scattered layouts with operation-specific canvas, spacing, background, frame and shadow controls. Galleries include Dark Portfolio; printable PDF contact sheets complement albums and print layouts. Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects.</p>
+        <p class="section-footnote">Collages include grid, mosaic, hero, filmstrip and scattered layouts with operation-specific canvas, spacing, background, frame and shadow controls. Galleries include Dark Portfolio; printable PDF contact sheets complement albums and print layouts. Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects. Successful PDF and other publication workflows identify the saved result; when notices are available, <strong>Details (N)</strong> expands them for inspection.</p>
       </section>
 
       <section id="video" class="content-section" aria-labelledby="video-title">
-        <p class="section-eyebrow"><span class="section-index">07</span> VIDEO WORKFLOWS</p>
+        <p class="section-eyebrow"><span class="section-index">08</span> VIDEO WORKFLOWS</p>
         <h2 id="video-title">Useful video tools, right in Dolphin.</h2>
         <p class="section-intro">Re-encode video, extract useful parts, or generate previews using the codecs available on your system.</p>
         <div class="video-list">
@@ -275,7 +354,7 @@
       </section>
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
-        <p class="section-eyebrow"><span class="section-index">08</span> BEFORE YOU CLICK</p>
+        <p class="section-eyebrow"><span class="section-index">09</span> BEFORE YOU CLICK</p>
         <h2 id="handling-title">Your originals stay protected.</h2>
         <p class="section-intro">KIM6 protects your original files by default. When an action could replace an original, you must explicitly approve the change. Nothing is silently overwritten.</p>
         <div class="policy-grid">
@@ -289,7 +368,7 @@
       </section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
-        <p class="section-eyebrow"><span class="section-index">09</span> WHEN SOMETHING GOES WRONG</p>
+        <p class="section-eyebrow"><span class="section-index">10</span> WHEN SOMETHING GOES WRONG</p>
         <h2 id="troubleshooting-title">Troubleshooting common problems.</h2>
         <p class="section-intro">If a menu is missing or an action fails, these common checks can help you identify and resolve the problem.</p>
         <div class="faq-list">
@@ -301,13 +380,14 @@
       </section>
 
       <section id="references" class="content-section references-section" aria-labelledby="references-title">
-        <p class="section-eyebrow"><span class="section-index">10</span> GO DEEPER</p>
+        <p class="section-eyebrow"><span class="section-index">11</span> GO DEEPER</p>
         <h2 id="references-title">Everything is documented.</h2>
         <p class="section-intro">This page covers everyday use. For additional information about features, settings, installation, or development, please check the resources below.</p>
         <div class="reference-list">
           <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 83 service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/RECIPES.html"><span><strong>Recipes</strong><small>Create, edit, preview, and run reusable photo workflows.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 87 static service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/commandconfig.html"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/FORMATS.html"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/DEVELOPMENT.html"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>

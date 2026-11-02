@@ -21,6 +21,7 @@
       <nav aria-label="Reference pages"><a href="README.html">Overview</a>
 <a href="INSTALL.html">Installation</a>
 <a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
@@ -30,7 +31,7 @@
       <div class="reference-source">KIM6 DOCUMENTATION · INSTALL.md</div>
       <article class="markdown-body">
 <h1 id="install-kim6">Install KIM6</h1>
-<p>KIM6 adds ten image and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
+<p>KIM6 adds 11 image, recipe, and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
 <h2 id="install-through-dolphin">Install through Dolphin</h2>
 <p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIM6.</p>
 <p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
@@ -50,7 +51,7 @@
 <p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
-<p>The installer adds KIM6's program files and ten service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
+<p>The installer adds KIM6's program files and 11 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
 <p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
 <h2 id="what-installsh-does">What <code>install.sh</code> does</h2>
 <p>The installer prepares KIM6 for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
@@ -76,7 +77,7 @@
 <li>Seven Python graphical dialog and application helper files.</li>
 <li>Metadata processing and format-verification helpers.</li>
 <li>Gallery generation resources.</li>
-<li>Ten Dolphin service-menu definitions.</li>
+<li>11 Dolphin service-menu definitions, including the Recipes submenu.</li>
 <li>Available compiled translation catalogs.</li>
 <li>The offline HTML User Guide, illustrations, stylesheet, and reference pages.</li>
 </ul>
@@ -88,7 +89,7 @@
 <h3 id="post-installation-verification">Post-installation verification</h3>
 <p>After copying files, the installer:</p>
 <ul>
-<li>Confirms that all ten installed Dolphin menus exist, carry KIM6's identification marker, and reference the installed dispatcher.</li>
+<li>Confirms that all 11 installed Dolphin menus exist, carry KIM6's identification marker, and reference the installed dispatcher.</li>
 <li>Confirms that the seven required Python helper files are present, are not symbolic links, and have valid Python syntax.</li>
 <li>Refreshes the KDE service cache with <code>kbuildsycoca6</code> when available.</li>
 <li>Prints the verified menu and helper inventories, installation path, and completion message.</li>
@@ -106,7 +107,7 @@
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>
-<p>The uninstaller removes the ten recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
+<p>The uninstaller removes the 11 recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
 <h2 id="advanced-installation-locations">Advanced installation locations</h2>
 <p>To choose a service-menu folder explicitly, use <code>--prefix</code>:</p>
 <pre class="sh"><code>./install.sh --prefix &quot;$HOME/.local/share/kio/servicemenus&quot;</code></pre>
@@ -119,13 +120,14 @@
 <p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
 <h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
 <h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
-<p>First verify that all ten KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
+<p>First verify that all 11 KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
 <h3 id="installation-or-removal-reports-a-conflict">Installation or removal reports a conflict</h3>
 <p>The installer identifies existing KIM6 installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
 <p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
 <p>For installer safeguards and recovery procedures, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <h2 id="offline-user-guide-and-documentation-updates">Offline User Guide and documentation updates</h2>
+<p>The installed User Guide includes a dedicated Recipes reference describing the Recipes submenu, editor, preview, and protected output behavior.</p>
 <p>KIM6 installs a complete offline User Guide, including its stylesheet, illustrations, and HTML reference pages. The User Guide is available through the KIM6 User Guide action in Dolphin.</p>
 <p>When Python 3 and Pandoc are installed, running <code>./install.sh</code> from a writable, non-root development checkout automatically regenerates the HTML references from the project's Markdown documentation.</p>
 <p>For root installations or checkouts where the reference directory is not writable, the installer verifies the generated HTML rather than modifying the source files, provided both tools are available. If the generated pages are outdated, installation stops.</p>

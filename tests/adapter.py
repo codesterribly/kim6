@@ -100,7 +100,7 @@ def main():
                  or (method == "org.freedesktop.DBus.Properties.Set" and len(args) == 6
                      and args[3] == interface and
                      ((args[4] == "autoClose" and args[5] in ("true", "false"))
-                      or (args[4] == "value" and args[5].isdecimal()))))
+                      or (args[4] in ("value", "maximum") and args[5].isdecimal()))))
         if not valid:
             raise ValueError("qdbus method argument contract mismatch")
         if (not owner_query and method == "org.freedesktop.DBus.Properties.Set" and
@@ -348,8 +348,11 @@ def main():
                 raise ValueError('rename copies require private staging')
         return subprocess.run([plan['real_rename_files'][tool], *args], timeout=10).returncode
     if tool == 'exiftool' and 'real_rename_exif' in plan:
-        if not (len(args) == 6 and args[0] == '-s3' and args[1] in
-                ('-DateTimeOriginal', '-CreateDate', '-ModifyDate') and args[2] == '-d' and args[4] == '--'):
+        raw = (len(args)==4 and args[0]=='-s3' and args[1] in
+               ('-DateTimeOriginal','-CreateDate','-ModifyDate') and args[2]=='--')
+        formatted = (len(args)==6 and args[0]=='-s3' and args[1] in
+               ('-DateTimeOriginal','-CreateDate','-ModifyDate') and args[2]=='-d' and args[4]=='--')
+        if not (raw or formatted):
             raise ValueError('unsupported rename EXIF query')
         owned(args[-1])
         return subprocess.run([plan['real_rename_exif'], *args], timeout=10).returncode
@@ -447,7 +450,7 @@ def main():
             raise ValueError('thunderbird requires one encoded compose attachment argument')
     elif tool == "mktemp":
         directory = "-d" in args
-        template = args[-1]
+        template = args[-1] if args else str(CONTROL / "tmp" / "settings.XXXXXX")
         # kim_all hard-codes /tmp; relocate that allocation into this test.
         if template.startswith("/tmp/kim."):
             template = str(CONTROL / "tmp" / Path(template).name)

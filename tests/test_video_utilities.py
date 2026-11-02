@@ -95,7 +95,7 @@ class VideoUtilityTests(unittest.TestCase):
         before = self.w.observe(self.source)
         result = self.dispatch("videoaudio", "--mode", "extract", "--format", "mp3")
         self.assertEqual(0, result.returncode, (result.stderr, result.events))
-        output = self.source.with_name("clip [雪]_audio.mp3")
+        output = self.source.with_name("clip [雪]-audio.mp3")
         probe = self.probe(output)
         self.assertEqual({"audio"}, {s["codec_type"] for s in probe["streams"]})
         self.assertEqual("mp3", probe["streams"][0]["codec_name"])
@@ -108,7 +108,7 @@ class VideoUtilityTests(unittest.TestCase):
         before = self.w.observe(self.source)
         result = self.dispatch("videoaudio", "--mode", "extract", "--format", "mp3")
         self.assertNotEqual(0, result.returncode)
-        self.assertFalse(self.source.with_name("clip [雪]_audio.mp3").exists())
+        self.assertFalse(self.source.with_name("clip [雪]-audio.mp3").exists())
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
 
@@ -120,7 +120,7 @@ class VideoUtilityTests(unittest.TestCase):
         before = self.w.observe(short)
         result = self.dispatch("videoaudio", "--mode", "extract", "--format", "mp3", source=short)
         self.assertNotEqual(0, result.returncode)
-        self.assertFalse(short.with_name("short-audio_audio.mp3").exists())
+        self.assertFalse(short.with_name("short-audio-audio.mp3").exists())
         self.assertEqual(self.w.observe(short), before)
         self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
 
@@ -180,7 +180,7 @@ class VideoUtilityTests(unittest.TestCase):
             with self.subTest(format=fmt):
                 result = self.dispatch("videoaudio", "--mode", "extract", "--format", fmt)
                 self.assertEqual(0, result.returncode, (result.stderr, result.events))
-                output = self.source.with_name(f"clip [雪]_audio.{fmt}")
+                output = self.source.with_name(f"clip [雪]-audio.{fmt}")
                 probe = self.probe(output)
                 self.assertEqual(codec, probe["streams"][0]["codec_name"])
                 self.assertEqual({"audio"}, {s["codec_type"] for s in probe["streams"]})
@@ -194,7 +194,7 @@ class VideoUtilityTests(unittest.TestCase):
         before = self.w.observe(self.source)
         result = self.dispatch("videoaudio", "--mode", "mute")
         self.assertEqual(0, result.returncode, (result.stderr, result.events))
-        output = self.source.with_name("clip [雪]_muted.mp4")
+        output = self.source.with_name("clip [雪]-muted.mp4")
         probe = self.probe(output)
         self.assertEqual(["video"], [s["codec_type"] for s in probe["streams"]])
         self.assertEqual("h264", probe["streams"][0]["codec_name"])
@@ -210,7 +210,7 @@ class VideoUtilityTests(unittest.TestCase):
     def test_muting_preserves_video_packet_payloads(self):
         result = self.dispatch("videoaudio", "--mode", "mute")
         self.assertEqual(0, result.returncode, (result.stderr, result.events))
-        muted = self.source.with_name("clip [雪]_muted.mp4")
+        muted = self.source.with_name("clip [雪]-muted.mp4")
         def packet_hashes(path):
             probe = subprocess.run([self.ffprobe, "-v", "error", "-select_streams", "v:0",
                                     "-show_packets", "-show_data_hash", "sha256",
@@ -294,7 +294,7 @@ class VideoUtilityTests(unittest.TestCase):
         rejected = self.dispatch("videoaudio", "--mode", "extract", "--format", "m4a", source=linked)
         self.assertNotEqual(0, rejected.returncode)
         self.assertEqual(self.w.observe(self.source), before)
-        self.assertFalse(self.source.with_name("clip [雪]_audio.m4a").exists())
+        self.assertFalse(self.source.with_name("clip [雪]-audio.m4a").exists())
 
     def test_dbus_service_loss_on_staged_output_probe_prevents_publication(self):
         second = self.make_video("input/second.mp4", audio=True, duration="0.5")
@@ -305,8 +305,8 @@ class VideoUtilityTests(unittest.TestCase):
         result = self.w.dispatch("videoaudio", "--mode", "extract", "--format", "flac",
                                  "--", self.source, second)
         self.assertNotEqual(0, result.returncode)
-        self.assertFalse(self.source.with_name("clip [雪]_audio.flac").exists())
-        self.assertFalse(second.with_name("second_audio.flac").exists())
+        self.assertFalse(self.source.with_name("clip [雪]-audio.flac").exists())
+        self.assertFalse(second.with_name("second-audio.flac").exists())
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
         self.assertTrue(any(call["tool"] == "qdbus" and call["argv"][-1] == "close"
@@ -358,7 +358,7 @@ class VideoUtilityTests(unittest.TestCase):
         source_before = self.w.observe(self.source)
         result = self.dispatch("videoaudio", "--mode", "extract", "--format", "mp3")
         self.assertNotEqual(0, result.returncode)
-        self.assertFalse(self.source.with_name("clip [雪]_audio.mp3").exists())
+        self.assertFalse(self.source.with_name("clip [雪]-audio.mp3").exists())
         self.assertEqual(self.w.observe(self.source), source_before)
         self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
 

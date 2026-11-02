@@ -38,3 +38,6 @@ Exec=kim_all videoframes --mode contact --format jpg --interactive -- %F
 Icon=image-x-generic
 _Name=Create animated GIF from video…
 Exec=kim_all videogif --interactive -- %F
+
+[Desktop Action _SEPARATOR_]
+Name=Separator

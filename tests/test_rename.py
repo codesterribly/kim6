@@ -46,10 +46,10 @@ class RenameTests(unittest.TestCase):
         second = self.w.png('other/next.png')
         self.w.respond_to('kdialog', '--inputbox', [
             {'stdout': 'Album_\n'}, {'stdout': '08\n'}, {'stdout': '4\n'}])
-        result = self.w.dispatch('rename', 'sequential', self.source, second)
+        result = self.w.dispatch('rename', 'sequential', '--output-dir', self.source.parent, self.source, second)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.source.with_name('Album_0008.JPG').read_bytes(), self.w.jpeg('.control/ref.jpg').read_bytes())
-        self.assertTrue(second.with_name('Album_0009.png').is_file())
+        self.assertTrue((self.source.parent/'Album_0009.png').is_file())
         self.assertFalse(self.source.exists())
         self.assertFalse(second.exists())
         self.clean()
@@ -281,13 +281,14 @@ class RenameTests(unittest.TestCase):
         occupied = self.w.jpeg('input/wallpaper_001.JPG')
         dangling = self.w.path('input/wallpaper_002.JPG'); dangling.symlink_to('missing')
         before = {p: self.w.observe(p) for p in (occupied, dangling)}
-        result = self.w.dispatch('rename', 'sequential', self.source)
+        result = self.w.dispatch('rename', 'sequential', '--output-dir', self.source.parent, self.source)
         self.assertTrue(self.source.with_name('wallpaper_003.JPG').is_file(), result.stderr)
         for path, state in before.items(): self.assertEqual(self.w.observe(path), state)
         self.clean()
 
     def test_interactive_numbering_and_directory_chooser(self):
-        self.w.respond_to('kdialog', 'Rename destination:', {'stdout': 'directory'})
+        self.w.path('out').mkdir()
+        self.w.dialog_result(['sequential','--parameters','wallpaper_','','1','3','--output-dir',str(self.w.path('out'))])
         result = self.w.dispatch('rename', 'interactive', self.source)
         self.assertTrue(self.w.path('out/wallpaper_001.JPG').is_file(), result.stderr)
         self.clean()
@@ -347,19 +348,16 @@ class RenameTests(unittest.TestCase):
             self.assertEqual(self.w.observe(destination / f'20200314_150926_{index}.JPG'), before[source], result.stderr)
         self.clean()
 
-    def test_missing_date_is_reported_without_moving_source_or_blocking_valid_item(self):
+    def test_missing_date_preflight_refuses_batch_until_another_method_is_chosen(self):
         self.real()
         dated = self.w.jpeg('other/DATED.JPG')
-        subprocess.run([shutil.which('exiftool'), '-overwrite_original', '-CreateDate=2021:04:05 06:07:08', str(dated)],
-                       check=True, capture_output=True)
-        before = self.w.observe(self.source)
-        result = self.w.dispatch('rename', 'exifdate', self.source, dated)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.w.observe(self.source), before)
-        self.assertTrue(dated.with_name('20210405_060708.JPG').exists(), result.stderr)
-        self.assertTrue(any('Succeeded: 1' in ' '.join(c['argv']) and 'Failed: 1' in ' '.join(c['argv']) for c in result.calls))
-        self.assertTrue(any(c['tool'] == 'qdbus' and c['argv'][2] == 'org.freedesktop.DBus.Properties.Set'
-                            and c['argv'][-1] == '2' for c in result.calls))
+        subprocess.run([shutil.which('exiftool'),'-overwrite_original','-CreateDate=2021:04:05 06:07:08',str(dated)],check=True,capture_output=True)
+        before={p:self.w.observe(p) for p in (self.source,dated)}
+        self.w.respond_to('kdialog','--warningyesno',{'status':1})
+        result=self.w.dispatch('rename','exifdate',self.source,dated)
+        self.assertNotEqual(result.returncode,0)
+        for path,state in before.items(): self.assertEqual(self.w.observe(path),state)
+        self.assertFalse(any(c['tool'] in ('ln','mv','cp') for c in result.calls))
         self.clean()
 
     def test_invalid_destination_is_reported_without_fallback(self):

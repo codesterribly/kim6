@@ -74,6 +74,37 @@ class PublicationActionTests(unittest.TestCase):
                                    '--', self.first, self.second)
         raise AssertionError('unknown publication action')
 
+    def test_album_and_tiffjoin_ignore_overwrite_and_preserve_occupied_targets(self):
+        self.real()
+        self.w.env['KIM6_CREATE_PICK_MORE'] = '0'
+        self.w.env['PATH'] += os.pathsep + os.defpath
+        self.w.approve_overwrite()
+        for kind, extension in (('album', 'pdf'), ('tiffjoin', 'tiff')):
+            with self.subTest(action=kind):
+                output = self.w.path('out/create-only-' + kind + '.' + extension)
+                output.write_bytes(b'occupied destination')
+                before = self.w.observe(output)
+                sources = [self.w.observe(p) for p in (self.first, self.second)]
+                if kind == 'album':
+                    # Album uses one Qt parameter dialog. Supply its actual
+                    # NUL-delimited result without launching a desktop UI.
+                    (self.w.control / 'kim_album_dialog.py').write_text(
+                        'import sys\nfrom pathlib import Path\nPath(sys.argv[1]).write_bytes(' +
+                        repr(b'1\0' + str(output).encode() + b'\0') + ')\n')
+                result = self.invoke(kind, output)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.w.observe(output), before)
+                self.assertEqual([self.w.observe(p) for p in (self.first, self.second)], sources)
+                numbered = output.with_name(output.stem + '_1' + output.suffix)
+                self.assertTrue(numbered.is_file())
+                if kind == 'album':
+                    self.assertEqual(self.page_info(numbered).get('Pages'), '2')
+                else:
+                    self.assertEqual(subprocess.check_output(
+                        [shutil.which('identify'), '-format', '%m\n', str(numbered)]).splitlines(),
+                        [b'TIFF', b'TIFF'])
+                self.clean()
+
     def test_producer_and_validation_failures_preserve_sources_and_existing_targets(self):
         self.real()
         extensions = {'album': 'pdf', 'print': 'pdf', 'tiffjoin': 'tiff', 'animate': 'gif'}

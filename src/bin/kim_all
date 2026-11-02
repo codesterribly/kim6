@@ -59,6 +59,72 @@ if [ -d "$DISPATCHER_DIR/../locale" ]; then
   export TEXTDOMAIN="${TEXTDOMAIN:-kim6}"
 fi
 
+# Adapters keep existing Bash actions and their policy/publication boundaries.
+# Before a job starts, tools retain their normal noninteractive behavior.
+job_show_warnings() {
+  local status="${1:-0}" label=''
+  case "${cmd:-}" in
+    album) label='PDF Album' ;; contactsheet) label='Contact Sheet' ;; collage) label='Collage' ;;
+    print) label='Print PDF' ;; tiffjoin) label='TIFF Document' ;; animate) label='Animated GIF' ;;
+    gallery) label='Web Gallery' ;; slideshow) label='Slideshow' ;;
+    convert) if [ -s "$KIMDIR/published.outputs" ]; then label='PDF files'; fi ;;
+  esac
+  if [ -n "$label" ]; then
+    local result=success
+    if [ -f "$KIMDIR/job.cancelled" ] || [ "${REPORT_CANCELLED:-0}" -gt 0 ]; then result=cancelled
+    elif [ "$status" -ne 0 ] || [ "${REPORT_FAIL:-0}" -gt 0 ]; then result=failed; fi
+    python3 "$DISPATCHER_DIR/kim_job.py" "${KIM_PSD_CACHE:-$KIMDIR/psd}" --publication "$label" "$result" "$KIMDIR/published.outputs" || true
+  elif [ -n "${KIM_PSD_CACHE:-}" ] && [ -f "$KIM_PSD_CACHE/warnings.jsonl" ]; then
+    python3 "$DISPATCHER_DIR/kim_job.py" "$KIM_PSD_CACHE" || true
+  fi
+}
+
+publication_record_output() {
+  case "${cmd:-}" in
+    album|contactsheet|collage|print|tiffjoin|animate|gallery|slideshow)
+      # Record only AFTER the atomic commit. The manifest survives subshell
+      # actions and is also truthful if progress cleanup subsequently fails.
+      printf '%s\0' "$1" >> "$KIMDIR/published.outputs" || true ;;
+    convert) case "${1,,}" in *.pdf) printf '%s\0' "$1" >> "$KIMDIR/published.outputs" || true ;; esac ;;
+  esac
+}
+
+job_cleanup() {
+  local status="$1"
+  publication_stop_owned_child; progress_cleanup; cleanup_stages
+  job_show_warnings "$status"
+  rm -rf -- "$KIMDIR"
+}
+
+action_options_dialog() {
+  local kind="$1"; shift
+  python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@"
+}
+
+job_run_tool() {
+  local tool="$1"; shift
+  local -a command=("$tool")
+  if [ -n "${KIM_PSD_CACHE:-}" ]; then command=(python3 "$DISPATCHER_DIR/kim_psd_source.py" "$tool"); fi
+  if [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/job.ref" ] && command -v python3 >/dev/null 2>&1; then
+    KIM_JOB_STAGE="$KIMDIR/job.stage" python3 "$DISPATCHER_DIR/kim_job_process.py" "$KIMDIR" "${command[@]}" "$@"
+  else
+    command "${command[@]}" "$@"
+  fi
+}
+job_run_command() {
+  if [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/job.ref" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$DISPATCHER_DIR/kim_job_process.py" "$KIMDIR" "$@"
+  else
+    command "$@"
+  fi
+}
+magick() { job_run_tool magick "$@"; }
+identify() { job_run_tool identify "$@"; }
+exiftool() { job_run_tool exiftool "$@"; }
+ffprobe() { job_run_tool ffprobe "$@"; }
+cp() { job_run_command cp "$@"; }
+cmp() { job_run_command cmp "$@"; }
+
 # Print an error and exit.
 die() {
   local message="$*"
@@ -77,7 +143,7 @@ die() {
 # One temp folder per run, always cleaned up on exit.
 mk_workdir() {
   KIMDIR="$(mktemp -d /tmp/kim.XXXXXXXX)" || die "mktemp failed"
-  trap 'progress_cleanup; cleanup_stages; rm -rf -- "$KIMDIR"' EXIT
+  trap 'job_cleanup "$?"' EXIT
 }
 
 # ---------------------------------------------------------------------------
@@ -120,6 +186,32 @@ count_valid_files() {
 # Most actions reject repeated file identities before any processing.
 # In-place transforms and time shifting retain their existing per-action
 # duplicate handling, while still requiring complete selection preflight.
+# This boundary is activated only after an in-scope consumer receives a PSD.
+# Non-PSD commands keep their original external-tool invocation paths.
+is_psd_source() {
+  local signature=''
+  [ -f "$1" ] || return 1
+  IFS= read -r -N 4 signature < "$1" || true
+  [ "$signature" = 8BPS ]
+}
+
+enable_psd_sources() {
+  case "${cmd:-}" in
+    convert|album|animate|contactsheet|gallery|collage|print|tiffjoin|resizeandsend|slideshow|webexport) ;;
+    *) return 0 ;;
+  esac
+  [ -z "${KIM_PSD_CACHE:-}" ] || return 0
+  local source
+  for source in "$@"; do
+    if is_psd_source "$source"; then
+      require_action_tools "$cmd PSD sources" python3 exiftool || return 1
+      export KIM_PSD_CACHE="$KIMDIR/psd"
+      break
+    fi
+  done
+  return 0
+}
+
 _collect_valid_files() {
   local outvar="$1" duplicates="$2"
   shift 2
@@ -149,6 +241,7 @@ _collect_valid_files() {
       out_arr+=("$i")
     fi
   done
+  enable_psd_sources "${out_arr[@]}"
 }
 
 collect_valid_files() {
@@ -678,6 +771,12 @@ commit_tmp_to_target() {
   local tmp="$1" target="$2" mode="${3:-create}" parent lock source_device target_device
   case "$mode" in create|overwrite) : ;; *) return 1 ;; esac
   owned_stage_file "$tmp" || return 1
+  if [ -f "$KIMDIR/job.ref" ]; then
+    local job_ref; read -r job_ref < "$KIMDIR/job.ref"
+    progress_cancelled "$job_ref" && return 1
+    progress_label "$job_ref" "$(cat "$KIMDIR/job.label" 2>/dev/null)
+$(gettext 'Writing / publishing output')" || return 1
+  fi
   parent="$(cd -P -- "$(dirname -- "$target")" && pwd -P)" || return 1
   target="$parent/${target##*/}"
   source_device="$(stat -c '%d' -- "$tmp")" || return 1
@@ -689,6 +788,7 @@ commit_tmp_to_target() {
   if [ "$mode" = "create" ]; then
     # No check-then-move: link itself refuses ANY occupied directory entry.
     ln -T -- "$tmp" "$target" || return 1
+    publication_record_output "$target"
     rm -f -- "$tmp" || true
     return 0
   fi
@@ -759,15 +859,27 @@ finalize_created_file() {
 report_init() {
   REPORT_OK=0
   REPORT_FAIL=0
+  REPORT_CANCELLED=0
+  REPORT_SKIPPED=0
   REPORT_FAIL_LIST=()
+  REPORT_CANCEL_LIST=()
+  REPORT_SKIP_LIST=()
 }
 
 report_ok() {
   REPORT_OK=$((REPORT_OK + 1))
 }
 
+report_skip() {
+  REPORT_SKIPPED=$((${REPORT_SKIPPED:-0}+1))
+  REPORT_SKIP_LIST+=("${1:-${source:-}}")
+}
+
 report_fail() {
   local f="$1"
+  if [ -f "${KIMDIR:-}/job.cancelled" ]; then
+    REPORT_CANCELLED=$((${REPORT_CANCELLED:-0}+1)); REPORT_CANCEL_LIST+=("$f"); return 0
+  fi
   REPORT_FAIL=$((REPORT_FAIL + 1))
 
   # Keep list small so dialogs stay readable.
@@ -780,7 +892,22 @@ report_fail() {
 report_finish_dialog() {
   local title="$1"
 
-  if [ "${REPORT_FAIL:-0}" -le 0 ]; then
+  local job_cancelled=false
+  if [ -f "${KIMDIR:-}/job.cancelled" ]; then
+    job_cancelled=true
+    case "${cmd:-}" in album|animate|contactsheet|collage|gallery|print|slideshow|tiffjoin) : ;;
+      *)
+        # Successful/failed/cancelled items have an explicit outcome. Everything
+        # left after Cancel All was never scheduled, and is reported as skipped.
+        local processed=$((${REPORT_OK:-0}+${REPORT_FAIL:-0}+${REPORT_CANCELLED:-0}+${REPORT_SKIPPED:-0}))
+        local -a not_scheduled=()
+        if declare -p files >/dev/null 2>&1; then not_scheduled=("${files[@]:processed}")
+        elif declare -p sources >/dev/null 2>&1; then not_scheduled=("${sources[@]:processed}"); fi
+        REPORT_SKIPPED=$((${REPORT_SKIPPED:-0}+${#not_scheduled[@]}))
+        REPORT_SKIP_LIST+=("${not_scheduled[@]}") ;;
+    esac
+  fi
+  if [ "${REPORT_FAIL:-0}" -le 0 ] && [ "${REPORT_CANCELLED:-0}" -le 0 ] && [ "$job_cancelled" = false ]; then
     return 0
   fi
 
@@ -790,11 +917,32 @@ report_finish_dialog() {
     "$(gettext 'Succeeded:')" "${REPORT_OK:-0}" \
     "$(gettext 'Failed:')" "${REPORT_FAIL:-0}")"
 
+  msg="$msg\n$(gettext 'Cancelled:') ${REPORT_CANCELLED:-0}\n$(gettext 'Skipped:') ${REPORT_SKIPPED:-0}"
+  if [ "$job_cancelled" = true ]; then
+    msg="$msg\n$(gettext 'Job cancelled. Already saved results were kept; remaining files were not scheduled.')"
+  fi
+  if [ "${#REPORT_CANCEL_LIST[@]}" -gt 0 ]; then
+    msg="$msg\n\n$(gettext 'Cancelled files:')\n$(printf '%s\n' "${REPORT_CANCEL_LIST[@]}")"
+  fi
+  if [ "${#REPORT_SKIP_LIST[@]}" -gt 0 ]; then
+    msg="$msg\n\n$(gettext 'Skipped files (already matched or unchanged):')\n$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"
+  fi
   if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then
     msg="$msg\n\n$(gettext 'Failed files (first 10):')\n$(printf '%s\n' "${REPORT_FAIL_LIST[@]}")"
   fi
 
-  kdialog --title "$title" --error "$(printf '%b' "$msg")"
+  if [ -n "${KIM_PSD_CACHE:-}" ] && [ -f "$KIM_PSD_CACHE/errors.txt" ]; then
+    msg="$msg\n\n$(cat -- "$KIM_PSD_CACHE/errors.txt")"
+  fi
+  local shown saved
+  shown="$(printf '%b' "$msg")"
+  if [ -s "${KIMDIR:-}/published.outputs" ]; then
+    while IFS= read -r -d '' saved; do
+      shown="$shown
+$(gettext 'Saved result retained:') $saved"
+    done < "$KIMDIR/published.outputs"
+  fi
+  kdialog --title "$title" --error "$shown"
 
 }
 
@@ -864,7 +1012,13 @@ progress_service_present() {
 }
 
 progress_error() {
-  local message="$1"
+  local message="$1" saved
+  if [ -s "${KIMDIR:-}/published.outputs" ]; then
+    while IFS= read -r -d '' saved; do
+      if [[ "$message" != *"$saved"* ]]; then message="$message
+$(gettext 'Saved result retained:') $saved"; fi
+    done < "$KIMDIR/published.outputs"
+  fi
   kdialog --title "$(gettext 'Kim')" --error "$message" 2>/dev/null || printf '%s\n' "$message" >&2
 }
 
@@ -874,7 +1028,7 @@ require_action_tools() {
   local action="$1" tool dependency
   shift
   for tool in "$@"; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
+    if ! type -P "$tool" >/dev/null 2>&1; then
       case "$tool" in
         magick|identify) dependency='ImageMagick 7' ;;
         exiftool) dependency='ExifTool' ;;
@@ -911,6 +1065,7 @@ progress_close() {
     # A vanished owned service already has no dialog to close.
     [ "$owner_rc" -eq 1 ] || return 1
   fi
+  if [ -f "$KIMDIR/job.ref" ] && [ "$(cat "$KIMDIR/job.ref")" = "$ref" ]; then rm -f -- "$KIMDIR/job.ref"; fi
   mapfile -t references < "$KIMDIR/progress.refs" || return 1
   : > "$KIMDIR/progress.refs" || return 1
   for registered in "${references[@]}"; do
@@ -966,7 +1121,7 @@ progress_open() {
     progress_error "$(gettext 'Cannot initialize the progress dialog. Processing stopped.')"
     return 1
   fi
-  ref="$(kdialog --progressbar "$text" "$((10#$max))" 2>/dev/null)" || rc=$?
+  ref="$(kdialog --cancel-label "$(gettext 'Cancel All')" --progressbar "$text" "$((10#$max))" 2>/dev/null)" || rc=$?
   if ! progress_parse_ref "$ref" parts; then
     progress_error "$(gettext 'KDialog returned an invalid progress reference. Processing stopped.')"
     return 1
@@ -985,6 +1140,23 @@ progress_open() {
     progress_bus_failure "$ref" "$(gettext 'Cannot initialize the progress dialog. Processing stopped.')"
     return 1
   fi
+  printf '%s\n' "$ref" > "$KIMDIR/job.ref"
+  printf '%s\n' "$max" > "$KIMDIR/job.total"
+  local action_name="$text"
+  case "${cmd:-}" in
+    convert) action_name="$(gettext 'Convert Images')" ;;
+    compress) action_name="$(gettext 'Compress Images')" ;;
+    resize) action_name="$(gettext 'Resize Images')" ;;
+    rotate|rotatewithexif) action_name="$(gettext 'Rotate Images')" ;;
+    flipflop) action_name="$(gettext 'Flip Images')" ;;
+    copyright) action_name="$(gettext 'Set Creator and Copyright')" ;;
+    timeshift|datesync|capturedate) action_name="$(gettext 'Photo Dates')" ;;
+    stripmeta) action_name="$(gettext 'Remove Metadata')" ;;
+    rename) action_name="$(gettext 'Rename Images')" ;;
+    webexport|resizeandsend) action_name="$(gettext 'Export Images')" ;;
+  esac
+  printf '%s\n' "$action_name" > "$KIMDIR/job.action"
+  printf '0\n' > "$KIMDIR/job.index"
   printf '%s\n' "$ref"
 }
 
@@ -995,12 +1167,13 @@ progress_open() {
 # of these failures proves user cancellation.
 progress_cancelled() {
   local ref="$1" cancelled
+  if [ -f "${KIMDIR:-}/job.cancelled" ]; then return 0; fi
   if ! cancelled="$(progress_call "$ref" wasCancelled 2>/dev/null)"; then
     progress_bus_failure "$ref" "$(gettext 'Cannot check progress cancellation. Processing stopped.')" || true
     return 0
   fi
   case "$cancelled" in
-    true) return 0 ;;
+    true) [ -z "${KIMDIR:-}" ] || : > "$KIMDIR/job.cancelled"; return 0 ;;
     false) return 1 ;;
     *) progress_abort "$ref" "$(gettext 'Unexpected progress cancellation reply. Processing stopped.')" || true
        return 0 ;;
@@ -1013,6 +1186,31 @@ progress_begin_item() {
     progress_close "$ref" || true
     return 1
   fi
+  local index=0 total=0 action='' remaining=0
+  if [ -f "$KIMDIR/job.index" ]; then read -r index < "$KIMDIR/job.index"; fi
+  if [ -f "$KIMDIR/job.total" ]; then read -r total < "$KIMDIR/job.total"; fi
+  if [ -f "$KIMDIR/job.action" ]; then read -r action < "$KIMDIR/job.action"; fi
+  index=$((index+1)); [ "$index" -le "$total" ] || index="$total"
+  printf '%s\n' "$index" > "$KIMDIR/job.index"
+  remaining=$((total-${REPORT_OK:-0}-${REPORT_FAIL:-0}-${REPORT_CANCELLED:-0}-${REPORT_SKIPPED:-0}))
+  # Composition actions already supply preparation N/M; these are source items,
+  # never a claim that each source produces a separate composed deliverable.
+  text="$action — file $index of $total: $text
+Succeeded: ${REPORT_OK:-0}; failed: ${REPORT_FAIL:-0}; cancelled: ${REPORT_CANCELLED:-0}; skipped: ${REPORT_SKIPPED:-0}; remaining: $remaining"
+  case "${cmd:-}" in
+    album|animate|contactsheet|collage|gallery|print|tiffjoin|slideshow)
+      # Their existing labels distinguish source N/M from busy rendering and
+      # verification. These jobs publish one composed deliverable.
+      text="$action — $2" ;;
+  esac
+  local active_source
+  for active_source in "${source:-}" "${i:-}" "${f:-}" "${file:-}"; do
+    if [ -f "$active_source" ] && [[ "$2" == *"${active_source##*/}"* ]]; then
+      text="$text
+$active_source"; break
+    fi
+  done
+  printf '%s' "$text" > "$KIMDIR/job.label"
   progress_label "$ref" "$text" || return 1
 }
 
@@ -1131,7 +1329,8 @@ collect_publication_inputs() {
     seen[$identity]=1
     result_ref+=("$path")
   done
-  [ "${#result_ref[@]}" -gt 0 ]
+  [ "${#result_ref[@]}" -gt 0 ] || return 1
+  enable_psd_sources "${result_ref[@]}"
 }
 
 # Resolve one explicitly selected output and choose a no-clobber destination.
@@ -1178,7 +1377,7 @@ publication_fail() {
   local ref="$1" tmp="$2" message="$3"
   [ -z "$tmp" ] || rm -f -- "$tmp" || true
   [ -z "$ref" ] || progress_close "$ref" || true
-  kdialog --title "$(gettext 'Kim')" --error "$message" || true
+  progress_error "$message" || true
   return 1
 }
 
@@ -1189,7 +1388,11 @@ publication_image_records() {
 
 publication_input_frames() {
   local file="$1" records count=0 record format width height scenes
-  records="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || return 1
+  if [ "$#" -gt 1 ]; then
+    records="$(cat -- "$2")" || return 1
+  else
+    records="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || return 1
+  fi
   while IFS= read -r record; do
     IFS='|' read -r format width height scenes <<< "$record"
     [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ &&
@@ -1205,7 +1408,13 @@ publication_input_frames() {
 validate_publication_pdf() {
   local file="$1" expected_pages="$2" expected_width="$3" expected_height="$4"
   local records record format width height pages=0
-  records="$(publication_image_records "$file" 2>/dev/null)" || return 1
+  # Album supplies records from its monitored full decoder pass. Other
+  # consumers retain the same decoder and validation behavior.
+  if [ "$#" -gt 4 ]; then
+    records="$(cat -- "$5")" || return 1
+  else
+    records="$(publication_image_records "$file" 2>/dev/null)" || return 1
+  fi
   while IFS= read -r record; do
     IFS='|' read -r format width height _ <<< "$record"
     [ "$format" = PDF ] && [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || return 1
@@ -1222,7 +1431,9 @@ validate_publication_gif() {
   local file="$1" expected_delay="$2" expected_loops="$3" expected_name="$4" expected_frames="$5"
   local -n expected_ref="$expected_name"
   local verbose detail format='' geometry='' frame_delay=0 iterations='' index=0 expected_width expected_height width height
-  verbose="$(identify -regard-warnings -verbose -- "$file" 2>/dev/null)" || return 1
+  if [ "$#" -gt 5 ]; then verbose="$(cat -- "$6")" || return 1
+  else verbose="$(identify -regard-warnings -verbose -- "$file" 2>/dev/null)" || return 1
+  fi
   while IFS= read -r detail; do
     case "$detail" in
       'Image:'*)
@@ -1290,6 +1501,100 @@ publish_gallery_directory() {
   [ ! -e "$staged_directory" ] && [ -d "$target_directory" ] && [ ! -L "$target_directory" ]
 }
 
+# A single owned process group per publication job. Children of the PSD
+# decoder, montage and PDF delegates stay in that group; unrelated jobs do not.
+PUBLICATION_OWNED_PID=''
+
+publication_stop_owned_child() {
+  local pid="${PUBLICATION_OWNED_PID:-}" attempt
+  [ -n "$pid" ] || return 0
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    kill -0 -- "-$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 -- "-$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || true; fi
+  wait "$pid" 2>/dev/null || true
+  PUBLICATION_OWNED_PID=''
+}
+
+publication_run_monitored() {
+  local ref="$1" output="$2" errors="$3" pid rc=0; shift 3
+  if progress_cancelled "$ref"; then return 130; fi
+  setsid "$@" < /dev/null > "$output" 2> "$errors" &
+  pid=$!; PUBLICATION_OWNED_PID="$pid"
+  while kill -0 "$pid" 2>/dev/null; do
+    if progress_cancelled "$ref"; then
+      publication_stop_owned_child
+      return 130
+    fi
+    sleep 0.1
+  done
+  wait "$pid" || rc=$?
+  PUBLICATION_OWNED_PID=''
+  if progress_cancelled "$ref"; then return 130; fi
+  return "$rc"
+}
+
+# KDialog exposes maximum through its existing D-Bus interface. Maximum 0
+# means busy: no page/elapsed-time percentage is invented for montage/decode.
+progress_maximum() {
+  local ref="$1" maximum="$2"
+  if ! [[ "$maximum" =~ ^[0-9]+$ ]] || [ "${#maximum}" -gt 10 ] || ((10#$maximum > 2147483647)); then
+    progress_abort "$ref" "$(gettext 'Cannot set the progress range. Processing stopped.')"
+    return 1
+  fi
+  if ! progress_call "$ref" org.freedesktop.DBus.Properties.Set \
+       org.kde.kdialog.ProgressDialog maximum "$maximum" >/dev/null 2>&1; then
+    progress_bus_failure "$ref" "$(gettext 'Cannot update the progress range. Processing stopped.')"
+    return 1
+  fi
+  progress_value "$ref" 0
+}
+
+# Existing Create/Publish actions share Album's monitor. Keep work out of
+# command substitutions: the parent shell must own the live child PID.
+PUBLICATION_PREPARED_COUNT=0
+PUBLICATION_INTERRUPTED=false
+publication_run_image() {
+  local ref="$1" tool="$2"; shift 2
+  local -a command=("$tool")
+  if [ -n "${KIM_PSD_CACHE:-}" ]; then command=(python3 "$DISPATCHER_DIR/kim_psd_source.py" "$tool"); fi
+  trap 'publication_stop_owned_child; exit 130' INT TERM HUP
+  local rc=0
+  PUBLICATION_INTERRUPTED=false
+  publication_run_monitored "$ref" "$KIMDIR/publication-records" "$KIMDIR/publication-errors" "${command[@]}" "$@" || rc=$?
+  if [ "$rc" -eq 130 ]; then PUBLICATION_INTERRUPTED=true; fi
+  return "$rc"
+}
+
+publication_prepare_source() {
+  local ref="$1" file="$2" total="$3" label rc=0
+  PUBLICATION_PREPARED_COUNT=$((PUBLICATION_PREPARED_COUNT + 1))
+  label="$(gettext 'Preparing and validating source images')"
+  if is_psd_source "$file"; then label="$(gettext 'Decoding and staging PSD composite')"; fi
+  progress_begin_item "$ref" "$label — $PUBLICATION_PREPARED_COUNT / $total: ${file##*/}" || return 1
+  publication_run_image "$ref" identify -ping -format '%m|%w|%h|%n\n' -- "$file" || rc=$?
+  if [ "$rc" -eq 130 ]; then return 1; fi
+  if [ "$rc" -ne 0 ]; then
+    publication_fail "$ref" '' "$(gettext 'Source preparation failed:') ${file##*/}
+$(cat -- "$KIMDIR/publication-errors")"; return 1
+  fi
+  progress_value "$ref" "$PUBLICATION_PREPARED_COUNT"
+}
+
+publication_render_stage() {
+  local ref="$1" label="$2" rc=0; shift 2
+  progress_begin_item "$ref" "$label" || return 1
+  progress_maximum "$ref" 0 || return 1
+  publication_run_image "$ref" "$@" || rc=$?
+  if [ "$rc" -eq 130 ]; then return 1; fi
+  if [ "$rc" -ne 0 ]; then
+    publication_fail "$ref" '' "$label — $(gettext 'processing failed.')
+$(cat -- "$KIMDIR/publication-errors")"; return 1
+  fi
+}
+
 # Build a photo album PDF from selected images using ImageMagick montage.
 #
 # Usage: album <dir> <files...>
@@ -1305,8 +1610,9 @@ publish_gallery_directory() {
 
 action_album() {
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
-  local file frame_count
-  local -a files=()
+  local file frame_count index=0 records errors page_label
+  local -a files=() inspector=(identify) renderer=(magick)
+  require_action_tools album setsid || return 1
   dir="${1:-}"
   shift || true
   if ! collect_publication_inputs files "$@"; then
@@ -1373,32 +1679,82 @@ action_album() {
     *) return 1 ;;
   esac
   capacity=$(( ${tile%x*} * ${tile#*x} ))
+  # Open before source inspection: even identify -ping can invoke the shared
+  # PSD decoder and color-managed staging path on the first use of a document.
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Preparing PDF album sources…')")" || return 1
+  trap 'publication_stop_owned_child; exit 130' INT TERM HUP
+  records="$KIMDIR/album-records"
+  errors="$KIMDIR/album-errors"
+  if [ -n "${KIM_PSD_CACHE:-}" ]; then
+    inspector=(python3 "$DISPATCHER_DIR/kim_psd_source.py" identify)
+    renderer=(python3 "$DISPATCHER_DIR/kim_psd_source.py" magick)
+  fi
   frames=0
   for file in "${files[@]}"; do
-    frame_count="$(publication_input_frames "$file")" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: an input image could not be inspected.')"; return 1; }
+    index=$((index + 1))
+    local label
+    label="$(gettext 'Preparing and validating source images') — $index / ${#files[@]}: ${file##*/}"
+    if is_psd_source "$file"; then
+      label="$(gettext 'Decoding and staging PSD composite') — $index / ${#files[@]}: ${file##*/}"
+    fi
+    progress_begin_item "$ref" "$label" || return 1
+    rc=0
+    publication_run_monitored "$ref" "$records" "$errors" "${inspector[@]}" \
+      -ping -format '%m|%w|%h|%n\n' -- "$file" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      if [ "$rc" -eq 130 ]; then progress_close "$ref" || true; return 1; fi
+      publication_fail "$ref" '' "$(gettext 'Album: source preparation failed:') ${file##*/}
+$(cat -- "$errors")"
+      return 1
+    fi
+    frame_count="$(publication_input_frames "$file" "$records")" || {
+      publication_fail "$ref" '' "$(gettext 'Album: an input image could not be inspected:') ${file##*/}"; return 1;
+    }
     frames=$((frames + frame_count))
+    progress_value "$ref" "$index" || return 1
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  # Creation-only output; selected sources are protected.
+  page_label="$expected_pages $(gettext 'pages')"
+  if [ "$expected_pages" -eq 1 ]; then page_label="1 $(gettext 'page')"; fi
+  # Creation-only output; selected sources and occupied entries are protected.
   mode=create
-  # Output filename was selected in the Qt settings dialog.
+  progress_begin_item "$ref" "$(gettext 'Preparing PDF output destination…')" || return 1
   prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: invalid or unsafe output destination.')"
-    return 1
+    publication_fail "$ref" '' "$(gettext 'Album: invalid or unsafe output destination.')"; return 1;
   }
   outpdf="$DERIVED_TARGET"
   mode="$DERIVED_MODE"
-  ref="$(progress_open 2 "$(gettext 'Kim - Creating album ...')")"
-  if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
-  tmp="$(tmp_for_target "$outpdf")" || { publication_fail "$ref" '' "$(gettext 'Album: cannot create destination-local staging.')"; return 1; }
-  if ! magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
-      -background white -- "${files[@]}" "$tmp" >/dev/null 2>&1; then rc=1; fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then rc=1; fi
-  if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Album: ImageMagick failed or produced an invalid PDF.')"; return 1; fi
-  if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Album: publication interrupted; no output was written.')"; return 1; fi
-  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF publication failed; existing files were preserved.')"; return 1; fi
-  progress_value "$ref" 2
-  progress_close "$ref"
+  tmp="$(tmp_for_target "$outpdf")" || {
+    publication_fail "$ref" '' "$(gettext 'Album: cannot create destination-local staging.')"; return 1;
+  }
+  progress_begin_item "$ref" "$(gettext 'Rendering PDF document') — $page_label" || return 1
+  progress_maximum "$ref" 0 || return 1
+  rc=0
+  publication_run_monitored "$ref" "$KIMDIR/album-render-output" "$errors" "${renderer[@]}" montage \
+    -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
+    -background white -- "${files[@]}" "$tmp" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    if [ "$rc" -eq 130 ]; then progress_close "$ref" || true; return 1; fi
+    publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF rendering failed.')
+$(cat -- "$errors")"; return 1
+  fi
+  progress_begin_item "$ref" "$(gettext 'Verifying resulting PDF') — $page_label" || return 1
+  rc=0
+  publication_run_monitored "$ref" "$records" "$errors" identify \
+    -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$tmp" || rc=$?
+  if [ "$rc" -eq 130 ]; then progress_close "$ref" || true; return 1; fi
+  if [ "$rc" -ne 0 ] || ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height" "$records"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Album: ImageMagick failed or produced an invalid PDF.')
+$(cat -- "$errors")"; return 1
+  fi
+  progress_begin_item "$ref" "$(gettext 'Publishing completed PDF…') ${outpdf##*/}" || return 1
+  if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then
+    publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF publication failed; existing files were preserved.')"; return 1
+  fi
+  if ! progress_close "$ref"; then
+    progress_error "$(gettext 'Album saved, but its progress window could not be closed:') $outpdf"
+    return 1
+  fi
   return 0
 }
 
@@ -1463,23 +1819,12 @@ action_compress() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
-  local first_format=''
-  first_format="$(identify -ping -format '%m' -- "${files[0]}" 2>/dev/null)" || return 1
-
   if [ "$custom" = true ]; then
-    if [ "$first_format" = PNG ]; then
-      QUALITY="$(kdialog --inputbox         "$(gettext 'PNG compression level (0-9, lossless):')" 6)" || return 1
-      [[ "$QUALITY" =~ ^[0-9]$ ]] || {
-        progress_error "$(gettext 'PNG compression level must be 0-9.')"
-        return 1
-      }
-      # Preserve custom PNG level separately; a normal quality
-      # value is still needed for mixed-format selections.
-      local custom_png_level="$QUALITY"
-      QUALITY=85
-    else
-      QUALITY="$(kdialog --inputbox         "$(gettext 'Compression quality (1-100):')" 85)" || return 1
-    fi
+    action_options_dialog compress "${files[@]}" || return 1
+    local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+    [ "${#choices[@]}" -eq 4 ] || return 1
+    QUALITY="${choices[0]}"; local custom_png_level="${choices[1]}"
+    jpeg_scan="${choices[2]}"; jpeg_optimize="${choices[3]}"
   elif [ "$preset" = maximum ]; then
     QUALITY=70
   elif [ "$preset" = recommended ]; then
@@ -1635,7 +1980,7 @@ action_compress() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 
@@ -1659,10 +2004,31 @@ action_compress() {
 # Notes:
 # - Uses ImageMagick `magick` to write explicit outputs.
 
+# Inspection failures are not animation failures. Keep the actual decoder
+# diagnostic, especially PSD resource/policy errors, separate from APNG probes.
+convert_inspection_failure() {
+  local source="$1" diagnostic="$2" message lower="${2,,}"
+  case "$lower" in
+    *'resource limit'*|*'cache resources exhausted'*|*'security policy'*|*'not authorized'*|*'exceeds the'*|*'exceeds limit'*|*'memoryallocationfailed'*|*'memory allocation failed'*|*'time limit'*|*'timed out'*)
+      message="$(gettext 'Convert: a resource or security-policy limit was exceeded. Try a smaller image/batch or review the ImageMagick policy.')" ;;
+    *'no decode delegate'*|*'unsupported'*)
+      message="$(gettext 'Convert: invalid or unsupported image format. Check the file and available ImageMagick decoders.')" ;;
+    *)
+      if is_psd_source "$source"; then
+        message="$(gettext 'Convert: PSD composite decoding or normalization failed. Check that the document has a usable composite/layers and valid color information.')"
+      else
+        message="$(gettext 'Convert: image identification or decoding failed. Check that the input is a complete, readable image.')"
+      fi ;;
+  esac
+  progress_error "$message
+${source##*/}
+$diagnostic"
+}
+
 action_convert() {
   # Conversion validates animated inputs separately, so unsupported
   # animation or frame timing cannot silently become a still image.
-  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false
+  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false outdir='' strip_metadata=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -1672,6 +2038,10 @@ action_convert() {
           FORMAT="$2"
           shift 2
           ;;
+        --output-dir)
+          [ "$#" -ge 2 ] || die "convert: --output-dir needs a value"
+          outdir="$2"; shift 2 ;;
+        --strip-metadata) strip_metadata=true; shift ;;
         --jp2-mode)
           [ "$#" -ge 2 ] || die "convert: --jp2-mode needs lossless or lossy"
           jp2_mode="$2"
@@ -1714,18 +2084,12 @@ action_convert() {
     done
     if [ "$custom" = true ]; then
       [ -z "$FORMAT" ] || die "convert: use --custom-format or --format, not both"
-      FORMAT="$(kdialog --inputbox "$(gettext 'Choose format to convert:')" '')" || return 1
-      if [[ "${FORMAT,,}" == jpg || "${FORMAT,,}" == jpeg || "${FORMAT,,}" == jfif ]]; then
-        if [ -z "$jpeg_scan" ]; then
-          local scan_choice optimize_choice
-          scan_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'JPEG scan mode:')" baseline "$(gettext 'Baseline')" progressive "$(gettext 'Progressive')")" || return 1
-          [ "$scan_choice" != progressive ] || jpeg_scan=Plane
-        fi
-        if [ "$jpeg_optimize" != true ]; then
-          optimize_choice="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Optimize JPEG Huffman coding?')" no "$(gettext 'No additional optimization')" yes "$(gettext 'Optimize coding tables; file-size reduction is not guaranteed')")" || return 1
-          [ "$optimize_choice" != yes ] || jpeg_optimize=true
-        fi
-      fi
+      action_options_dialog convert "${raw_files[@]}" || return 1
+      local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+      [ "${#choices[@]}" -eq 6 ] || return 1
+      FORMAT="${choices[0]}"; strip_metadata="${choices[5]}"
+      if [ "$FORMAT" = jp2 ]; then jp2_mode="${choices[1]}"; jp2_quality="${choices[2]}"; fi
+      if [ "$FORMAT" = jpeg ]; then jpeg_scan="${choices[3]}"; jpeg_optimize="${choices[4]}"; fi
     fi
   else
     FORMAT="${1:-}"
@@ -1747,6 +2111,7 @@ action_convert() {
     return 1
   fi
   FORMAT="${FORMAT,,}"
+  case "$FORMAT" in psd|psb) die 'Photoshop documents are read-only inputs; choose JPEG, PNG, TIFF or PDF output' ;; esac
   case "$FORMAT" in
     jpg|jpeg|jpe|jfif)
       :
@@ -1807,6 +2172,9 @@ action_convert() {
 
   local selected_path
   for selected_path in "${files[@]}"; do
+    if [ "$strip_metadata" = true ] && { [ "$FORMAT" != pdf ] || ! is_psd_source "$selected_path"; }; then
+      die 'convert: --strip-metadata is available only for PSD to PDF; use the metadata menus for other exports'
+    fi
     # split_path uses newline records; refuse an ambiguous destination mapping.
     if [[ "$selected_path" == *$'\n'* ]]; then
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: ambiguous filename.')"
@@ -1821,6 +2189,12 @@ action_convert() {
 
   if [ "$mode" = "cancel" ]; then
     return 1
+  fi
+
+  if [ -n "$outdir" ]; then
+    [ "$mode" = create ] || die 'convert: --output-dir requires create mode'
+    [ -d "$outdir" ] && [ ! -L "$outdir" ] && [ -w "$outdir" ] && [ -x "$outdir" ] || die 'convert: output directory is unavailable'
+    outdir="$(cd -P -- "$outdir" && pwd)" || return 1
   fi
 
   # Resolve parent aliases before comparing destination mappings. Never publish
@@ -1902,17 +2276,24 @@ action_convert() {
       report_fail "$i"
       break
     fi
+    [ -z "$outdir" ] || dir="$outdir"
     OUTFILE="$dir/${stem}.${FORMAT}"
     if [ "$mode" = overwrite ] && [ -n "$ext" ] && [ "${ext,,}" = "$FORMAT" ]; then
       OUTFILE="$dir/$base"
     fi
 
+    local input_is_psd=false
+    if is_psd_source "$i"; then input_is_psd=true; fi
     rc=0
+    : > "$KIMDIR/convert-output-error"
     input_is_apng=false
     apng_codec=''
     apng_output_frames=''
     apng_loop=''
-    input_records="$(identify -regard-warnings -ping -format '%m|%w|%h\n' -- "$i" 2>/dev/null)" || input_records=''
+    if ! input_records="$(identify -regard-warnings -ping -format '%m|%w|%h\n' -- "$i" 2> "$KIMDIR/convert-inspection-error")"; then
+      convert_inspection_failure "$i" "$(cat -- "$KIMDIR/convert-inspection-error")"
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
     input_frames=0
     source_width=''; source_height=''
     input_format=''
@@ -1926,6 +2307,12 @@ action_convert() {
       [ -n "$source_width" ] || source_width="$frame_width"
       [ -n "$source_height" ] || source_height="$frame_height"
     done <<< "$input_records"
+    if [ "$rc" -ne 0 ] || [ "$input_frames" -lt 1 ]; then
+      convert_inspection_failure "$i" "Invalid image dimensions or an empty image list."
+      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
+    fi
+    # Only a decoded PNG with an actual animation control chunk reaches this
+    # probe. Its error flag must never stand in for a general decode failure.
     if [ "$(image_format_class "$input_format")" = PNG ] && image_has_apng_control_chunk "$i"; then
       apng_input_record="$(ffprobe -v error -select_streams v:0 -count_frames \
         -show_entries stream=codec_name,width,height,nb_read_frames -of default=noprint_wrappers=1 -i "$i" 2>/dev/null)" || rc=1
@@ -2023,7 +2410,7 @@ action_convert() {
       esac
     fi
     if [ "$input_frames" -eq 1 ] && [ "$(image_format_class "$input_format")" = WEBP ] &&
-       image_webp_animation_signature "$i" >/dev/null 2>&1 && [ "$FORMAT" != webp ]; then
+       image_webp_animation_signature "$i" >/dev/null 2>> "$KIMDIR/convert-output-error" && [ "$FORMAT" != webp ]; then
       kdialog --title "$(gettext 'Kim')" --error \
         "$(gettext 'Convert: animated WebP playback cannot be preserved in the requested output format.')\n\n$base"
       report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
@@ -2032,7 +2419,7 @@ action_convert() {
     # re-encoding must validate the control chunks after creating the stage.
     # An animated WebP with a one-frame ANMF sequence is handled similarly.
 
-    if [ "$mode" = "create" ]; then
+    if [ "$mode" = "create" ] || [ "$input_is_psd" = true ]; then
       n=1
       while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir/${stem}_${n}.${FORMAT}"
@@ -2043,7 +2430,7 @@ action_convert() {
     {
       # Snapshot absent-vs-authorized-present before producing any output.
       publication_mode=create
-      [ "$mode" != overwrite ] || publication_mode=overwrite
+      if [ "$mode" = overwrite ] && [ "$input_is_psd" != true ]; then publication_mode=overwrite; fi
       if [ ! -e "$OUTFILE" ] && [ ! -L "$OUTFILE" ]; then
         publication_mode=create
       fi
@@ -2070,7 +2457,7 @@ action_convert() {
           ;;
       esac
       if [ "$bmp5" = true ]; then
-        magick -- "$i" -define bmp:format=bmp5 "$OUTTMP" >/dev/null 2>&1 || rc=$?
+        magick -- "$i" -define bmp:format=bmp5 "$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
       elif [ "$FORMAT" = apng ]; then
         apng_error="${OUTTMP}.stderr"
         apng_loop=1
@@ -2127,13 +2514,25 @@ action_convert() {
             "$apng_duration" "$apng_error" -hide_banner -v error -xerror -nostdin -progress pipe:1 \
             -nostats -i "$OUTTMP" -map 0:v:0 -f null - || rc=$?
         fi
+      elif [ "$FORMAT" = pdf ] && [ "$input_is_psd" = true ]; then
+        if [ "$strip_metadata" != true ]; then
+          if ! kdialog --title "$(gettext 'Kim — Photoshop to PDF')" --warningyesno \
+            "$(gettext 'Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged.')"; then
+            rc=1
+          fi
+        fi
+        # A Photoshop print density is not the PDF raster canvas. Pin the
+        # pixel-to-point scale used by the single-page output validator.
+        if [ "$rc" -eq 0 ]; then
+          magick -- "$i" -units PixelsPerInch -density 72 -strip "$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
+        fi
       elif [[ "$FORMAT" == jp2 || "$FORMAT" == j2k || "$FORMAT" == jpc ]]; then
         if [ "$FORMAT" = jp2 ] && [ "$jp2_mode" = lossless ]; then
-          magick -- "$i" -define jp2:rate=1 "JP2:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          magick -- "$i" -define jp2:rate=1 "JP2:$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         elif [ "$FORMAT" = jp2 ]; then
-          magick -- "$i" -quality "$jp2_quality" "JP2:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          magick -- "$i" -quality "$jp2_quality" "JP2:$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         else
-          magick -- "$i" "$FORMAT:$OUTTMP" >/dev/null 2>&1 || rc=$?
+          magick -- "$i" "$FORMAT:$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         fi
       else
         if [ -n "$format_coder" ]; then
@@ -2141,21 +2540,21 @@ action_convert() {
             local -a jpeg_options=()
             [ -z "$jpeg_scan" ] || jpeg_options+=(-interlace "$jpeg_scan")
             [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
-            magick -- "$i" "${jpeg_options[@]}" "JPEG:$OUTTMP" >/dev/null 2>&1 || rc=$?
+            magick -- "$i" "${jpeg_options[@]}" "JPEG:$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
           else
-            magick -- "$i" "$format_coder:$OUTTMP" >/dev/null 2>&1 || rc=$?
+            magick -- "$i" "$format_coder:$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
           fi
         elif [[ "$FORMAT" == jpg || "$FORMAT" == jpeg || "$FORMAT" == jpe || "$FORMAT" == jfif ]]; then
           local -a jpeg_options=()
           [ -z "$jpeg_scan" ] || jpeg_options+=(-interlace "$jpeg_scan")
           [ "$jpeg_optimize" != true ] || jpeg_options+=(-define jpeg:optimize-coding=true)
-          magick -- "$i" "${jpeg_options[@]}" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+          magick -- "$i" "${jpeg_options[@]}" "$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         else
-          magick -- "$i" "$OUTTMP" >/dev/null 2>&1 || rc=$?
+          magick -- "$i" "$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         fi
       fi
       if [ "$rc" -eq 0 ] && [ "$FORMAT" = jp2 ] && [ -s "$convert_source_icc" ]; then
-        exiftool -overwrite_original "-ICC_Profile<=$convert_source_icc" -- "$OUTTMP" >/dev/null 2>&1 || rc=$?
+        exiftool -overwrite_original "-ICC_Profile<=$convert_source_icc" -- "$OUTTMP" >/dev/null 2>> "$KIMDIR/convert-output-error" || rc=$?
         convert_output_icc="$KIMDIR/convert-output.icc"
         exiftool -b -ICC_Profile -- "$OUTTMP" > "$convert_output_icc" 2>/dev/null || rc=$?
         cmp -s -- "$convert_source_icc" "$convert_output_icc" || rc=1
@@ -2234,7 +2633,7 @@ action_convert() {
           WEBP:webp)
             # Still WebP is valid without ANIM; validate when there is an
             # ANIM/ANMF sequence, including a one-frame animation.
-            if [ "$input_frames" -gt 1 ] || image_webp_animation_signature "$i" >/dev/null 2>&1; then
+            if [ "$input_frames" -gt 1 ] || image_webp_animation_signature "$i" >/dev/null 2>> "$KIMDIR/convert-output-error"; then
               animation_before="$(image_webp_animation_signature "$i")" || rc=1
               animation_after="$(image_webp_animation_signature "$OUTTMP")" || rc=1
               [ -n "$animation_before" ] && [ "$animation_before" = "$animation_after" ] || rc=1
@@ -2270,9 +2669,21 @@ action_convert() {
       if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$publication_mode"; then
         report_ok
       else
+        if [ "$interrupted" != true ]; then
+          local output_diagnostic
+          output_diagnostic="$(cat -- "$KIMDIR/convert-output-error")"
+          case "${output_diagnostic,,}" in
+            *'resource limit'*|*'cache resources exhausted'*|*'security policy'*|*'not authorized'*|*'memoryallocationfailed'*|*'timed out'*)
+              progress_error "$(gettext 'Convert: the encoder exceeded a resource or security-policy limit. Try a smaller output or review the ImageMagick policy.')
+$OUTFILE
+$output_diagnostic" ;;
+            *) progress_error "$(gettext 'Convert: destination or encoder/output validation failed. Check the destination, encoder capability and color-profile support:') $OUTFILE
+$output_diagnostic" ;;
+          esac
+        fi
         report_fail "$i"
       fi
-      rm -f -- "$OUTTMP" "${apng_error:-}" >/dev/null 2>&1 || true
+      rm -f -- "$OUTTMP" "${apng_error:-}" >/dev/null 2>> "$KIMDIR/convert-output-error" || true
       [ "$interrupted" != true ] || break
       progress_value "$dbusRef" "$counter"
       continue
@@ -2281,7 +2692,7 @@ action_convert() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 
@@ -2518,6 +2929,7 @@ EOF
       done <<< "$info"
       [ "$source_frames" -gt 0 ] || rc=1
     fi
+    if is_psd_source "$file"; then asset_name=png; fi
     n=$((n + 1))
     image_path="$gallery_dir/images/image_$n.$asset_name"
     thumb_path="$gallery_dir/thumbs/image_$n.png"
@@ -2663,6 +3075,7 @@ KIM6_GALLERY_FALLBACK
     publication_fail "$ref" '' "$(gettext 'Gallery: publication failed; existing directories were preserved.')"
     return 1
   fi
+  publication_record_output "$target_dir"
   progress_value "$ref" "$nbfiles"
   progress_close "$ref"
   xdg-open "$target_dir/index.html" >/dev/null 2>&1 || true
@@ -2673,6 +3086,7 @@ KIM6_GALLERY_FALLBACK
 # Produce a print-quality contact-sheet PDF without modifying source images.
 # Rasterize labels and headings, then validate every page before publication.
 action_contactsheet() {
+  require_action_tools contactsheet setsid || return 1
   local paper=letter orientation=portrait grid=4x5 labels=both fit=fit background=white
   local dpi=300 title='Contact Sheet' requested='' interactive=false
   local arg file frames mode target ref tmp='' stage width height cols rows
@@ -2760,8 +3174,10 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     return 1
   }
   files=("${selected[@]}")
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
-    frames="$(publication_input_frames "$file")" || return 1
+    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
+    frames="$(publication_input_frames "$file" "$KIMDIR/publication-records")" || return 1
     [ "$frames" -eq 1 ] || {
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: each source must be a single-frame image.')"
       return 1
@@ -2805,7 +3221,6 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   [ "$background" != black ] || front=white
   pointsize=$(( dpi / 9 ))
 
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Creating contact sheet ...')")"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -2826,10 +3241,12 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     first=$(( page_index * cols * rows ))
     last=$(( first + cols * rows ))
     [ "$last" -le "${#files[@]}" ] || last="${#files[@]}"
+    progress_maximum "$ref" "${#files[@]}" || return 1
+    progress_value "$ref" "$counter" || return 1
     for ((index = first; index < last; index++)); do
       file="${files[index]}"
       counter=$((counter + 1))
-      if ! progress_begin_item "$ref" "$(gettext 'Kim - Contact sheet: ')${file##*/}" || progress_cancelled "$ref"; then
+      if ! progress_begin_item "$ref" "$(gettext 'Rendering contact-sheet thumbnail') — $counter / ${#files[@]}: ${file##*/}" || progress_cancelled "$ref"; then
         publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet interrupted.')"
         return 1
       fi
@@ -2837,7 +3254,8 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
       geometry="${tile_width}x${tile_height}"
       [ "$fit" != fill ] || geometry+='^'
       image_args=("$file" -auto-orient -thumbnail "$geometry" -gravity center -background "$background" -extent "${tile_width}x${tile_height}" "PNG:$tile")
-      if ! magick "${image_args[@]}" >/dev/null 2>&1; then
+      if ! publication_run_image "$ref" magick "${image_args[@]}"; then
+        if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
         publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: unable to render a thumbnail.')"
         return 1
       fi
@@ -2857,20 +3275,19 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     done
     raw="$stage/pages/raw_$(printf '%04d' "$page_index").png"
     page="$stage/pages/page_$(printf '%04d' "$page_index").png"
-    if ! magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
-        -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw" >/dev/null 2>&1; then
-      publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page layout failed.')"
+    if ! publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet page') $((page_index + 1)) / $page_count" magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
+        -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw"; then
       return 1
     fi
-    if ! magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
-        -units PixelsPerInch -density "$dpi" "PNG:$page" >/dev/null 2>&1; then
+    if ! publication_run_image "$ref" magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
+        -units PixelsPerInch -density "$dpi" "PNG:$page"; then
+      if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
       publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page sizing failed.')"
       return 1
     fi
     page_files+=("$page")
   done
-  if progress_cancelled "$ref" || ! magick "${page_files[@]}" -adjoin "PDF:$tmp" >/dev/null 2>&1; then
-    publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF generation interrupted or failed.')"
+  if progress_cancelled "$ref" || ! publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet PDF…')" magick "${page_files[@]}" -adjoin "PDF:$tmp"; then
     return 1
   fi
   local pdf_width=612 pdf_height=792
@@ -2880,10 +3297,12 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     pdf_width="$pdf_height"
     pdf_height="$swap"
   fi
-  if ! validate_publication_pdf "$tmp" "$page_count" "$pdf_width" "$pdf_height" || progress_cancelled "$ref"; then
+  publication_render_stage "$ref" "$(gettext 'Verifying resulting PDF…')" identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$tmp" || return 1
+  if ! validate_publication_pdf "$tmp" "$page_count" "$pdf_width" "$pdf_height" "$KIMDIR/publication-records" || progress_cancelled "$ref"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF validation failed or was interrupted.')"
     return 1
   fi
+  progress_begin_item "$ref" "$(gettext 'Publishing completed output…')" || return 1
   if ! commit_tmp_to_target "$tmp" "$target" "$mode"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: PDF publication failed; existing files were preserved.')"
     return 1
@@ -2893,6 +3312,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
 }
 
 action_print() {
+  require_action_tools print setsid || return 1
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
   local file frame_count
   local -a files=()
@@ -2927,8 +3347,10 @@ action_print() {
   esac
   capacity=$(( ${tile%x*} * ${tile#*x} ))
   frames=0
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
-    frame_count="$(publication_input_frames "$file")" || {
+    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
+    frame_count="$(publication_input_frames "$file" "$KIMDIR/publication-records")" || {
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: an input image could not be inspected.')"
       return 1
     }
@@ -2944,7 +3366,6 @@ action_print() {
     return 1
   }
   outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
-  ref="$(progress_open 2 "$(gettext 'Kim - Creating print layout ...')")"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -2953,18 +3374,21 @@ action_print() {
     publication_fail "$ref" '' "$(gettext 'Print: cannot create destination-local staging.')"
     return 1
   }
-  if ! magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
-      -background white -- "${files[@]}" "$tmp" >/dev/null 2>&1; then rc=1; fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height"; then
+  if ! publication_render_stage "$ref" "$(gettext 'Rendering print-layout PDF…')" magick montage -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
+      -background white -- "${files[@]}" "$tmp"; then return 1; fi
+  if [ "$rc" -eq 0 ]; then
+    publication_render_stage "$ref" "$(gettext 'Verifying resulting PDF…')" identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$tmp" || return 1
+  fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_pdf "$tmp" "$expected_pages" "$width" "$height" "$KIMDIR/publication-records"; then
     rc=1
   fi
   if [ "$rc" -ne 0 ]; then publication_fail "$ref" "$tmp" "$(gettext 'Print: ImageMagick failed or produced an invalid PDF.')"; return 1; fi
   if progress_cancelled "$ref"; then publication_fail "$ref" "$tmp" "$(gettext 'Print: publication interrupted; no output was written.')"; return 1; fi
+  progress_begin_item "$ref" "$(gettext 'Publishing completed output…')" || return 1
   if ! commit_tmp_to_target "$tmp" "$outpdf" "$mode"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Print: PDF publication failed; existing files were preserved.')"
     return 1
   fi
-  progress_value "$ref" 2
   progress_close "$ref"
   return 0
 }
@@ -2972,6 +3396,7 @@ action_print() {
 
 # Join selected image frames into one ordered multi-page TIFF file.
 action_tiffjoin() {
+  require_action_tools tiffjoin setsid || return 1
   local requested='' file dir mode output ref tmp='' info record format width height scenes rc=0 frames=0
   local index=0 expected_width expected_height
   local -a files=() source_geometry=()
@@ -2986,8 +3411,10 @@ action_tiffjoin() {
   kim6_create_select_more kim6_selected_inputs "Multi-page TIFF" || return 1
   collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
   dir="${files[0]%/*}"
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
-    info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || {
+    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
+    info="$(cat -- "$KIMDIR/publication-records")" || {
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: an input image could not be decoded.')"
       return 1
     }
@@ -3019,7 +3446,6 @@ action_tiffjoin() {
   }
   output="$DERIVED_TARGET"
   mode="$DERIVED_MODE"
-  ref="$(progress_open 2 "$(gettext 'Kim - Joining TIFF images ...')")"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -3028,11 +3454,12 @@ action_tiffjoin() {
     publication_fail "$ref" '' "$(gettext 'TIFF join: cannot create destination-local staging.')"
     return 1
   }
-  if ! magick -- "${files[@]}" -adjoin "$tmp" >/dev/null 2>&1; then
-    rc=1
+  if ! publication_render_stage "$ref" "$(gettext 'Rendering multi-page TIFF…')" magick -- "${files[@]}" -adjoin "$tmp"; then
+    return 1
   fi
   if [ "$rc" -eq 0 ]; then
-    info="$(publication_image_records "$tmp" 2>/dev/null)" || rc=1
+    publication_render_stage "$ref" "$(gettext 'Verifying multi-page TIFF…')" identify -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$tmp" || return 1
+    info="$(cat -- "$KIMDIR/publication-records")" || rc=1
     if [ "$rc" -eq 0 ]; then
       while IFS= read -r record; do
         IFS='|' read -r format width height _ <<< "$record"
@@ -3052,17 +3479,18 @@ action_tiffjoin() {
     publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication interrupted; no output was written.')"
     return 1
   fi
+  progress_begin_item "$ref" "$(gettext 'Publishing completed output…')" || return 1
   if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
     publication_fail "$ref" "$tmp" "$(gettext 'TIFF join: publication failed; existing files were preserved.')"
     return 1
   fi
-  progress_value "$ref" 2
   progress_close "$ref"
 }
 
 # Create an ordered animated GIF. Delay is in centiseconds and loop count zero
 # repeats forever, matching the historical service-menu command.
 action_animate() {
+  require_action_tools animate setsid || return 1
   local requested='' delay='' loops='' file dir mode output ref tmp='' info record format width height scenes
   local rc=0 frames=0
   local -a files=() source_geometry=()
@@ -3137,8 +3565,10 @@ action_animate() {
     return 1
   fi
   loops=$((10#$loops))
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
-    info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || {
+    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
+    info="$(cat -- "$KIMDIR/publication-records")" || {
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: an input image could not be decoded.')"
       return 1
     }
@@ -3162,7 +3592,6 @@ action_animate() {
   [ -n "$requested" ] || return 1
   prepare_derived_target "$requested" gif "$mode" "${files[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: invalid or unsafe output destination.')"; return 1; }
   output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
-  ref="$(progress_open 2 "$(gettext 'Kim - Creating animation ...')")"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -3171,10 +3600,13 @@ action_animate() {
     publication_fail "$ref" '' "$(gettext 'Animation: cannot create destination-local staging.')"
     return 1
   }
-  if ! magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp" >/dev/null 2>&1; then
-    rc=1
+  if ! publication_render_stage "$ref" "$(gettext 'Rendering animated GIF…')" magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp"; then
+    return 1
   fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames"; then
+  if [ "$rc" -eq 0 ]; then
+    publication_render_stage "$ref" "$(gettext 'Verifying animated GIF…')" identify -regard-warnings -verbose -- "$tmp" || return 1
+  fi
+  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames" "$KIMDIR/publication-records"; then
     rc=1
   fi
   if [ "$rc" -ne 0 ]; then
@@ -3185,11 +3617,11 @@ action_animate() {
     publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication interrupted; no output was written.')"
     return 1
   fi
+  progress_begin_item "$ref" "$(gettext 'Publishing completed output…')" || return 1
   if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication failed; existing files were preserved.')"
     return 1
   fi
-  progress_value "$ref" 2
   progress_close "$ref"
 }
 
@@ -3240,8 +3672,23 @@ action_rename() {
   [ "$#" -ge 2 ] || rename_abort "rename: missing mode or files"
   local mode="$1" output_dir='' interactive=false
   shift
+  if [ "$mode" = interactive ]; then
+    [ "${1:-}" != -- ] || shift
+    local reviewed_policy
+    reviewed_policy="$(choose_output_mode "$(gettext 'Rename Images')" "$(gettext 'Create renamed copies or explicitly rename selected originals?')" "$#" rename)"
+    [ "$reviewed_policy" != cancel ] || return 1
+    printf '%s\n' "$reviewed_policy" > "$KIMDIR/rename-policy"
+    action_options_dialog rename "$reviewed_policy" "$@" || return 1
+    local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+    action_rename "${choices[@]}" -- "$@"; return $?
+  fi
+  local supplied=false supplied_value='' supplied_replacement='' supplied_start=1 supplied_padding=3
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --parameters)
+        [ "$#" -ge 5 ] || rename_abort "rename: incomplete dialog parameters"
+        supplied=true; supplied_value="$2"; supplied_replacement="$3"; supplied_start="$4"; supplied_padding="$5"
+        shift 5 ;;
       --output-dir)
         [ "$#" -ge 2 ] || rename_abort "rename: missing destination directory"
         [ -n "$2" ] || rename_abort "rename: empty destination directory"
@@ -3274,9 +3721,9 @@ action_rename() {
         overwrite "$(gettext 'Replace Text')" off)" || return 1
     fi
 
-    [ "$mode" = exifdate ] || break
+    [ "$mode" = exifdate ] && [ "$supplied" != true ] || break
 
-    if ! command -v exiftool >/dev/null 2>&1; then
+    if ! type -P exiftool >/dev/null 2>&1; then
       kdialog --title "$(gettext 'Rename Images')" --error \
         "$(gettext 'ExifTool is required for EXIF-date renaming.')"
       return 1
@@ -3312,6 +3759,26 @@ Would you like to choose another rename method?"; then
 
     return 1
   done
+  if [ "$supplied" = true ]; then
+    case "$mode" in
+      addprefix) prefix="$supplied_value" ;;
+      addsuffix) suffix="$supplied_value" ;;
+      overwrite) from="$supplied_value"; to="$supplied_replacement"; [ -n "$from" ] || rename_abort 'Enter the text to replace.' ;;
+      sequential)
+        sequence_base="$supplied_value"; number="$supplied_start"; padding="$supplied_padding"
+        [[ "$number" =~ ^[0-9]{1,10}$ && "$padding" =~ ^[0-9]{1,2}$ ]] && (( padding >= 1 && padding <= 18 )) || rename_abort 'Invalid sequence parameters.' ;;
+      exifdate)
+        case "$supplied_value" in
+          ''|compact) preset=1; date_format='%Y%m%d_%H%M%S' ;;
+          iso) preset=2; date_format='%Y-%m-%d_%H-%M-%S' ;;
+          day_first) preset=3; date_format='%Y-%d-%m_%H-%M-%S' ;;
+          camera) preset=4; date_format='IMG-%Y%m%d_%H%M%S' ;;
+          *) rename_abort 'Choose a supported capture-date filename format.' ;;
+        esac ;;
+      lowercase|uppercase|spacestodash|spacestounderscore|underscorestospace|dashestospace) : ;;
+      *) rename_abort 'Unknown filename method.' ;;
+    esac
+  else
   case "$mode" in
     addprefix) prefix="$(kdialog --inputbox "$(gettext 'Prefix to add:')" '')" || return 1 ;;
     addsuffix) suffix="$(kdialog --inputbox "$(gettext 'Suffix to add:')" '')" || return 1 ;;
@@ -3350,12 +3817,21 @@ Would you like to choose another rename method?"; then
     *) rename_abort "rename: unknown mode" ;;
   esac
 
-  action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
+  fi
+  if [ -f "$KIMDIR/rename-policy" ]; then
+    # Only the interactive entry above creates this invocation-private marker,
+    # after the existing explicit original-renaming confirmation. No CLI flag
+    # or environment value can authorize replacement through this shortcut.
+    read -r action_mode < "$KIMDIR/rename-policy"; rm -f -- "$KIMDIR/rename-policy"
+    case "$action_mode" in create|overwrite) : ;; *) return 1 ;; esac
+  else
+    action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
+  fi
   [ "$action_mode" != cancel ] || return 1
   # Interactive renames go directly to the directory picker.
   # Explicit --output-dir takes precedence. Noninteractive calls without
   # a destination continue to use each source file's own directory.
-  if [ -z "$output_dir" ] && { [ "$interactive" = true ] || [ "$mode" = sequential ]; }; then
+  if [ -z "$output_dir" ] && { [ "$interactive" = true ] || [ "$mode" = sequential ] && [ "$supplied" != true ]; }; then
     local rename_start_dir
     rename_start_dir="$(dirname -- "$1")"
     [ -d "$rename_start_dir" ] || rename_start_dir="$PWD"
@@ -3453,6 +3929,9 @@ Would you like to choose another rename method?"; then
         fi
         newstem="$date_value" ;;
     esac
+    if [ "$supplied" = true ] && [ "$mode" != exifdate ]; then
+      newstem="$(python3 "$DISPATCHER_DIR/kim_filename.py" "$stem" "$mode" "$supplied_value" "$supplied_replacement" "$number" "$padding")" || rename_abort 'Invalid filename parameters.'
+    fi
     [[ -n "$newstem" && "$newstem" != . && "$newstem" != .. && "$newstem" != */* && "$newstem" != *$'\n'* && "$newstem" != *$'\r'* ]] || rename_abort "rename: invalid filename stem"
     destination="${output_dir:-$parent}"
     [ -w "$destination" ] && [ -x "$destination" ] || rename_abort "rename: inaccessible destination directory"
@@ -3583,7 +4062,7 @@ Would you like to choose another rename method?"; then
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -3642,11 +4121,15 @@ action_resize() {
     if [ "$custom" = true ]; then
       [ -z "$SCALE" ] || die "resize: use --custom or --size, not both"
       [ -z "$percent" ] && [ "$custom_percent" != true ] || die "resize: choose only one size option"
-      SCALE="$(kdialog --inputbox "$(gettext 'Resize dimension (maximum width x height):')" '1600x1600')" || return 1
+      action_options_dialog resize "${raw_files[@]}" || return 1
+      local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+      SCALE="${choices[0]}"
     fi
     if [ "$custom_percent" = true ]; then
       [ -z "$SCALE" ] && [ -z "$percent" ] || die "resize: choose only one size option"
-      percent="$(kdialog --inputbox "$(gettext 'Resize percentage (1-1000):')" 50)" || return 1
+      action_options_dialog percent "${raw_files[@]}" || return 1
+      local -a percent_choices=(); mapfile -d '' -t percent_choices < "$KIMDIR/options"
+      percent="${percent_choices[0]%%%}"
     fi
     if [ -n "$percent" ]; then
       [ -z "$SCALE" ] || die "resize: use either --size or --percent"
@@ -3871,7 +4354,7 @@ action_resize() {
 
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -4005,7 +4488,11 @@ action_resizeandsend() {
     stage_index=$((stage_index + 1))
     out="$KIMDIR/${stem}__send_${stage_index}.${output_ext}"
     if [ "$rc" -eq 0 ] && [ "$size" = full ]; then
-      cp -- "$i" "$out" >/dev/null 2>&1 || rc=$?
+      if is_psd_source "$i"; then
+        magick - "${coder}:$out" < "$i" >/dev/null 2>&1 || rc=$?
+      else
+        cp -- "$i" "$out" >/dev/null 2>&1 || rc=$?
+      fi
     elif [ "$rc" -eq 0 ]; then
       magick - -auto-orient -resize "$size" "$coder:$out" < "$i" >/dev/null 2>&1 || rc=$?
     fi
@@ -4142,7 +4629,7 @@ action_resizeandsend() {
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The mail client was opened. Prepared attachments remain here until you delete them:') $persistent_dir"
   fi
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$interrupted" != true ] && [ "$REPORT_FAIL" -eq 0 ]
+  [ "$interrupted" != true ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 
@@ -4380,7 +4867,7 @@ action_transform_in_place() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 action_rotate() {
@@ -4412,7 +4899,9 @@ action_rotate() {
     done
     if [ "$custom" = true ]; then
       [ -z "$angle" ] && [ "$exif" = false ] || die "rotate: --custom cannot be combined with another angle"
-      angle="$(kdialog --inputbox "$(gettext 'Rotate by how many degrees?')" 45)" || return 1
+      action_options_dialog rotate "${files[@]}" || return 1
+      local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+      angle="${choices[0]}"
     fi
     [ "$exif" = false ] || {
       [ -z "$angle" ] || die "rotate: --exif cannot be combined with --angle"
@@ -4509,17 +4998,10 @@ action_stripmeta() {
   [ "$nbfiles" -le 0 ] && return 0
 
   if [ "$interactive" = true ]; then
-    local selected
-    selected="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose metadata to remove:')" \
-      all "$(gettext 'All metadata')" gps "$(gettext 'GPS coordinates')" ai "$(gettext 'Recognized AI-generation fields')" 2>/dev/null)" || return 1
-    case "$selected" in
-      all|gps|ai)
-        strip_mode="$selected"
-        ;;
-      *)
-        return 1
-        ;;
-    esac
+    action_options_dialog strip "$strip_mode" "${files[@]}" || return 1
+    local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+    strip_mode="${choices[0]}"
+    case "$strip_mode" in all|gps|ai) : ;; *) return 1 ;; esac
   fi
   if [ "$strip_mode" != all ]; then
     action_stripmeta_selective "$strip_mode" "$remove_ai" "${files[@]}"
@@ -4791,7 +5273,7 @@ action_stripmeta() {
   done
   progress_close "$dbusRef"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # Read-only metadata probes, plus pixel/ICC fingerprints used by every
@@ -4807,7 +5289,7 @@ metadata_png_icc_equal() {
 
   command -v "$interpreter" >/dev/null 2>&1 || return 1
 
-  "$interpreter" -B - "$source" "$target" <<'PYICC'
+  job_run_command "$interpreter" -B - "$source" "$target" <<'PYICC'
 import binascii
 import struct
 import sys
@@ -4905,7 +5387,7 @@ metadata_png_publish_one() {
     return 1
   fi
 
-  response="$("$interpreter" -B "$engine" "${png_args[@]}" --input "$source" --output "$tmp")" || rc=1
+  response="$(job_run_command "$interpreter" -B "$engine" "${png_args[@]}" --input "$source" --output "$tmp")" || rc=1
   [[ "$response" =~ ^removed=[0-9]+\ bytes=[0-9]+-\>[0-9]+$ ]] || rc=1
   [ -s "$tmp" ] || rc=1
 
@@ -4986,7 +5468,7 @@ metadata_jpeg_webp_publish_all() {
     return 1
   fi
 
-  response="$("$interpreter" -B "$engine" \
+  response="$(job_run_command "$interpreter" -B "$engine" \
     --format "$format" --input "$source" --output "$tmp")" ||
     rc=1
 
@@ -5041,7 +5523,7 @@ metadata_tiff_encoded_equal() {
   [ -f "$engine" ] || return 1
   command -v "$interpreter" >/dev/null 2>&1 || return 1
 
-  "$interpreter" -B "$engine" \
+  job_run_command "$interpreter" -B "$engine" \
     --before "$source" --after "$candidate"
 }
 
@@ -5056,7 +5538,7 @@ metadata_isobmff_equal() {
   [ -f "$engine" ] || return 1
   command -v "$interpreter" >/dev/null 2>&1 || return 1
 
-  "$interpreter" -B "$engine" \
+  job_run_command "$interpreter" -B "$engine" \
     --format "$format" \
     --before "$source" \
     --after "$candidate"
@@ -5150,7 +5632,7 @@ metadata_publish_one() {
 
       if [ ! -f "$integrity_engine" ] ||
          ! command -v "$integrity_python" >/dev/null 2>&1 ||
-         ! "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$source"              --input "$tmp"; then
+         ! job_run_command "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$source"              --input "$tmp"; then
         printf 'KIM6: Selective JPEG/WebP container verification failed: %s\n' "$source" >&2
         rc=1
       fi
@@ -5244,7 +5726,7 @@ action_stripmeta_selective() {
     XMP-iptcExt:RatingRegionGPSAltitude XMP-iptcExt:RatingRegionGPSAltitudeRef)
   collect_valid_files files "$@" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
-  if ! command -v exiftool >/dev/null 2>&1; then
+  if ! type -P exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for selective metadata removal.')"
     return 1
   fi
@@ -5369,7 +5851,85 @@ action_stripmeta_selective() {
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
   progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+}
+
+# All new date UI routes share a read-only planner and the established metadata
+# publisher. The planner emits NUL-delimited arguments, never executable shell.
+action_photo_date() {
+  local kind=set interactive=false clock='' zone='' seconds=0 fields=capture source target policy ref config result counter=0 argument epoch stage rc
+  local -a files=() args=() expected=() identities=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --mode|--direction) kind="$2"; shift 2 ;;
+      --datetime) clock="$2"; shift 2 ;;
+      --timezone) zone="$2"; shift 2 ;;
+      --seconds) seconds="$2"; shift 2 ;;
+      --fields) fields="$2"; shift 2 ;;
+      --interactive) interactive=true; shift ;;
+      --) shift; files+=("$@"); break ;;
+      *) die "capturedate: unknown option $1" ;;
+    esac
+  done
+  datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Select local, unambiguous photo files.')"; return 1; }
+  for source in "${files[@]}"; do identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
+  config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
+  if [ "$interactive" = true ]; then
+    python3 "$DISPATCHER_DIR/kim_date_dialog.py" "$kind" "$config" "${files[@]}" || return 1
+  else
+    python3 - "$config" "$kind" "$clock" "$zone" "$seconds" "$fields" <<'PYDATE'
+import json,sys
+from pathlib import Path
+p,kind,clock,zone,seconds,fields=sys.argv[1:]
+Path(p).write_text(json.dumps(dict(kind=kind,datetime=clock,timezone=zone or ('embedded' if kind in ('shift','exif-to-file') else ''),seconds=int(seconds),fields=fields)))
+PYDATE
+  fi
+  # Preflight the entire batch before asking for policy or changing any file.
+  for source in "${files[@]}"; do
+    if ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
+      progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
+    fi
+  done
+  policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+  [ "$policy" != cancel ] || return 1
+  report_init; METADATA_INTERRUPTED=false
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Photo dates')")" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter+1))
+    if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${identities[$((counter-1))]}" ]; then
+      report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"; continue
+    fi
+    progress_begin_item "$ref" "$(gettext 'Planning photo date:') ${source##*/}" || break
+    if ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
+      report_fail "$source: $(cat "$KIMDIR/date-error")"; progress_value "$ref" "$counter"; continue
+    fi
+    mapfile -d '' -t args < "$result"
+    target="$(metadata_output_path "$source" dated "$policy")"; rc=0
+    if [[ "${args[0]}" != -*=* ]]; then
+      epoch="${args[0]}"
+      stage="$(tmp_for_target "$target")" || return 1
+      cp --preserve=mode,timestamps -- "$source" "$stage" || rc=1
+      cmp -s -- "$source" "$stage" || rc=1
+      # Python's integer nanosecond interface also handles pre-1970 dates.
+      python3 - "$stage" "$epoch" <<'PYDATE' || rc=1
+import os,sys
+p,ns=sys.argv[1:]; os.utime(p,ns=(os.stat(p).st_atime_ns,int(ns)))
+if os.stat(p).st_mtime_ns!=int(ns): raise SystemExit('The filesystem cannot store this File Modification Date at the requested precision. No date was changed.')
+PYDATE
+      if progress_cancelled "$ref"; then rc=130; METADATA_INTERRUPTED=true; fi
+      if [ "$rc" -eq 0 ]; then commit_tmp_to_target "$stage" "$target" "$policy" || rc=1; fi
+      rm -f -- "$stage"
+    else
+      expected=()
+      for argument in "${args[@]}"; do expected+=("${argument%%=*}"$'\034'"${argument#*=}"); done
+      metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}" || rc=1
+    fi
+    if [ "$rc" -eq 0 ]; then report_ok; else report_fail "$source — $(gettext 'Photo date update failed; no incomplete output was published.')"; fi
+    progress_value "$ref" "$counter"
+    [ "$METADATA_INTERRUPTED" != true ] || break
+  done
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Photo dates')"
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 
 action_copyright() {
@@ -5402,14 +5962,15 @@ action_copyright() {
   done
   collect_valid_files files "${files[@]}" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
-  if ! command -v exiftool >/dev/null 2>&1; then
+  if ! type -P exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for copyright metadata editing.')"
     return 1
   fi
   if [ "$interactive" = true ] || { [ "$provided" != true ] && [ -z "$creator$notice$rights" ]; }; then
-    creator="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Creator / Artist (leave blank to keep unchanged):')" "$creator")" || return 1
-    notice="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Copyright notice (leave blank to keep unchanged):')" "$notice")" || return 1
-    rights="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Optional usage rights (leave blank to keep unchanged):')" "$rights")" || return 1
+    action_options_dialog copyright "${files[@]}" || return 1
+    local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+    [ "${#choices[@]}" -eq 3 ] || return 1
+    creator="${choices[0]}"; notice="${choices[1]}"; rights="${choices[2]}"
   fi
   [ -n "$creator$notice$rights" ] || die "copyright: select at least one nonempty field"
   [ -z "$year" ] || [[ "$year" =~ ^[0-9]{4}$ ]] || die "copyright: year must be four digits"
@@ -5423,18 +5984,23 @@ action_copyright() {
       report_fail "$source"
       break
     }
+    local rights_format legacy_rights=true
+    rights_format="$(metadata_query "$source" -FileType)" || { report_fail "$source"; continue; }
+    case "$rights_format" in WEBP|'Extended WEBP'|HEIC|HEIF|AVIF|JXL) legacy_rights=false ;; esac
     args=(); expected=()
     if [ -n "$creator" ]; then
-      args+=(-EXIF:Artist="$creator" -IPTC:By-line="$creator" -XMP-dc:Creator="$creator")
-      expected+=('-Artist'$'\034'"$creator" '-IPTC:By-line'$'\034'"$creator" '-XMP-dc:Creator'$'\034'"$creator")
+      args+=(-EXIF:Artist="$creator" -XMP-dc:Creator="$creator")
+      expected+=('-Artist'$'\034'"$creator" '-XMP-dc:Creator'$'\034'"$creator")
+      if [ "$legacy_rights" = true ]; then args+=(-IPTC:By-line="$creator"); expected+=('-IPTC:By-line'$'\034'"$creator"); fi
     fi
     if [ -n "$notice" ]; then
       capture_year="$(metadata_query "$source" -DateTimeOriginal)" || { report_fail "$source"; progress_value "$ref" "$counter"; continue; }
       if [[ "$capture_year" =~ ^([0-9]{4}): ]]; then capture_year="${BASH_REMATCH[1]}"; else capture_year="$(date +%Y)"; fi
       [ -n "$year" ] && capture_year="$year"
       expected_value="${notice//\{YEAR\}/$capture_year}"
-      args+=(-EXIF:Copyright="$expected_value" -IPTC:CopyrightNotice="$expected_value" -XMP-dc:Rights="$expected_value")
-      expected+=('-Copyright'$'\034'"$expected_value" '-IPTC:CopyrightNotice'$'\034'"$expected_value" '-XMP-dc:Rights'$'\034'"$expected_value")
+      args+=(-EXIF:Copyright="$expected_value" -XMP-dc:Rights="$expected_value")
+      expected+=('-Copyright'$'\034'"$expected_value" '-XMP-dc:Rights'$'\034'"$expected_value")
+      if [ "$legacy_rights" = true ]; then args+=(-IPTC:CopyrightNotice="$expected_value"); expected+=('-IPTC:CopyrightNotice'$'\034'"$expected_value"); fi
     fi
     if [ -n "$rights" ]; then args+=(-XMP-xmpRights:UsageTerms="$rights"); expected+=('-XMP-xmpRights:UsageTerms'$'\034'"$rights"); fi
     local already=true pair current pair_tag pair_value
@@ -5443,7 +6009,7 @@ action_copyright() {
       current="$(metadata_query "$source" "$pair_tag")" || current=''
       [ "$current" = "$pair_value" ] || already=false
     done
-    if [ "$already" = true ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+    if [ "$already" = true ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
     target="$(metadata_output_path "$source" copyright "$policy")"
     if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
       report_ok
@@ -5453,10 +6019,17 @@ action_copyright() {
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 action_timeshift() {
+  local option has_offset=false
+  for option in "$@"; do
+    if [ "$option" = --interactive ]; then action_photo_date --mode shift "$@"; return $?; fi
+    [ "$option" != -- ] || break
+  done
+  for option in "$@"; do [ "$option" != --offset ] || has_offset=true; [ "$option" != -- ] || break; done
+  if [ "$has_offset" = false ]; then action_photo_date --mode shift --interactive "$@"; return $?; fi
   # Shift camera-local EXIF timestamps by the requested fixed offset.
   # Preview the first file without writing; prevent duplicate source edits.
   local offset='' fields=all interactive=false sign hours minutes seconds shiftarg policy source ref target counter=0 capture_year preview_before preview_after rc key previous parent canonical_parent
@@ -5466,6 +6039,7 @@ action_timeshift() {
       --offset|--fields)
         [ "$#" -ge 2 ] || die "timeshift: $1 requires a value"
         if [ "$1" = --offset ]; then
+          [ -n "$2" ] || die "Choose an adjustment in Adjust Photo Capture Date…"
           offset="$2"
         else
           fields="$2"
@@ -5481,7 +6055,7 @@ action_timeshift() {
   # after the first successful update. Preserve that established behavior.
   collect_valid_files_with_repeats files "${files[@]}" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
-  if ! command -v exiftool >/dev/null 2>&1; then
+  if ! type -P exiftool >/dev/null 2>&1; then
     progress_error "$(gettext 'ExifTool is required for camera timestamp editing.')"
     return 1
   fi
@@ -5550,7 +6124,7 @@ action_timeshift() {
       expected+=("-$option"$'\034'"$preview_after")
     done
     if [ "$rc" -ne 0 ]; then report_fail "$source"; progress_value "$ref" "$counter"; continue; fi
-    if [ "${#expected[@]}" -eq 0 ] || [[ "$offset" == +00:00:00 || "$offset" == -00:00:00 ]]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+    if [ "${#expected[@]}" -eq 0 ] || [[ "$offset" == +00:00:00 || "$offset" == -00:00:00 ]]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
     # ExifTool computes expected camera-local clock values too; exact staged
     # values are validated before publication. Unselected fields remain untouched.
     target="$(metadata_output_path "$source" timeshift "$policy")"
@@ -5563,13 +6137,12 @@ action_timeshift() {
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
-# Convert a camera-local EXIF timestamp into a filesystem epoch. EXIF values
-# without OffsetTimeOriginal are interpreted in the system local timezone,
-# never as UTC. DST gaps and repeated fall-back times are rejected because a
-# timezone-free camera value cannot disambiguate those wall-clock readings.
+# A camera clock is not a filesystem instant without an explicit offset.
+# Legacy CLI EXIF conversion refuses unknown zones; the shared Qt route also
+# supports XMP capture dates and an informed, explicit timezone choice.
 datesync_exif_epoch() {
   local file="$1" stamp subsec offset iso epoch normalized fraction delta alternate
   stamp="$(metadata_query "$file" -DateTimeOriginal)" || return 1
@@ -5586,13 +6159,8 @@ datesync_exif_epoch() {
     [[ "$offset" =~ ^([+-])([0-9]{2}):([0-9]{2})$ ]] || return 1
     epoch="$(date -d "$iso ${BASH_REMATCH[1]}${BASH_REMATCH[2]}:${BASH_REMATCH[3]}" +%s 2>/dev/null)" || return 1
   else
-    epoch="$(date -d "$iso" +%s 2>/dev/null)" || return 1
-    normalized="$(date -d "@$epoch" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
-    [ "$normalized" = "$iso" ] || return 1
-    for delta in -7200 -5400 -3600 -1800 1800 3600 5400 7200; do
-      alternate="$(date -d "@$((epoch + delta))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
-      [ "$alternate" != "$iso" ] || return 1
-    done
+    printf '%s\n' 'The camera timezone is unknown. Use Set File Date from Photo Capture Date… and choose the camera timezone.' >&2
+    return 1
   fi
   [[ "$epoch" =~ ^-?[0-9]+$ ]] || return 1
   printf '@%s.%s\n' "$epoch" "$fraction"
@@ -5607,7 +6175,7 @@ datesync_epoch_to_wall_time() {
     if [ "${BASH_REMATCH[1]}" = + ]; then posix_offset="-$hour:$minute"; else posix_offset="+$hour:$minute"; fi
     TZ="UTC$posix_offset" date -d "@$epoch" '+%Y:%m:%d %H:%M:%S' 2>/dev/null
   else
-    date -d "@$epoch" '+%Y:%m:%d %H:%M:%S' 2>/dev/null
+    return 1  # A filesystem instant cannot supply an unknown camera timezone.
   fi
 }
 
@@ -5634,6 +6202,14 @@ datesync_collect_files() {
 }
 
 action_datesync() {
+  local option
+  for option in "$@"; do
+    if [ "$option" = --interactive ]; then action_photo_date --mode exif-to-file "$@"; return $?; fi
+    [ "$option" != -- ] || break
+  done
+  local has_direction=false
+  for option in "$@"; do [ "$option" != --direction ] || has_direction=true; [ "$option" != -- ] || break; done
+  if [ "$has_direction" = false ]; then action_photo_date --mode exif-to-file --interactive "$@"; return $?; fi
   # Synchronize EXIF and filesystem timestamps in the selected direction.
   # Preserve subsecond data and access time where supported.
   local direction='' fields=capture interactive=false source target ref policy rc counter=0
@@ -5646,6 +6222,7 @@ action_datesync() {
       --direction|--fields)
         [ "$#" -ge 2 ] || die "datesync: $1 requires a value"
         if [ "$1" = --direction ]; then
+          [ -n "$2" ] || die "Choose Set File Date from Photo Capture Date… or Set Photo Capture Date from File Date…"
           direction="$2"
         else
           fields="$2"
@@ -5675,7 +6252,7 @@ action_datesync() {
     original_identities+=("$(stat -c '%d:%i' -- "$source")") || return 1
   done
 
-  command -v exiftool >/dev/null 2>&1 || {
+  type -P exiftool >/dev/null 2>&1 || {
     progress_error "$(gettext 'ExifTool is required for date synchronization.')"
     return 1
   }
@@ -5703,6 +6280,10 @@ action_datesync() {
     else
       preview_offset="$(metadata_query "${files[0]}" -OffsetTimeOriginal)"
       proposed_date="$(datesync_epoch_to_wall_time "$first_seconds" "$preview_offset" 2>/dev/null)"
+    fi
+    if [ -z "$proposed_date" ]; then
+      progress_error "$(gettext 'No valid destination date can be calculated. No date was changed. Use Set Photo Capture Date… or choose an explicit camera timezone.')"
+      return 1
     fi
     if [ "$direction" = exif-to-file ]; then
       kdialog --title "$(gettext 'Kim — Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
@@ -5837,7 +6418,7 @@ action_datesync() {
         current_date="$(metadata_query "$source" -ModifyDate)" || { report_fail "$source"; continue; }
         [ "$current_date" = "$modify_date" ] && [ "$modify_subsec" = "$wanted_subsec" ] || rc=1
       fi
-      if [ "$rc" -eq 0 ]; then report_ok; progress_value "$ref" "$counter"; continue; fi
+      if [ "$rc" -eq 0 ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
       target="$(metadata_output_path "$source" datesync "$policy")"
       if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
         report_ok
@@ -5867,7 +6448,7 @@ action_datesync() {
   fi
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$REPORT_FAIL" -eq 0 ]
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 ####################
@@ -7015,12 +7596,12 @@ video_resolve_container() {
 
 video_terminate_owned_process() {
   local pid="$1" attempt
-  kill -TERM "$pid" 2>/dev/null || true
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   for ((attempt = 0; attempt < 20; attempt++)); do
-    kill -0 "$pid" 2>/dev/null || return 0
+    kill -0 -- "-$pid" 2>/dev/null || kill -0 "$pid" 2>/dev/null || return 0
     sleep 0.1
   done
-  kill -KILL "$pid" 2>/dev/null || true
+  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
 }
 
 video_cleanup_owned_process() {
@@ -7047,7 +7628,7 @@ video_run_monitored() {
       break
     fi
   done
-  ffmpeg "${command[@]}" > /dev/null 2>"$error_file" &
+  setsid ffmpeg "${command[@]}" > /dev/null 2>"$error_file" &
   pid=$!
   VIDEO_OWNED_FFMPEG_PID="$pid"
   # Opening a FIFO read-only can hang forever if a producer fails before
@@ -7061,7 +7642,8 @@ video_run_monitored() {
         out_time_ms)
           if [[ "$value" =~ ^[0-9]+$ ]] && awk -v d="$duration" 'BEGIN { exit !(d > 0) }'; then
             percent="$(awk -v t="$value" -v d="$duration" 'BEGIN { p = int(t / 1000000 / d * 100); if (p > 100) p = 100; print p }')"
-            if ! progress_label "$ref" "$label — ${percent}%"; then
+            if ! progress_label "$ref" "$(cat "$KIMDIR/job.label" 2>/dev/null)
+$label — ${percent}% of measured video duration"; then
               interrupted=1
               video_terminate_owned_process "$pid"
               break
@@ -7249,7 +7831,7 @@ action_video() {
       return 2
       ;;
   esac
-  if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+  if ! command -v ffmpeg >/dev/null 2>&1 || ! type -P ffprobe >/dev/null 2>&1; then
     progress_error "$(gettext 'FFmpeg and ffprobe are required for video transcoding.')"; return 1
   fi
   if ! encoder_output="$(ffmpeg -hide_banner -encoders 2>/dev/null)"; then
@@ -7428,7 +8010,7 @@ action_video() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$REPORT_FAIL" -eq 0 ]
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # Video utilities create derivatives only; KIM_POLICY cannot overwrite sources.
@@ -7562,7 +8144,7 @@ video_utility_files() {
 }
 
 video_utility_init() {
-  if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+  if ! command -v ffmpeg >/dev/null 2>&1 || ! type -P ffprobe >/dev/null 2>&1; then
     progress_error "$(gettext 'FFmpeg and ffprobe are required for video utilities.')"
     return 1
   fi
@@ -7770,7 +8352,7 @@ action_videoframes() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$REPORT_FAIL" -eq 0 ]
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 action_videoaudio() {
@@ -8018,7 +8600,7 @@ action_videoaudio() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$REPORT_FAIL" -eq 0 ]
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 action_videogif() {
@@ -8233,7 +8815,7 @@ action_videogif() {
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'Kim')"
-  [ "$REPORT_FAIL" -eq 0 ]
+  [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 SLIDESHOW_OWNED_MAGICK_PID=''
@@ -8338,7 +8920,7 @@ action_slideshow() {
     progress_error "$(gettext 'The FFmpeg libx264 encoder is required to create an H.264 slideshow.')"
     return 1
   fi
-  if ! command -v magick >/dev/null 2>&1 || ! command -v identify >/dev/null 2>&1 || ! command -v exiftool >/dev/null 2>&1 || ! command -v setsid >/dev/null 2>&1; then
+  if ! type -P magick >/dev/null 2>&1 || ! type -P identify >/dev/null 2>&1 || ! type -P exiftool >/dev/null 2>&1 || ! command -v setsid >/dev/null 2>&1; then
     progress_error "$(gettext 'ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames.')"; return 1
   fi
   if ! collect_publication_inputs files "${files[@]}" || [ "${#files[@]}" -eq 0 ]; then
@@ -8406,7 +8988,7 @@ action_slideshow() {
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
-    case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][dD]|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
+    case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
       report_fail "$source — $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
     record="$(identify -regard-warnings +ping -format '%m|%w|%h|%[orientation]|%[colorspace]|%n\n' - < "$source" 2>/dev/null)" || rc=1
     [[ "$record" != *$'\n'* && -n "$record" ]] || rc=1
@@ -8422,7 +9004,9 @@ action_slideshow() {
     fi
     local frame_path
     printf -v frame_path '%s/slide_%04d.png' "${stage%/*}" "$index"
-    if slideshow_run_magick_monitored "$ref" "$source" "$frame_path" magick - -auto-orient -profile "$srgb_profile" -profile "$rec709_profile" -resize "${width}x${height}>" \
+    local -a frame_encoder=(magick)
+    if [ -n "${KIM_PSD_CACHE:-}" ]; then frame_encoder=(python3 "$DISPATCHER_DIR/kim_psd_source.py" magick); fi
+    if slideshow_run_magick_monitored "$ref" "$source" "$frame_path" "${frame_encoder[@]}" - -auto-orient -profile "$srgb_profile" -profile "$rec709_profile" -resize "${width}x${height}>" \
         -background "$background" -gravity center -extent "$size" PNG:-; then
       :
     else
@@ -8537,7 +9121,7 @@ action_slideshow() {
     rc=1
   fi
   rm -f -- "$error_file" "${frames_out[@]}" 2>/dev/null || true
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -8564,7 +9148,7 @@ Commands:
 
   convert --format FORMAT [--bmp5] [--jp2-mode lossless|lossy]
           [--jp2-quality 1..100] [--jpeg-progressive|--jpeg-baseline]
-          [--jpeg-optimize] -- <files...>
+          [--jpeg-optimize] [--output-dir DIR (create mode)] -- <files...>
   convert --custom-format -- <files...>
       Convert to JPEG, PNG, APNG, GIF, BMP, TIFF, PDF, WebP, AVIF, HEIC/HEIF,
       JPEG XL or JPEG 2000 where the installed encoder is available. APNG
@@ -8620,6 +9204,13 @@ Commands:
       percentage opens a numeric prompt.
       Overwrite mode replaces the selected original only after validation.
       Create mode writes *_resized files beside each input by default.
+
+  capturedate --interactive -- <photos...>
+  capturedate --datetime 'YYYY-MM-DD HH:MM:SS[.fraction]' --timezone unknown|UTC|+HH:MM -- <photos...>
+  capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM]
+              [--seconds INTEGER] [--fields capture|all] -- <photos...>
+      Embedded Photo Capture Date and filesystem File Modification Date are
+      separate. Unknown camera timezones are never interpreted as computer-local.
 
   datesync --direction exif-to-file|file-to-exif [--fields capture|all] -- <files...>
   datesync --interactive -- <files...>
@@ -8754,24 +9345,27 @@ main() {
   [[ $# -ge 1 ]] || { usage; exit 1; }
   cmd="$1"
   shift || true
+  unset KIM_PSD_CACHE
 
   case "$cmd" in
     album|animate|compress|contactsheet|gallery|collage|print|resize|tiffjoin)
       require_action_tools "$cmd" magick identify || exit 1 ;;
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
-    copyright|timeshift)
+    copyright|timeshift|capturedate)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
     datesync)
       require_action_tools "$cmd" exiftool || exit 1 ;;
   esac
 
   case "$cmd" in
+    recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
     album)           mk_workdir; action_album "$@" ;;
     animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;
     contactsheet)    mk_workdir; action_contactsheet "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
+    capturedate)     mk_workdir; action_photo_date "$@" ;;
     copyright)       mk_workdir; action_copyright "$@" ;;
     datesync)        mk_workdir; action_datesync "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;

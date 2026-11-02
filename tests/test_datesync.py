@@ -20,7 +20,8 @@ class DateSyncTests(unittest.TestCase):
         self.w.use_real_mv()
         subprocess.run([shutil.which('exiftool'), '-overwrite_original',
                         '-DateTimeOriginal=2024:02:29 23:59:58',
-                        '-SubSecTimeOriginal=123456789', str(self.source)],
+                        '-SubSecTimeOriginal=123456789', '-OffsetTimeOriginal=-05:00',
+                        '-OffsetTimeDigitized=-05:00', '-OffsetTime=-05:00', str(self.source)],
                        check=True, capture_output=True)
 
     def tag(self, name, path=None):

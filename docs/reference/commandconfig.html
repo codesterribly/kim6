@@ -21,6 +21,7 @@
       <nav aria-label="Reference pages"><a href="README.html">Overview</a>
 <a href="INSTALL.html">Installation</a>
 <a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
@@ -43,8 +44,9 @@
 <ul>
 <li><a href="#command-syntax">Command Syntax</a></li>
 <li><a href="#output-and-file-handling">Output and File Handling</a></li>
+<li><a href="#recipes">Recipes</a></li>
 <li><a href="#configuration-and-defaults">Configuration and Defaults</a></li>
-<li><a href="#still-image-actions">Still-image actions</a>: album, animate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport</li>
+<li><a href="#still-image-actions">Still-image actions</a>: album, animate, capturedate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport</li>
 <li><a href="#video-actions">Video actions</a>: slideshow, video, videoaudio, videoframes, videogif</li>
 <li><a href="#information-actions">Information actions</a>: about, license, manual, settings</li>
 </ul>
@@ -309,14 +311,36 @@ KIM_COPYRIGHT_USAGE_RIGHTS=</code></pre>
 <p>For a temporary command-line filename-prefix override:</p>
 <pre class="sh"><code>KIM_NAME_AFFIX_POSITION=prefix ./src/bin/kim_all resize --size 1600x1600 -- photo.jpg</code></pre>
 <p>See <a href="#output-and-file-handling">Output and File Handling</a>, <a href="#copyright">copyright</a>, and <a href="#webexport">webexport</a> for action-specific details.</p>
+<h2 id="recipes">Recipes</h2>
+<p>The <strong>KIM6 Recipes</strong> submenu in Dolphin provides <strong>Run a Recipe…</strong> and <strong>Recipe Editor…</strong>. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See <a href="ACTIONS.html">ACTIONS.md</a> for the two static service-menu entry points.</p>
+<p>Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides <strong>Load Photos &amp; Run</strong>. The dedicated <strong>Run a Recipe</strong> window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.</p>
+<p>Recipes are derivative-only: originals are never replaced. They support output filename patterns such as <code>{filename}_recipe</code>, where <code>{filename}</code> is the input basename without its extension. Previously saved <code>{stem}</code> patterns remain valid. The final extension is set by the output format and occupied names are numbered to avoid collisions.</p>
+<p>PSD sources are readable in supported workflows, but KIM6 cannot publish PSD output. A missing required format causes a preflight problem and can be corrected through <strong>Fix Recipe…</strong> by adding <strong>Convert Format</strong> and choosing an available output type. KIM6 does not silently choose a fallback encoder.</p>
+<p>The supplied <strong>Web Export</strong> recipe auto-orients the input, fits it within 1600 × 1600 pixels without upscaling, applies sRGB color handling, converts to JPEG at quality 95, strips all metadata, and saves <code>{filename}_web.jpg</code> in a <code>Web</code> subfolder beside each original. Set Creator / Artist, Set Copyright Notice, and Set Usage Rights are present but disabled in the shipped recipe. The destination is configured in the recipe; an output-directory picker appears only for recipes configured to ask on run.</p>
+<p>For every supported step, editor behavior, folder organization, preview, safety rules, and troubleshooting, see the <a href="RECIPES.html">Recipes reference</a>.</p>
+<h3 id="recipe"><code>recipe</code></h3>
+<pre class="sh"><code>kim_all recipe --list
+kim_all recipe --editor [-- FILE...]
+kim_all recipe --choose [-- FILE...]
+kim_all recipe --run-id ID [-- FILE...]
+kim_all recipe --recipe ID_OR_JSON_FILE [--preview] [--destination DIR] -- FILE...
+kim_all recipe --sync-menu</code></pre>
+<p><code>--list</code> prints built-in and saved user recipe definitions as JSON. <code>--editor</code> opens Recipe Editor; omitting <code>--recipe</code> also opens the editor. <code>--choose</code> opens Run a Recipe with no recipe selected. <code>--run-id</code> opens confirmation for a saved recipe ID; opening it does not execute the recipe automatically. These graphical forms accept an optional initial file selection.</p>
+<p><code>--recipe</code> selects a built-in or saved user recipe by ID, or reads one recipe from a JSON file, and requires at least one input file. It executes directly and prints per-file results as JSON. <code>--preview</code> instead prints planned outputs and problems as JSON without publishing files. <code>--destination</code> supplies or overrides the directory for a recipe with a directory destination, including one configured to ask on run; beside-source and subfolder destinations use the recipe definition. Preflight problems or execution failures return a nonzero status. <code>--sync-menu</code> rebuilds installed Root shortcuts from the saved library. <code>--help</code> shows the accepted arguments. Recipes always create derivatives and number occupied output names.</p>
 <h2 id="still-image-actions">Still-image actions</h2>
 <h3 id="album"><code>album</code></h3>
 <pre class="sh"><code>kim_all album -- FILE...
 kim_all album OUTPUT_DIRECTORY FILE...</code></pre>
-<p>Prompts for one of eight PDF album layouts and a PDF destination. The optional first argument chooses the initial output directory. Produces an ordered, validated multi-page A4 PDF (portrait or landscape according to the chosen preset). Existing targets require the configured create/overwrite choice.</p>
+<p>Prompts for one of eight PDF album layouts and a PDF destination. The optional first argument chooses the initial output directory. Produces an ordered, validated multi-page A4 PDF (portrait or landscape according to the chosen preset). Albums always create new files, regardless of <code>KIM_POLICY</code>; occupied names are numbered without replacing existing targets.</p>
 <h3 id="animate"><code>animate</code></h3>
 <pre class="sh"><code>kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...</code></pre>
 <p>Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from <code>videogif</code>, which samples a video segment.</p>
+<h3 id="capturedate"><code>capturedate</code></h3>
+<pre class="sh"><code>kim_all capturedate --interactive -- FILE...
+kim_all capturedate --datetime &#39;YYYY-MM-DD HH:MM:SS&#39; --timezone unknown|UTC|+HH:MM -- FILE...
+kim_all capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM] [--seconds INTEGER] [--fields capture|all] -- FILE...</code></pre>
+<p>The <strong>Set Photo Capture Date…</strong> command edits camera capture-date metadata. The related photo-date actions can adjust an existing capture date, derive a capture date from the file modification time, or synchronize the file modification time with the recorded photo capture date. Unknown camera time zones are not assumed to be UTC or the computer local time.</p>
+<p>See also <a href="#datesync"><code>datesync</code></a> and <a href="#timeshift"><code>timeshift</code></a>.</p>
 <h3 id="collage"><code>collage</code></h3>
 <pre class="sh"><code>kim_all collage [--size WxH] [--tile COLUMNSxROWS] [--overlap PERCENT] [--background COLOR] [--border PERCENT] [--rotation DEGREES] [--random-rotation DEGREES] [--seed INTEGER] [--shadow|--no-shadow] [--output FILE] -- IMAGE...</code></pre>
 <p>Builds a PNG collage. Without arguments, prompts for canvas/tile size, overlap and background, then asks for output. Overlap is 0–90%, border 0–50%, rotation −180° to 180°, random rotation 0–180°, and seed is a nonnegative integer of at most nine digits. The default tile dimensions are <code>5x4</code>, overlap 15%, background grey, border 2% of tile width, random rotation ±15°, and shadow on. Uses selected order and staged publication.</p>
@@ -431,7 +455,7 @@ kim_all rotate --custom -- IMAGE...</code></pre>
 <p>Default mode <code>all</code> preserves the existing full-strip behavior. <code>gps</code> removes recognized coordinate fields; <code>ai</code> removes recognized AI-generation fields, including IPTC AI prompts, prompt-writer name, AI system and AI system version. The DigitalSourceType field is removed only when it contains a recognized AI classification, not an unrelated classification. <code>--remove-ai</code> combines recognized AI-field removal with <code>all</code> or <code>gps</code>. Interactive mode selects a mode. GPS removal targets recognized coordinate fields; other metadata and visible scene details may still reveal a location. AI removal targets recognized AI-generation metadata, not every possible generator indicator. Unrecognized generator-specific fields and signed C2PA / Content Credentials may remain. ExifTool cannot guarantee their complete removal.</p>
 <h3 id="tiffjoin"><code>tiffjoin</code></h3>
 <pre class="sh"><code>kim_all tiffjoin [--output PATH] [--] IMAGE...</code></pre>
-<p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output and create/overwrite policy when not supplied/forced. Sources are preserved; output is staged and validated.</p>
+<p>Joins selected images/frames in selection order into a multi-page TIFF. Prompts for output when <code>--output</code> is omitted. Always creates a new file, regardless of <code>KIM_POLICY</code>; occupied names are numbered without replacing existing targets. Sources are preserved; output is staged and validated.</p>
 <h3 id="timeshift"><code>timeshift</code></h3>
 <pre class="sh"><code>kim_all timeshift --offset [+|-]HH:MM:SS [--fields all|capture] -- IMAGE...
 kim_all timeshift --interactive -- IMAGE...</code></pre>

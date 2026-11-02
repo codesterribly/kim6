@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Service
+Icon=view-list-details
+Name=KIM6 Recipes
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
+X-KDE-Protocol=file
+Actions=KIMRecipe0Run;KIMRecipe1Editor;
+_X-KDE-Submenu=KIM6 Recipes
+X-KIM6-Managed=true
+
+[Desktop Action KIMRecipe0Run]
+Icon=view-list-details
+_Name=Run a Recipe…
+Exec=kim_all recipe --choose -- %F
+
+[Desktop Action KIMRecipe1Editor]
+Icon=document-edit
+_Name=Recipe Editor…
+Exec=kim_all recipe --editor

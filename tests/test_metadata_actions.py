@@ -108,15 +108,13 @@ class MetadataActionTests(unittest.TestCase):
         self.assertEqual('Environment Creator', self.tag('-Artist'))
 
     def test_interactive_copyright_prompts_three_independent_fields(self):
-        self.w.sequence('kdialog', [
-            {'stdout': 'Interactive creator'}, {'stdout': 'Interactive notice'},
-            {'stdout': ''}, {'stdout': 'org.kde.kdialog-test /ProgressDialog'}])
+        self.w.dialog_result(['Interactive creator','Interactive notice',''])
         result = self.w.dispatch('copyright', '--interactive', '--', str(self.source))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual('Interactive creator', self.tag('-Artist'))
         self.assertEqual('Interactive notice', self.tag('-Copyright'))
         self.assertEqual('', self.tag('-XMP-xmpRights:UsageTerms'))
-        self.assertEqual(3, len([c for c in result.calls if c['tool'] == 'kdialog' and '--inputbox' in c['argv']]))
+        self.assertFalse(any(c['tool']=='kdialog' and '--inputbox' in c['argv'] for c in result.calls))
 
     def test_missing_exiftool_fails_closed(self):
         before = self.w.observe(self.source)
@@ -273,15 +271,15 @@ class MetadataActionTests(unittest.TestCase):
     def test_interactive_timeshift_shows_exiftool_before_after_preview(self):
         self.set_tags('-DateTimeOriginal=2024:01:31 23:45:00', '-CreateDate=2024:01:31 23:45:00',
                       '-ModifyDate=2024:01:31 23:45:00')
-        self.w.sequence('kdialog', [
-            {'stdout': '+00:30:00'}, {'stdout': 'all'}, {'status': 0},
-            {'stdout': 'org.kde.kdialog-test /ProgressDialog'}])
+        self.w.dialog_result(dict(kind='shift',seconds=1800,timezone='embedded',fields='all'), 'kim_date_dialog.py')
+        (self.w.bin/'stat').unlink(); (self.w.bin/'stat').symlink_to(shutil.which('stat'))
+        (self.w.bin/'exiftool').unlink(); (self.w.bin/'exiftool').symlink_to(shutil.which('exiftool'))
         result = self.w.dispatch('timeshift', '--interactive', '--', str(self.source))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual('2024:02:01 00:15:00', self.tag('-DateTimeOriginal'))
-        preview = next(c for c in result.calls if c['tool'] == 'kdialog' and '--yesno' in c['argv'])
-        self.assertIn('2024:01:31 23:45:00', preview['argv'][-1])
-        self.assertIn('2024:02:01 00:15:00', preview['argv'][-1])
+        self.assertEqual('2024:02:01 00:15:00',self.tag('-CreateDate'))
+        self.assertEqual('2024:02:01 00:15:00',self.tag('-ModifyDate'))
+        self.assertFalse(any(c['tool']=='kdialog' and '--yesno' in c['argv'] for c in result.calls))
 
     def test_create_mode_preserves_source_and_uses_numbered_derived_file(self):
         self.set_tags('-GPSLatitude=42', '-Artist=Original')

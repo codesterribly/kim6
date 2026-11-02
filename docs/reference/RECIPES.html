@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>RECIPES · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to User Guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · docs/RECIPES.md</div>
+      <article class="markdown-body">
+<h1 id="recipes-reusable-photo-workflows">Recipes: Reusable Photo Workflows</h1>
+<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIM6 Recipes menu</strong>. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and <strong>recipes never modify the source photographs</strong>.</p>
+<h2 id="start-in-dolphin">Start in Dolphin</h2>
+<p><img src="../images/kim6-recipes-menu.png" alt="KDE Dolphin KIM6 Recipes menu showing Root shortcuts, Run a Recipe, and Recipe Editor" /></p>
+<ol type="1">
+<li>Select one or more supported photographs and right-click.</li>
+<li>Open <strong>KIM6 Recipes → Run a Recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
+<li>Review the selected photographs and the <strong>Run a Recipe</strong> window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.</li>
+<li>When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.</li>
+</ol>
+<p>The Recipes menu also provides <strong>Recipe Editor…</strong> for creating and managing your own workflows. The runner and editor group recipes under <strong>Built-In</strong>, <strong>Root</strong>, user-created folders, and <strong>Unfiled</strong>. Only user recipes assigned to <strong>Root</strong> are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.</p>
+<h2 id="web-export-a-ready-to-use-recipe">Web Export: a ready-to-use recipe</h2>
+<p>The supplied <strong>Web Export</strong> recipe auto-orients photographs, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and <strong>removes all metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The destination is configured in this built-in recipe, not chosen anew for each run. Originals are unchanged.</p>
+<p>This workflow is more than a change of file extension. Its three optional rights-metadata steps, <strong>Set Creator / Artist</strong>, <strong>Set Copyright Notice</strong>, and <strong>Set Usage Rights</strong>, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: <strong>Duplicate to Edit</strong> creates a customizable copy rather than changing the supplied recipe.</p>
+<h3 id="included-recipes">Included recipes</h3>
+<p>The following recipes are shipped with this checkout. You can duplicate a built-in to customize it.</p>
+<table>
+<thead>
+<tr>
+<th>Built-in recipe</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web Export</td>
+<td>Auto-orient, fit within 1600 × 1600 without upscaling, sRGB, JPEG quality 95, strip metadata, and save to a Web subfolder.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="create-and-edit-recipes">Create and edit recipes</h2>
+<p><img src="../images/kim6-recipe-editor.png" alt="KIM6 Recipe Editor with ordered steps, destination choices, and live output preview" /></p>
+<p>Open <strong>Recipe Editor…</strong> from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.</p>
+<p>The editor can also <strong>Load Photos &amp; Run</strong>. When a run originates in the editor, returning to the editor retains the selected photographs and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.</p>
+<h3 id="processing-steps">Processing steps</h3>
+<p>The Recipe Editor offers <strong>25 operations</strong> in four groups. Each entry below uses the label shown in <strong>Add Operation…</strong>. Some operations have format-dependent parameters or ordering requirements.</p>
+<h4 id="geometry--orientation">Geometry &amp; Orientation</h4>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Auto-Orient</strong></td>
+<td>Apply embedded camera orientation to the rendered image.</td>
+</tr>
+<tr>
+<td><strong>Flip Image</strong></td>
+<td>Mirror horizontally or vertically.</td>
+</tr>
+<tr>
+<td><strong>Resize by Percentage</strong></td>
+<td>Resize by a percentage, including enlargement above 100%.</td>
+</tr>
+<tr>
+<td><strong>Resize Long Edge</strong></td>
+<td>Fit the longest dimension to a pixel limit, with optional upscaling.</td>
+</tr>
+<tr>
+<td><strong>Resize to Exact Dimensions</strong></td>
+<td>Set both width and height exactly; may stretch the picture.</td>
+</tr>
+<tr>
+<td><strong>Resize to Fit</strong></td>
+<td>Fit inside maximum width and height, preserving proportions; optional upscaling.</td>
+</tr>
+<tr>
+<td><strong>Resize with Custom Geometry</strong></td>
+<td>Use supported ImageMagick geometry, including fit, fill, and conditional resize.</td>
+</tr>
+<tr>
+<td><strong>Rotate</strong></td>
+<td>Rotate through an angle; supports conditional landscape/portrait application.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="format--color">Format &amp; Color</h4>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Color Profile</strong></td>
+<td>Preserve a supported profile or convert to sRGB.</td>
+</tr>
+<tr>
+<td><strong>Compress Image</strong></td>
+<td>Set final compression preset or custom encoder quality, PNG level, and JPEG options.</td>
+</tr>
+<tr>
+<td><strong>Convert Format</strong></td>
+<td>Choose output format and applicable encoder options, including JPEG quality.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="metadata--copyright">Metadata &amp; Copyright</h4>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Remove AI Metadata</strong></td>
+<td>Remove recognized AI-related metadata.</td>
+</tr>
+<tr>
+<td><strong>Remove All Metadata</strong></td>
+<td>Remove all available metadata; normalize orientation first if required.</td>
+</tr>
+<tr>
+<td><strong>Remove Descriptive Metadata</strong></td>
+<td>Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation.</td>
+</tr>
+<tr>
+<td><strong>Remove GPS Location</strong></td>
+<td>Remove recognized GPS/location metadata.</td>
+</tr>
+<tr>
+<td><strong>Set Copyright</strong></td>
+<td>Set creator, copyright notice, and usage rights, inherited or overridden.</td>
+</tr>
+<tr>
+<td><strong>Set Copyright Notice</strong></td>
+<td>Set copyright notice, inherited from Settings unless overridden.</td>
+</tr>
+<tr>
+<td><strong>Set Creator / Artist</strong></td>
+<td>Set creator/artist, inherited from Settings unless overridden.</td>
+</tr>
+<tr>
+<td><strong>Set Usage Rights</strong></td>
+<td>Set usage terms, inherited from Settings unless overridden.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="filenames--dates">Filenames &amp; Dates</h4>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Adjust Capture Date</strong></td>
+<td>Adjust existing camera capture timestamps by a fixed offset.</td>
+</tr>
+<tr>
+<td><strong>Change Output Filename</strong></td>
+<td>Transform the planned output name, such as case, prefix, suffix, replacement, sequence, or capture date.</td>
+</tr>
+<tr>
+<td><strong>Keep Source File Date</strong></td>
+<td>Preserve the source file modification timestamp on the derivative.</td>
+</tr>
+<tr>
+<td><strong>Rename Output File</strong></td>
+<td>Set output filename pattern, for example <code>{filename}_recipe</code>; preview includes extension.</td>
+</tr>
+<tr>
+<td><strong>Set Capture Date</strong></td>
+<td>Use a specific time, embedded capture time, or file mtime as the capture date.</td>
+</tr>
+<tr>
+<td><strong>Synchronize File Date</strong></td>
+<td>Synchronize the derivative filesystem date with the planned capture time.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>JPEG quality is not a separate operation.</strong> Configure quality through <strong>Convert Format</strong> or <strong>Compress Image</strong>. The final encoding options are applied during output creation. Step order matters, especially for orientation, metadata removal, date operations and naming. All operations can be enabled or disabled independently.</p>
+<h3 id="output-filename-patterns">Output filename patterns</h3>
+<p>In <strong>Rename Output File</strong>, <code>{filename}</code> means the original name without its extension. A pattern of <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.</p>
+<p>Previously saved patterns using <code>{stem}</code> continue to work. KIM6 determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. When a destination filename already exists, KIM6 assigns a collision-safe name rather than replacing that file.</p>
+<h2 id="preflight-and-output-preview">Preflight and output preview</h2>
+<p><strong>Run a Recipe</strong> lists each selected photograph and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Problem</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
+<p>The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.</p>
+<p>Adding JPEG and PSD files does not require the interface to freeze until the batch is analyzed: pending filenames appear promptly and input inspection continues in background workers. A large PSD may still take time to decode, but the window remains usable.</p>
+<h2 id="photoshop-psd-inputs-and-fix-recipe">Photoshop PSD inputs and Fix Recipe</h2>
+<p>KIM6 can <strong>read</strong> PSD photographs in supported workflows but <strong>does not create PSD output files</strong>. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers <strong>Fix Recipe…</strong>. This opens the existing editor so you can add <strong>Convert Format</strong> and select a supported output type. KIM6 does not silently choose a format on your behalf.</p>
+<p>After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.</p>
+<p>PSD inputs are treated as rendered image sources rather than editable Photoshop documents with preserved layers. Color-profile and precision handling depend on the input and the selected output format. See <a href="FORMATS.html#photoshop-psd-inputs">Image and Video Format Support</a> for details.</p>
+<h2 id="destinations-safety-and-cancellation">Destinations, safety, and cancellation</h2>
+<p>Recipes are <strong>derivative-only</strong>. They do not offer in-place modification or overwrite of source photographs. The recipe's configured destination and planned output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Occupied output filenames are numbered rather than overwritten.</p>
+<p>File inspection, required encoder checks, and the preflight plan must succeed before a run begins. A failed or cancelled operation must not be reported as a completed publication. Successfully committed outputs can remain available if a later file in the batch fails or the user cancels.</p>
+<h2 id="completion-messages-and-diagnostic-details">Completion messages and diagnostic details</h2>
+<p>Publication tools such as PDF Album can show a compact completion window with the saved output path, <strong>Open Folder</strong>, and <strong>Done</strong>. Where there is additional information about the source files, <strong>Details (N)</strong> expands to grouped, selectable diagnostics with <strong>Copy Details</strong>. The details control is omitted when there is nothing to disclose. Informational details are not necessarily failures.</p>
+<h2 id="current-scope">Current scope</h2>
+<p>Recipes currently process photographs. Video recipes, visual thumbnail previews, and in-place recipe operations are not part of this workflow. The text/table output preview reports planned results rather than attempting to simulate every rendered pixel.</p>
+<p>For the exact Dolphin entry points, see <a href="ACTIONS.html">Dolphin Menu Actions</a>. For global output settings, see <a href="commandconfig.html">Command and Configuration Reference</a>. The <a href="../index.html#recipes">illustrated User Guide</a> starts with the Recipes menu in Dolphin.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
+</body>
+</html>

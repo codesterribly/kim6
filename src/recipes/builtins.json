@@ -1,0 +1,51 @@
+[
+  {
+    "schema": 1,
+    "id": "web-export",
+    "name": "Web Export",
+    "media": "image",
+    "steps": [
+      {
+        "op": "image.auto_orient"
+      },
+      {
+        "op": "image.resize",
+        "max_width": 1600,
+        "max_height": 1600,
+        "upscale": false
+      },
+      {
+        "op": "image.color",
+        "mode": "srgb"
+      },
+      {
+        "op": "image.convert",
+        "format": "jpeg",
+        "quality": 95
+      },
+      {
+        "op": "metadata.strip_all"
+      },
+      {
+        "op": "metadata.creator",
+        "enabled": false
+      },
+      {
+        "op": "metadata.copyright_notice",
+        "enabled": false
+      },
+      {
+        "op": "metadata.usage_rights",
+        "enabled": false
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_web"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Web"
+    }
+  }
+]

@@ -21,6 +21,7 @@
       <nav aria-label="Reference pages"><a href="README.html">Overview</a>
 <a href="INSTALL.html">Installation</a>
 <a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
 <a href="commandconfig.html">Commands &amp; settings</a>
 <a href="FORMATS.html">Formats</a>
 <a href="DEVELOPMENT.html">Development</a></nav>
@@ -48,7 +49,7 @@
 </tr>
 <tr>
 <td><code>src/kim_*.desktop.in</code></td>
-<td>Ten KDE Dolphin service-menu definitions containing 83 executable actions.</td>
+<td>11 KDE Dolphin service-menu definitions containing 87 executable actions.</td>
 </tr>
 <tr>
 <td><code>src/gallery/</code></td>
@@ -90,10 +91,17 @@
 <li><code>ACTIONS.md</code> - Complete Dolphin menu and action inventory.</li>
 <li><code>commandconfig.md</code> - detailed descriptions of KIM6 functionality, command-line options and configuration.</li>
 <li><code>FORMATS.md</code> - Supported image and video formats.</li>
+<li><code>RECIPES.md</code> - The Recipes submenu, editor, step definitions, preflight and derivative-only outputs.</li>
 <li><code>index.html</code> - HTML User Guide with CSS styling (<code>work.css</code>).</li>
+<li><code>reference/</code> - Generated HTML pages from the Markdown sources; never edit generated pages directly.</li>
 </ul>
+<h2 id="recipe-architecture">Recipe Architecture</h2>
+<p>The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in <code>src/bin/</code> include <code>kim_recipe_core.py</code>, <code>kim_recipe_image.py</code>, <code>kim_recipe_dialog.py</code>, <code>kim_recipe_run.py</code>, and <code>kim_recipe_menu.py</code>; the shipped definitions are kept under <code>src/recipes/</code>.</p>
+<p>The Recipes submenu has two static entries, Run a Recipe and Recipe Editor; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.</p>
+<p><strong>Safety contract:</strong> Recipes publish derivatives only, never overwrite selected source photographs, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected photographs. Cancellation or failed publication must never be presented as success.</p>
+<p>See <a href="RECIPES.html">RECIPES.md</a> for user-facing behavior and <a href="ACTIONS.html">ACTIONS.md</a> for service-menu entry points.</p>
 <h2 id="dolphin-service-menus">Dolphin Service Menus</h2>
-<p>KIM6 uses ten KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
+<p>KIM6 uses 11 KDE service-menu definitions in <code>src/</code>. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
 <p>For example:</p>
 <pre class="sh"><code>kim_all compress --recommended -- %F</code></pre>
 <p>The <code>%F</code> placeholder supplies the selected file paths. The <code>--</code> separator marks the end of command options so filenames beginning with a hyphen are handled correctly.</p>
@@ -216,7 +224,7 @@ git --no-pager diff --check</code></pre>
 <p>Before preparing a release:</p>
 <ol type="1">
 <li>Run the complete test suite and static checks.</li>
-<li>Verify all ten Dolphin service-menu files and their 83 executable action mappings.</li>
+<li>Verify all 11 Dolphin service-menu files and their 87 executable action mappings.</li>
 <li>Test installation, upgrading, and uninstallation using temporary directories.</li>
 <li>Test the menus in Dolphin on a supported KDE Plasma system.</li>
 <li>Review the installation instructions and user documentation.</li>

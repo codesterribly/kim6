@@ -102,6 +102,11 @@ class Workspace:
                 bmff_companion,
                 self.control / bmff_companion.name,
             )
+        psd_companion = self.production.with_name('kim_psd_source.py')
+        shutil.copyfile(psd_companion, self.control / psd_companion.name)
+        for companion in ('kim_filename.py','kim_ui.py','kim_date_tools.py','kim_date_dialog.py','kim_job.py','kim_job_process.py','kim_action_dialog.py','kim_recipe_core.py','kim_recipe_image.py','kim_recipe_dates.py'):
+            path=self.production.with_name(companion)
+            if path.exists(): shutil.copyfile(path,self.control/companion)
         self.plan = self.control / "plan.json"
         self.plan.write_text(json.dumps({"responses": {}, "config": {}}))
         self.log = self.control / "calls.jsonl"
@@ -309,6 +314,23 @@ class Workspace:
         self.plan.write_text(json.dumps(plan))
         self.env["MAGICK_TEMPORARY_PATH"] = str(self.control / "tmp")
         self.env["MAGICK_THREAD_LIMIT"] = "1"
+
+    def dialog_result(self, values, helper='kim_action_dialog.py'):
+        """Replace parameter collection only; production planning/apply remain real.
+
+        Actual Qt control behavior is covered by test_unified_ui and
+        test_unified_dates_jobs. This keeps dispatcher policy tests headless.
+        """
+        self.subprocess_timeout=40  # Real monitored metadata tools, not GUI delay.
+        python=self.bin/'python3'
+        if not python.exists(): python.symlink_to(sys.executable)
+        if helper=='kim_date_dialog.py':
+            payload=json.dumps(values)
+            code="import sys\nfrom pathlib import Path\nPath(sys.argv[2]).write_text("+repr(payload)+")\n"
+        else:
+            payload=b''.join(str(value).encode()+b'\0' for value in values)
+            code="import sys\nfrom pathlib import Path\nPath(sys.argv[2]).write_bytes("+repr(payload)+")\n"
+        (self.control/helper).write_text(code)
 
     def shared_progress(self, body, *args):
         """Exercise shared progress helpers with the real dispatcher definitions."""
@@ -533,7 +555,7 @@ atomic_overwrite_file "$1" "$scratch"
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    start_new_session=True)
         try:
-            stdout, stderr = process.communicate(timeout=10)
+            stdout, stderr = process.communicate(timeout=getattr(self,'subprocess_timeout',10))
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()

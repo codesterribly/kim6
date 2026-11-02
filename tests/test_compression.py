@@ -50,14 +50,15 @@ class CompressionTests(unittest.TestCase):
         self.assertEqual(call['argv'][call['argv'].index('-quality') + 1], '8')
         self.assert_clean()
 
-    def test_non_jpeg_content_named_jpg_is_rejected(self):
+    def test_png_content_named_jpg_keeps_actual_format(self):
         self.source.write_bytes(self.workspace.png('.control/reference.png').read_bytes())
         before = self.workspace.observe(self.source)
-        self.workspace.use_real_compression()
+        (self.workspace.bin/'magick').unlink(); (self.workspace.bin/'magick').symlink_to(shutil.which('magick'))
         result = self.dispatch()
-        self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))
-        self.assertEqual(self.workspace.observe(self.source), before)
-        self.assertTrue(any('Failed: 1' in ' '.join(c['argv']) for c in result.calls))
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.workspace.observe(self.source),before)
+        output=self.source.with_name('photo 雪_compressed.jpg')
+        self.assertEqual(subprocess.check_output([shutil.which('identify'),'-format','%m',str(output)]),b'PNG')
         self.assert_clean()
 
     def test_wrong_jpeg_dimensions_are_rejected(self):
@@ -185,14 +186,20 @@ class CompressionTests(unittest.TestCase):
                                             capture_output=True).returncode)
 
     def test_custom_quality_dialog_exposes_scan_and_huffman_optimization_choices(self):
+        import sys
         self.workspace.use_real_compression()
+        # The offscreen widget suite tests the actual combined Qt controls.
+        # Here collect a concrete dialog result through the real dispatcher.
+        (self.workspace.bin/'python3').symlink_to(sys.executable)
+        (self.workspace.control/'kim_action_dialog.py').write_text(
+            "import sys\nfrom pathlib import Path\nPath(sys.argv[2]).write_bytes(b'85\\0' b'6\\0Plane\\0true\\0')\n")
         result = self.workspace.dispatch('compress', '--custom', '--', str(self.source))
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertTrue(self.source.with_name('photo 雪_compressed.jpg').is_file())
-        menus = [c['argv'] for c in result.calls if c['tool'] == 'kdialog' and '--menu' in c['argv']]
-        self.assertEqual(2, len(menus))
-        self.assertIn('progressive', menus[0])
-        self.assertIn('yes', menus[1])
+        output=self.source.with_name('photo 雪_compressed.jpg')
+        self.assertTrue(output.is_file())
+        encoders=[c['argv'] for c in result.calls if c['tool']=='magick']
+        self.assertEqual(len(encoders),1)
+        self.assertIn('Plane',encoders[0]); self.assertIn('jpeg:optimize-coding=true',encoders[0])
 
     def test_newly_occupied_destination_is_never_deleted(self):
         self.workspace.respond('magick', output_base64=base64.b64encode(self.source.read_bytes()).decode(),
@@ -293,7 +300,7 @@ def failure_case(mode, scenario):
         result = self.dispatch()
         for p, state in before.items():
             self.assertEqual(w.observe(p), state)
-        self.assertTrue(any('Failed: 1' in ' '.join(c['argv']) for c in result.calls), result.calls)
+        self.assertTrue(any(('Cancelled: 1' if scenario=='cancel' else 'Failed: 1') in ' '.join(c['argv']) for c in result.calls), result.calls)
         self.assertTrue(any(e['tool'] == tool and e['status'] == status for e in result.events), result.events)
         self.assertFalse(any(c['tool'] == 'cp' for c in result.calls))
         self.assert_clean()

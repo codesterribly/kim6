@@ -14,6 +14,22 @@ from PySide6.QtWidgets import (
 )
 
 
+def collision_message(filename):
+    """Advisory only: the renderer rechecks using create-only publication."""
+    name = filename.strip()
+    if not name: return ''
+    if not name.lower().endswith('.png'): name += '.png'
+    path = Path(os.path.abspath(name))
+    if not os.path.lexists(path): return ''
+    number = 1
+    while number < 10000:
+        candidate = path.with_name(f'{path.stem}_{number}{path.suffix}')
+        if not os.path.lexists(candidate):
+            return f'{path.name} already exists. KIM6 plans to save this as {candidate.name}. The name is checked again when saving.'
+        number += 1
+    return 'Many matching names already exist. Choose a different filename.'
+
+
 def main():
     if len(sys.argv) < 3:
         return 2
@@ -21,7 +37,7 @@ def main():
     destination = Path(sys.argv[1])
     pictures = sys.argv[2:]
 
-    app = QApplication(sys.argv)
+    app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
     dialog.setWindowTitle("KIM6 — Create a Photo Collage")
     dialog.setMinimumWidth(460)
@@ -117,6 +133,16 @@ def main():
     output_layout.addWidget(output)
     output_layout.addWidget(browse)
     form.addRow("Save as:", output_row)
+    collision = QLabel(); collision.setWordWrap(True)
+    collision.setAccessibleName('Planned collage filename collision')
+    form.addRow('', collision)
+
+    def update_collision():
+        message = collision_message(output.text())
+        collision.setText(message); collision.setVisible(bool(message))
+
+    output.textChanged.connect(update_collision)
+    update_collision()
 
     def browse_output():
         filename, _ = QFileDialog.getSaveFileName(

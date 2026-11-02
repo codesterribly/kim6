@@ -1,7 +1,7 @@
 
 # Install KIM6
 
-KIM6 adds ten image and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
+KIM6 adds 11 image, recipe, and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
 
 ## Install through Dolphin
 
@@ -35,7 +35,7 @@ Download or clone the KIM6 source code, then open a terminal in the project dire
 
 If you downloaded a source archive, extract it first and run the installer from the extracted folder.
 
-The installer adds KIM6's program files and ten service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
+The installer adds KIM6's program files and 11 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
 
@@ -90,7 +90,7 @@ The installed components include:
 - Seven Python graphical dialog and application helper files.
 - Metadata processing and format-verification helpers.
 - Gallery generation resources.
-- Ten Dolphin service-menu definitions.
+- 11 Dolphin service-menu definitions, including the Recipes submenu.
 - Available compiled translation catalogs.
 - The offline HTML User Guide, illustrations, stylesheet, and reference pages.
 
@@ -115,7 +115,7 @@ personal modifications to those files before upgrading.
 
 After copying files, the installer:
 
-- Confirms that all ten installed Dolphin menus exist, carry KIM6's
+- Confirms that all 11 installed Dolphin menus exist, carry KIM6's
   identification marker, and reference the installed dispatcher.
 - Confirms that the seven required Python helper files are present,
   are not symbolic links, and have valid Python syntax.
@@ -158,7 +158,7 @@ From the source directory, run:
 ./uninstall.sh
 ```
 
-The uninstaller removes the ten recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.
+The uninstaller removes the 11 recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.
 
 ## Advanced installation locations
 
@@ -192,7 +192,7 @@ The installer creates the chosen folder if needed. It does not install system pa
 
 ### Dolphin does not show an action
 
-First verify that all ten KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
+First verify that all 11 KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
 
 ### Installation or removal reports a conflict
 The installer identifies existing KIM6 installations from recognized program
@@ -212,6 +212,8 @@ For installer safeguards and recovery procedures, see
 [Installer safety and recovery](docs/DEVELOPMENT.md#installer-safety-and-recovery).
 
 ## Offline User Guide and documentation updates
+
+The installed User Guide includes a dedicated Recipes reference describing the Recipes submenu, editor, preview, and protected output behavior.
 
 KIM6 installs a complete offline User Guide, including its stylesheet,
 illustrations, and HTML reference pages. The User Guide is available through
