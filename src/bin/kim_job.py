@@ -44,6 +44,7 @@ def grouped_warnings(rows):
     """Deduplicate by original source identity, never by a derived/staging path."""
     categories={}
     for row in rows:
+        if not row.warnings: continue
         source=os.path.realpath(row.source)
         try:
             st=os.stat(source); identity=(st.st_dev,st.st_ino)

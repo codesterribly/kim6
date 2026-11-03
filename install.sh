@@ -447,10 +447,14 @@ for name in "${menu_names[@]}"; do
   [[ -f "$SOURCE_DIR/src/$name.in" && ! -L "$SOURCE_DIR/src/$name.in" ]] || die "menu template is missing: $SOURCE_DIR/src/$name.in"
 done
 
-# Verify every additional application helper and root document before
+# Verify every additional application helper and document before
 # installation starts. An incomplete checkout must not partially update KIM6.
 for relative in \
     ABOUT README.md \
+    docs/ACTIONS.md \
+    docs/FORMATS.md \
+    docs/DEVELOPMENT.md \
+    docs/commandconfig.md \
     src/bin/kim_collage_dialog.py \
     src/bin/kim_contactsheet_dialog.py \
     src/bin/kim_video_dialog.py \

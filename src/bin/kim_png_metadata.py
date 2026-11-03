@@ -221,6 +221,15 @@ def filter_xmp(data, mode, remove_ai):
         'compositewithtrainedalgorithmicmedia',
         'algorithmicmedia',
     }
+    # Match complete supported values, never arbitrary URI suffixes/substrings.
+    ai_sources |= {
+        prefix + source
+        for prefix in (
+            'http://cv.iptc.org/newscodes/digitalsourcetype/',
+            'https://cv.iptc.org/newscodes/digitalsourcetype/',
+        )
+        for source in ai_sources
+    }
 
     def drop(name, value):
         if mode == 'gps' and is_gps(name):
@@ -253,7 +262,12 @@ def filter_xmp(data, mode, remove_ai):
             if not isinstance(child.tag, str):
                 continue
 
-            if drop(child.tag, ''.join(child.itertext())):
+            value = ''.join(child.itertext())
+            if not value.strip() and len(child) == 0:
+                value = child.get(
+                    '{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource', value
+                )
+            if drop(child.tag, value):
                 node.remove(child)
                 changed = True
             else:
