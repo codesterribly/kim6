@@ -466,6 +466,13 @@ def publish(stage, directory_fd, name):
 
 def execute(recipe, sources, chosen=None, progress=None, start_index=1):
     recipe = validate(recipe)
+    from kim_image_ops import has_image_operations, preflight_batch
+    if len(sources) > 1 and has_image_operations(recipe):
+        try:
+            preflight_batch(recipe, sources, chosen, start_index)
+        except (OSError, RecipeError, PSDError) as exc:
+            from kim_psd_source import cancelled
+            return [{'source': str(source), 'ok': False, 'error': str(exc), 'cancelled': cancelled()} for source in sources]
     results = []
     for index, source in enumerate(sources, start_index):
         from kim_psd_source import cancelled, checkpoint, stage as job_stage

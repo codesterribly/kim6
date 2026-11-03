@@ -5,7 +5,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
-Actions=01Rename;02SetCaptureDate;02AdjustCaptureTime;03DateSync;03CaptureFromFile;04SetCopyright;05StripMetadata;06StripAI;07StripGPS;
+Actions=00CheckExtensions;01Rename;02SetCaptureDate;02AdjustCaptureTime;03DateSync;03CaptureFromFile;04SetCopyright;04Overlay;05StripMetadata;06StripAI;07StripGPS;
 _X-KDE-Submenu=KIM6 — Organize/Metadata
 X-KIM6-Managed=true
 
@@ -28,6 +28,11 @@ Exec=kim_all datesync --direction exif-to-file --interactive -- %F
 Icon=document-edit
 _Name=Set creator and copyright…
 Exec=kim_all copyright --interactive -- %F
+
+[Desktop Action 04Overlay]
+Icon=insert-image
+_Name=Add Watermark / Overlay…
+Exec=kim_all overlay -- %F
 
 [Desktop Action 06StripAI]
 Icon=document-properties
@@ -53,3 +58,8 @@ Exec=kim_all capturedate --interactive -- %F
 Icon=view-calendar-day
 _Name=Set Photo Capture Date from File Date…
 Exec=kim_all datesync --direction file-to-exif --interactive -- %F
+
+[Desktop Action 00CheckExtensions]
+Icon=document-preview
+_Name=Check Image Extensions…
+Exec=kim_all checkextensions -- %F

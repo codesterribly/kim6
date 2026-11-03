@@ -404,9 +404,9 @@ class InstallWorkflowTests(unittest.TestCase):
     def test_upgrade_recognizes_legacy_menus_and_removes_known_legacy_commands(self):
         runtime_bin = self.prefix / "kim6/bin"
         runtime_bin.mkdir(parents=True)
-        shutil.copyfile(ROOT / "src/bin/kim_compress", runtime_bin / "kim_compress")
-        shutil.copyfile(ROOT / "src/bin/kim_video", runtime_bin / "kim_video")
-        shutil.copyfile(ROOT / "src/bin/kim_rename", runtime_bin / "kim_rename")
+        shutil.copyfile(ROOT / "src/bin/archive/kim_compress", runtime_bin / "kim_compress")
+        shutil.copyfile(ROOT / "src/bin/archive/kim_video", runtime_bin / "kim_video")
+        shutil.copyfile(ROOT / "src/bin/archive/kim_rename", runtime_bin / "kim_rename")
         legacy_menu = self.prefix / "kim_compressandresize.desktop"
         legacy_menu_text = "[Desktop Entry]\nType=Service\nActions=Compress;\n[Desktop Action Compress]\nExec=kim_compress 50 %D %U\n"
         legacy_menu.write_text(legacy_menu_text)
@@ -438,7 +438,7 @@ class InstallWorkflowTests(unittest.TestCase):
         runtime = self.prefix / "kim6"
         (runtime / "bin").mkdir(parents=True)
         (runtime / "user-state").write_text("old runtime\n")
-        shutil.copyfile(ROOT / "src/bin/kim_compress", runtime / "bin/kim_compress")
+        shutil.copyfile(ROOT / "src/bin/archive/kim_compress", runtime / "bin/kim_compress")
         old_menu = self.prefix / "kim_publication.desktop"
         old_menu.write_text("[Desktop Entry]\nX-KIM6-Managed=true\nName=old owned menu\n")
         tools = self.root / "mv shim"
@@ -507,7 +507,7 @@ class InstallWorkflowTests(unittest.TestCase):
         runtime = self.prefix / "kim6"
         (runtime / "bin").mkdir(parents=True)
         shutil.copyfile(ROOT / "src/bin/kim_all", runtime / "bin/kim_all")
-        shutil.copyfile(ROOT / "src/bin/kim_compress", runtime / "bin/kim_compress")
+        shutil.copyfile(ROOT / "src/bin/archive/kim_compress", runtime / "bin/kim_compress")
         legacy_script = runtime / "bin/kim_rename"
         legacy_script.write_text("#!/bin/sh\n# old KIM script\n")
         (runtime / "my-notes.txt").write_text("user data\n")

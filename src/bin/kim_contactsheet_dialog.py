@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
+from kim_ui import tr
+
 
 def main():
     if len(sys.argv) < 3:
@@ -35,6 +37,7 @@ def main():
         widget = QComboBox()
         for text, value in choices:
             widget.addItem(text, value)
+        widget.setAccessibleName(label.rstrip(":"))
         form.addRow(label, widget)
         return widget
 
@@ -45,15 +48,26 @@ def main():
         ("Portrait", "portrait"), ("Landscape", "landscape")
     ])
     grid = select("Layout:", [
+        ("Automatic (recommended)", "auto"),
         ("4 × 5 — Compact", "4x5"),
         ("3 × 4 — Spacious", "3x4"),
         ("5 × 7 — Dense", "5x7"),
     ])
-    labels = select("Labels:", [
+    labels = select("Captions:", [
         ("Number and filename", "both"),
         ("Number only", "number"),
         ("Filename only", "filename"),
-        ("None", "none"),
+        ("No captions", "none"),
+        (tr("Capture date"), "capture"),
+        (tr("Camera and lens"), "camera"),
+        (tr("Embedded caption"), "embedded"),
+    ])
+    font_size = select(tr("Caption font size:"), [
+        (tr("Auto (recommended)"), "auto"), (tr("Small"), "small"),
+        (tr("Medium"), "medium"), (tr("Large"), "large"),
+    ])
+    label_placement = select(tr("Caption position:"), [
+        (tr("Below image"), "below"), (tr("Above image"), "above"),
     ])
     fit = select("Placement:", [
         ("Fit without cropping", "fit"),
@@ -132,6 +146,8 @@ def main():
             dpi.currentData(),
             heading.text(),
             filename,
+            font_size.currentData(),
+            label_placement.currentData(),
         ]
 
         # NUL-delimited fields preserve spaces and Unicode.

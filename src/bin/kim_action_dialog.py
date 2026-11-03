@@ -2,10 +2,10 @@
 """Parameter-only standalone retrofits; Bash retains policy and publication."""
 import sys
 from pathlib import Path
-from PySide6.QtCore import QTimer, QThread
+from PySide6.QtCore import QTimer, QThread, Qt
 from PySide6.QtWidgets import (QApplication,QDialog,QVBoxLayout,QFormLayout,QLabel,
     QDialogButtonBox,QComboBox,QSpinBox,QLineEdit,QCheckBox,QPushButton,QFileDialog,QPlainTextEdit,
-    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView)
+    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout)
 from kim_ui import RotationInput, with_help
 from kim_recipe_image import copyright_settings, COPYRIGHT_TAGS
 
@@ -58,14 +58,30 @@ class GeometryPlan(QThread):
 
 
 class ActionDialog(QDialog):
-    def __init__(self, kind, files=(), parent=None, policy='create'):
+    def __init__(self, kind, files=(), parent=None, policy='create', preset='custom'):
         super().__init__(parent); self.policy=policy; self.kind=kind; self.files=list(files); self.values=[]; self.fields={}
+        self.compression_preset=preset
         self.worker=None; self.headers={}; self.header_error=None; self.closing=False; self.geometry_cache={}
         self.setWindowTitle('KIM6 — '+{'rotate':'Rotate by Custom Angle','resize':'Resize to Custom Size','percent':'Resize by Percentage',
             'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
-        self.resize(660,270 if kind=='rotate' else 460); self.layout=QVBoxLayout(self); self.form=QFormLayout(); self.layout.addLayout(self.form)
+        self.layout=QVBoxLayout(self)
+        if kind=='compress':
+            self.setWindowTitle('KIM6 — Compress '+preset.title())
+            if preset!='custom':
+                notice=QLabel({'recommended':'Starting with Recommended settings. You can adjust the settings before applying.',
+                              'maximum':'Starting with Maximum compression settings. You can adjust the settings before applying.'}[preset])
+                notice.setWordWrap(True); self.layout.addWidget(notice)
+        self.form=QFormLayout(); self.layout.addLayout(self.form)
+        if kind=='compress':
+            self.setMinimumWidth(520); self.layout.setSizeConstraint(QLayout.SetFixedSize)
+        else: self.resize(660,270 if kind=='rotate' else 460)
         self.message=QLabel(); self.message.setWordWrap(True); self.layout.addWidget(self.message)
-        self.preview=QPlainTextEdit(); self.preview.setReadOnly(True); self.layout.addWidget(self.preview)
+        if kind=='compress':
+            self.preview=QLabel(); self.preview.setWordWrap(True); self.preview.setTextFormat(Qt.PlainText)
+            self.preview.setTextInteractionFlags(Qt.TextSelectableByMouse|Qt.TextSelectableByKeyboard)
+        else:
+            self.preview=QPlainTextEdit(); self.preview.setReadOnly(True)
+        self.layout.addWidget(self.preview)
         self.buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
         self.apply=self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Apply')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); self.layout.addWidget(self.buttons)
@@ -95,12 +111,14 @@ class ActionDialog(QDialog):
             self.form.addRow('Encoder quality',with_help(QLabel('JPEG 2000 lossy mode exposes quality.'),'quality'))
             self.message.setText('Format options apply at encoding. Unsupported metadata or ICC preservation stops the affected file with an explanation. Fixed-format menu shortcuts keep their existing behavior.')
         elif kind=='compress':
-            self.spin('quality','JPEG / WebP / AVIF quality',1,100,85); self.spin('png','PNG lossless level',0,9,6)
-            self.fields['progressive']=QCheckBox('Progressive JPEG'); self.fields['progressive'].setChecked(True); self.form.addRow(self.fields['progressive'])
-            self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding'); self.form.addRow(self.fields['optimize'])
-            self.form.addRow('Compression quality',with_help(QLabel('Each file keeps its supported format.'),'quality'))
-            self.form.addRow('Color profile',with_help(QLabel('Embedded ICC profiles are retained.'),'color'))
-            self.message.setText('JPEG, PNG, WebP and AVIF only. PNG compression is lossless; quality applies to lossy formats. Transparency stays supported in PNG/WebP/AVIF. Compression may not make a smaller file. Descriptive fields other than EXIF may be removed by this standalone compressor.')
+            self.spin('quality','JPEG / WebP / AVIF quality',1,100,70 if preset=='maximum' else 85)
+            self.spin('png','PNG lossless compression level',0,9,9 if preset=='maximum' else 6)
+            self.fields['progressive']=QCheckBox('Progressive JPEG'); self.fields['progressive'].setChecked(True)
+            self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding')
+            self.jpeg_help_rows={key:with_help(self.fields[key],key) for key in ('progressive','optimize')}
+            for row in self.jpeg_help_rows.values(): self.form.addRow(row); self.form.setRowVisible(row,False)
+            for key in ('quality','png'): self.form.setRowVisible(self.fields[key],False)
+            self.message.setText('Inspecting selected image formats…')
         elif kind=='copyright':
             self.inherited=copyright_settings()
             for field,label in [('creator','Creator / Artist'),('notice','Copyright Notice'),('rights','Usage Rights')]:
@@ -200,9 +218,14 @@ class ActionDialog(QDialog):
         if value:
             for key in ('width','height'): self.fields[key].setValue(int(value))
 
+    def set_preview_text(self,text):
+        if self.kind=='compress':
+            self.preview.setText(text); self.preview.setVisible(bool(text))
+        else: self.preview.setPlainText(text)
+
     def refresh(self):
         if self.worker:
-            self.preview.setPlainText('Inspecting selected files / planning dimensions…'); self.apply.setEnabled(False); return
+            self.set_preview_text('Inspecting selected files…' if self.kind=='compress' else 'Inspecting selected files / planning dimensions…'); self.apply.setEnabled(False); return
         try:
             if self.header_error: raise ValueError(self.header_error)
             if self.kind=='rotate':
@@ -221,7 +244,7 @@ class ActionDialog(QDialog):
                 if self.files and geometry not in self.geometry_cache:
                     self.worker=GeometryPlan(self.files,self.headers,geometry,self)
                     self.worker.finished.connect(self.geometry_finished); self.worker.start()
-                    self.preview.setPlainText('Planning dimensions…'); self.apply.setEnabled(False); return
+                    self.set_preview_text('Planning dimensions…'); self.apply.setEnabled(False); return
                 planned,error=self.geometry_cache.get(geometry,([],None))
                 if error: raise ValueError(error)
                 lines+=planned
@@ -236,13 +259,25 @@ class ActionDialog(QDialog):
             elif self.kind=='compress':
                 self.values=[str(self.fields['quality'].value()),str(self.fields['png'].value()),'Plane' if self.fields['progressive'].isChecked() else 'None','true' if self.fields['optimize'].isChecked() else 'false']
                 formats={record[2] for record in self.headers.values()}
-                if formats:
-                    self.fields['quality'].setEnabled(bool(formats & {'JPEG','WEBP','AVIF'}))
-                    self.fields['png'].setEnabled('PNG' in formats)
-                    for key in ('progressive','optimize'): self.fields[key].setEnabled('JPEG' in formats)
+                # Only applicable, approved encoder values determine adjustment.
+                baseline_quality,baseline_png=(70,9) if self.compression_preset=='maximum' else (85,6)
+                adjusted=(bool(formats & {'JPEG','WEBP','AVIF'}) and self.fields['quality'].value()!=baseline_quality or
+                          'PNG' in formats and self.fields['png'].value()!=baseline_png or
+                          'JPEG' in formats and (not self.fields['progressive'].isChecked() or self.fields['optimize'].isChecked()))
+                self.values.append('true' if adjusted else 'false')
+                lossy=[name for fmt,name in (('JPEG','JPEG'),('WEBP','WebP'),('AVIF','AVIF')) if fmt in formats]
+                self.form.setRowVisible(self.fields['quality'],bool(lossy))
+                self.form.setRowVisible(self.fields['png'],'PNG' in formats)
+                for row in self.jpeg_help_rows.values(): self.form.setRowVisible(row,'JPEG' in formats)
+                self.form.labelForField(self.fields['quality']).setText(' / '.join(lossy)+(' quality' if lossy==['JPEG'] else ' lossy quality'))
+                info=[]
+                if 'PNG' in formats: info.append('PNG compression is lossless.')
+                if lossy: info.append(' / '.join(lossy)+' quality controls lossy compression.')
+                info.append('Each file keeps its format.')
+                self.message.setText(' '.join(info))
                 unsupported=[Path(path).name for path,record in self.headers.items() if record[2] not in ('JPEG','PNG','WEBP','AVIF')]
-                if unsupported: raise ValueError('Compress Custom supports JPEG, PNG, WebP and AVIF. Convert these files first: '+', '.join(unsupported))
-                lines=['One encoder per file; source format is retained.']
+                if unsupported: raise ValueError('Compression supports JPEG, PNG, WebP and AVIF. Convert these files first: '+', '.join(unsupported))
+                lines=['Re-encoding does not guarantee a smaller file. EXIF metadata and ICC color profiles are preserved, but other descriptive metadata may be removed.']
             elif self.kind=='copyright':
                 self.values=[self.fields[k].text() for k in ('creator','notice','rights')]
                 if not any(self.values): raise ValueError('Enter at least one creator, copyright or usage-rights value, or reset from Settings.')
@@ -261,9 +296,9 @@ class ActionDialog(QDialog):
                 self.rename_table.setRowCount(len(self.rename_rows))
                 for row,values in enumerate(self.rename_rows):
                     for column,value in enumerate(values): self.rename_table.setItem(row,column,QTableWidgetItem(value))
-            self.preview.setPlainText('\n'.join(lines)); self.apply.setEnabled(True)
+            self.set_preview_text('\n'.join(lines)); self.apply.setEnabled(True)
         except Exception as exc:
-            self.preview.setPlainText(str(exc)); self.apply.setEnabled(False)
+            self.set_preview_text(str(exc)); self.apply.setEnabled(False)
             if self.kind=='rename': self.rename_table.setRowCount(0)
 
     def rename_plan(self):
@@ -303,10 +338,13 @@ class ActionDialog(QDialog):
 
 
 def main():
-    kind,result,*files=sys.argv[1:]; initial=None; policy='create'
+    kind,result,*files=sys.argv[1:]; initial=None; policy='create'; preset='custom'
+    if kind=='compress' and files[:1]==['--preset']:
+        _,preset,*files=files
+        if preset not in ('recommended','maximum','custom'): raise ValueError('Invalid compression preset')
     if kind=='rename' and files and files[0] in ('create','overwrite'): policy=files.pop(0)
     if kind=='strip' and files and files[0] in ('all','gps','ai'): initial=files.pop(0)
-    app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy)
+    app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy,preset=preset)
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
     if dialog.exec()!=QDialog.Accepted: return 1
     Path(result).write_bytes(b''.join(v.encode()+b'\0' for v in dialog.values)); return 0

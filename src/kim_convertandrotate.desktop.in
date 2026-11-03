@@ -72,12 +72,12 @@ Exec=kim_all convert --format webp -- %F
 [Desktop Action 2001CompressRecommended]
 Icon=document-save
 _Name=Compress Recommended
-Exec=kim_all compress --recommended -- %F
+Exec=kim_all compress --recommended --interactive -- %F
 
 [Desktop Action 2102CompressMaximum]
 Icon=document-save
 _Name=Compress Maximum
-Exec=kim_all compress --maximum -- %F
+Exec=kim_all compress --maximum --interactive -- %F
 
 [Desktop Action 2203CompressCustom]
 Icon=document-save

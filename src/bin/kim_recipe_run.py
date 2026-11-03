@@ -142,6 +142,10 @@ class RecipeWorker(QThread):
     def run(self):
         from kim_psd_source import inspection_context
         try:
+            from kim_image_ops import has_image_operations, preflight_batch
+            if has_image_operations(self.recipe):
+                with inspection_context(self.stage_changed.emit, self.isInterruptionRequested):
+                    preflight_batch(self.recipe, self.files, self.chosen)
             for index, source in enumerate(self.files, 1):
                 if self.isInterruptionRequested():
                     self.cancelled = True; break
@@ -153,7 +157,8 @@ class RecipeWorker(QThread):
                 if result.get('cancelled') or self.isInterruptionRequested():
                     self.cancelled = True; break
         except Exception as exc:
-            self.error = str(exc)
+            if self.isInterruptionRequested(): self.cancelled = True
+            else: self.error = str(exc)
 
 
 class InputFiltersWorker(QThread):
@@ -263,6 +268,12 @@ def confirmation_snapshot(recipe):
     except (OSError, RecipeError) as exc:
         error = str(exc)
     for step in snapshot['steps']:
+        if step['op'] == 'image.overlay' and step['kind'] == 'text':
+            try:
+                from kim_image_ops import resolved_watermark_fields
+                step['text_fields'] = resolved_watermark_fields(step)
+            except (OSError, RecipeError) as exc:
+                if step.get('enabled', True): error = str(exc)
         for key, spec in definitions[step['op']]['parameters'].items():
             if key=='quality' and step['op']=='image.convert' and any(s['op']=='image.compress' and s.get('enabled',True) for s in snapshot['steps']):
                 continue  # Disabled compression restores this saved reference.
@@ -282,9 +293,10 @@ def selection_title(recipe, folders):
 
 
 class RunRecipeDialog(QDialog):
-    def __init__(self, recipe, files, folders=(), parent=None, chosen=None):
+    def __init__(self, recipe, files, folders=(), parent=None, chosen=None, operation_title=None):
         super().__init__(parent)
         self.recipe = copy.deepcopy(recipe)
+        self.operation_title = operation_title
         self.files = list(files)
         self.execution_recipe, self.binding_error = confirmation_snapshot(recipe) if recipe else (None, None)
         self.add_worker = None; self._addition_queue = []; self._addition_items = []; self.input_revision = 0
@@ -293,10 +305,10 @@ class RunRecipeDialog(QDialog):
         self.generation = 0
         self.reviewed_generation = None
         self.validated_snapshot = None
-        self.library = load_library()
+        self.library = RecipeLibrary() if operation_title else load_library()
         self.selected_id = recipe['id'] if recipe else None
         self.saved_definition = None
-        if recipe:
+        if recipe and not operation_title:
             try:
                 saved = lookup_recipe(recipe['id'])
                 if saved == recipe: self.saved_definition = saved
@@ -309,8 +321,9 @@ class RunRecipeDialog(QDialog):
         self.preflight_clock = QTimer(self); self.preflight_clock.setInterval(1000)
         self.preflight_clock.timeout.connect(self.refresh_preflight_status)
         self.results = []
+        self.execution_succeeded = False
         self.editor_dialog = None; self._close_after_editor = False
-        self.setWindowTitle('Run a Recipe'); self.resize(1120, 820)
+        self.setWindowTitle(operation_title or 'Run a Recipe'); self.resize(1120, 820)
         layout = QVBoxLayout(self)
         selection = QHBoxLayout()
         label = QLabel('&Recipe:')
@@ -329,8 +342,11 @@ class RunRecipeDialog(QDialog):
         self.search.textChanged.connect(self.refresh_selector)
         self.selector.currentIndexChanged.connect(self.select_recipe)
         self.refresh_selector()
-        self.heading = QLabel('Recipe: ' + selection_title(recipe, folders) if recipe else 'Choose a recipe…')
+        if operation_title:
+            for control in (label, self.search, self.selector, self.create_button): control.hide()
+        self.heading = QLabel(operation_title or ('Recipe: ' + selection_title(recipe, folders) if recipe else 'Choose a recipe…'))
         self.heading.setTextFormat(Qt.PlainText); self.heading.setWordWrap(True)
+        if operation_title: self.heading.setText(operation_title + ' — review all output plans')
         layout.addWidget(self.heading)
         self.count = QLabel('Inputs: ' + file_count(len(self.files))); layout.addWidget(self.count)
         split = QSplitter(Qt.Horizontal); layout.addWidget(split, 1)
@@ -378,7 +394,7 @@ class RunRecipeDialog(QDialog):
         safety = QLabel('Originals are never overwritten. KIM6 saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
         safety.setWordWrap(True); layout.addWidget(safety)
         buttons = QHBoxLayout(); buttons.addStretch(1)
-        self.run_button = QPushButton('Run Recipe on ' + file_count(len(self.files)).title()); self.run_button.setEnabled(False)
+        self.run_button = QPushButton(('Apply to ' if operation_title else 'Run Recipe on ') + file_count(len(self.files)).title()); self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.start_execution)
         self.cancel_button = QPushButton('Cancel'); self.cancel_button.clicked.connect(self.reject)
         buttons.addWidget(self.run_button); buttons.addWidget(self.cancel_button); layout.addLayout(buttons)
@@ -486,7 +502,7 @@ class RunRecipeDialog(QDialog):
             item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Waiting for recipe'])
             item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.count.setText('Inputs: ' + file_count(len(self.files)))
-        self.run_button.setText('Run Recipe on ' + file_count(len(self.files)).title())
+        self.run_button.setText(('Apply to ' if self.operation_title else 'Run Recipe on ') + file_count(len(self.files)).title())
         self.update_file_actions()
         if preflight: self.start_preflight()
         if self.files: self.inputs.setCurrentItem(self.inputs.topLevelItem(0))
@@ -527,6 +543,7 @@ class RunRecipeDialog(QDialog):
         self.operations.expandAll()
 
     def refresh_selector(self, *args):
+        if self.operation_title: return
         query = self.search.text().casefold().strip()
         self.selector.blockSignals(True); self.selector.clear()
         for folder_id, name, recipes in library_groups(self.library):
@@ -721,7 +738,7 @@ class RunRecipeDialog(QDialog):
             messages += [str(self.files[index]) + ': ' + issue for issue in row.problems]
         self.diagnostics.setPlainText('\n'.join(messages))
         self.warning_view.set_rows(list(self.rows.values()))
-        self.fix_recipe_button.setVisible(any(row.properties.get('_repair')=='add_convert_format' for row in self.rows.values()) and self.editor_dialog is None and not self._pending_picker)
+        self.fix_recipe_button.setVisible(not self.operation_title and any(row.properties.get('_repair')=='add_convert_format' for row in self.rows.values()) and self.editor_dialog is None and not self._pending_picker)
         self.run_button.setEnabled(self.recipe is not None and self.reviewed_generation == self.generation and bool(self.files) and not pending and not problems and self.preflight_worker is None and self.worker is None and not self._closing and self.add_worker is None and not self._addition_queue and self.editor_dialog is None and not self._pending_picker)
 
     def show_selected(self, *args):
@@ -750,11 +767,12 @@ class RunRecipeDialog(QDialog):
         self.run_button.setEnabled(False); self.choose_destination.setEnabled(False)
         self.selector.setEnabled(False); self.search.setEnabled(False); self.create_button.setEnabled(False)
         self.add_photos.setEnabled(False); self.remove_selected.setEnabled(False); self.clear_list.setEnabled(False); self.inputs.setEnabled(False)
-        self.job_status = JobStatus('Run Recipe',len(self.files))
-        self.progress = JobProgressDialog('Running recipe…', 'Cancel All', 0, len(self.files), self)
+        self.job_status = JobStatus(self.operation_title or 'Run Recipe',len(self.files))
+        self.progress = JobProgressDialog(('Applying ' + self.operation_title + '…') if self.operation_title else 'Running recipe…', 'Cancel All', 0, len(self.files), self)
         self.progress.setWindowModality(Qt.WindowModal); self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False); self.progress.setAutoReset(False)
         recipe, files, chosen = self.validated_snapshot
+        self.execution_succeeded = False
         self.worker = RecipeWorker(recipe, files, chosen, self)
         self.progress.canceled.connect(self.cancel_execution)
         self.worker.item_started.connect(self.execution_started)
@@ -786,6 +804,9 @@ class RunRecipeDialog(QDialog):
     @Slot()
     def execution_finished(self):
         worker = self.worker; self.results = worker.results; self.worker = None
+        self.execution_succeeded = (bool(self.files) and not worker.cancelled and not worker.error
+                                    and len(worker.results) == len(self.files)
+                                    and all(result['ok'] for result in worker.results))
         self.progress.complete(); self.progress.deleteLater()
         skipped=[]
         for index,result in enumerate(worker.results):

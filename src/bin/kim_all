@@ -888,7 +888,7 @@ report_fail() {
   fi
 }
 
-# Show a summary dialog only if something failed.
+# Compression always shows one result; other actions retain error-only summaries.
 report_finish_dialog() {
   local title="$1"
 
@@ -906,6 +906,31 @@ report_finish_dialog() {
         REPORT_SKIPPED=$((${REPORT_SKIPPED:-0}+${#not_scheduled[@]}))
         REPORT_SKIP_LIST+=("${not_scheduled[@]}") ;;
     esac
+  fi
+  if [ "${cmd:-}" = compress ]; then
+    # Communication failures can stop a job without proving cancellation.
+    # Account for every remaining input without claiming it was processed.
+    local compression_processed=$((REPORT_OK+REPORT_FAIL+REPORT_CANCELLED+REPORT_SKIPPED))
+    if [ "$compression_processed" -lt "${#files[@]}" ]; then
+      REPORT_SKIP_LIST+=("${files[@]:compression_processed}")
+      REPORT_SKIPPED=$((REPORT_SKIPPED+${#files[@]}-compression_processed))
+    fi
+    # The compression result replaces this reporter's error-only dialog.
+    local result_file="$KIMDIR/compression-result"
+    printf '%s\0' "$REPORT_OK" "$REPORT_FAIL" "$REPORT_CANCELLED" "$REPORT_SKIPPED" \
+      "${COMPRESSION_ORIGINAL:-0}" "${COMPRESSION_OUTPUT:-0}" "${COMPRESSION_MEASURED:-0}" \
+      "${COMPRESSION_SETTINGS:-}" "$job_cancelled" > "$result_file"
+    if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then
+      printf '%s\0' "$(gettext 'Failed files (first 10):')" "${REPORT_FAIL_LIST[@]}" >> "$result_file"
+    fi
+    if [ "${#REPORT_CANCEL_LIST[@]}" -gt 0 ]; then
+      printf '%s\0' "$(gettext 'Cancelled files:')" "${REPORT_CANCEL_LIST[@]}" >> "$result_file"
+    fi
+    if [ "${#REPORT_SKIP_LIST[@]}" -gt 0 ]; then
+      printf '%s\0' "$(gettext 'Skipped files:')" "${REPORT_SKIP_LIST[@]}" >> "$result_file"
+    fi
+    python3 "$DISPATCHER_DIR/kim_job.py" --compression "$result_file"
+    return
   fi
   if [ "${REPORT_FAIL:-0}" -le 0 ] && [ "${REPORT_CANCELLED:-0}" -le 0 ] && [ "$job_cancelled" = false ]; then
     return 0
@@ -1013,6 +1038,11 @@ progress_service_present() {
 
 progress_error() {
   local message="$1" saved
+  # Opt-in batch reporting collects progress diagnostics into one result dialog.
+  if [ -n "${PROGRESS_ERROR_FILE:-}" ]; then
+    printf '%s\n' "$message" >> "$PROGRESS_ERROR_FILE"
+    return 0
+  fi
   if [ -s "${KIMDIR:-}/published.outputs" ]; then
     while IFS= read -r -d '' saved; do
       if [[ "$message" != *"$saved"* ]]; then message="$message
@@ -1101,6 +1131,7 @@ progress_bus_failure() {
   local ref="$1" message="$2" owner_rc=0
   progress_service_present "$ref" || owner_rc=$?
   if [ "$owner_rc" -eq 1 ]; then
+    if [ -n "${PROGRESS_ERROR_FILE:-}" ]; then progress_error "$message"; fi
     progress_close "$ref" || true
     return 1
   fi
@@ -1595,23 +1626,37 @@ $(cat -- "$KIMDIR/publication-errors")"; return 1
   fi
 }
 
-# Build a photo album PDF from selected images using ImageMagick montage.
-#
-# Usage: album <dir> <files...>
-#
-# Behavior:
-# - Prompts for an album layout (tile/page geometry presets).
-# - Asks where to save the output PDF (save dialog starts in <dir>).
-# - Uses destination-local staging and validates every generated PDF page.
-#
-# Notes:
-# - Expects montage to be available.
-# - Output is a single PDF at the user-selected path.
+# Compose a bounded annotation region as literal pixels. Caption text is only
+# consumed by Qt, never by ImageMagick's label, caption or annotate interpreters.
+publication_caption_tile() {
+  local ref="$1" source="$2" output="$3" width="$4" height="$5" label_height="$6"
+  local pixels="$7" background="$8" fit="$9" placement="${10}" label_mode="${11}"
+  local index="${12}" date="${13}" camera="${14}" custom="${15}"
+  local photo="$output.photo.png" label="$output.label.png" geometry="${width}x$((height-label_height))" rc=0 source_stamp
+  [ ! -L "$source" ] && source_stamp="$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" || return 1
+  [ "$fit" != fill ] || geometry+='^'
+  publication_run_image "$ref" magick "$source" -auto-orient -thumbnail "$geometry" \
+    -gravity center -background "$background" -extent "${width}x$((height-label_height))" +set label "PNG:$photo" || return 1
+  publication_run_monitored "$ref" "$KIMDIR/annotation-output" "$KIMDIR/annotation-errors" \
+    python3 "$DISPATCHER_DIR/kim_annotations.py" "$source" "$label" "$width" "$label_height" \
+    "$pixels" "$background" "$label_mode" "$index" "$date" "$camera" "$custom" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    [ "$rc" -ne 130 ] || return 1
+    return 1
+  fi
+  local -a strips=("$photo" "$label")
+  [ "$placement" != above ] || strips=("$label" "$photo")
+  publication_run_image "$ref" magick "${strips[@]}" -append +set label "PNG:$output" || return 1
+  [ ! -L "$source" ] && [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" = "$source_stamp" ] || return 1
+  rm -f -- "$photo" "$label"
+}
 
+# Build a PDF album using the existing layout geometries and publication path.
 action_album() {
   local dir nb outpdf mode tile geometry page width height capacity frames expected_pages ref tmp='' rc=0
   local file frame_count index=0 records errors page_label
-  local -a files=() inspector=(identify) renderer=(magick)
+  local caption_mode=none capture_date=false camera_lens=false annotated=false
+  local -a files=() inspector=(identify) renderer=(magick) album_tiles=()
   require_action_tools album setsid || return 1
   dir="${1:-}"
   shift || true
@@ -1648,7 +1693,7 @@ action_album() {
     return 1
   fi
 
-  settings_file="$(mktemp)" || return 1
+  settings_file="$KIMDIR/album-settings"
 
   if ! python3 "$album_dialog" "$settings_file" "${files[@]}"; then
     rm -f -- "$settings_file"
@@ -1658,13 +1703,22 @@ action_album() {
   mapfile -d '' -t album_choices < "$settings_file"
   rm -f -- "$settings_file"
 
-  if [ "${#album_choices[@]}" -ne 2 ]; then
+  if [ "${#album_choices[@]}" -ne "$((5 + ${#files[@]}))" ]; then
     kdialog --title "KIM6" --error       "The PDF Album settings are incomplete."
     return 1
   fi
 
   nb="${album_choices[0]}"
   outpdf="${album_choices[1]}"
+  caption_mode="${album_choices[2]}"; capture_date="${album_choices[3]}"; camera_lens="${album_choices[4]}"
+  case "$caption_mode" in none|embedded|filename|custom) ;; *) return 1 ;; esac
+  case "$capture_date:$camera_lens" in true:true|true:false|false:true|false:false) ;; *) return 1 ;; esac
+  if [ "$caption_mode" != none ] || [ "$capture_date" = true ] || [ "$camera_lens" = true ]; then
+    annotated=true
+    if [ "$caption_mode" = embedded ] || [ "$capture_date" = true ] || [ "$camera_lens" = true ]; then
+      require_action_tools album exiftool || return 1
+    fi
+  fi
 
   [ -n "$outpdf" ] || return 1
   case "$nb" in
@@ -1710,6 +1764,9 @@ $(cat -- "$errors")"
     frame_count="$(publication_input_frames "$file" "$records")" || {
       publication_fail "$ref" '' "$(gettext 'Album: an input image could not be inspected:') ${file##*/}"; return 1;
     }
+    if [ "$annotated" = true ] && [ "$frame_count" -ne 1 ]; then
+      publication_fail "$ref" '' "$(gettext 'Captions beneath each image require single-frame sources. Set Caption source to None and uncheck Include capture date and Include camera and lens to retain every frame of a multi-frame input.')"; return 1
+    fi
     frames=$((frames + frame_count))
     progress_value "$ref" "$index" || return 1
   done
@@ -1727,12 +1784,31 @@ $(cat -- "$errors")"
   tmp="$(tmp_for_target "$outpdf")" || {
     publication_fail "$ref" '' "$(gettext 'Album: cannot create destination-local staging.')"; return 1;
   }
+  if [ "$annotated" = true ]; then
+    local cell_width cell_height label_height pixels annotated_tile
+    cell_width="${geometry%%x*}"; cell_height="${geometry#*x}"; cell_height="${cell_height%%+*}"
+    pixels=$((cell_width / 26)); [ "$pixels" -ge 8 ] || pixels=8; [ "$pixels" -le 14 ] || pixels=14
+    label_height=$((cell_height / 3))
+    mkdir -- "${tmp%/*}/captions" || return 1
+    index=0
+    for file in "${files[@]}"; do
+      index=$((index+1)); annotated_tile="${tmp%/*}/captions/$index.png"
+      progress_begin_item "$ref" "$(gettext 'Rendering album caption') — $index / ${#files[@]}: ${file##*/}" || return 1
+      if ! publication_caption_tile "$ref" "$file" "$annotated_tile" "$cell_width" "$cell_height" "$label_height" \
+          "$pixels" white fit below "$caption_mode" "$index" "$capture_date" "$camera_lens" "${album_choices[index+4]}"; then
+        publication_fail "$ref" "$tmp" "$(gettext 'Album: annotated photo rendering failed or was interrupted.')"; return 1
+      fi
+      album_tiles+=("$annotated_tile")
+    done
+  else
+    album_tiles=("${files[@]}")
+  fi
   progress_begin_item "$ref" "$(gettext 'Rendering PDF document') — $page_label" || return 1
   progress_maximum "$ref" 0 || return 1
   rc=0
   publication_run_monitored "$ref" "$KIMDIR/album-render-output" "$errors" "${renderer[@]}" montage \
     -tile "$tile" -geometry "$geometry" -page "$page" -density 72 \
-    -background white -- "${files[@]}" "$tmp" || rc=$?
+    -background white -- "${album_tiles[@]}" "$tmp" || rc=$?
   if [ "$rc" -ne 0 ]; then
     if [ "$rc" -eq 130 ]; then progress_close "$ref" || true; return 1; fi
     publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF rendering failed.')
@@ -1778,12 +1854,14 @@ $(cat -- "$errors")"; return 1
 # - KIM_POLICY=prompt   offers explicitly confirmed overwrite
 
 action_compress() {
-  local QUALITY='' outdir='' custom=false preset='' jpeg_scan='' jpeg_optimize=false
+  local QUALITY='' outdir='' custom=false preset='' jpeg_scan='' jpeg_optimize=false interactive=false
+  local png_level=6 preset_label='' preset_adjusted=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --recommended) preset=recommended; shift ;;
+        --interactive) interactive=true; shift ;;
         --maximum) preset=maximum; shift ;;
         --quality)
           [ "$#" -ge 2 ] || die "compress: --quality needs a value"
@@ -1819,16 +1897,27 @@ action_compress() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
-  if [ "$custom" = true ]; then
-    action_options_dialog compress "${files[@]}" || return 1
+  if [ "$custom" = true ]; then preset=custom; interactive=true; fi
+  case "$preset" in
+    maximum) QUALITY=70; png_level=9; preset_label="$(gettext 'Maximum')" ;;
+    recommended) QUALITY=85; preset_label="$(gettext 'Recommended')" ;;
+    custom) preset_label="$(gettext 'Custom')" ;;
+  esac
+  if [ "$interactive" = true ]; then
+    [ -n "$preset" ] || die 'compress: --interactive requires --recommended, --maximum or --custom'
+    action_options_dialog compress --preset "$preset" "${files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-    [ "${#choices[@]}" -eq 4 ] || return 1
-    QUALITY="${choices[0]}"; local custom_png_level="${choices[1]}"
-    jpeg_scan="${choices[2]}"; jpeg_optimize="${choices[3]}"
-  elif [ "$preset" = maximum ]; then
-    QUALITY=70
-  elif [ "$preset" = recommended ]; then
-    QUALITY=85
+    [ "${#choices[@]}" -eq 5 ] || return 1
+    QUALITY="${choices[0]}"; png_level="${choices[1]}"
+    jpeg_scan="${choices[2]}"; jpeg_optimize="${choices[3]}"; preset_adjusted="${choices[4]}"
+    [[ "$png_level" =~ ^[0-9]$ ]] || return 1
+    case "$jpeg_scan:$jpeg_optimize:$preset_adjusted" in
+      Plane:true:true|Plane:true:false|Plane:false:true|Plane:false:false|None:true:true|None:true:false|None:false:true|None:false:false) ;;
+      *) return 1 ;;
+    esac
+  fi
+  if [ "$preset" != custom ] && [ "$preset_adjusted" = true ]; then
+    preset_label+=" $(gettext '(adjusted)')"
   fi
 
   [[ "$QUALITY" =~ ^[0-9]{1,3}$ ]] || {
@@ -1860,6 +1949,10 @@ action_compress() {
   fi
 
   report_init
+  COMPRESSION_ORIGINAL=0; COMPRESSION_OUTPUT=0; COMPRESSION_MEASURED=0
+  COMPRESSION_SETTINGS="${preset_label:+$(gettext 'Starting preset:') $preset_label}"
+  local -A compression_formats=()
+  local format_settings progressive_setting optimize_setting
 
   local dbusRef
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Compressing images ...')")"
@@ -1867,7 +1960,7 @@ action_compress() {
   local counter=0
   local f dir base stem ext
   local OUTFILE OUTTMP n rc actual input_info
-  local interrupted
+  local interrupted original_bytes output_bytes source_stamp source_links source_device source_inode remainder
 
   for f in "${files[@]}"; do
     counter=$((counter + 1))
@@ -1881,7 +1974,7 @@ action_compress() {
 
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Compressing file: ')$base"; then
       report_fail "$f"
-      progress_close "$dbusRef"
+      progress_close "$dbusRef" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
@@ -1891,6 +1984,10 @@ action_compress() {
       break
     fi
 
+    if [ -L "$f" ] || ! source_stamp="$(stat -c '%h:%d:%i:%s:%y:%z' -- "$f")"; then
+      report_fail "$f"; progress_value "$dbusRef" "$counter" || break; continue
+    fi
+    IFS=: read -r source_links source_device source_inode original_bytes remainder <<< "$source_stamp"
     input_info=""
     if [[ "$f" != *$'\n'* ]] &&
        input_info="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$f" 2>/dev/null)" &&
@@ -1898,7 +1995,7 @@ action_compress() {
       :
     else
       report_fail "$f"
-      progress_value "$dbusRef" "$counter"
+      progress_value "$dbusRef" "$counter" || break
       continue
     fi
 
@@ -1914,7 +2011,7 @@ action_compress() {
     fi
     if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
       report_fail "$f"
-      progress_value "$dbusRef" "$counter"
+      progress_value "$dbusRef" "$counter" || break
       continue
     fi
     if progress_cancelled "$dbusRef"; then
@@ -1934,15 +2031,6 @@ action_compress() {
           encode_options+=(-define jpeg:optimize-coding=true)
         ;;
       PNG)
-        local png_level=6
-        [ "$preset" != maximum ] || png_level=9
-        if [ "$custom" = true ]; then
-          if [ -n "${custom_png_level:-}" ]; then
-            png_level="$custom_png_level"
-          else
-            png_level=9
-          fi
-        fi
         encode_options=(-define "png:compression-level=$png_level")
         ;;
       WEBP|AVIF)
@@ -1952,6 +2040,23 @@ action_compress() {
     esac
 
     if [ "$rc" -eq 0 ]; then
+      # Report only settings actually passed to an encoder, using content format.
+      if [ -z "${compression_formats[$input_kind]:-}" ]; then
+        case "$input_kind" in
+          JPEG)
+            progressive_setting="$(gettext 'Yes')"; optimize_setting="$(gettext 'No')"
+            [ "${jpeg_scan:-Plane}" != None ] || progressive_setting="$(gettext 'No')"
+            [ "$jpeg_optimize" != true ] || optimize_setting="$(gettext 'Yes')"
+            format_settings="$(gettext 'JPEG quality:') $QUALITY
+$(gettext 'Progressive JPEG:') $progressive_setting
+$(gettext 'JPEG Huffman optimization:') $optimize_setting" ;;
+          PNG) format_settings="$(gettext 'PNG lossless compression level:') $png_level" ;;
+          WEBP) format_settings="$(gettext 'WebP lossy quality:') $QUALITY" ;;
+          AVIF) format_settings="$(gettext 'AVIF lossy quality:') $QUALITY" ;;
+        esac
+        COMPRESSION_SETTINGS+="${COMPRESSION_SETTINGS:+$'\n\n'}$format_settings"
+        compression_formats[$input_kind]=true
+      fi
       magick -- "$f" +profile '!{icc,exif}' +set comment         "${encode_options[@]}" "$input_kind:$OUTTMP"         >/dev/null 2>&1 || rc=$?
     fi
     actual=""
@@ -1967,20 +2072,27 @@ action_compress() {
       interrupted=true
     fi
     [ "$interrupted" != true ] || rc=1
+    if [ -L "$f" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$f")" != "$source_stamp" ]; then rc=1; fi
     if [ "$rc" -eq 0 ] && commit_tmp_to_target "$OUTTMP" "$OUTFILE" "$mode"; then
       report_ok
+      # Original size survives overwrite; only committed outputs enter totals.
+      if output_bytes="$(stat -c '%s' -- "$OUTFILE")"; then
+        COMPRESSION_ORIGINAL=$((COMPRESSION_ORIGINAL + original_bytes))
+        COMPRESSION_OUTPUT=$((COMPRESSION_OUTPUT + output_bytes))
+        COMPRESSION_MEASURED=$((COMPRESSION_MEASURED + 1))
+      fi
     else
       report_fail "$f"
     fi
     rm -f -- "$OUTTMP" >/dev/null 2>&1 || true
-    [ "$interrupted" != true ] || break
+    if [ "$interrupted" = true ] || progress_cancelled "$dbusRef"; then break; fi
 
-    progress_value "$dbusRef" "$counter"
+    progress_value "$dbusRef" "$counter" || break
   done
 
-  progress_close "$dbusRef"
+  progress_close "$dbusRef" || true
   report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "${REPORT_SKIPPED:-0}" -eq 0 ] && [ ! -f "$KIMDIR/job.cancelled" ]
 }
 
 
@@ -3083,21 +3195,147 @@ KIM6_GALLERY_FALLBACK
   true
 }
 
-# Produce a print-quality contact-sheet PDF without modifying source images.
-# Rasterize labels and headings, then validate every page before publication.
+# Read-only content inspection followed only by an explicitly reviewed,
+# create-only copy plan. KIM_POLICY never authorizes renaming or replacement.
+action_checkextensions() {
+  require_action_tools checkextensions python3 exiftool setsid || return 1
+  local -a inputs=() inspected=() files=() targets=() stamps=()
+  local helper="$DISPATCHER_DIR/kim_extensions_dialog.py" result="$KIMDIR/extension-selection"
+  local plan="$KIMDIR/extension-plan" source ext stamp target base stem ref='' stage index n rc
+  local interrupted=false processed=0 not_scheduled=0 summary result_option
+  local -a saved=() interrupted_files=()
+  local -A reserved=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --directory)
+        [ "$#" -ge 2 ] || die 'checkextensions: --directory needs a value'
+        [ -d "$2" ] && [ ! -L "$2" ] || die 'checkextensions: select a real directory, not a symlink'
+        inputs+=("$2"); shift 2 ;;
+      --) shift; inputs+=("$@"); break ;;
+      -*) die "checkextensions: unknown option $1" ;;
+      *) inputs+=("$1"); shift ;;
+    esac
+  done
+  python3 "$helper" "$result" "${inputs[@]}" || return 1
+  mapfile -d '' -t inspected < "$result"
+  [ "${#inspected[@]}" -gt 0 ] && [ "$(( ${#inspected[@]} % 3 ))" -eq 0 ] || return 1
+  for ((index=0; index<${#inspected[@]}; index+=3)); do files+=("${inspected[index]}"); done
+  local -a checked=()
+  collect_publication_inputs checked "${files[@]}" || {
+    progress_error "$(gettext 'Correctly named copies require distinct regular files without symlinks or hardlink aliases.')"; return 1
+  }
+  files=("${checked[@]}")
+  : > "$plan"
+  for ((index=0; index<${#files[@]}; index++)); do
+    source="${files[index]}"; ext="${inspected[index*3+1]}"; stamp="${inspected[index*3+2]}"
+    case "$ext" in jpg|png|webp|avif|heic|heif|gif|tif|bmp|psd|jp2|j2k|jxl) ;; *) return 1 ;; esac
+    [ "$(python3 "$helper" --stamp "$source")" = "$stamp" ] || {
+      progress_error "$(gettext 'An inspected source changed. Inspect it again before creating copies.')"; return 1
+    }
+    base="${source##*/}"; stem="$base"
+    if [[ "$base" == *.* && ! ( "$base" == .* && "$base" != *.*.* ) ]]; then stem="${base%.*}"; fi
+    # Create-only planning first numbers ALL occupied entries, including selected
+    # sources. Validate the final free candidate against the complete selection.
+    prepare_derived_target "${source%/*}/$stem.$ext" "$ext" create || {
+      progress_error "$(gettext 'Unsafe destination for a correctly named copy.')"; return 1
+    }
+    target="$DERIVED_TARGET"; n=1
+    while [ -n "${reserved[$target]:-}" ] || [ -e "$target" ] || [ -L "$target" ]; do
+      target="${source%/*}/${stem}_$n.$ext"; n=$((n+1))
+    done
+    if ! prepare_derived_target "$target" "$ext" create "${files[@]}" || [ "$DERIVED_TARGET" != "$target" ]; then
+      progress_error "$(gettext 'Unsafe or changed destination for a correctly named copy.')"; return 1
+    fi
+    reserved[$target]=1; targets+=("$target"); stamps+=("$stamp")
+    printf '%s\0' "$source" "$target" "$stamp" >> "$plan"
+  done
+  python3 "$helper" --confirm "$plan" || return 1
+  report_init
+  # Dynamically scoped opt-in: shared progress helpers retain their normal UI
+  # for other actions. A file also captures errors from command substitutions.
+  local PROGRESS_ERROR_FILE="$KIMDIR/extension-progress-errors"
+  : > "$PROGRESS_ERROR_FILE"
+  trap 'publication_stop_owned_child; exit 130' INT TERM HUP
+  ref="$(progress_open "${#files[@]}" "$(gettext 'Creating correctly named copies…')")" || interrupted=true
+  for ((index=0; index<${#files[@]}; index++)); do
+    [ "$interrupted" = false ] || break
+    source="${files[index]}"; target="${targets[index]}"; stamp="${stamps[index]}"
+    if ! progress_begin_item "$ref" "$(gettext 'Copying image without re-encoding:') ${source##*/}"; then
+      interrupted=true; break
+    fi
+    stage=''; rc=0
+    if [ "$(python3 "$helper" --stamp "$source")" = "$stamp" ] &&
+       stage="$(tmp_for_target "$target")" &&
+       publication_run_monitored "$ref" "$KIMDIR/extension-output" "$KIMDIR/extension-errors" \
+         cp --preserve=timestamps -- "$source" "$stage" &&
+       publication_run_monitored "$ref" "$KIMDIR/extension-output" "$KIMDIR/extension-errors" \
+         python3 "$helper" --verify "$source" "$stage" "$stamp" &&
+       [ "$(python3 "$helper" --stamp "$source")" = "$stamp" ]; then
+      if progress_cancelled "$ref"; then rc=130
+      else commit_tmp_to_target "$stage" "$target" create || rc=$?; fi
+    else
+      rc=$?
+    fi
+    if [ "$rc" -eq 0 ]; then
+      # Publication succeeded. Later progress failures cannot undo this result.
+      report_ok; saved+=("$target")
+    elif [ "$rc" -eq 130 ] || [ -f "$KIMDIR/job.cancelled" ] || [ -s "$PROGRESS_ERROR_FILE" ]; then
+      interrupted=true
+      if [ -f "$KIMDIR/job.cancelled" ]; then report_fail "$source"
+      else interrupted_files+=("$source"); fi
+    else
+      report_fail "$source"
+    fi
+    processed=$((index+1))
+    [ -z "$stage" ] || rm -f -- "$stage" || true
+    [ "$interrupted" = false ] || break
+    if progress_cancelled "$ref" || ! progress_value "$ref" "$processed"; then interrupted=true; break; fi
+  done
+  not_scheduled=$((${#files[@]}-processed))
+  for source in "${files[@]:processed}"; do report_skip "$source"; done
+  if ! progress_close "$ref"; then
+    interrupted=true
+    progress_error "$(gettext 'Cannot close the progress dialog cleanly.')"
+  fi
+  result_option=--error
+  if [ "$interrupted" = false ] && [ "$REPORT_OK" -eq "${#files[@]}" ] && [ ! -f "$KIMDIR/job.cancelled" ]; then
+    summary="$(gettext 'All correctly named copies were saved.')"
+    result_option=--msgbox
+  elif [ -f "$KIMDIR/job.cancelled" ]; then
+    summary="$(gettext 'Copying cancelled. Already saved copies were kept.')"
+  else
+    summary="$(gettext 'Copying did not complete successfully. Already saved copies were kept.')"
+  fi
+  summary+="$(printf '\n\n%s %d\n%s %d\n%s %d\n%s %d\n%s %d' \
+    "$(gettext 'Succeeded:')" "$REPORT_OK" "$(gettext 'Failed:')" "$REPORT_FAIL" \
+    "$(gettext 'Cancelled:')" "$REPORT_CANCELLED" "$(gettext 'Interrupted:')" "${#interrupted_files[@]}" \
+    "$(gettext 'Not scheduled:')" "$not_scheduled")"
+  if [ "${#saved[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Saved copies:')"$'\n'"$(printf '%s\n' "${saved[@]}")"; fi
+  if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Failed files (first 10):')"$'\n'"$(printf '%s\n' "${REPORT_FAIL_LIST[@]}")"; fi
+  if [ "${#REPORT_CANCEL_LIST[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Cancelled files:')"$'\n'"$(printf '%s\n' "${REPORT_CANCEL_LIST[@]}")"; fi
+  if [ "${#interrupted_files[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Interrupted files:')"$'\n'"$(printf '%s\n' "${interrupted_files[@]}")"; fi
+  if [ "$not_scheduled" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Files not scheduled:')"$'\n'"$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"; fi
+  if [ -s "$PROGRESS_ERROR_FILE" ]; then summary+=$'\n\n'"$(cat -- "$PROGRESS_ERROR_FILE")"; fi
+  kdialog --title "$(gettext 'KIM6 — Correctly named copies')" "$result_option" "$summary" || true
+  [ "$interrupted" = false ] && [ "$REPORT_OK" -eq "${#files[@]}" ] && [ ! -f "$KIMDIR/job.cancelled" ]
+}
+
+# Produce a contact-sheet PDF, validating every page before publication.
 action_contactsheet() {
   require_action_tools contactsheet setsid || return 1
-  local paper=letter orientation=portrait grid=4x5 labels=both fit=fit background=white
-  local dpi=300 title='Contact Sheet' requested='' interactive=false
+  local paper=letter orientation=portrait grid=auto labels=both fit=fit background=white
+  local dpi=300 title='Contact Sheet' requested='' interactive=false font_size=auto label_placement=below label_height=0
   local arg file frames mode target ref tmp='' stage width height cols rows
   local tile_width tile_height page_count page_index first last index counter=0
-  local front pointsize caption caption_name tile raw page geometry
+  local front pointsize medium_pointsize max_pointsize tile raw page geometry
+  local plan_margin plan_gap plan_top plan_heading_height composition_top row col row_count row_width x y heading_tile number_tile number_width
+  local -a auto_plans=() composition_args=()
   local -a files=() page_files=() montage_args=() image_args=()
 
   [ "${1:-}" != -- ] || interactive=true
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --paper|--orientation|--grid|--labels|--fit|--background|--dpi|--title|--output)
+      --paper|--orientation|--grid|--labels|--fit|--background|--dpi|--title|--output|--font-size|--label-placement)
         [ "$#" -ge 2 ] || die "contactsheet: $1 needs a value"
         arg="$2"
         case "$1" in
@@ -3110,6 +3348,8 @@ action_contactsheet() {
           --dpi) dpi="$arg" ;;
           --title) title="$arg" ;;
           --output) requested="$arg" ;;
+          --font-size) font_size="$arg" ;;
+          --label-placement) label_placement="$arg" ;;
         esac
         shift 2 ;;
       --interactive) interactive=true; shift ;;
@@ -3138,7 +3378,7 @@ action_contactsheet() {
 
   mapfile -d '' -t settings < "$settings_file"
 
-  [ "${#settings[@]}" -eq 9 ] || {
+  [ "${#settings[@]}" -eq 11 ] || {
     progress_error "$(gettext 'Contact sheet: invalid dialog settings.')"
     return 1
   }
@@ -3152,20 +3392,26 @@ action_contactsheet() {
   dpi="${settings[6]}"
   title="${settings[7]}"
   requested="${settings[8]}"
+  font_size="${settings[9]}"; label_placement="${settings[10]}"
 fi
 
 case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   case "$orientation" in portrait|landscape) ;; *) die 'contactsheet: invalid orientation' ;; esac
-  case "$grid" in 3x4|4x5|5x7) ;; *) die 'contactsheet: invalid grid' ;; esac
-  case "$labels" in number|filename|both|none) ;; *) die 'contactsheet: invalid labels' ;; esac
+  case "$grid" in auto|3x4|4x5|5x7) ;; *) die 'contactsheet: invalid grid' ;; esac
+  case "$labels" in number|filename|both|none|capture|camera|embedded) ;; *) die 'contactsheet: invalid captions' ;; esac
+  case "$font_size" in auto|small|medium|large) ;; *) die 'contactsheet: invalid font size' ;; esac
+  case "$label_placement" in below|above) ;; *) die 'contactsheet: invalid caption position' ;; esac
+  case "$labels" in capture|camera|embedded) require_action_tools contactsheet exiftool || return 1 ;; esac
   case "$fit" in fit|fill) ;; *) die 'contactsheet: invalid placement' ;; esac
   case "$background" in white|black) ;; *) die 'contactsheet: invalid background' ;; esac
   case "$dpi" in 150|300) ;; *) die 'contactsheet: invalid DPI' ;; esac
   [[ "$title" != *$'\n'* && "$title" != *$'\r'* ]] || die 'contactsheet: invalid heading'
   [ "${#title}" -le 150 ] || die 'contactsheet: heading is too long'
   # Escape ImageMagick's percent substitutions and leading @ indirection.
-  title="${title//%/%%}"
-  [[ "$title" != @* ]] || title=" $title"
+  if [ "$grid" != auto ]; then
+    title="${title//%/%%}"
+    [[ "$title" != @* ]] || title=" $title"
+  fi
   [ "${#files[@]}" -gt 0 ] || return 1
 
   local -a selected=()
@@ -3175,6 +3421,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   }
   files=("${selected[@]}")
   ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
+  : > "$KIMDIR/contactsheet-dimensions"
   for file in "${files[@]}"; do
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
     frames="$(publication_input_frames "$file" "$KIMDIR/publication-records")" || return 1
@@ -3182,6 +3429,14 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
       kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: each source must be a single-frame image.')"
       return 1
     }
+    if [ "$grid" = auto ]; then
+      # One lightweight orientation-aware header read; PSD normalization is
+      # already cached by source preparation. No planning decode is needed.
+      if ! publication_run_image "$ref" identify -ping -format '%w|%h|%[orientation]\n' -- "$file"; then
+        publication_fail "$ref" '' "$(gettext 'Contact sheet: source geometry inspection failed or was interrupted.')"; return 1
+      fi
+      cat -- "$KIMDIR/publication-records" >> "$KIMDIR/contactsheet-dimensions"
+    fi
   done
 
   if [ -z "$requested" ]; then
@@ -3198,8 +3453,6 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   mode="$DERIVED_MODE"
 
   # Work in raster pixels at the requested DPI; keep print geometry fixed.
-  cols="${grid%x*}"
-  rows="${grid#*x}"
   if [ "$paper" = letter ]; then
     width=$((17 * dpi / 2))
     height=$((11 * dpi))
@@ -3212,14 +3465,45 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     width="$height"
     height="$swap"
   fi
-  # Reserve top and bottom margins for the page heading and page number.
-  tile_width=$(( (width - dpi / 2) / cols - dpi / 10 ))
-  tile_height=$(( (height - dpi) / rows - dpi / 5 ))
-  [ "$tile_width" -ge 60 ] && [ "$tile_height" -ge 60 ] || return 1
-  page_count=$(( (${#files[@]} + cols * rows - 1) / (cols * rows) ))
+  if [ "$grid" = auto ]; then
+    progress_begin_item "$ref" "$(gettext 'Planning automatic contact-sheet pages…')" || return 1
+    if ! publication_run_monitored "$ref" "$KIMDIR/layout-output" "$KIMDIR/layout-errors" \
+        python3 "$DISPATCHER_DIR/kim_annotations.py" --plan-contactsheet "$KIMDIR/contactsheet-dimensions" \
+        "$KIMDIR/contactsheet-plan" "$width" "$height" "$dpi" "$labels" "$font_size" "$fit" "${#files[@]}"; then
+      publication_fail "$ref" '' "$(gettext 'Contact sheet: automatic layout failed or was interrupted.')"; return 1
+    fi
+    mapfile -t auto_plans < "$KIMDIR/contactsheet-plan"
+    page_count="${#auto_plans[@]}"
+    [ "$page_count" -gt 0 ] || return 1
+  else
+    cols="${grid%x*}"
+    rows="${grid#*x}"
+    # Reserve top and bottom margins for the page heading and page number.
+    tile_width=$(( (width - dpi / 2) / cols - dpi / 10 ))
+    tile_height=$(( (height - dpi) / rows - dpi / 5 ))
+    [ "$tile_width" -ge 60 ] && [ "$tile_height" -ge 60 ] || return 1
+    page_count=$(( (${#files[@]} + cols * rows - 1) / (cols * rows) ))
+    # Medium is a resolution-based baseline; Auto also adapts to grid density.
+    medium_pointsize=$((dpi / 9))
+    [ "$medium_pointsize" -ge 12 ] || medium_pointsize=12
+    [ "$medium_pointsize" -le 40 ] || medium_pointsize=40
+    case "$font_size" in
+      auto) pointsize=$((dpi * 4 / (9 * cols)))
+            # Very dense rows can constrain labels more than the column count.
+            [ "$pointsize" -le "$((tile_height / 5))" ] || pointsize=$((tile_height / 5)) ;;
+      small) pointsize=$((medium_pointsize * 4 / 5)) ;;
+      medium) pointsize="$medium_pointsize" ;;
+      large) pointsize=$((medium_pointsize * 5 / 4)) ;;
+    esac
+    label_height=$(( tile_height / 4 ))
+    # Leave room for a full Qt text line plus its padding, even at 5x7 / 150 DPI.
+    # Keep the existing tile and label geometry; wrapping and elision handle width.
+    max_pointsize=$((label_height * 3 / 5))
+    [ "$pointsize" -le "$max_pointsize" ] || pointsize="$max_pointsize"
+    [ "$pointsize" -ge 4 ] || pointsize=4
+  fi
   front=black
   [ "$background" != black ] || front=white
-  pointsize=$(( dpi / 9 ))
 
   if progress_cancelled "$ref"; then
     progress_close "$ref"
@@ -3237,10 +3521,35 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
 
   # Complete each page in private staging; only the validated PDF is published.
   for ((page_index = 0; page_index < page_count; page_index++)); do
-    montage_args=(-font DejaVu-Sans -pointsize "$pointsize" -background "$background" -fill "$front")
-    first=$(( page_index * cols * rows ))
-    last=$(( first + cols * rows ))
-    [ "$last" -le "${#files[@]}" ] || last="${#files[@]}"
+    if [ "$grid" = auto ]; then
+      IFS=$'\t' read -r first last cols rows tile_width tile_height label_height pointsize \
+        plan_margin plan_gap plan_top plan_heading_height <<< "${auto_plans[page_index]}"
+      composition_top=$((plan_top + (height-plan_top-plan_margin-rows*tile_height-(rows-1)*plan_gap)/2))
+      heading_tile="$stage/pages/heading_$page_index.png"
+      number_tile="$stage/pages/number_$page_index.png"
+      number_width=$((dpi*3/2))
+      if ! publication_run_monitored "$ref" "$KIMDIR/heading-output" "$KIMDIR/heading-errors" \
+          python3 "$DISPATCHER_DIR/kim_annotations.py" "${files[0]}" "$heading_tile" \
+          "$((width-2*plan_margin-number_width-plan_gap))" "$plan_heading_height" "$((dpi/6))" "$background" \
+          custom 1 false false "$title"; then
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: heading rendering failed or was interrupted.')"; return 1
+      fi
+      # Give numbering its own bounded region so a long heading cannot hide it.
+      if ! publication_run_monitored "$ref" "$KIMDIR/heading-output" "$KIMDIR/heading-errors" \
+          python3 "$DISPATCHER_DIR/kim_annotations.py" "${files[0]}" "$number_tile" \
+          "$number_width" "$plan_heading_height" "$((dpi*10/72))" "$background" \
+          custom 1 false false "Page $((page_index+1)) / $page_count"; then
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page numbering failed or was interrupted.')"; return 1
+      fi
+      composition_args=(-size "${width}x${height}" "xc:$background" -gravity northwest
+        "$heading_tile" -geometry "+$plan_margin+$plan_margin" -composite
+        "$number_tile" -geometry "+$((width-plan_margin-number_width))+$plan_margin" -composite)
+    else
+      first=$(( page_index * cols * rows ))
+      last=$(( first + cols * rows ))
+      [ "$last" -le "${#files[@]}" ] || last="${#files[@]}"
+      montage_args=(-font DejaVu-Sans -pointsize "$pointsize" -background "$background" -fill "$front")
+    fi
     progress_maximum "$ref" "${#files[@]}" || return 1
     progress_value "$ref" "$counter" || return 1
     for ((index = first; index < last; index++)); do
@@ -3251,23 +3560,32 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
         return 1
       fi
       tile="$stage/tiles/$(printf '%05d' "$counter").png"
-      geometry="${tile_width}x${tile_height}"
-      [ "$fit" != fill ] || geometry+='^'
-      image_args=("$file" -auto-orient -thumbnail "$geometry" -gravity center -background "$background" -extent "${tile_width}x${tile_height}" "PNG:$tile")
-      if ! publication_run_image "$ref" magick "${image_args[@]}"; then
-        if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
-        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: unable to render a thumbnail.')"
-        return 1
+      if [ "$labels" != none ]; then
+        if ! publication_caption_tile "$ref" "$file" "$tile" "$tile_width" "$tile_height" "$label_height" \
+            "$pointsize" "$background" "$fit" "$label_placement" "$labels" "$counter" false false ''; then
+          publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: annotated thumbnail failed or was interrupted.')"; return 1
+        fi
+      else
+        geometry="${tile_width}x${tile_height}"
+        [ "$fit" != fill ] || geometry+='^'
+        image_args=("$file" -auto-orient -thumbnail "$geometry" -gravity center -background "$background" -extent "${tile_width}x${tile_height}" +set label "PNG:$tile")
+        if ! publication_run_image "$ref" magick "${image_args[@]}"; then
+          if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
+          publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: unable to render a thumbnail.')"
+          return 1
+        fi
       fi
-      caption_name="${file##*/}"
-      caption_name="${caption_name//%/%%}"
-      case "$labels" in
-        none) caption=' ' ;;
-        number) caption="$counter" ;;
-        filename) caption=" $caption_name" ;;
-        both) caption="$counter. $caption_name" ;;
-      esac
-      montage_args+=(-label "$caption" "$tile")
+      if [ "$grid" = auto ]; then
+        row=$(((index-first)/cols)); col=$(((index-first)%cols))
+        row_count=$((last-first-row*cols))
+        [ "$row_count" -le "$cols" ] || row_count="$cols"
+        row_width=$((row_count*tile_width+(row_count-1)*plan_gap))
+        x=$(((width-row_width)/2+col*(tile_width+plan_gap)))
+        y=$((composition_top+row*(tile_height+plan_gap)))
+        composition_args+=("$tile" -geometry "+$x+$y" -composite)
+      else
+        montage_args+=("$tile")
+      fi
       progress_value "$ref" "$counter" || {
         publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: progress update failed.')"
         return 1
@@ -3275,15 +3593,20 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     done
     raw="$stage/pages/raw_$(printf '%04d' "$page_index").png"
     page="$stage/pages/page_$(printf '%04d' "$page_index").png"
-    if ! publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet page') $((page_index + 1)) / $page_count" magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
-        -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw"; then
-      return 1
-    fi
-    if ! publication_run_image "$ref" magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
-        -units PixelsPerInch -density "$dpi" "PNG:$page"; then
-      if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
-      publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page sizing failed.')"
-      return 1
+    if [ "$grid" = auto ]; then
+      publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet page') $((page_index + 1)) / $page_count" \
+        magick "${composition_args[@]}" -units PixelsPerInch -density "$dpi" "PNG:$page" || return 1
+    else
+      if ! publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet page') $((page_index + 1)) / $page_count" magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
+          -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw"; then
+        return 1
+      fi
+      if ! publication_run_image "$ref" magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
+          -units PixelsPerInch -density "$dpi" "PNG:$page"; then
+        if [ "$PUBLICATION_INTERRUPTED" = true ]; then return 1; fi
+        publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet: page sizing failed.')"
+        return 1
+      fi
     fi
     page_files+=("$page")
   done
@@ -9205,6 +9528,10 @@ Commands:
       Overwrite mode replaces the selected original only after validation.
       Create mode writes *_resized files beside each input by default.
 
+  checkextensions [--directory DIR] [--] [files or directories...]
+      Inspect image content and extensions without changing originals.
+      Folder scans are nonrecursive. Correctly named copies require review.
+
   capturedate --interactive -- <photos...>
   capturedate --datetime 'YYYY-MM-DD HH:MM:SS[.fraction]' --timezone unknown|UTC|+HH:MM -- <photos...>
   capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM]
@@ -9352,18 +9679,20 @@ main() {
       require_action_tools "$cmd" magick identify || exit 1 ;;
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
-    copyright|timeshift|capturedate)
+    crop|overlay|copyright|timeshift|capturedate)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
     datesync)
       require_action_tools "$cmd" exiftool || exit 1 ;;
   esac
 
   case "$cmd" in
+    crop|overlay)    python3 "$DISPATCHER_DIR/kim_image_ops_dialog.py" "$cmd" "$@" ;;
     recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
     album)           mk_workdir; action_album "$@" ;;
     animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;
     contactsheet)    mk_workdir; action_contactsheet "$@" ;;
+    checkextensions) mk_workdir; action_checkextensions "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
     capturedate)     mk_workdir; action_photo_date "$@" ;;
     copyright)       mk_workdir; action_copyright "$@" ;;

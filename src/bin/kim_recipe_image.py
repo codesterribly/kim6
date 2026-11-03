@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import struct
 import string
+import tempfile
+from kim_image_ops import CROP_DEFAULTS, OVERLAY_DEFAULTS
 from kim_psd_source import (prepared, PSDError, WARNING as PSD_WARNING, header as psd_header,
                             run_process, metadata_diagnostics, session_warnings, stage)
 from kim_recipe_core import RecipeError, OutputFormatRequired, keys, text, enabled_steps, config_path, format_output_pattern, display_output_pattern
@@ -38,6 +40,7 @@ GPS_TAGS = ('GPS:all', 'XMP-exif:GPS*', 'XMP:GPS*') + tuple(
     for field in ('GPSLatitude', 'GPSLongitude', 'GPSAltitude', 'GPSAltitudeRef'))
 
 DEFAULTS = {
+    'image.crop': CROP_DEFAULTS, 'image.overlay': OVERLAY_DEFAULTS,
     'image.auto_orient': {}, 'image.rotate': {'degrees': 90},
     'image.flip': {'axis': 'horizontal'},
     'image.resize': {'max_width': 2048, 'max_height': 2048, 'upscale': False},
@@ -64,6 +67,7 @@ SETTING_FIELDS = {'metadata.creator': 'creator', 'metadata.copyright_notice': 'n
 SETTING_KEYS = {'creator': 'KIM_COPYRIGHT_CREATOR', 'notice': 'KIM_COPYRIGHT_NOTICE',
                 'rights': 'KIM_COPYRIGHT_USAGE_RIGHTS'}
 LABELS = {
+    'image.crop': 'Crop Image', 'image.overlay': 'Add Watermark / Overlay',
     'image.auto_orient': 'Auto-Orient', 'image.resize': 'Resize to Fit',
     'image.resize_percent': 'Resize by Percentage', 'image.resize_exact': 'Resize to Exact Dimensions', 'image.rotate': 'Rotate',
     'image.flip': 'Flip Image', 'image.color': 'Color Profile', 'image.convert': 'Convert Format',
@@ -434,6 +438,11 @@ class ImageHandler:
                                    'image.resize_long_edge':'resize longest edge aspect fit scale',
                                    'metadata.set_capture':'date timestamp EXIF capture camera clock mtime',
                                    'image.convert':'encode codec JPEG BMP GIF HEIC HEIF JP2 JPEG2000 JXL PDF TIFF WebP AVIF PNG'}.get(op,'')}
+            if op in ('image.crop', 'image.overlay'):
+                definitions[op]['editor'] = 'image_ops'
+                definitions[op]['keywords'] += (' crop aspect ratio rectangle pixels selection' if op == 'image.crop' else ' watermark overlay text logo camera caption artist copyright')
+                definitions[op]['category'] = CATEGORIES[0] if op == 'image.crop' else CATEGORIES[2]
+                definitions[op]['description'] = ('Crop the oriented image, then optionally resize proportionally. Manual areas use relative coordinates on every image.' if op == 'image.crop' else 'Visible pixels, independent of embedded rights metadata. Place after all geometry and color steps; missing embedded fields are omitted.')
             if op == 'image.convert':
                 definitions[op]['description'] = 'One output per input. JPEG/BMP/PDF/HEIC use white backgrounds; GIF uses palette transparency. JPEG/WebP/AVIF quality can inherit KIM6 Web Export Settings or use an override.'
                 definitions[op]['parameters']['quality'].update(settings_key='Web Export quality',settings_field='quality')
@@ -463,6 +472,11 @@ class ImageHandler:
     def step_label(self, step):
         op = step['op']
         label = LABELS.get(op, op)
+        if op == 'image.crop':
+            return label + ' — ' + step['aspect'] + ', ' + step['area'] + ('; target ' + str(step['target_width']) + ' × ' + str(step['target_height']) if step['resize'] else '')
+        if op == 'image.overlay':
+            from kim_image_ops import KINDS
+            return label + ' — ' + dict((value, title) for title, value in KINDS)[step['kind']] + ', ' + step['anchor'].replace('_', ' ') + ', ' + str(step['opacity']) + '%'
         if op == 'image.resize':
             return f"{label} — {step['max_width']} × {step['max_height']}"
         if op == 'image.convert':
@@ -497,6 +511,12 @@ class ImageHandler:
         for step in enabled_steps(steps):
             if step['op'] == 'metadata.set_capture' and step['mode'] == 'specific' and not step['datetime']:
                 raise RecipeError('Choose a capture date and time to continue.')
+            if step['op'] == 'image.overlay' and step['kind'] == 'text':
+                from kim_image_ops import watermark_text
+                watermark_text(step)
+            if step['op'] == 'image.overlay' and step['kind'] == 'camera':
+                from kim_image_ops import validate_camera_selection
+                validate_camera_selection(step)
         active = [s for s in enabled_steps(steps) if s['op'] in SETTING_FIELDS or s['op'] == 'metadata.copyright']
         settings = copyright_settings() if any(any(s.get(k) is None for k in self.operation_definitions()[s['op']]['parameters']) for s in active) else {}
         for step in active:
@@ -515,6 +535,9 @@ class ImageHandler:
 
     def operation_details(self, step):
         definition = self.operation_definitions()[step['op']]
+        if step['op'] in ('image.crop', 'image.overlay'):
+            from kim_image_ops import step_details
+            return definition['label'], step_details(step)
         details = []
         for key, spec in definition['parameters'].items():
             try:
@@ -543,6 +566,8 @@ class ImageHandler:
                    ('Quality', str(p['quality']) if p.get('quality') is not None else 'Not set by enabled steps'),
                    ('Output dimensions', f"{p.get('display_width', p.get('width', '?'))} × {p.get('display_height', p.get('height', '?'))} pixels (planned)")]
         if p.get('compression'): fields.append(('Compression',p['compression']))
+        fields += [('Crop geometry', value) for value in p.get('crops', [])]
+        fields += [('Visible overlay', value) for value in p.get('overlays', [])]
         names = {tag: LABELS['metadata.' + {'creator': 'creator', 'notice': 'copyright_notice', 'rights': 'usage_rights'}[field]].removeprefix('Set ') + ' (' + tag.split(':')[0] + ')'
                  for field, tags in COPYRIGHT_TAGS.items() for tag in tags}
         for line in row.metadata:
@@ -575,6 +600,10 @@ class ImageHandler:
         op = step.get('op')
         if op not in DEFAULTS or not op.startswith(('image.', 'metadata.','file.')):
             raise RecipeError('Unknown image operation: ' + str(op))
+        if op in ('image.crop', 'image.overlay'):
+            from kim_image_ops import validate_crop, validate_overlay
+            (validate_crop if op == 'image.crop' else validate_overlay)(step)
+            return
         required = tuple(DEFAULTS[op])
         optional = ('enabled',)
         if op in SETTING_FIELDS:
@@ -656,9 +685,13 @@ class ImageHandler:
 
     def validate_order(self, steps):
         metadata_step = None
+        overlay_seen = False
         declarations = set()
         for step in enabled_steps(steps):
             op = step['op']
+            if overlay_seen and (op in ('image.crop', 'image.rotate', 'image.flip', 'image.auto_orient', 'image.color') or op.startswith('image.resize')):
+                raise RecipeError('Move ' + LABELS[op] + ' before Add Watermark / Overlay; overlays must use final image geometry and color.')
+            if op == 'image.overlay': overlay_seen = True
             if op in ('image.convert', 'image.compress'):
                 if op in declarations:
                     raise RecipeError('Multiple Convert Format steps conflict. Keep one final output format.' if op == 'image.convert' else
@@ -712,6 +745,7 @@ class ImageHandler:
         srgb_pixels = False
         name = (stem if stem is not None else source.stem) + '_recipe'
         pixel_args, edits = [], []
+        crop_descriptions, overlays = [], []
         conversion = next((s for s in steps if s['op'] == 'image.convert'), None)
         compression = next((s for s in steps if s['op'] == 'image.compress'), None)
         if conversion: fmt = conversion['format']
@@ -742,7 +776,7 @@ class ImageHandler:
         auto_oriented = False
         for step_number, step in numbered_steps:
             op = step['op']
-            if op in ('image.rotate', 'image.flip'):
+            if op in ('image.rotate', 'image.flip', 'image.crop', 'image.overlay'):
                 # Explicit transforms act on the displayed image and bake orientation into pixels.
                 pixel_args += ['-auto-orient']
                 if orientation in (5, 6, 7, 8):
@@ -772,6 +806,15 @@ class ImageHandler:
                     pixel_args += rotation
             elif op == 'image.flip':
                 pixel_args += ['-flop' if step['axis'] == 'horizontal' else '-flip']
+            elif op == 'image.crop':
+                from kim_image_ops import crop_plan
+                crop = crop_plan(width, height, step)
+                pixel_args += crop['args']
+                crop_descriptions.append(f"{crop['width']} × {crop['height']} at ({crop['x']}, {crop['y']}) → {crop['output_width']} × {crop['output_height']} pixels")
+                width, height = crop['output_width'], crop['output_height']
+            elif op == 'image.overlay':
+                from kim_image_ops import overlay_plan
+                overlays.append(overlay_plan(source, width, height, step))
             elif op in ('image.resize','image.resize_long_edge'):
                 max_width = step['pixels'] if op == 'image.resize_long_edge' else step['max_width']
                 max_height = step['pixels'] if op == 'image.resize_long_edge' else step['max_height']
@@ -932,7 +975,7 @@ class ImageHandler:
         if conversion and not compression: quality = self.parameter_value(conversion,'quality')
         if compression:
             quality = compression['quality'] if compression['preset'] == 'custom' else 70 if compression['preset'] == 'maximum' else 85
-        encode = bool(pixel_args or quality is not None)
+        encode = bool(pixel_args or overlays or quality is not None)
         if fmt == 'psd' and conversion is None:
             raise OutputFormatRequired(
                 'This recipe needs an output format for Photoshop files. '
@@ -943,6 +986,8 @@ class ImageHandler:
             raise RecipeError('Add Convert Format and choose a supported output format for this image.')
         if fmt not in FORMATS:
             raise RecipeError('Choose an available output format in Convert Format')
+        if overlays and 'cmyk' in colorspace and not source_profile:
+            raise RecipeError('Unprofiled CMYK has unknown source colors; supply a valid source ICC profile before overlaying')
         if encode:
             formats = run(['magick', '-list', 'format'])
             if not any(len(parts := line.split()) >= 3 and parts[0].rstrip('*') == CODERS[fmt] and 'w' in parts[2] for line in formats.splitlines()):
@@ -1042,11 +1087,13 @@ class ImageHandler:
                                'display_width': height if orientation in (5, 6, 7, 8) else width,
                                'display_height': width if orientation in (5, 6, 7, 8) else height,
                                'source_format': info.get('FileType', '').lower(),
+                               'crops': crop_descriptions,
+                               'overlays': [('Camera & EXIF details' if r['step']['kind'] == 'camera' else r['step']['kind']) + ' at ' + r['step']['anchor'].replace('_', ' ') + (': ' + r['text'] if r['text'] else ': ' + r['step']['logo'] if r['step']['kind'] == 'image' else ': no embedded fields; skipped') for r in overlays],
                                'strip_all': strip_all, 'strip_gps': strip_gps,
                                'strip_ai': any(s['op'] == 'metadata.strip_ai' for s in steps),
                                'width': width, 'height': height, 'dimensions': 'exact planned pixels', 'compressed_size': 'unknown', 'quality': quality, 'orientation': orientation_tag, 'compression': compression_label},
-                'metadata': final_metadata, 'pixel_args': pixel_args, 'edits': edits,
-                'warnings': ([PSD_WARNING] if info.get('FileType') == 'PSD' else []) + session_warnings() + date_warnings,
+                'metadata': final_metadata, 'pixel_args': pixel_args, 'edits': edits, 'overlays': overlays,
+                'warnings': ([PSD_WARNING] if info.get('FileType') == 'PSD' else []) + session_warnings() + date_warnings + [w for r in overlays for w in r['warnings']],
                 'compression': compression, 'compression_label': compression_label,
                 'conversion': conversion, 'pixel_export': pixel_export, 'force_srgb': force_srgb, 'profile_srgb': srgb_pixels,
                 'encode': encode, 'quality': quality, 'timestamp': timestamp, 'timestamp_ns': timestamp_ns, 'auto_oriented': auto_oriented}
@@ -1054,7 +1101,7 @@ class ImageHandler:
     def execute(self, source, output, steps, state):
         stage('Encoding image' if state['encode'] else 'Copying source')
         if state['encode']:
-            args = ['magick', str(source)] + state['pixel_args']
+            args = []  # Final encoder options; shared overlays precede these.
             if state['quality'] is not None:
                 args += ['-quality', str(state['quality'])]
             # JPEG cannot represent transparency: flatten explicitly onto white.
@@ -1081,7 +1128,10 @@ class ImageHandler:
             # chunk into WebP/HEIC that ExifTool cannot subsequently remove.
             # Its ICC has already been used for the required sRGB transform.
             if state['strip_all'] or fmt in ('bmp','pdf'): args += ['-strip']
-            run(args + [CODERS[fmt] + ':' + str(output)])
+            from kim_image_ops import overlay_arguments
+            with tempfile.TemporaryDirectory(prefix='.kim6-overlay.', dir=output.parent) as workspace:
+                composites = overlay_arguments(source, state, workspace)
+                run(['magick', str(source)] + state['pixel_args'] + composites + args + [CODERS[fmt] + ':' + str(output)])
             if fmt == 'jp2' and state['profile']:
                 # Match Convert's explicit JP2 ICC restoration, from the profile
                 # actually used to encode the pixels (including a color step).

@@ -13,12 +13,14 @@ def tr(text):
 
 
 HELP = {
-    'capture': ('Photo Capture Date', "The date and time the photograph was taken, stored inside the image as metadata. This is different from the file's modification date."),
-    'timezone': ('Camera Timezone', "The timezone where the photograph was taken. If you don't know it, choose Unknown. KIM6 won't guess based on your computer's timezone."),
-    'dates': ('Date Fields / All Dates', "Choose which dates inside the photograph to update. This doesn't change the file's modification date unless you also select that operation."),
+    'capture': ('Photo Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
+    'timezone': ('Camera Timezone', "The timezone where the image was taken. If you don't know it, choose Unknown. KIM6 won't guess based on your computer's timezone."),
+    'dates': ('Date Fields / All Dates', "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."),
     'settings': ('Reset from Settings', 'Use the value from KIM6 Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe.'),
     'color': ('Color Profile / sRGB', 'Color profiles tell applications how colors should appear. sRGB is a good choice for web sharing and general compatibility. KIM6 converts colors using the original profile when available.'),
     'quality': ('Compression Quality', 'Higher quality generally preserves more detail but creates larger files. Lower quality generally makes smaller files but may lose detail. Results vary by image and format.'),
+    'progressive': ('Progressive JPEG', 'Saves JPEG images in multiple passes, so a partially downloaded image can appear before the full file arrives. It does not change image dimensions or the selected quality. File size may change slightly.'),
+    'optimize': ('Optimize JPEG Huffman Coding', "Uses more efficient lossless coding of the JPEG's compressed data. It can reduce file size without changing the decoded image pixels or selected JPEG quality. It may take slightly longer to encode."),
     'resize': ('Resize to Fit / Exact Dimensions', 'Resize to Fit keeps the original proportions within your chosen dimensions. Exact Dimensions forces the specified width and height, which can stretch the image.'),
     'strip': ('Remove All Metadata', 'Removes embedded information such as camera details, dates, GPS, copyright and color profiles. Use the more specific removal options if you want to keep other information.'),
     'output': ('Output Filename / Location', 'KIM6 saves new files without replacing existing ones. If a filename is taken, it adds a number. The final name is checked again when saving.'),

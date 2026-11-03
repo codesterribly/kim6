@@ -123,9 +123,8 @@ def publication_result(directory, action, outputs, status, graphical=None):
         for caption,details in groups: print(caption+'\n'+details,file=sys.stderr)
         return None
     if graphical is None: graphical=bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
-    # Other quick publications retain their quiet completion when no advisory
-    # exists. Album always gets one primary result, never a second notice window.
-    if action!='PDF Album' and not groups: return None
+    # Successful publications return quietly unless source advisories need attention.
+    if not groups: return None
     if not graphical:
         print(action+' created successfully\nSaved as: '+'; '.join(outputs),file=sys.stderr)
         for caption,details in groups: print(caption+'\n'+details,file=sys.stderr)
@@ -152,9 +151,66 @@ def show_shell_warnings(directory):
     dialog.resize(660,220); dialog.exec()
 
 
+def compression_result(path):
+    """Consume private job accounting; one result for success, failure or cancellation."""
+    import gettext
+    import sys
+    tr = gettext.translation('kim6', localedir=os.environ.get('TEXTDOMAINDIR') or
+                             Path(__file__).resolve().parent.parent/'locale', fallback=True).gettext
+    fields = Path(path).read_bytes().decode('utf-8', errors='replace').split('\0')
+    ok, failed, cancelled, skipped, original, output, measured = map(int, fields[:7])
+    settings, stopped = fields[7:9]
+    if stopped == 'true' or cancelled:
+        heading = tr('Compression cancelled — successfully saved results were kept')
+    elif failed and not ok:
+        heading = tr('Compression failed')
+    elif failed or skipped:
+        heading = tr('Compression partially completed')
+    else:
+        heading = tr('Compression completed')
+    lines = [heading, '', tr('Files successfully processed:') + f' {ok}',
+             tr('Files failed:') + f' {failed}']
+    if cancelled or skipped or stopped == 'true':
+        lines += [tr('Files cancelled:') + f' {cancelled}', tr('Files skipped:') + f' {skipped}']
+    if measured == ok:
+        factor, unit = 1, 'B'
+        for candidate in ('KiB', 'MiB', 'GiB', 'TiB', 'PiB'):
+            if max(original, output) < factor * 1024: break
+            factor *= 1024
+            unit = candidate
+        def size(value): return f'{value / factor:,.2f} {unit} ({value:,} ' + tr('bytes') + ')'
+        saved = original - output
+        lines += ['', tr('Original total size:') + ' ' + size(original),
+                  tr('Output total size:') + ' ' + size(output),
+                  (tr('Size increase:') if saved < 0 else tr('Bytes saved:')) + ' ' + size(abs(saved))]
+        percent = f'{abs(saved) * 100 / original:.2f}%' if original and ok else tr('Not applicable (zero original size)')
+        lines.append((tr('Percentage increased:') if saved < 0 else tr('Percentage saved:')) + ' ' + percent)
+    elif ok:
+        lines += ['', tr('Size statistics unavailable: a published output size could not be read.')]
+    if not ok:
+        lines += ['', tr('No outputs were successfully published; size savings are not applicable.')]
+    if settings: lines += ['', tr('Compression settings:'), settings]
+    message = '\n'.join(lines)
+    details = '\n'.join(fields[9:-1])
+    if not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+        print(message + ('\n\n' + details if details else ''), file=sys.stderr)
+        return
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    app = QApplication.instance() or QApplication([])
+    dialog = QMessageBox()
+    dialog.setWindowTitle(tr('KIM6 — Compression results'))
+    dialog.setTextFormat(Qt.PlainText)
+    dialog.setText(message)
+    if details: dialog.setDetailedText(details)
+    dialog.setIcon(QMessageBox.Warning if failed or cancelled or stopped == 'true' else QMessageBox.Information)
+    dialog.exec()
+
 if __name__=='__main__':
     import sys
-    if len(sys.argv)>2 and sys.argv[2]=='--publication':
+    if sys.argv[1:2] == ['--compression']:
+        compression_result(sys.argv[2])
+    elif len(sys.argv)>2 and sys.argv[2]=='--publication':
         directory,_,action,status,manifest=sys.argv[1:]
         path=Path(manifest)
         outputs=[os.fsdecode(name) for name in path.read_bytes().split(b'\0') if name] if path.exists() else []

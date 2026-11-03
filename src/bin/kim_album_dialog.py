@@ -8,11 +8,16 @@ The existing kim_all publication pipeline creates and validates the PDF.
 import os
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+    QCheckBox, QTableWidget, QTableWidgetItem, QPlainTextEdit, QHeaderView, QGroupBox,
 )
+
+from kim_ui import tr
+from kim_annotations import clean_text
 
 LAYOUTS = [
     ("1 × 1, Portrait", "1"),
@@ -51,6 +56,46 @@ def main():
         album_layout.addItem(label, value)
     album_layout.setCurrentIndex(4)
     form.addRow("Layout:", album_layout)
+
+    annotation_group = QGroupBox(tr("Captions beneath each image"))
+    annotation_layout = QVBoxLayout(annotation_group)
+    annotation_note = QLabel(tr("Selected information appears beneath each image. "
+                               "Nothing is printed over the image."))
+    annotation_note.setWordWrap(True)
+    annotation_layout.addWidget(annotation_note)
+    annotation_form = QFormLayout()
+    annotation_layout.addLayout(annotation_form)
+    layout.addWidget(annotation_group)
+
+    caption_source = QComboBox()
+    caption_source.setAccessibleName(tr("Caption source"))
+    for label, value in ((tr("None"), "none"), (tr("Embedded caption"), "embedded"),
+                         (tr("Filename"), "filename"), (tr("Custom per-image captions"), "custom")):
+        caption_source.addItem(label, value)
+    annotation_form.addRow(tr("Caption source:"), caption_source)
+    capture_date = QCheckBox(tr("Include capture date"))
+    camera_lens = QCheckBox(tr("Include camera and lens"))
+    annotation_form.addRow(capture_date)
+    annotation_form.addRow(camera_lens)
+    captions = QTableWidget(len(images), 2)
+    captions.setHorizontalHeaderLabels([tr("Source filename"), tr("Caption")])
+    captions.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    editors = []
+    for row, image in enumerate(images):
+        item = QTableWidgetItem(os.path.basename(image))
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setToolTip(image)
+        captions.setItem(row, 0, item)
+        editor = QPlainTextEdit()
+        editor.setPlaceholderText(tr("Blank captions are allowed"))
+        captions.setCellWidget(row, 1, editor)
+        captions.setRowHeight(row, 76)
+        editors.append(editor)
+    captions.setMinimumHeight(180)
+    captions.hide()
+    annotation_layout.addWidget(captions)
+    caption_source.currentIndexChanged.connect(
+        lambda: captions.setVisible(caption_source.currentData() == "custom"))
 
     output_row = QWidget()
     output_layout = QHBoxLayout(output_row)
@@ -111,7 +156,10 @@ def main():
 
         # NUL-delimited values preserve whitespace and Unicode.
         with open(settings_file, "wb") as stream:
-            for value in (album_layout.currentData(), filename):
+            values = [album_layout.currentData(), filename, caption_source.currentData(),
+                      str(capture_date.isChecked()).lower(), str(camera_lens.isChecked()).lower()]
+            values.extend(clean_text(editor.toPlainText()) for editor in editors)
+            for value in values:
                 stream.write(value.encode("utf-8") + b"\0")
 
         dialog.accept()

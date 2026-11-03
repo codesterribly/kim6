@@ -71,7 +71,7 @@ class PhotoDateDialog(QDialog):
         self.apply.setEnabled(False)
         if self.worker:
             self.pending=True; self.worker.requestInterruption(); return
-        self.pending=False; self.details.setPlainText('Checking selected photo dates…')
+        self.pending=False; self.details.setPlainText('Checking selected image dates…')
         worker=DatePreview(self.files,self.config(),self); self.worker=worker
         worker.finished.connect(self.finished_preview); worker.start()
 

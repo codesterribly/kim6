@@ -371,6 +371,17 @@ class RecipeWidget(QWidget):
             hint = QLabel(definition['description']); hint.setWordWrap(True)
             self.form.addRow(hint)
         definitions = definition['parameters']
+        if definition.get('editor') == 'image_ops':
+            from kim_image_ops import step_details
+            for title, value in step_details(step):
+                label = QLabel(value); label.setTextFormat(Qt.PlainText); label.setWordWrap(True)
+                self.form.addRow(title, label)
+            configure = QPushButton('Configure with Image Preview…')
+            configure.clicked.connect(lambda checked=False, r=row: self.configure_image_operation(r))
+            self.form.addRow(configure)
+            reset = QPushButton('Reset Step Defaults'); reset.clicked.connect(self.reset_step_defaults)
+            self.form.addRow(reset)
+            return
         if step['op'] == 'image.resize':
             sizes = (300,600,800,1024,1280,1400,1600,1920,2048,2560,3440,3840)
             presets = QComboBox(); presets.addItem('Custom bounds',None)
@@ -465,6 +476,23 @@ class RecipeWidget(QWidget):
             self.form.addRow(self.step_defaults_button)
         self.update_parameter_modes(row)
         self.update_conversion_controls(row)
+
+    def configure_image_operation(self, row):
+        from kim_image_ops_dialog import ImageOperationDialog
+        # The same modal controls configure standalone operations. The Recipe
+        # destination and all preceding/succeeding steps remain authoritative.
+        files = self.files if self.example_files is None else self.example_files
+        dialog = ImageOperationDialog(self.recipe['steps'][row], files, self,
+                                      recipe=self.recipe, row=row)
+        sample = self.example_selector.currentData()
+        if sample and dialog.images.findData(sample) >= 0:
+            dialog.images.setCurrentIndex(dialog.images.findData(sample))
+        if dialog.exec() != QDialog.Accepted: return
+        replacement = copy.deepcopy(dialog.step)
+        if 'enabled' in self.recipe['steps'][row]:
+            replacement['enabled'] = self.recipe['steps'][row]['enabled']
+        self.recipe['steps'][row] = replacement
+        self.reload_steps(row); self.update_modified(); self.update_preview()
 
     def update_filename_example(self,*_):
         if self.filename_example is None: return
