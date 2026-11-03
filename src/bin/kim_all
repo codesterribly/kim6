@@ -1256,6 +1256,7 @@ progress_open() {
     rotate|rotatewithexif) action_name="$(gettext 'Rotate Images')" ;;
     flipflop) action_name="$(gettext 'Flip Images')" ;;
     copyright) action_name="$(gettext 'Set Creator and Copyright')" ;;
+    location-gpx|location-copy|location-apply|location-reduce) action_name='Image Location Tools' ;;
     timeshift|datesync|capturedate) action_name="$(gettext 'Photo Dates')" ;;
     stripmeta) action_name="$(gettext 'Remove Metadata')" ;;
     rename) action_name="$(gettext 'Rename Images')" ;;
@@ -5923,6 +5924,12 @@ metadata_publish_one() {
   shift 5
   local -n expected_pairs="$expected_name"
   local tmp source_info output_info source_icc output_icc rc=0 pair actual tag value
+  local verification_extension="${source##*.}" location_active=false
+  case "${cmd:-}" in
+    location-gpx|location-copy|location-apply|location-reduce)
+      [ "${location_plan:-}" = "$KIMDIR/preview.approved" ] || return 1
+      location_active=true; verification_extension="${verification_extension,,}" ;;
+  esac
   [ ! -L "$source" ] && [ "$(stat -c '%h' -- "$source" 2>/dev/null)" = 1 ] || return 1
   metadata_is_raw "$source" && return 1
   source_info="$(metadata_image_fingerprint "$source")" || return 1
@@ -5933,7 +5940,12 @@ metadata_publish_one() {
     rm -f -- "$tmp" >/dev/null 2>&1 || true
     return 1
   fi
-  exiftool "$@" -o "$tmp" -- "$source" >/dev/null 2>&1 || rc=$?
+  if [ "$location_active" = true ]; then
+    # Only approved location assignments reach the shared staging publisher.
+    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" write "$location_plan" "$source" "$tmp" || rc=$?
+  else
+    exiftool "$@" -o "$tmp" -- "$source" >/dev/null 2>&1 || rc=$?
+  fi
   [ "$rc" -eq 0 ] && [ -s "$tmp" ] || { rm -f -- "$tmp"; return 1; }
   output_info="$(metadata_image_fingerprint "$tmp")" || rc=$?
   [ -n "$output_info" ] && [ "$output_info" = "$source_info" ] || rc=1
@@ -5944,10 +5956,10 @@ metadata_publish_one() {
   # picture and animation bytes before publishing ExifTool output.
   # The isolated legacy harness retains its existing fault injection.
   if [ "$rc" -eq 0 ] &&
-     [ "${KIM_JPEG_WEBP_ENGINE:-native}" != legacy ]; then
+     { [ "${KIM_JPEG_WEBP_ENGINE:-native}" != legacy ] || [ "$location_active" = true ]; }; then
     local integrity_format='' integrity_engine integrity_python
 
-    case "${source##*.}" in
+    case "$verification_extension" in
       jpg|jpeg|JPG|JPEG|Jpg|Jpeg)
         integrity_format=jpeg ;;
       webp|WEBP|Webp)
@@ -5970,8 +5982,8 @@ metadata_publish_one() {
   # Ensure selective TIFF edits preserve compressed image data.
   # Existing mocked tests explicitly use the legacy verifier mode.
   if [ "$rc" -eq 0 ] &&
-     [ "${KIM_TIFF_VERIFY:-native}" != legacy ]; then
-    case "${source##*.}" in
+     { [ "${KIM_TIFF_VERIFY:-native}" != legacy ] || [ "$location_active" = true ]; }; then
+    case "$verification_extension" in
       tif|tiff|TIF|TIFF|Tif|Tiff)
         if ! metadata_tiff_encoded_equal "$source" "$tmp"; then
           printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$source" >&2
@@ -5983,9 +5995,9 @@ metadata_publish_one() {
 
   # HEIF/AVIF selective-edit encoded-payload verification.
   if [ "$rc" -eq 0 ] &&
-     [ "${KIM_ISOBMFF_VERIFY:-native}" != legacy ]; then
+     { [ "${KIM_ISOBMFF_VERIFY:-native}" != legacy ] || [ "$location_active" = true ]; }; then
     local bmff_format=''
-    case "${source##*.}" in
+    case "$verification_extension" in
       heic|heif|hif|HEIC|HEIF|HIF)
         bmff_format=heif ;;
       avif|AVIF)
@@ -5998,6 +6010,12 @@ metadata_publish_one() {
       printf 'KIM6: ISO-BMFF encoded-data verification failed: %s\n' "$source" >&2
       rc=1
     fi
+  fi
+
+  if [ "$rc" -eq 0 ] && [ "$location_active" = true ]; then
+    # Verify actual GPS, removed fields, retained dates/rights and PNG encoded
+    # chunks before the existing atomic publisher can see this stage.
+    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" verify "$location_plan" "$source" "$tmp" || rc=$?
   fi
 
   for pair in "${expected_pairs[@]}"; do
@@ -6186,6 +6204,112 @@ action_stripmeta_selective() {
   done
   progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+}
+
+# All Image Location Tools use one planner and the existing metadata publisher.
+# Editing routes accept no unreviewed CLI coordinates or external plan files.
+action_location() {
+  local kind="$1"; shift
+  # Keep the legacy CLI spelling as an alias, with one user-facing workflow.
+  [ "$kind" != copy ] || kind=apply
+  local source target policy ref counter=0 rc=0 selection_config=''
+  local location_plan="$KIMDIR/preview.approved"
+  local -a files=() expected=() location_unchanged=() location_saved=()
+  [ "${1:-}" != --interactive ] || shift
+  [ "${1:-}" = -- ] || { progress_error 'Image Location Tools require -- followed by selected image paths.'; return 1; }
+  shift
+  datesync_collect_files files "$@" || { progress_error "${DATESYNC_SELECTION_ERROR:-Select local regular images without symbolic or hard links.}"; return 1; }
+  if [ "$kind" = report ]; then
+    KIM_LOCATION_CONFIG= preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" report "$KIMDIR/location-report" create - "${files[@]}"
+    return $?
+  fi
+  if [ "$kind" = apply ] || [ "$kind" = gpx ]; then
+    # Select source and destinations before the unchanged output-policy decision.
+    # This returns input configuration only, never an approved publication plan.
+    selection_config="$KIMDIR/location-selection"
+    KIM_LOCATION_CONFIG= preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
+    if ! python3 - "$selection_config" > "$KIMDIR/location-inputs" <<'KIM6_LOCATION_INPUTS'
+import json
+from pathlib import Path
+import sys
+files = json.loads(Path(sys.argv[1]).read_text())['files']
+if not isinstance(files, list) or not files or any(not isinstance(p, str) or '\0' in p for p in files):
+    raise ValueError('Invalid selected image paths')
+sys.stdout.buffer.write(b''.join(p.encode('utf-8') + b'\0' for p in files))
+KIM6_LOCATION_INPUTS
+    then
+      progress_error 'The selected images could not be read. No images were changed. Reopen Apply GPS to Images.'
+      return 1
+    fi
+    mapfile -d '' -t files < "$KIMDIR/location-inputs"
+    datesync_collect_files files "${files[@]}" || { progress_error "$DATESYNC_SELECTION_ERROR"; return 1; }
+  fi
+  policy="$(choose_output_mode 'KIM6 — Image Location Tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
+  [ "$policy" != cancel ] || return 1
+  : > "$KIMDIR/location-seeds" || return 1
+  for source in "${files[@]}"; do
+    target="$(metadata_output_path "$source" location "$policy")" || return 1
+    printf '%s\0' "$target" >> "$KIMDIR/location-seeds" || return 1
+  done
+  KIM_LOCATION_CONFIG="$selection_config" preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$location_plan" "$policy" "$KIMDIR/location-seeds" "${files[@]}" || return 1
+  preview_run preview_verify || return 1
+  # Preview acceptance never substitutes for choose_output_mode's explicit
+  # replacement confirmation under KIM_POLICY=prompt.
+  report_init; METADATA_INTERRUPTED=false
+  ref="$(progress_open "${#files[@]}" 'KIM6 — Image Location Tools')" || return 1
+  for source in "${files[@]}"; do
+    counter=$((counter+1))
+    if ! progress_begin_item "$ref" "Location metadata: ${source##*/}"; then
+      report_fail "$source — processing stopped or approved plan changed; review a fresh plan"; rc=1; break
+    fi
+    if [ "$(preview_value state "$source")" = skip ]; then
+      location_unchanged+=("$source")
+      report_skip "$source"; progress_value "$ref" "$counter"; continue
+    fi
+    target="$(preview_value target "$source")" || { rc=1; break; }
+    if metadata_publish_one "$source" "$target" "$policy" "$ref" expected; then
+      report_ok; location_saved+=("$target")
+    else
+      report_fail "$source — GPS staging, verification or publication failed; no incomplete output was published"
+      rc=1; break
+    fi
+    progress_value "$ref" "$counter" || { rc=1; break; }
+    [ "$METADATA_INTERRUPTED" != true ] || { rc=1; break; }
+  done
+  progress_close "$ref"
+  local location_processed=$((REPORT_OK+REPORT_FAIL+REPORT_CANCELLED+REPORT_SKIPPED))
+  if [ "$location_processed" -lt "${#files[@]}" ]; then
+    REPORT_SKIP_LIST+=("${files[@]:location_processed}")
+    REPORT_SKIPPED=$((REPORT_SKIPPED+${#files[@]}-location_processed))
+  fi
+  # Present actual publication outcomes in one brief result, with file details
+  # disclosed on demand. Skips reached in the loop differ from unscheduled images.
+  local location_interrupted=0 location_result="$KIMDIR/location-result"
+  if [ "$rc" -ne 0 ] || [ "$METADATA_INTERRUPTED" = true ] || [ -f "$KIMDIR/job.cancelled" ]; then
+    location_interrupted=1
+  fi
+  printf '%s\0' "$REPORT_OK" "$REPORT_FAIL" "$REPORT_CANCELLED" "$REPORT_SKIPPED" \
+    "$location_interrupted" "${#location_unchanged[@]}" > "$location_result"
+  if [ "${#location_unchanged[@]}" -gt 0 ]; then
+    printf '%s\0' "${location_unchanged[@]}" >> "$location_result"
+  fi
+  if [ "${#location_saved[@]}" -gt 0 ]; then
+    printf '%s\0' "${location_saved[@]}" >> "$location_result"
+  fi
+  if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then
+    printf '%s\0' 'Images that could not be saved:' "${REPORT_FAIL_LIST[@]}" >> "$location_result"
+  fi
+  if [ "${#REPORT_CANCEL_LIST[@]}" -gt 0 ]; then
+    printf '%s\0' 'Cancelled images:' "${REPORT_CANCEL_LIST[@]}" >> "$location_result"
+  fi
+  if [ "${#REPORT_SKIP_LIST[@]}" -gt 0 ]; then
+    printf '%s\0' 'Unchanged or unprocessed images:' "${REPORT_SKIP_LIST[@]}" >> "$location_result"
+  fi
+  python3 "$DISPATCHER_DIR/kim_location_dialog.py" --result "$location_result" "$location_plan" || {
+    report_finish_dialog 'KIM6 — Image Location Tools'
+    kdialog --title 'KIM6 — Image Location Tools' --error 'The location result summary could not be displayed. Any images already saved were kept.' || true
+  }
+  [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 
 # All new date UI routes share a read-only planner and the established metadata
@@ -6550,21 +6674,39 @@ datesync_collect_files() {
   # shellcheck disable=SC2178
   local -n result_ref="$1"
   shift
-  local raw parent path identity
+  local raw parent path identity reason links
   local -A seen=()
-  result_ref=()
+  result_ref=(); DATESYNC_SELECTION_ERROR=''
   for raw in "$@"; do
-    [[ "$raw" != *$'\n'* && "$raw" != *$'\r'* ]] || return 1
+    reason=''
+    if [[ "$raw" = *$'\n'* || "$raw" = *$'\r'* ]]; then
+      printf -v DATESYNC_SELECTION_ERROR 'Selected image path contains an unsupported line break: %q' "$raw"
+      return 1
+    fi
     [[ "$raw" = /* ]] || raw="$PWD/$raw"
-    parent="$(cd -P -- "$(dirname -- "$raw")" && pwd -P)" || return 1
+    if ! parent="$(cd -P -- "$(dirname -- "$raw")" && pwd -P)"; then
+      DATESYNC_SELECTION_ERROR="Cannot access the parent folder of selected image: $raw"; return 1
+    fi
     path="$parent/${raw##*/}"
-    [ ! -L "$path" ] && [ -f "$path" ] && [ "$(stat -c '%h' -- "$path")" = 1 ] || return 1
-    identity="$(stat -c '%d:%i' -- "$path")" || return 1
+    if [ -L "$path" ]; then reason='is a symbolic link'
+    elif [ -d "$path" ]; then reason='is a folder; select individual image files'
+    elif [ ! -e "$path" ]; then reason='is missing or unavailable'
+    elif [ ! -f "$path" ]; then reason='is not a regular file'
+    elif ! links="$(stat -c '%h' -- "$path")"; then reason='could not be inspected'
+    elif [ "$links" != 1 ]; then reason="has $links hard links; select an independent regular image file"
+    fi
+    if [ -n "$reason" ]; then
+      DATESYNC_SELECTION_ERROR="Selected image $path — $reason."
+      printf '%s\n' "$DATESYNC_SELECTION_ERROR" >&2; return 1
+    fi
+    identity="$(stat -c '%d:%i' -- "$path")" || {
+      DATESYNC_SELECTION_ERROR="Cannot read the identity of selected image: $path"; return 1;
+    }
     [ -n "${seen[$identity]:-}" ] && continue
     seen[$identity]=1
     result_ref+=("$path")
   done
-  [ "${#result_ref[@]}" -gt 0 ]
+  [ "${#result_ref[@]}" -gt 0 ] || { DATESYNC_SELECTION_ERROR='Select one or more image files.'; return 1; }
 }
 
 action_datesync() {
@@ -9575,6 +9717,13 @@ Commands:
       Inspect image content and extensions without changing originals.
       Folder scans are nonrecursive. Correctly named copies require review.
 
+  location-gpx -- <images...>
+  location-apply -- <images...>
+  location-report -- <images...>
+  location-reduce -- <images...>
+      Shared Image Location Tools dialog; mandatory Preview Changes for edits.
+      Report is read-only. GPS writes preserve pixels, profiles and image dates.
+
   capturedate --interactive -- <photos...>
   capturedate --datetime 'YYYY-MM-DD HH:MM:SS[.fraction]' --timezone unknown|UTC|+HH:MM -- <photos...>
   capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM]
@@ -9724,6 +9873,10 @@ main() {
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
     crop|overlay|copyright|timeshift|capturedate)
       require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
+    location-gpx|location-copy|location-apply|location-reduce)
+      require_action_tools "$cmd" magick identify exiftool || exit 1 ;;
+    location-report)
+      require_action_tools "$cmd" exiftool || exit 1 ;;
     datesync)
       require_action_tools "$cmd" exiftool || exit 1 ;;
   esac
@@ -9737,6 +9890,11 @@ main() {
     contactsheet)    mk_workdir; action_contactsheet "$@" ;;
     checkextensions) mk_workdir; action_checkextensions "$@" ;;
     convert)         mk_workdir; action_convert "$@" ;;
+    location-gpx)    mk_workdir; action_location gpx "$@" ;;
+    location-copy)   mk_workdir; action_location copy "$@" ;;
+    location-apply)  mk_workdir; action_location apply "$@" ;;
+    location-report) mk_workdir; action_location report "$@" ;;
+    location-reduce) mk_workdir; action_location reduce "$@" ;;
     capturedate)     mk_workdir; action_photo_date "$@" ;;
     copyright)       mk_workdir; action_copyright "$@" ;;
     datesync)        mk_workdir; action_datesync "$@" ;;

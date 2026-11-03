@@ -1,0 +1,30 @@
+[Desktop Entry]
+Type=Service
+Icon=mark-location
+Name=KIM6
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
+X-KDE-Protocol=file
+Actions=01GPX;03Apply;04Report;05Reduce;
+_X-KDE-Submenu=KIM6 — Location
+X-KIM6-Managed=true
+
+[Desktop Action 01GPX]
+Icon=mark-location
+_Name=GPX Geotagging…
+Exec=kim_all location-gpx -- %F
+
+[Desktop Action 03Apply]
+Icon=mark-location
+_Name=Apply GPS to Images…
+Exec=kim_all location-apply -- %F
+
+[Desktop Action 04Report]
+Icon=document-properties
+_Name=Location Privacy Report…
+Exec=kim_all location-report -- %F
+
+[Desktop Action 05Reduce]
+Icon=mark-location
+_Name=Reduce Coordinate Precision…
+Exec=kim_all location-reduce -- %F

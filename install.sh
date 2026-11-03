@@ -79,6 +79,7 @@ kim6_report_dependencies() {
       apt:qdbus) echo qdbus-qt6 ;;
       apt:xdg-open) echo xdg-utils ;;
       apt:qtwidgets) echo python3-pyside6.qtwidgets ;;
+      apt:qtnetwork) echo python3-pyside6.qtnetwork ;;
       apt:intltool-merge) echo intltool ;;
       apt:msgfmt) echo gettext ;;
       apt:kbuildsycoca6) echo libkf6service-bin ;;
@@ -88,6 +89,7 @@ kim6_report_dependencies() {
       dnf:qdbus) echo qt6-qttools ;;
       dnf:xdg-open) echo xdg-utils ;;
       dnf:qtwidgets) echo python3-pyside6 ;;
+      dnf:qtnetwork) echo python3-pyside6 ;;
       dnf:intltool-merge) echo intltool ;;
       dnf:msgfmt) echo gettext ;;
       dnf:kbuildsycoca6) echo kf6-kservice ;;
@@ -97,6 +99,7 @@ kim6_report_dependencies() {
       pacman:qdbus) echo qt6-tools ;;
       pacman:xdg-open) echo xdg-utils ;;
       pacman:qtwidgets) echo pyside6 ;;
+      pacman:qtnetwork) echo pyside6 ;;
       pacman:intltool-merge) echo intltool ;;
       pacman:msgfmt) echo gettext ;;
       pacman:kbuildsycoca6) echo kservice ;;
@@ -106,6 +109,7 @@ kim6_report_dependencies() {
       zypper:qdbus) echo libqt6-qttools ;;
       zypper:xdg-open) echo xdg-utils ;;
       zypper:qtwidgets) echo python3-PySide6 ;;
+      zypper:qtnetwork) echo python3-PySide6 ;;
       zypper:intltool-merge) echo intltool ;;
       zypper:msgfmt) echo gettext-tools ;;
       zypper:kbuildsycoca6) echo kf6-kservice ;;
@@ -140,6 +144,11 @@ kim6_report_dependencies() {
           path="$path (PySide6)"
         fi
         ;;
+      qtnetwork)
+        if python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check >/dev/null 2>&1; then
+          path="$(command -v python3) (QtNetwork, TLS, PNG, platform plugin files)"
+        fi
+        ;;
       *)
         path="$(command -v "$tool" 2>/dev/null || true)"
         ;;
@@ -172,6 +181,7 @@ required|ffmpeg|FFmpeg|Video and animation processing
 required|ffprobe|FFprobe|Video and audio inspection
 required|python3|Python 3|Application helpers
 required|qtwidgets|PySide6 Qt Widgets|Graphical configuration dialogs
+required|qtnetwork|D1 map capabilities|Qt Network, TLS, PNG decoding and platform plugin files
 required|xdg-open|xdg-open|Opening generated output
 required|intltool-merge|intltool|Dolphin menu generation
 optional|pandoc|Pandoc|HTML manual generation
@@ -268,10 +278,21 @@ kim6_report_dependencies
 if ! python3 -c 'from PySide6.QtWidgets import QApplication, QDialog' >/dev/null 2>&1; then
   echo "install.sh: missing Python Qt 6 Widgets dependency." >&2
   echo "Affected: Settings, Collage, Contact Sheet, PDF Album," >&2
-  echo "          Animated GIF, and HTML Gallery dialogs." >&2
+  echo "          Animated GIF, HTML Gallery, and D1 Location Tools dialogs." >&2
   echo "Install: sudo apt install python3-pyside6.qtwidgets" >&2
   exit 1
 fi
+
+# D1 uses software Qt painting, QtNetwork HTTPS and Qt's PNG decoder. This
+# read-only probe creates no application/window and makes no network requests.
+# Missing modules and local runtime/plugin defects must not look like readiness.
+if ! python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check; then
+  echo "install.sh: D1 map dependencies are incomplete; installation stopped." >&2
+  echo "Use the package-manager command above for system Python. For pip-managed Python," >&2
+  echo "use its interpreter with the matching-version PySide6-Essentials repair command reported by the probe." >&2
+  exit 1
+fi
+echo "D1 display connection, remote X11 authorization, network and map-provider availability must be checked at runtime."
 
 
 
@@ -292,6 +313,7 @@ menu_names=(
   kim_convertandrotate.desktop
   kim_information.desktop
   kim_metadata.desktop
+  kim_location.desktop
   kim_publication.desktop
   kim_recipes.desktop
   kim_videoutilities.desktop
@@ -323,7 +345,7 @@ manual_files=(
   docs/images/kim6-metadata-menu.png
   docs/images/kim6-settings-general.png
 )
-runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
   README.md
   docs/ACTIONS.md
@@ -417,7 +439,7 @@ for name in "${menu_names[@]}"; do
 done
 
 # Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
+for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -498,6 +520,11 @@ install_file "$SOURCE_DIR/src/bin/kim_filename.py" "$RUNTIME/bin/kim_filename.py
 install_file "$SOURCE_DIR/src/bin/kim_ui.py" "$RUNTIME/bin/kim_ui.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_date_tools.py" "$RUNTIME/bin/kim_date_tools.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_date_dialog.py" "$RUNTIME/bin/kim_date_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_location.py" "$RUNTIME/bin/kim_location.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_location_dialog.py" "$RUNTIME/bin/kim_location_dialog.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_location_ui.py" "$RUNTIME/bin/kim_location_ui.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_photo_selection.py" "$RUNTIME/bin/kim_photo_selection.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_location_map.py" "$RUNTIME/bin/kim_location_map.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_job.py" "$RUNTIME/bin/kim_job.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_job_process.py" "$RUNTIME/bin/kim_job_process.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_action_dialog.py" "$RUNTIME/bin/kim_action_dialog.py" 0644
@@ -562,6 +589,13 @@ for name in "${menu_names[@]}"; do
   temporary="$(mktemp "$PREFIX/.${name}.tmp.XXXXXX")"
   intltool-merge --desktop-style "$SOURCE_DIR/po" "$SOURCE_DIR/src/$name.in" "$temporary" >/dev/null
   sed -i "s#^Exec=kim_all\\([[:space:]]\\|$\\)#Exec=\"$exec_path\"\\1#" "$temporary"
+  if [ "$name" = kim_location.desktop ]; then
+    # Replacing the complete managed artifact removes the old Copy action too.
+    if grep -Eq '^\[Desktop Action 02Copy\]$|^Exec=.*[[:space:]]location-copy[[:space:]]' "$temporary" ||
+       [ "$(grep -c '^Exec=.*[[:space:]]location-apply -- %F$' "$temporary")" -ne 1 ]; then
+      die "location menu must contain one Apply GPS entry and no redundant Copy GPS action"
+    fi
+  fi
   if ! grep -Fq "kim6/bin/kim_all" "$temporary"; then
     echo "install.sh: rendered menu does not reference the installed dispatcher: $name" >&2
     exit 1
@@ -627,6 +661,11 @@ for helper in \
   kim_settings_dialog.py \
   kim_ui.py \
   kim_date_dialog.py \
+  kim_location.py \
+  kim_location_dialog.py \
+  kim_location_ui.py \
+  kim_photo_selection.py \
+  kim_location_map.py \
   kim_action_dialog.py \
   kim_preview.py \
   kim_recipe_dialog.py \
@@ -692,6 +731,11 @@ for helper in \
   kim_settings_dialog.py \
   kim_ui.py \
   kim_date_dialog.py \
+  kim_location.py \
+  kim_location_dialog.py \
+  kim_location_ui.py \
+  kim_photo_selection.py \
+  kim_location_map.py \
   kim_action_dialog.py \
   kim_preview.py \
   kim_recipe_dialog.py \

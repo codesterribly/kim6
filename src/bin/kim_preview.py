@@ -17,8 +17,12 @@ from kim_psd_source import run_process, inspection_context, checkpoint
 
 def identity(path):
     info=os.lstat(path)
-    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        raise ValueError('Select regular files without symbolic or hard links: '+str(path))
+    if stat.S_ISLNK(info.st_mode): reason = 'is a symbolic link'
+    elif stat.S_ISDIR(info.st_mode): reason = 'is a folder, not an image or GPX file'
+    elif not stat.S_ISREG(info.st_mode): reason = 'is not a regular file'
+    elif info.st_nlink != 1: reason = 'has ' + str(info.st_nlink) + ' hard links'
+    else: reason = None
+    if reason: raise ValueError(str(path) + ' — ' + reason + '. Select an independent regular file.')
     return [info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns,info.st_mode,info.st_uid,info.st_gid]
 
 
@@ -405,6 +409,9 @@ def verify_entry(entry):
 
 def verify_plan(plan):
     if not plan['entries']: raise ValueError('No selected images.')
+    if plan.get('operation') == 'location':
+        from kim_location import verify_dependencies
+        verify_dependencies(plan)
     for entry in plan['entries']: verify_entry(entry)
 
 
@@ -432,10 +439,13 @@ def qt_classes():
             self.plan=plan
             entries=plan['entries']; changes=sum(e['status']=='change' for e in entries); skips=sum(e['status']=='skip' for e in entries)
             errors=sum(e['status']=='error' for e in entries); warnings=sum(bool(e['warnings']) for e in entries)
-            label={'rename':'Rename Images','convert':'Convert Format','copyright':'Set Creator and Copyright','strip':'Remove Metadata','date':'Photo Dates'}[plan['operation']]
+            label={'rename':'Rename Images','convert':'Convert Format','copyright':'Set Creator and Copyright','strip':'Remove Metadata','date':'Photo Dates','location':'Image Location Tools'}[plan['operation']]
             policy=('Create renamed copies' if plan['operation']=='rename' else 'Create new files (originals untouched)') if plan['policy']=='create' else ('Rename selected originals' if plan['operation']=='rename' else 'Explicitly approved replacement')
             settings=''
-            if plan['operation']=='date':
+            if plan['operation']=='location':
+                from kim_location import TITLES
+                label=TITLES[plan['config']['kind']]
+            elif plan['operation']=='date':
                 label={'set':'Set Photo Capture Date','shift':'Adjust Photo Capture Date','exif-to-file':'Set File Date from Photo Capture Date','file-to-exif':'Set Photo Capture Date from File Date'}[plan['config']['kind']]
             elif plan['operation']=='convert':
                 c=plan['config']; settings=' — '+c['format'].upper()
@@ -585,6 +595,9 @@ def main():
         plan=json.loads(Path(path).read_text())
         if command=='verify': verify_plan(plan)
         elif command=='guard':
+            if plan.get('operation') == 'location':
+                from kim_location import verify_dependencies
+                verify_dependencies(plan)
             target=absolute(args[0]); entry=next(e for e in plan['entries'] if e.get('target')==target); verify_entry(entry)
         elif command in ('target','args','state','date'):
             source=absolute(args[0]); entry=next(e for e in plan['entries'] if e['source']==source)

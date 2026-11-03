@@ -7,12 +7,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QLocale, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QLabel, QMessageBox,
-    QPushButton, QSpinBox, QTabWidget, QTextEdit, QTextBrowser, QLineEdit,
+    QPushButton, QSpinBox, QTabWidget, QTextEdit, QTextBrowser, QLineEdit, QCheckBox, QGroupBox,
     QVBoxLayout, QWidget, QScrollArea,
 )
 
@@ -47,8 +47,30 @@ AFFIX_DEFAULTS = {
 AFFIX_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
 
 
+def system_location_units():
+    # Qt follows the desktop's regional measurement setting.
+    try:
+        if QLocale.system().measurementSystem() in (QLocale.ImperialUSSystem, QLocale.ImperialUKSystem):
+            return 'imperial'
+    except (AttributeError, RuntimeError): pass
+    return 'metric'
+
+
+def location_unit_choices():
+    system = system_location_units()
+    other = 'metric' if system == 'imperial' else 'imperial'
+    return [('System (' + system.title() + ')', 'system'), (other.title(), other)]
+
+
+def location_unit_selection(value):
+    # A legacy explicit choice equal to today's system becomes Follow System.
+    return 'system' if value == system_location_units() else value
+
+
 DEFAULTS = {
     "KIM_POLICY": "prompt",
+    "KIM_LOCATION_UNITS": "system",
+    "KIM_LOCATION_ONLINE_MAPS": "no",
     "KIM_NAME_AFFIX_POSITION": "suffix",
     **AFFIX_DEFAULTS,
     "KIM_WEB_QUALITY_JPEG": "95",
@@ -91,6 +113,10 @@ def load_settings(path):
                 settings[key] = value
             continue
         if key == "KIM_POLICY" and value in VALID_POLICIES:
+            settings[key] = value
+        elif key == "KIM_LOCATION_UNITS" and value in {"system", "imperial", "metric"}:
+            settings[key] = value
+        elif key == "KIM_LOCATION_ONLINE_MAPS" and value in {"yes", "no"}:
             settings[key] = value
         elif key == "KIM_NAME_AFFIX_POSITION" and value in VALID_AFFIXES:
             settings[key] = value
@@ -176,12 +202,28 @@ def main():
         values["KIM_POLICY"],
     )
 
+    location_units = combo(
+        "Image location units:",
+        location_unit_choices(),
+        location_unit_selection(values["KIM_LOCATION_UNITS"]),
+    )
+
     explanation = QLabel(
         "Overwriting originals always requires explicit confirmation. "
         "Creation-only operations never overwrite their input images."
     )
     explanation.setWordWrap(True)
     settings_layout.addWidget(explanation)
+
+    maps = QGroupBox("Maps")
+    maps_layout = QVBoxLayout(maps)
+    online_maps = QCheckBox("Automatically load online maps")
+    online_maps.setChecked(values["KIM_LOCATION_ONLINE_MAPS"] == "yes")
+    maps_layout.addWidget(online_maps)
+    maps_explanation = QLabel("When enabled, location maps load geographic imagery automatically. "
+                             "Visible map areas are requested from OpenStreetMap.")
+    maps_explanation.setWordWrap(True); maps_layout.addWidget(maps_explanation)
+    settings_layout.addWidget(maps)
 
     quality = {}
 
@@ -436,6 +478,8 @@ def main():
     outer.addLayout(footer)
 
     def restore_defaults():
+        online_maps.setChecked(DEFAULTS["KIM_LOCATION_ONLINE_MAPS"] == "yes")
+        location_units.setCurrentIndex(location_units.findData(DEFAULTS["KIM_LOCATION_UNITS"]))
         policy.setCurrentIndex(
             policy.findData(DEFAULTS["KIM_POLICY"])
         )
@@ -454,6 +498,8 @@ def main():
 
     def save():
         updated = {
+            "KIM_LOCATION_ONLINE_MAPS": "yes" if online_maps.isChecked() else "no",
+            "KIM_LOCATION_UNITS": location_units.currentData(),
             "KIM_POLICY": policy.currentData(),
             "KIM_NAME_AFFIX_POSITION": affix.currentData(),
         }
