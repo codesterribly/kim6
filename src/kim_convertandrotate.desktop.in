@@ -5,69 +5,74 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;image/jpeg;image/png;image/webp;image/avif;
 X-KDE-Protocol=file
-Actions=01ConvertAVIF;02ConvertBMP;03ConvertGIF;04ConvertHEIC;05ConvertJP2Lossless;06ConvertJP2Lossy;07ConvertJPG;08ConvertJXL;09ConvertPDF;10ConvertPNG;11ConvertTIFF;12ConvertWEBP;_SEPARATOR_;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
+Actions=01ConvertAVIF;02ConvertBMP;03ConvertGIF;04ConvertHEIC;05ConvertJP2Lossless;06ConvertJP2Lossy;07ConvertJPG;08ConvertJXL;09ConvertPDF;10ConvertPNG;11ConvertTIFF;12ConvertWEBP;13ConvertCustom;_SEPARATOR_;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
 _X-KDE-Submenu=KIM6 — Convert/Compress
 X-KIM6-Managed=true
 
 [Desktop Action 01ConvertAVIF]
 Icon=image-x-generic
 _Name=Convert to AVIF
-Exec=kim_all convert --format avif -- %F
+Exec=kim_all convert --preview --format avif -- %F
 
 [Desktop Action 02ConvertBMP]
 Icon=image-x-generic
 _Name=Convert to BMP
-Exec=kim_all convert --format bmp --bmp5 -- %F
+Exec=kim_all convert --preview --format bmp --bmp5 -- %F
 
 [Desktop Action 03ConvertGIF]
 Icon=image-x-generic
 _Name=Convert to GIF
-Exec=kim_all convert --format gif -- %F
+Exec=kim_all convert --preview --format gif -- %F
 
 [Desktop Action 04ConvertHEIC]
 Icon=image-x-generic
 _Name=Convert to HEIC/HEIF
-Exec=kim_all convert --format heic -- %F
+Exec=kim_all convert --preview --format heic -- %F
 
 [Desktop Action 05ConvertJP2Lossless]
 Icon=image-x-generic
 _Name=Convert to JPEG 2000 (Lossless)
-Exec=kim_all convert --format jp2 --jp2-mode lossless -- %F
+Exec=kim_all convert --preview --format jp2 --jp2-mode lossless -- %F
 
 [Desktop Action 06ConvertJP2Lossy]
 Icon=image-x-generic
 _Name=Convert to JPEG 2000 (Lossy)
-Exec=kim_all convert --format jp2 --jp2-mode lossy -- %F
+Exec=kim_all convert --preview --format jp2 --jp2-mode lossy -- %F
 
 [Desktop Action 07ConvertJPG]
 Icon=image-x-generic
 _Name=Convert to JPEG
-Exec=kim_all convert --format jpg -- %F
+Exec=kim_all convert --preview --format jpg -- %F
 
 [Desktop Action 08ConvertJXL]
 Icon=image-x-generic
 _Name=Convert to JPEG XL
-Exec=kim_all convert --format jxl -- %F
+Exec=kim_all convert --preview --format jxl -- %F
 
 [Desktop Action 09ConvertPDF]
 Icon=image-x-generic
 _Name=Convert to PDF
-Exec=kim_all convert --format pdf -- %F
+Exec=kim_all convert --preview --format pdf -- %F
 
 [Desktop Action 10ConvertPNG]
 Icon=image-x-generic
 _Name=Convert to PNG
-Exec=kim_all convert --format png -- %F
+Exec=kim_all convert --preview --format png -- %F
 
 [Desktop Action 11ConvertTIFF]
 Icon=image-x-generic
 _Name=Convert to TIFF
-Exec=kim_all convert --format tiff -- %F
+Exec=kim_all convert --preview --format tiff -- %F
 
 [Desktop Action 12ConvertWEBP]
 Icon=image-x-generic
 _Name=Convert to WebP
-Exec=kim_all convert --format webp -- %F
+Exec=kim_all convert --preview --format webp -- %F
+
+[Desktop Action 13ConvertCustom]
+Icon=image-x-generic
+_Name=Custom Convert…
+Exec=kim_all convert --preview --custom-format -- %F
 
 [Desktop Action 2001CompressRecommended]
 Icon=document-save

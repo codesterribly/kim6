@@ -98,7 +98,69 @@ job_cleanup() {
 
 action_options_dialog() {
   local kind="$1"; shift
-  python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@"
+  case "$kind" in
+    convert|copyright|strip|rename)
+      preview_run python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@" || return $?
+      [ -f "$KIMDIR/options" ] || { progress_error 'The preview editor did not return its selected values. No images were changed.'; return 1; } ;;
+    *) python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@" ;;
+  esac
+}
+
+# Only Batch C GUI boundaries use this wrapper. Helpers return 130 for Cancel
+# and 125 for a failure already displayed in their preview; all other failures
+# need a visible explanation, including import errors and native Qt aborts.
+preview_run() {
+  local diagnostic detail status=0
+  diagnostic="$("$@" 2>&1)" || status=$?
+  [ -z "$diagnostic" ] || printf '%s\n' "$diagnostic" >&2
+  case "$status" in
+    0) return 0 ;;
+    125|130) return "$status" ;;
+  esac
+  detail="$diagnostic"
+  case "$detail" in
+    *'Traceback (most recent call last):'*) detail="${detail##*$'\n'}" ;;
+  esac
+  progress_error "Preview Changes could not complete. No images were changed.
+${detail:-The preview helper exited with status $status.}"
+  return 1
+}
+
+# Preview data is private to this invocation. Seeds use the same filename and
+# affix helpers as execution; approved names are never renumbered at publication.
+preview_active() { [ -f "$KIMDIR/preview.approved" ]; }
+preview_value() { python3 "$DISPATCHER_DIR/kim_preview.py" "$1" "$KIMDIR/preview.approved" "$2"; }
+preview_verify() { python3 "$DISPATCHER_DIR/kim_preview.py" verify "$KIMDIR/preview.approved"; }
+preview_guard() {
+  if preview_active; then
+    if ! python3 "$DISPATCHER_DIR/kim_preview.py" guard "$KIMDIR/preview.approved" "$1"; then
+      : > "$KIMDIR/preview.invalid"
+      return 1
+    fi
+  fi
+}
+preview_selection() {
+  local source
+  for source in "$@"; do
+    [ -f "$source" ] || { progress_error "Selected input is missing or unavailable: $source"; return 1; }
+  done
+}
+preview_confirm() {
+  local operation="$1" policy="$2" tag="$3"; shift 3
+  local source dir base stem ext candidate
+  : > "$KIMDIR/preview.inputs" || { progress_error 'Could not prepare Preview Changes inputs. No images were changed.'; return 1; }
+  for source in "${files[@]}"; do
+    { IFS= read -r dir; IFS= read -r base; IFS= read -r stem; IFS= read -r ext; } < <(split_path "$source")
+    if [ "$operation" = convert ]; then
+      candidate="${outdir:-$dir}/${stem}.${FORMAT}"
+      if [ "$policy" = overwrite ] && [ "${ext,,}" = "$FORMAT" ]; then candidate="$dir/$base"; fi
+    elif [ "$policy" = overwrite ]; then candidate="$source"
+    else candidate="$dir/$(affixed_filename "$stem" "$tag" "$ext")"; fi
+    printf '%s\0%s\0' "$source" "$candidate" >> "$KIMDIR/preview.inputs" || { progress_error 'Could not prepare Preview Changes inputs. No images were changed.'; return 1; }
+  done
+  preview_run python3 "$DISPATCHER_DIR/kim_preview.py" spec "$KIMDIR/preview" "$operation" "$policy" "$@" || return 1
+  preview_run python3 "$DISPATCHER_DIR/kim_preview.py" confirm "$KIMDIR/preview" || return 1
+  preview_run preview_verify || return 1
 }
 
 job_run_tool() {
@@ -189,6 +251,10 @@ count_valid_files() {
 # This boundary is activated only after an in-scope consumer receives a PSD.
 # Non-PSD commands keep their original external-tool invocation paths.
 is_psd_source() {
+  if [ "${preview:-false}" = true ] && ! preview_active; then
+    python3 "$DISPATCHER_DIR/kim_preview.py" is-psd "$1"
+    return $?
+  fi
   local signature=''
   [ -f "$1" ] || return 1
   IFS= read -r -N 4 signature < "$1" || true
@@ -263,7 +329,13 @@ collect_valid_files_with_repeats() {
 
 # Overwrite requires explicit authorization, never configuration alone.
 choose_output_mode() {
-  local title="$1" prompt="$2" count="${3:-}" context="${4:-mixed}" choice warning yes_label
+  local title="$1" prompt="$2" count="${3:-}" context="${4:-mixed}" choice warning yes_label create_label review_label
+  create_label="$(gettext 'Create new files (originals untouched)')"
+  review_label="$(gettext 'Overwrite originals (confirmation required)')"
+  if [ "$context" = rename ]; then
+    create_label="$(gettext 'Create renamed copies')"
+    review_label="$(gettext 'Rename selected originals (confirmation required)')"
+  fi
 
   if [ "$(policy_mode)" = create ]; then
     printf '%s\n' create
@@ -275,8 +347,8 @@ choose_output_mode() {
   fi
 
   choice="$(kdialog --title "$title" --radiolist "$prompt" \
-    create "$(gettext 'Create new files (originals untouched)')" on \
-    review "$(gettext 'Overwrite originals (confirmation required)')" off)" || {
+    create "$create_label" on \
+    review "$review_label" off)" || {
     printf '%s\n' cancel
     return 0
   }
@@ -771,6 +843,7 @@ commit_tmp_to_target() {
   local tmp="$1" target="$2" mode="${3:-create}" parent lock source_device target_device
   case "$mode" in create|overwrite) : ;; *) return 1 ;; esac
   owned_stage_file "$tmp" || return 1
+  preview_guard "$target" || return 1
   if [ -f "$KIMDIR/job.ref" ]; then
     local job_ref; read -r job_ref < "$KIMDIR/job.ref"
     progress_cancelled "$job_ref" && return 1
@@ -787,6 +860,7 @@ $(gettext 'Writing / publishing output')" || return 1
 
   if [ "$mode" = "create" ]; then
     # No check-then-move: link itself refuses ANY occupied directory entry.
+    preview_guard "$target" || return 1
     ln -T -- "$tmp" "$target" || return 1
     publication_record_output "$target"
     rm -f -- "$tmp" || true
@@ -805,6 +879,7 @@ $(gettext 'Writing / publishing output')" || return 1
   fi
   [ ! -L "$target" ] && [ -f "$target" ] || return 1
   [ "$(stat -c '%h' -- "$target")" = "1" ] || return 1
+  preview_guard "$target" || return 1
   # Prefer a rename-only move when available. Never use ordinary mv -f.
   case "$(mv --help 2>/dev/null)" in
     *--no-copy*) mv --no-copy -fT -- "$tmp" "$target"; return $? ;;
@@ -1212,7 +1287,15 @@ progress_cancelled() {
 }
 
 progress_begin_item() {
+  [ ! -f "$KIMDIR/preview.invalid" ] || return 1
   local ref="$1" text="$2"
+  if preview_active; then
+    local preview_source="${source:-${i:-}}" preview_target
+    if [ -n "$preview_source" ]; then
+      preview_target="$(preview_value target "$preview_source")" || return 1
+      preview_guard "$preview_target" || return 1
+    fi
+  fi
   if progress_cancelled "$ref"; then
     progress_close "$ref" || true
     return 1
@@ -2140,7 +2223,7 @@ $diagnostic"
 action_convert() {
   # Conversion validates animated inputs separately, so unsupported
   # animation or frame timing cannot silently become a still image.
-  local FORMAT='' bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false outdir='' strip_metadata=false
+  local FORMAT='' preview=false bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false outdir='' strip_metadata=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -2182,7 +2265,9 @@ action_convert() {
           bmp5=true
           shift
           ;;
+        --preview) preview=true; shift ;;
         --custom-format)
+          preview=true
           custom=true
           shift
           ;;
@@ -2198,7 +2283,7 @@ action_convert() {
       [ -z "$FORMAT" ] || die "convert: use --custom-format or --format, not both"
       action_options_dialog convert "${raw_files[@]}" || return 1
       local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-      [ "${#choices[@]}" -eq 6 ] || return 1
+      [ "${#choices[@]}" -eq 6 ] || { progress_error 'Custom Convert returned incomplete preview settings. No images were changed.'; return 1; }
       FORMAT="${choices[0]}"; strip_metadata="${choices[5]}"
       if [ "$FORMAT" = jp2 ]; then jp2_mode="${choices[1]}"; jp2_quality="${choices[2]}"; fi
       if [ "$FORMAT" = jpeg ]; then jpeg_scan="${choices[3]}"; jpeg_optimize="${choices[4]}"; fi
@@ -2278,6 +2363,7 @@ action_convert() {
   esac
 
   local -a files=()
+  if [ "$preview" = true ]; then preview_selection "${raw_files[@]}" || return 1; fi
   collect_valid_files files "${raw_files[@]}" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
@@ -2304,6 +2390,7 @@ action_convert() {
   fi
 
   if [ -n "$outdir" ]; then
+    [[ "$outdir" != *$'\n'* && "$outdir" != *$'\r'* ]] || die 'convert: ambiguous output directory'
     [ "$mode" = create ] || die 'convert: --output-dir requires create mode'
     [ -d "$outdir" ] && [ ! -L "$outdir" ] && [ -w "$outdir" ] && [ -x "$outdir" ] || die 'convert: output directory is unavailable'
     outdir="$(cd -P -- "$outdir" && pwd)" || return 1
@@ -2349,6 +2436,9 @@ action_convert() {
     done
   fi
 
+  if [ "$preview" = true ]; then
+    preview_confirm convert "$mode" '' format "$FORMAT" jp2_mode "$jp2_mode" jp2_quality "$jp2_quality" jpeg_scan "$jpeg_scan" jpeg_optimize "$jpeg_optimize" bmp5 "$bmp5" strip_metadata "$strip_metadata" || return 1
+  fi
   report_init
 
   local dbusRef
@@ -2394,6 +2484,11 @@ action_convert() {
       OUTFILE="$dir/$base"
     fi
 
+    if preview_active; then
+      OUTFILE="$(preview_value target "$i")" || return 1
+      if [ "$(preview_value state "$i")" = skip ]; then report_skip "$i"; progress_value "$dbusRef" "$counter"; continue; fi
+      preview_guard "$OUTFILE" || { report_fail "$i — approved plan changed"; break; }
+    fi
     local input_is_psd=false
     if is_psd_source "$i"; then input_is_psd=true; fi
     rc=0
@@ -2453,85 +2548,20 @@ action_convert() {
         "$(gettext 'Convert: APNG animation could not be safely inspected.')\n\n$base"
       report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
     fi
-    if [[ "${input_format^^}" == EXR || "${input_format^^}" == HDR ]] &&
-       [[ "${FORMAT^^}" != "${input_format^^}" ]]; then
-      kdialog --title "$(gettext 'Kim')" --error \
-        "$(gettext 'Convert: HDR and OpenEXR sources require explicit tone mapping before conversion to another format; this action does not guess an SDR mapping.')\n\n$base"
-      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-    fi
-    if [ "$input_frames" -lt 1 ]; then
-      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-    fi
-    if [ "$input_is_apng" = true ] && [ "$FORMAT" != apng ]; then
-      kdialog --title "$(gettext 'Kim')" --error \
-        "$(gettext 'Convert: preserving animated PNG timing and looping is supported only for APNG output.')\n\n$base"
-      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-    fi
-    if [ "$input_frames" -gt 1 ] && ! image_output_preserves_frames "$FORMAT"; then
-      kdialog --title "$(gettext 'Kim')" --error \
-        "$(gettext 'Convert: the selected output format cannot preserve this multi-frame image.')\n\n$base"
-      report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-    fi
-    # A same-extension overwrite with no options is an intentional no-op.
-    # Return before applying encoder safety restrictions: no re-encoding occurs.
-    if [ "$mode" = overwrite ] && [ -n "$ext" ] &&
-       [ "${ext,,}" = "$FORMAT" ] && [ -z "$jpeg_scan" ] &&
-       [ "$jpeg_optimize" != true ] && [ "$bmp5" != true ] &&
-       [ "$(image_format_class "$input_format")" = "$(image_format_class "$FORMAT")" ]; then
-      report_ok
-      progress_value "$dbusRef" "$counter"
-      continue
-    fi
-
-    # A frame count is not evidence that an animation's playback contract
-    # survived conversion. Reject unverified cross-format re-encoding before
-    # creating a stage; preserve multipage document conversions separately.
-    if [ "$input_frames" -gt 1 ] && [ "$input_is_apng" != true ]; then
-      case "$(image_format_class "$input_format")" in
-        GIF)
-          case "$FORMAT" in
-            gif|apng) ;;
-            *)
-              kdialog --title "$(gettext 'Kim')" --error \
-                "$(gettext 'Convert: preserving animated playback across these formats is not verified; no output was written.')\n\n$base"
-              report_fail "$i"; progress_value "$dbusRef" "$counter"; continue ;;
-          esac
-          ;;
-        WEBP)
-          if [ "$FORMAT" != webp ]; then
-            kdialog --title "$(gettext 'Kim')" --error \
-              "$(gettext 'Convert: animated WebP conversion to another format cannot safely retain frame timing, blending and looping.')\n\n$base"
-            report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-          fi
-          ;;
-        AVIF|HEIC)
-          kdialog --title "$(gettext 'Kim')" --error \
-            "$(gettext 'Convert: multi-image AVIF/HEIC sequences cannot be safely re-encoded without verified timing and playback metadata.')\n\n$base"
-          report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-          ;;
-        *)
-          # TIFF/PDF/ICO collections are pages, not validated animations.
-          case "$FORMAT" in
-            gif|gif87|webp|apng|avif|heic|heif)
-              kdialog --title "$(gettext 'Kim')" --error \
-                "$(gettext 'Convert: multipage images cannot be safely converted to animated formats.')\n\n$base"
-              report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
-              ;;
-          esac
-          ;;
-      esac
-    fi
+    # These header-based refusals/no-op rules also build Preview Changes.
+    # APNG decoding above is deliberately deferred until after confirmation.
+    local conversion_state webp_animation=false
     if [ "$input_frames" -eq 1 ] && [ "$(image_format_class "$input_format")" = WEBP ] &&
-       image_webp_animation_signature "$i" >/dev/null 2>> "$KIMDIR/convert-output-error" && [ "$FORMAT" != webp ]; then
-      kdialog --title "$(gettext 'Kim')" --error \
-        "$(gettext 'Convert: animated WebP playback cannot be preserved in the requested output format.')\n\n$base"
+       image_webp_animation_signature "$i" >/dev/null 2>> "$KIMDIR/convert-output-error"; then webp_animation=true; fi
+    if ! conversion_state="$(python3 "$DISPATCHER_DIR/kim_preview.py" conversion-check \
+        "$input_format" "$input_frames" "$input_is_apng" "$webp_animation" "$FORMAT" "$mode" "$ext" \
+        "$jpeg_scan" "$jpeg_optimize" "$bmp5" 2> "$KIMDIR/convert-preflight-error")"; then
+      progress_error "${base}: $(cat -- "$KIMDIR/convert-preflight-error")"
       report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
     fi
-    # Even a single-frame APNG has a looping/control contract. Same-format
-    # re-encoding must validate the control chunks after creating the stage.
-    # An animated WebP with a one-frame ANMF sequence is handled similarly.
+    if [ "$conversion_state" = skip ]; then report_ok; progress_value "$dbusRef" "$counter"; continue; fi
 
-    if [ "$mode" = "create" ] || [ "$input_is_psd" = true ]; then
+    if ! preview_active && { [ "$mode" = "create" ] || [ "$input_is_psd" = true ]; }; then
       n=1
       while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
         OUTFILE="$dir/${stem}_${n}.${FORMAT}"
@@ -2627,7 +2657,7 @@ action_convert() {
             -nostats -i "$OUTTMP" -map 0:v:0 -f null - || rc=$?
         fi
       elif [ "$FORMAT" = pdf ] && [ "$input_is_psd" = true ]; then
-        if [ "$strip_metadata" != true ]; then
+        if [ "$strip_metadata" != true ] && ! preview_active; then
           if ! kdialog --title "$(gettext 'Kim — Photoshop to PDF')" --warningyesno \
             "$(gettext 'Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged.')"; then
             rc=1
@@ -4002,6 +4032,8 @@ action_rename() {
     [ "$reviewed_policy" != cancel ] || return 1
     printf '%s\n' "$reviewed_policy" > "$KIMDIR/rename-policy"
     action_options_dialog rename "$reviewed_policy" "$@" || return 1
+    preview_run mv -- "$KIMDIR/options.approved" "$KIMDIR/preview.approved" || return 1
+    preview_run preview_verify || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
     action_rename "${choices[@]}" -- "$@"; return $?
   fi
@@ -4208,6 +4240,9 @@ Would you like to choose another rename method?"; then
   ref="$(progress_open "${#sources[@]}" "$(gettext 'Kim - Planning renames ...')")"
   # Complete preflight precedes the first copy/link/removal. EXIF failures are
   # accounted for individually and skipped; all other mapping conflicts abort.
+  if preview_active; then
+    for source in "${sources[@]}"; do targets+=("$(preview_value target "$source")"); done
+  else
   for source in "${sources[@]}"; do
     if progress_cancelled "$ref"; then
       report_fail "$source"
@@ -4283,6 +4318,7 @@ Would you like to choose another rename method?"; then
     targets+=("$target")
     [ "$mode" != sequential ] || number=$((number + 1))
   done
+  fi
   for index in "${!sources[@]}"; do
     source="${sources[$index]}"; target="${targets[$index]}"
     counter=$((index + 1))
@@ -4342,6 +4378,9 @@ Would you like to choose another rename method?"; then
     if progress_cancelled "$ref"; then
       interrupted=true
       rc=1
+    fi
+    if [ "$rc" -eq 0 ]; then
+      preview_guard "$target" || rc=1
     fi
     if [ "$rc" -eq 0 ]; then
       if [ -n "$tmp" ]; then
@@ -5316,6 +5355,7 @@ action_stripmeta() {
       ;;
   esac
   local -a files=()
+  if [ "$interactive" = true ]; then preview_selection "$@" || return 1; fi
   collect_valid_files files "$@" || return 1
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
@@ -5327,10 +5367,10 @@ action_stripmeta() {
     case "$strip_mode" in all|gps|ai) : ;; *) return 1 ;; esac
   fi
   if [ "$strip_mode" != all ]; then
-    action_stripmeta_selective "$strip_mode" "$remove_ai" "${files[@]}"
+    action_stripmeta_selective "$strip_mode" "$remove_ai" "$interactive" "${files[@]}"
     return $?
   fi
-  if [ "$remove_ai" = true ]; then
+  if [ "$remove_ai" = true ] && [ "$interactive" != true ]; then
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal.')" 2>/dev/null || true
   fi
 
@@ -5340,6 +5380,7 @@ action_stripmeta() {
     "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
   [ "$mode" != cancel ] || return 1
 
+  if [ "$interactive" = true ]; then preview_confirm strip "$mode" stripped mode all remove_ai "$remove_ai" || return 1; fi
   report_init
   local dbusRef interrupted
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
@@ -5378,16 +5419,7 @@ action_stripmeta() {
     # PNG/APNG full stripping removes custom ancillary metadata and text.
     # Selective AI/GPS keep their existing paths until the next stage.
     if [[ "${ext,,}" = png || "${ext,,}" = apng ]]; then
-      if [ "$mode" = overwrite ]; then
-        OUTFILE="$i"
-      else
-        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
-        n=1
-        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
-          n=$((n + 1))
-        done
-      fi
+      OUTFILE="$(metadata_output_path "$i" stripped "$mode")"
 
       if metadata_png_publish_one "$i" "$OUTFILE" "$mode" "$dbusRef" all false; then
         report_ok
@@ -5413,16 +5445,7 @@ action_stripmeta() {
     if [ -n "$container_format" ] &&
        [ "${KIM_JPEG_WEBP_ENGINE:-native}" != legacy ]; then
 
-      if [ "$mode" = overwrite ]; then
-        OUTFILE="$i"
-      else
-        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
-        n=1
-        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
-          n=$((n + 1))
-        done
-      fi
+      OUTFILE="$(metadata_output_path "$i" stripped "$mode")"
 
       if metadata_jpeg_webp_publish_all \
           "$i" "$OUTFILE" "$mode" "$dbusRef" \
@@ -5442,16 +5465,7 @@ action_stripmeta() {
     if [ "${ext,,}" = gif ] &&
        [ "${KIM_GIF_ENGINE:-native}" != legacy ]; then
 
-      if [ "$mode" = overwrite ]; then
-        OUTFILE="$i"
-      else
-        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
-        n=1
-        while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-          OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
-          n=$((n + 1))
-        done
-      fi
+      OUTFILE="$(metadata_output_path "$i" stripped "$mode")"
 
       if metadata_jpeg_webp_publish_all \
           "$i" "$OUTFILE" "$mode" "$dbusRef" gif; then
@@ -5486,16 +5500,7 @@ action_stripmeta() {
       continue
     fi
 
-    if [ "$mode" = overwrite ]; then
-      OUTFILE="$i"
-    else
-      OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext")"
-      n=1
-      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="$dir/$(affixed_filename "$stem" stripped "$ext" "$n" "-")"
-        n=$((n + 1))
-      done
-    fi
+    OUTFILE="$(metadata_output_path "$i" stripped "$mode")"
     if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
       report_fail "$i"
       progress_value "$dbusRef" "$counter"
@@ -6017,6 +6022,7 @@ metadata_publish_one() {
 }
 
 metadata_output_path() {
+  if preview_active; then preview_value target "$1"; return $?; fi
   local source="$1" tag="$2" publication_mode="$3" dir stem ext target n=1
   {
     IFS= read -r dir
@@ -6039,7 +6045,7 @@ metadata_output_path() {
 action_stripmeta_selective() {
   # Remove only the selected metadata classes; leave unrelated tags intact.
   # AI/C2PA removal is best-effort, not proof of origin.
-  local strip_mode="$1" remove_ai="$2"; shift 2
+  local strip_mode="$1" remove_ai="$2" interactive="$3"; shift 3
   local -a files=() expected args ai_tags=(XMP-iptcExt:AIPromptInformation XMP-iptcExt:AIPromptWriterName XMP-iptcExt:AISystemUsed XMP-iptcExt:AISystemVersionUsed)
   local -a gps_ext_tags=(XMP-iptcExt:LocationShownGPSLatitude XMP-iptcExt:LocationShownGPSLongitude
     XMP-iptcExt:LocationShownGPSAltitude XMP-iptcExt:LocationShownGPSAltitudeRef
@@ -6060,12 +6066,17 @@ action_stripmeta_selective() {
   done
   [ "$strip_mode" = ai ] || [ "$remove_ai" != true ] || do_ai=true
   [ "$strip_mode" != ai ] || do_ai=true
-  if [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; then
+  if [ "$interactive" != true ] && { [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; }; then
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
   fi
   METADATA_INTERRUPTED=false
   publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
   [ "$publication_mode" != cancel ] || return 1
+  if [ "$interactive" = true ]; then
+    local preview_tag="$strip_mode"
+    [ "$remove_ai" != true ] || preview_tag="${preview_tag}_ai"
+    preview_confirm strip "$publication_mode" "$preview_tag" mode "$strip_mode" remove_ai "$remove_ai" || return 1
+  fi
   report_init
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
@@ -6194,11 +6205,22 @@ action_photo_date() {
       *) die "capturedate: unknown option $1" ;;
     esac
   done
+  if [ "$interactive" = true ]; then preview_selection "${files[@]}" || return 1; fi
   datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Select local, unambiguous photo files.')"; return 1; }
   for source in "${files[@]}"; do identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    python3 "$DISPATCHER_DIR/kim_date_dialog.py" "$kind" "$config" "${files[@]}" || return 1
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    [ "$policy" != cancel ] || return 1
+    # Pass the existing helper's exact affix seed alongside each source.
+    : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Photo Dates preview inputs. No images were changed.'; return 1; }
+    for source in "${files[@]}"; do
+      target="$(metadata_output_path "$source" dated "$policy")" || { progress_error 'Could not resolve Photo Dates preview destinations. No images were changed.'; return 1; }
+      printf '%s\0' "$target" >> "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Photo Dates preview inputs. No images were changed.'; return 1; }
+    done
+    preview_run python3 "$DISPATCHER_DIR/kim_date_dialog.py" "$kind" "$config" "$policy" "$KIMDIR/date-seeds" "${files[@]}" || return 1
+    preview_run mv -- "$config.approved" "$KIMDIR/preview.approved" || return 1
+    preview_run preview_verify || return 1
   else
     python3 - "$config" "$kind" "$clock" "$zone" "$seconds" "$fields" <<'PYDATE'
 import json,sys
@@ -6207,23 +6229,30 @@ p,kind,clock,zone,seconds,fields=sys.argv[1:]
 Path(p).write_text(json.dumps(dict(kind=kind,datetime=clock,timezone=zone or ('embedded' if kind in ('shift','exif-to-file') else ''),seconds=int(seconds),fields=fields)))
 PYDATE
   fi
-  # Preflight the entire batch before asking for policy or changing any file.
-  for source in "${files[@]}"; do
-    if ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
-      progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
-    fi
-  done
-  policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
-  [ "$policy" != cancel ] || return 1
+  if ! preview_active; then
+    # Preflight the entire batch before asking for policy or changing any file.
+    for source in "${files[@]}"; do
+      if ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
+        progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
+      fi
+    done
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    [ "$policy" != cancel ] || return 1
+  fi
   report_init; METADATA_INTERRUPTED=false
   ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Photo dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${identities[$((counter-1))]}" ]; then
-      report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"; continue
+      report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"
+      if preview_active; then break; fi
+      continue
     fi
-    progress_begin_item "$ref" "$(gettext 'Planning photo date:') ${source##*/}" || break
-    if ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
+    progress_begin_item "$ref" "$(gettext 'Planning photo date:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
+    if preview_active; then
+      if [ "$(preview_value state "$source")" = skip ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
+      preview_value date "$source" > "$result" || return 1
+    elif ! python3 "$DISPATCHER_DIR/kim_date_tools.py" "$config" "$source" "$result" 2> "$KIMDIR/date-error"; then
       report_fail "$source: $(cat "$KIMDIR/date-error")"; progress_value "$ref" "$counter"; continue
     fi
     mapfile -d '' -t args < "$result"
@@ -6259,7 +6288,7 @@ action_copyright() {
   # Resolve copyright year substitutions from available capture dates.
   # Compare expected tags against the staged output before publication.
   local creator="${KIM_COPYRIGHT_CREATOR:-}" notice="${KIM_COPYRIGHT_NOTICE:-}" rights="${KIM_COPYRIGHT_USAGE_RIGHTS:-}"
-  local year='' interactive=false provided=false
+  local year='' interactive=false provided=false policy=''
   local -a files=() args expected
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -6283,6 +6312,7 @@ action_copyright() {
       *) files+=("$1"); shift ;;
     esac
   done
+  if [ "$interactive" = true ]; then preview_selection "${files[@]}" || return 1; fi
   collect_valid_files files "${files[@]}" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
   if ! type -P exiftool >/dev/null 2>&1; then
@@ -6290,15 +6320,20 @@ action_copyright() {
     return 1
   fi
   if [ "$interactive" = true ] || { [ "$provided" != true ] && [ -z "$creator$notice$rights" ]; }; then
+    interactive=true
+    policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
     action_options_dialog copyright "${files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-    [ "${#choices[@]}" -eq 3 ] || return 1
+    [ "${#choices[@]}" -eq 3 ] || { progress_error 'The rights editor returned incomplete preview settings. No images were changed.'; return 1; }
     creator="${choices[0]}"; notice="${choices[1]}"; rights="${choices[2]}"
   fi
   [ -n "$creator$notice$rights" ] || die "copyright: select at least one nonempty field"
   [ -z "$year" ] || [[ "$year" =~ ^[0-9]{4}$ ]] || die "copyright: year must be four digits"
-  local policy counter=0 source ref target capture_year expected_value option rc
-  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+  local counter=0 source ref target capture_year expected_value option rc
+  if [ "$interactive" != true ]; then
+    policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+  fi
+  if [ "$interactive" = true ]; then preview_confirm copyright "$policy" copyright creator "$creator" notice "$notice" rights "$rights" year "$year" || return 1; fi
   METADATA_INTERRUPTED=false
   report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
@@ -6307,32 +6342,40 @@ action_copyright() {
       report_fail "$source"
       break
     }
-    local rights_format legacy_rights=true
-    rights_format="$(metadata_query "$source" -FileType)" || { report_fail "$source"; continue; }
-    case "$rights_format" in WEBP|'Extended WEBP'|HEIC|HEIF|AVIF|JXL) legacy_rights=false ;; esac
-    args=(); expected=()
-    if [ -n "$creator" ]; then
-      args+=(-EXIF:Artist="$creator" -XMP-dc:Creator="$creator")
-      expected+=('-Artist'$'\034'"$creator" '-XMP-dc:Creator'$'\034'"$creator")
-      if [ "$legacy_rights" = true ]; then args+=(-IPTC:By-line="$creator"); expected+=('-IPTC:By-line'$'\034'"$creator"); fi
+    if preview_active; then
+      if [ "$(preview_value state "$source")" = skip ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
+      preview_value args "$source" > "$KIMDIR/rights.args" || return 1
+      mapfile -d '' -t args < "$KIMDIR/rights.args"
+      expected=()
+      for option in "${args[@]}"; do expected+=("${option%%=*}"$'\034'"${option#*=}"); done
+    else
+      local rights_format legacy_rights=true
+      rights_format="$(metadata_query "$source" -FileType)" || { report_fail "$source"; continue; }
+      case "$rights_format" in WEBP|'Extended WEBP'|HEIC|HEIF|AVIF|JXL) legacy_rights=false ;; esac
+      args=(); expected=()
+      if [ -n "$creator" ]; then
+        args+=(-EXIF:Artist="$creator" -XMP-dc:Creator="$creator")
+        expected+=('-Artist'$'\034'"$creator" '-XMP-dc:Creator'$'\034'"$creator")
+        if [ "$legacy_rights" = true ]; then args+=(-IPTC:By-line="$creator"); expected+=('-IPTC:By-line'$'\034'"$creator"); fi
+      fi
+      if [ -n "$notice" ]; then
+        capture_year="$(metadata_query "$source" -DateTimeOriginal)" || { report_fail "$source"; progress_value "$ref" "$counter"; continue; }
+        if [[ "$capture_year" =~ ^([0-9]{4}): ]]; then capture_year="${BASH_REMATCH[1]}"; else capture_year="$(date +%Y)"; fi
+        [ -n "$year" ] && capture_year="$year"
+        expected_value="${notice//\{YEAR\}/$capture_year}"
+        args+=(-EXIF:Copyright="$expected_value" -XMP-dc:Rights="$expected_value")
+        expected+=('-Copyright'$'\034'"$expected_value" '-XMP-dc:Rights'$'\034'"$expected_value")
+        if [ "$legacy_rights" = true ]; then args+=(-IPTC:CopyrightNotice="$expected_value"); expected+=('-IPTC:CopyrightNotice'$'\034'"$expected_value"); fi
+      fi
+      if [ -n "$rights" ]; then args+=(-XMP-xmpRights:UsageTerms="$rights"); expected+=('-XMP-xmpRights:UsageTerms'$'\034'"$rights"); fi
+      local already=true pair current pair_tag pair_value
+      for pair in "${expected[@]}"; do
+        pair_tag="${pair%%$'\034'*}"; pair_value="${pair#*$'\034'}"
+        current="$(metadata_query "$source" "$pair_tag")" || current=''
+        [ "$current" = "$pair_value" ] || already=false
+      done
+      if [ "$already" = true ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
     fi
-    if [ -n "$notice" ]; then
-      capture_year="$(metadata_query "$source" -DateTimeOriginal)" || { report_fail "$source"; progress_value "$ref" "$counter"; continue; }
-      if [[ "$capture_year" =~ ^([0-9]{4}): ]]; then capture_year="${BASH_REMATCH[1]}"; else capture_year="$(date +%Y)"; fi
-      [ -n "$year" ] && capture_year="$year"
-      expected_value="${notice//\{YEAR\}/$capture_year}"
-      args+=(-EXIF:Copyright="$expected_value" -XMP-dc:Rights="$expected_value")
-      expected+=('-Copyright'$'\034'"$expected_value" '-XMP-dc:Rights'$'\034'"$expected_value")
-      if [ "$legacy_rights" = true ]; then args+=(-IPTC:CopyrightNotice="$expected_value"); expected+=('-IPTC:CopyrightNotice'$'\034'"$expected_value"); fi
-    fi
-    if [ -n "$rights" ]; then args+=(-XMP-xmpRights:UsageTerms="$rights"); expected+=('-XMP-xmpRights:UsageTerms'$'\034'"$rights"); fi
-    local already=true pair current pair_tag pair_value
-    for pair in "${expected[@]}"; do
-      pair_tag="${pair%%$'\034'*}"; pair_value="${pair#*$'\034'}"
-      current="$(metadata_query "$source" "$pair_tag")" || current=''
-      [ "$current" = "$pair_value" ] || already=false
-    done
-    if [ "$already" = true ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
     target="$(metadata_output_path "$source" copyright "$policy")"
     if metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}"; then
       report_ok

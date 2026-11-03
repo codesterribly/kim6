@@ -10,7 +10,7 @@ from kim_recipe_image import capture_date, NO_LEGACY_IPTC, canonical_file_type
 from kim_psd_source import run_process
 
 
-def ensure_still_capture_input(path):
+def ensure_still_capture_input(path, preview=False):
     """Do not let a still-photo metadata workflow weaken animation refusals.
 
     Header/chunk inspection is read-only and never decodes a large PSD merely
@@ -18,7 +18,8 @@ def ensure_still_capture_input(path):
     existing metadata/tool validation; animation control always fails closed.
     """
     import struct
-    with open(path,'rb') as stream:
+    import os
+    with os.fdopen(os.open(path,os.O_RDONLY | (os.O_NOFOLLOW|os.O_NOATIME if preview else 0)),'rb') as stream:
         signature=stream.read(12)
         png=signature.startswith(b'\x89PNG\r\n\x1a\n')
         webp=signature[:4]==b'RIFF' and signature[8:12]==b'WEBP'
@@ -34,12 +35,16 @@ def ensure_still_capture_input(path):
             stream.seek(length+(4 if png else length%2),1)
 
 
-def source_date(path, ignore_invalid=False):
-    ensure_still_capture_input(path)
-    result = run_process(['exiftool','-json','-G1','-DateTimeOriginal','-OffsetTimeOriginal',
-                          '-SubSecTimeOriginal','-CreateDate','-ModifyDate','-OffsetTimeDigitized','-OffsetTime','-SubSecTimeDigitized','-SubSecTime','-FileType',str(path)],text=True)
-    if result.returncode: raise RecipeError('Cannot read photo dates: ' + result.stderr.strip())
-    raw = json.loads(result.stdout)[0]
+def source_date(path, ignore_invalid=False, preview=False):
+    ensure_still_capture_input(path,preview)
+    tags=['-EXIF:all','-XMP:all','-IPTC:DateCreated','-IPTC:TimeCreated','-FileType']
+    if preview:
+        from kim_preview import read_metadata
+        raw=read_metadata(path,tags)
+    else:
+        result=run_process(['exiftool','-json','-G1',*tags,'--',str(path)],text=True)
+        if result.returncode: raise RecipeError('Cannot read photo dates: '+result.stderr.strip())
+        raw=json.loads(result.stdout)[0]
     exif = raw.get('ExifIFD:DateTimeOriginal'); xmp = raw.get('XMP-exif:DateTimeOriginal')
     info = {'DateTimeOriginal':exif or xmp, 'FileType':raw.get('File:FileType','')}
     if exif:
@@ -52,13 +57,13 @@ def source_date(path, ignore_invalid=False):
     import re
     match = re.search(r'\.(\d+)',str(info['DateTimeOriginal']))
     fraction = str(info.get('SubSecTimeOriginal') or (match.group(1) if match else ''))
-    return capture, fraction, canonical_file_type(info['FileType']).lower()
+    return capture, fraction, canonical_file_type(info['FileType']).lower(),raw
 
 
 def resolve(path, config):
     kind = config['kind']; fields = config.get('fields','capture'); zone = config.get('timezone','embedded')
     if fields not in ('capture','all'): raise RecipeError('Choose the date fields to change.')
-    capture, fraction, fmt = source_date(path, ignore_invalid=kind in ('set','file-to-exif'))
+    capture, fraction, fmt, raw = source_date(path, ignore_invalid=kind in ('set','file-to-exif'),preview=config.get('_preview',False))
     if kind == 'set':
         capture, fraction = explicit(config.get('datetime',''),zone)
     elif kind == 'file-to-exif':
@@ -82,10 +87,6 @@ def resolve(path, config):
         return {'epoch_ns':epoch_ns(capture,fraction),'preview':display(capture,fraction),'args':[]}
     args = assignments(capture,fraction,fields,fmt not in NO_LEGACY_IPTC)
     if kind == 'shift' and fields == 'all':
-        result=run_process(['exiftool','-json','-G1','-CreateDate','-ModifyDate',
-            '-OffsetTimeDigitized','-OffsetTime','-SubSecTimeDigitized','-SubSecTime',str(path)],text=True)
-        if result.returncode: raise RecipeError('Cannot read the other embedded photo dates.')
-        raw=json.loads(result.stdout)[0]
         # Change only dates that exist, each by the same wall-clock delta.
         for key,subsec,offset,mirror in [('CreateDate','SubSecTimeDigitized','OffsetTimeDigitized','XMP-xmp:CreateDate'),
                                          ('ModifyDate','SubSecTime','OffsetTime','XMP-xmp:ModifyDate')]:
@@ -99,7 +100,7 @@ def resolve(path, config):
                 wall=f'{other.year:04d}:'+other.strftime('%m:%d %H:%M:%S')
                 off=other.strftime('%z'); off=off[:3]+':'+off[3:] if off else ''
                 args += ['-EXIF:'+key+'='+wall, '-'+mirror+'='+wall+('.'+frac if frac else '')+off]
-    return {'preview':display(capture,fraction),'args':args}
+    return {'preview':display(capture,fraction),'args':args,'current':raw}
 
 
 def main():

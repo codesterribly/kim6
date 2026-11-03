@@ -3,35 +3,20 @@
 import json
 import sys
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QFormLayout,
-    QLabel, QComboBox, QLineEdit, QPushButton, QDialogButtonBox, QPlainTextEdit)
+    QLabel, QComboBox, QLineEdit, QPushButton, QDialogButtonBox)
 from kim_ui import CaptureDateInput, CaptureAdjustment, CaptureDateOptions
-from kim_date_tools import resolve
 
 TITLES = {'set':'Set Photo Capture Date', 'shift':'Adjust Photo Capture Date',
           'exif-to-file':'Set File Date from Photo Capture Date', 'file-to-exif':'Set Photo Capture Date from File Date'}
 
 
-class DatePreview(QThread):
-    def __init__(self, files, config, parent):
-        super().__init__(parent); self.files, self.config = files, config; self.rows=[]; self.valid=True
-
-    def run(self):
-        from kim_psd_source import inspection_context
-        for path in self.files:
-            if self.isInterruptionRequested(): self.valid=False; break
-            try:
-                with inspection_context(cancelled=self.isInterruptionRequested): value = resolve(path,self.config)['preview']
-            except Exception as exc: value=str(exc); self.valid=False
-            self.rows.append(Path(path).name + ': ' + value)
-
-
 class PhotoDateDialog(QDialog):
-    def __init__(self, kind, files, parent=None):
+    def __init__(self, kind, files, policy, seeds, parent=None):
         super().__init__(parent); self.kind, self.files = kind,list(files); self.worker=None; self.pending=False; self.closing=False
+        self.policy,self.seeds,self.plan=policy,seeds,None
         self.form=None
-        self.setWindowTitle('KIM6 — ' + TITLES[kind]); self.resize(650,390)
+        self.setWindowTitle('KIM6 — ' + TITLES[kind]); self.resize(1050,620)
         layout=QVBoxLayout(self); form=QFormLayout(); self.form=form; layout.addLayout(form)
         self.capture=CaptureDateInput(); form.addRow(self.capture)
         form.setRowVisible(self.capture,kind=='set')
@@ -46,10 +31,11 @@ class PhotoDateDialog(QDialog):
                        'Changes embedded Photo Capture Date metadata; the File Modification Date is preserved.')
         self.explanation=QLabel(explanation + (f' The same entered date will apply to all {len(files)} selected files.' if kind=='set' and len(files)>1 else f' {len(files)} selected file(s); each source is calculated separately.'))
         self.explanation.setWordWrap(True); layout.addWidget(self.explanation)
-        self.details=QPlainTextEdit(); self.details.setReadOnly(True); layout.addWidget(self.details)
+        from kim_preview import qt_classes
+        self.details=qt_classes()[0](self); layout.addWidget(QLabel('Preview Changes')); layout.addWidget(self.details)
         self.fix=QPushButton('Set Photo Capture Date…'); self.fix.clicked.connect(self.use_set); layout.addWidget(self.fix); self.fix.setVisible(kind!='set')
         self.buttons=QDialogButtonBox(QDialogButtonBox.Apply | QDialogButtonBox.Cancel)
-        self.apply=self.buttons.button(QDialogButtonBox.Apply); self.apply.setEnabled(False); self.apply.clicked.connect(self.accept)
+        self.apply=self.buttons.button(QDialogButtonBox.Apply); self.apply.setText('Apply Changes'); self.apply.setEnabled(False); self.apply.clicked.connect(self.accept)
         self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
         self.capture.changed.connect(self.refresh); self.adjust.changed.connect(self.refresh)
         self.zone.currentIndexChanged.connect(self.refresh); self.offset.textChanged.connect(self.refresh); self.fields.currentIndexChanged.connect(self.refresh)
@@ -71,15 +57,27 @@ class PhotoDateDialog(QDialog):
         self.apply.setEnabled(False)
         if self.worker:
             self.pending=True; self.worker.requestInterruption(); return
-        self.pending=False; self.details.setPlainText('Checking selected image dates…')
-        worker=DatePreview(self.files,self.config(),self); self.worker=worker
+        self.pending=False; self.details.summary.setText('Checking selected image dates…')
+        from kim_preview import qt_classes
+        worker=qt_classes()[1]('date',self.policy,self.files,self.config(),self.seeds,self); self.worker=worker
+        worker.progress.connect(lambda i,n,p:self.details.summary.setText(f'Inspecting image {i+1} of {n}: {Path(p).name}'))
         worker.finished.connect(self.finished_preview); worker.start()
 
     def finished_preview(self):
         worker,self.worker=self.worker,None
         if self.closing: worker.deleteLater(); super().reject(); return
         if self.pending: worker.deleteLater(); self.refresh(); return
-        self.details.setPlainText('\n'.join(worker.rows)); self.apply.setEnabled(worker.valid and bool(worker.rows)); worker.deleteLater()
+        if worker.error: self.details.summary.setText(worker.error)
+        else: self.plan=worker.plan; self.apply.setEnabled(self.details.show_plan(worker.plan))
+        worker.deleteLater()
+
+    def accept(self):
+        if not self.apply.isEnabled() or self.worker: return
+        from kim_preview import verify_plan
+        try: verify_plan(self.plan)
+        except Exception as exc:
+            self.details.summary.setText(str(exc)+' Review a fresh plan.'); self.apply.setEnabled(False); return
+        super().accept()
 
     def reject(self):
         if self.worker:
@@ -92,9 +90,12 @@ class PhotoDateDialog(QDialog):
 
 
 def main():
-    kind,result,*files=sys.argv[1:]
-    app=QApplication(sys.argv[:1]); dialog=PhotoDateDialog(kind,files)
-    if dialog.exec()!=QDialog.Accepted: return 1
+    kind,result,policy,seeds_path,*files=sys.argv[1:]
+    seeds=Path(seeds_path).read_bytes().decode().split("\0")[:-1]
+    app=QApplication(sys.argv[:1]); dialog=PhotoDateDialog(kind,files,policy,seeds)
+    if dialog.exec()!=QDialog.Accepted: return 130
+    from kim_preview import save_plan
+    save_plan(result+'.approved',dialog.plan)
     Path(result).write_text(json.dumps(dialog.config())); return 0
 
 
