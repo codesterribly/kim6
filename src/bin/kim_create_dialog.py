@@ -13,8 +13,8 @@ import re
 import struct
 from collections import OrderedDict
 
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer
-from PySide6.QtGui import QIcon, QPixmap, QPalette, QBrush, QImage
+from PySide6.QtCore import Qt, QSize, QRectF, QThread, Signal, QTimer
+from PySide6.QtGui import QIcon, QPixmap, QPalette, QBrush, QImage, QPainter
 from kim_photo_selection import (
     choose_images, CREATE_IMAGE_EXTENSIONS, ThumbnailWorker, ImageCanvas,
 )
@@ -313,8 +313,6 @@ class OrderedImages(QWidget):
         if status == 'Ready' and self.mode == 'animation' and self.animation_format == 'apng':
             if details['frames'] != 1 or details['animated_png']:
                 return 'Blocked', 'APNG needs single-frame sources', details
-            if max(details['width'], details['height']) > 4096:
-                return 'Blocked', 'APNG dimensions cannot exceed 4096 pixels', details
         return status, reason, details
 
     def counts(self):
@@ -887,7 +885,7 @@ class AnimatedImageDialog(OrderedImageDialog):
     """Approve source order and settings; preview never encodes or publishes."""
 
     def __init__(self, destination, starting_dir, paths, *, output='', delay=100,
-                 loops=0, animation_format='gif'):
+                 loops=0, animation_format='gif', canvas_mode='fit'):
         super().__init__()
         self.destination = Path(destination)
         self.frame_index = 0
@@ -908,6 +906,17 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.format.addItem('Animated PNG (APNG)', 'apng')
         self.format.setCurrentIndex(max(0, self.format.findData(animation_format)))
         form.addRow('Output format:', self.format)
+        self.canvas_mode = QComboBox()
+        self.canvas_mode.addItem('Fit entire image', 'fit')
+        self.canvas_mode.addItem('Fill canvas (center crop)', 'fill')
+        self.canvas_mode.addItem('Preserve original pixels (pad)', 'preserve')
+        self.canvas_mode.setCurrentIndex(max(0, self.canvas_mode.findData(canvas_mode)))
+        self.canvas_mode.setToolTip('Fit and Fill use the first image’s oriented size. '
+                                   'Preserve uses the largest required canvas without resizing.')
+        self.canvas_mode_label = QLabel('APNG canvas:')
+        form.addRow(self.canvas_mode_label, self.canvas_mode)
+        self.canvas_mode_label.setVisible(animation_format == 'apng')
+        self.canvas_mode.setVisible(animation_format == 'apng')
         self.delay = QSpinBox()
         self.delay.setRange(0, 65535)
         self.delay.setValue(int(delay))
@@ -969,6 +978,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.restart.clicked.connect(self.restart_preview)
         self.browse.clicked.connect(self.choose_output)
         self.format.currentIndexChanged.connect(self.change_format)
+        self.canvas_mode.currentIndexChanged.connect(self.change_canvas_mode)
         self.output.textChanged.connect(self.update_controls)
         self.ordered.changed.connect(self.sequence_changed)
         self.ordered.resized.connect(self.fit_images)
@@ -1030,6 +1040,8 @@ class AnimatedImageDialog(OrderedImageDialog):
                 self.canvas.message = reason
             elif path in self.ordered.thumbnails:
                 self.canvas.image = self.ordered.thumbnails[path]
+                if self.format.currentData() == 'apng':
+                    self.canvas.image = self.apng_preview(self.canvas.image, details)
                 self.ordered.thumbnails.move_to_end(path)
             elif path in self.ordered.unavailable:
                 self.canvas.message = 'Preview unavailable.\nNo safe thumbnail decoder; export validation is independent.'
@@ -1037,6 +1049,44 @@ class AnimatedImageDialog(OrderedImageDialog):
                 self.canvas.message = 'Loading frame preview…'
             self.ordered.request_preview(path)
         self.canvas.update()
+
+    def apng_canvas_size(self):
+        """One oriented output canvas, shared by preview and approval limits."""
+        details = [self.ordered.states[p][2] for p in self.sequence]
+        if not details or any(d is None for d in details):
+            return QSize()
+        if self.canvas_mode.currentData() == 'preserve':
+            return QSize(max(d['width'] for d in details), max(d['height'] for d in details))
+        return QSize(details[0]['width'], details[0]['height'])
+
+    def apng_preview(self, thumbnail, details):
+        # Only transform the cached, asynchronously decoded thumbnail. Header
+        # geometry avoids accumulating rounding errors from thumbnail dimensions.
+        canvas = self.apng_canvas_size()
+        if not canvas.isValid() or details is None:
+            return QImage()
+        size = canvas.scaled(self.canvas.size(), Qt.KeepAspectRatio)
+        image = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+        width, height = details['width'], details['height']
+        mode = self.canvas_mode.currentData()
+        scale = (max if mode == 'fill' else min)(canvas.width() / width, canvas.height() / height)
+        if mode == 'preserve':
+            scale = 1
+        # Painting clips Fill at the canvas edges; Fit/Preserve leave alpha padding.
+        xscale, yscale = size.width() / canvas.width(), size.height() / canvas.height()
+        rect = QRectF((canvas.width() - width * scale) / 2 * xscale,
+                      (canvas.height() - height * scale) / 2 * yscale,
+                      width * scale * xscale, height * scale * yscale)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawImage(rect, thumbnail)
+        painter.end()
+        return image
+
+    def change_canvas_mode(self, *_):
+        self.show_frame()
+        self.update_controls()
 
     def play_preview(self):
         if not self.sequence or self.finish_result is not None:
@@ -1071,6 +1121,9 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.show_frame()
 
     def change_format(self):
+        is_apng = self.format.currentData() == 'apng'
+        self.canvas_mode_label.setVisible(is_apng)
+        self.canvas_mode.setVisible(is_apng)
         name, extension = os.path.splitext(self.output.text())
         if extension.lower() in ('.gif', '.png'):
             self.output.setText(name + ('.gif' if self.format.currentData() == 'gif' else '.png'))
@@ -1117,8 +1170,10 @@ class AnimatedImageDialog(OrderedImageDialog):
             if not 2 <= count <= 360 or self.delay.value() < 1:
                 problem = 'APNG needs 2–360 single-frame images and a nonzero frame delay.'
             else:
-                details = [self.ordered.states[p][2] for p in self.sequence]
-                if max(d['width'] for d in details) * max(d['height'] for d in details) * count > 200000000:
+                canvas = self.apng_canvas_size()
+                if max(canvas.width(), canvas.height()) > 4096:
+                    problem = 'APNG canvas dimensions cannot exceed 4096 pixels.'
+                elif canvas.width() * canvas.height() * count > 200000000:
                     problem = 'APNG exceeds the 200-million pixel-frame limit.'
         self.create.setEnabled(not problem and ready == count and self.finish_result is None)
         self.summary.setText(f'{count} selected · {ready} ready · {blocked} blocked · {pending} inspecting'
@@ -1137,7 +1192,10 @@ class AnimatedImageDialog(OrderedImageDialog):
             return
         target, _ = self.approved_target()
         values = [self.format.currentData(), str(self.delay.value()),
-                  str(self.loops.value()), target, *self.ordered_paths()]
+                  str(self.loops.value()), target]
+        if self.format.currentData() == 'apng':
+            values.append(self.canvas_mode.currentData())
+        values.extend(self.ordered_paths())
         try:
             self.destination.write_bytes(b''.join(os.fsencode(value) + b'\0' for value in values))
         except OSError as exc:
@@ -1154,6 +1212,11 @@ def animation_dialog(arguments):
     if len(arguments) < 8:
         return 2
     destination, starting_dir, count_text, animation_format, delay, loops, output, *paths = arguments
+    canvas_mode = 'fit'
+    if paths[:1] == ['--canvas-mode']:
+        if len(paths) < 3 or paths[1] not in ('fit', 'fill', 'preserve'):
+            return 2
+        _, canvas_mode, *paths = paths
     try:
         if (int(count_text) != len(paths) or not paths or animation_format not in ('gif', 'apng')
                 or not 0 <= int(delay) <= 65535 or not 0 <= int(loops) <= 65535):
@@ -1162,7 +1225,8 @@ def animation_dialog(arguments):
         return 2
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = AnimatedImageDialog(destination, starting_dir, paths, output=output,
-                                 delay=delay, loops=loops, animation_format=animation_format)
+                                 delay=delay, loops=loops, animation_format=animation_format,
+                                 canvas_mode=canvas_mode)
     return 0 if dialog.exec() == QDialog.Accepted else 130
 
 

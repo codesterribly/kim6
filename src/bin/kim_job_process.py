@@ -28,6 +28,27 @@ def main():
     tool=Path(command[0]).name
     stage='Copying source' if tool=='cp' else 'Validating copied bytes' if tool=='cmp' else 'Inspecting video' if tool=='ffprobe' else 'Reading metadata' if tool=='exiftool' else 'Inspecting image' if tool=='identify' or 'identify' in command[1:2] else 'Checking / updating metadata' if any('metadata.py' in a or 'verify.py' in a for a in command) else 'Processing image'
     if tool=='exiftool' and any('=' in a or a=='-o' for a in command[1:]): stage='Updating metadata'
+    # ffprobe inspects both videos and animated images.
+    # Choose terminology from the active operation, without
+    # changing progress messages for ordinary video actions.
+    if tool == 'ffprobe':
+        try:
+            active_label = (
+                (workspace / 'job.label')
+                .read_text(encoding='utf-8')
+                .lower()
+            )
+        except OSError:
+            active_label = ''
+
+        if any(term in active_label for term in (
+            'animated png',
+            'animated gif',
+            'apng',
+            'animation',
+        )):
+            stage = 'Inspecting animation'
+
     stage_file.write_text(stage)
     previous=''; interrupted=False
     child=None

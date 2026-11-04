@@ -3946,19 +3946,25 @@ action_tiffjoin() {
 
 # Create an ordered animated GIF or APNG without changing source images.
 # GIF retains the existing ImageMagick path; APNG uses normalized RGBA frames.
+# APNG --canvas-mode fit (default), fill, or preserve controls its single canvas.
 action_animate() {
   require_action_tools animate setsid || return 1
   local requested='' delay='' loops='' animation_format=gif file dir mode output ref tmp=''
   local info record format width height scenes frames=0 extension
-  local work raw_frame canvas_frame dimensions source_width source_height
-  local max_width=0 max_height=0 frame_index=0 final_delay probe codec out_width out_height out_frames play_count durations
-  local -a files=() source_geometry=()
+  local work canvas_frame dimensions source_width source_height orientation canvas_mode=fit
+  local canvas_width=0 canvas_height=0 frame_index=0 final_delay probe codec out_width out_height out_frames play_count durations
+  local -a files=() source_geometry=() resize_args=()
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --format)
         [ "$#" -ge 2 ] || return 2
         animation_format="$2"
+        shift 2
+        ;;
+      --canvas-mode)
+        [ "$#" -ge 2 ] || return 2
+        canvas_mode="$2"
         shift 2
         ;;
       --output)
@@ -4007,7 +4013,8 @@ action_animate() {
     settings_file="$(mktemp "$KIMDIR/animation-settings.XXXXXX")" || return 1
 
     if python3 "$dialog_script" animate "$settings_file" "$dir" "${#files[@]}" \
-        "$animation_format" "${delay:-100}" "${loops:-0}" "$requested" "${files[@]}"; then
+        "$animation_format" "${delay:-100}" "${loops:-0}" "$requested" \
+        --canvas-mode "$canvas_mode" "${files[@]}"; then
       :
     else
       rc=$?
@@ -4024,8 +4031,14 @@ action_animate() {
     delay="${selections[1]}"
     loops="${selections[2]}"
     requested="${selections[3]}"
+    local source_offset=4
+    if [ "$animation_format" = apng ]; then
+      (( ${#selections[@]} >= 6 )) || return 1
+      canvas_mode="${selections[4]}"
+      source_offset=5
+    fi
     # Revalidate added sources without sorting the exact approved order.
-    if ! collect_publication_inputs revalidated_files "${selections[@]:4}"; then
+    if ! collect_publication_inputs revalidated_files "${selections[@]:source_offset}"; then
       progress_error 'Animation selection contains an unsafe or duplicate file.'
       return 1
     fi
@@ -4052,6 +4065,10 @@ action_animate() {
       ;;
     apng)
       extension=png
+      case "$canvas_mode" in fit|fill|preserve) ;; *)
+        progress_error 'APNG canvas mode must be fit, fill, or preserve.'
+        return 2 ;;
+      esac
       (( delay >= 1 )) || {
         progress_error 'APNG delay must be at least 1 centisecond.'
         return 2
@@ -4171,55 +4188,65 @@ action_animate() {
         return 1
       fi
 
-      raw_frame="$work/raw_$(printf '%06d' "$frame_index").png"
-
+      # Inspect headers through the existing PSD adapter and cancellation monitor.
+      # Orientation 5–8 swaps the axes, exactly as -auto-orient does below.
       publication_render_stage "$ref" \
-        "Decoding APNG frame $((frame_index + 1))/$frames…" \
-        magick -- "$file" -auto-orient -colorspace sRGB \
-        -strip -depth 8 "PNG32:$raw_frame" || return 1
+        "Inspecting APNG frame $((frame_index + 1))/$frames…" \
+        identify -ping -format '%w|%h|%n|%[orientation]\n' -- "$file" || return 1
 
-      dimensions="$(identify -ping -format '%w|%h|%n' \
-        -- "$raw_frame" 2>/dev/null)" || {
+      dimensions="$(cat -- "$KIMDIR/publication-records")" || {
         publication_fail "$ref" "$tmp" 'Cannot inspect an APNG frame.'
         return 1
       }
 
-      IFS='|' read -r source_width source_height scenes <<< "$dimensions"
+      IFS='|' read -r source_width source_height scenes orientation <<< "$dimensions"
 
       if ! [[ "$source_width" =~ ^[1-9][0-9]*$ &&
               "$source_height" =~ ^[1-9][0-9]*$ &&
-              "$scenes" = 1 ]] ||
-         (( source_width > 4096 || source_height > 4096 )); then
+              "$scenes" = 1 && "$dimensions" != *$'\n'* ]]; then
         publication_fail "$ref" "$tmp" \
-          'Invalid APNG frame or dimension exceeds 4096 pixels.'
+          'Invalid APNG source frame.'
         return 1
       fi
 
-      if (( source_width > max_width )); then
-        max_width="$source_width"
-      fi
-
-      if (( source_height > max_height )); then
-        max_height="$source_height"
+      case "$orientation" in
+        LeftTop|RightTop|RightBottom|LeftBottom)
+          dimensions="$source_width"; source_width="$source_height"; source_height="$dimensions" ;;
+      esac
+      if (( frame_index == 0 )); then
+        canvas_width="$source_width"
+        canvas_height="$source_height"
+      elif [ "$canvas_mode" = preserve ]; then
+        (( source_width <= canvas_width )) || canvas_width="$source_width"
+        (( source_height <= canvas_height )) || canvas_height="$source_height"
       fi
 
       frame_index=$((frame_index + 1))
     done
 
-    if (( max_width * max_height * frames > 200000000 )); then
+    if (( canvas_width > 4096 || canvas_height > 4096 )); then
+      publication_fail "$ref" "$tmp" 'APNG canvas dimensions cannot exceed 4096 pixels.'
+      return 1
+    fi
+    if (( canvas_width * canvas_height * frames > 200000000 )); then
       publication_fail "$ref" "$tmp" \
         'APNG exceeds the 200-million pixel-frame limit.'
       return 1
     fi
 
+    case "$canvas_mode" in
+      fit) resize_args=(-resize "${canvas_width}x${canvas_height}") ;;
+      fill) resize_args=(-resize "${canvas_width}x${canvas_height}^") ;;
+      preserve) resize_args=() ;;
+    esac
     for ((frame_index = 0; frame_index < frames; frame_index++)); do
-      raw_frame="$work/raw_$(printf '%06d' "$frame_index").png"
       canvas_frame="$work/frame_$(printf '%06d' "$frame_index").png"
 
       publication_render_stage "$ref" \
         "Preparing canvas $((frame_index + 1))/$frames…" \
-        magick -- "$raw_frame" -background none -gravity center \
-        -extent "${max_width}x${max_height}" \
+        magick -- "${files[frame_index]}" -auto-orient -colorspace sRGB \
+        "${resize_args[@]}" +repage -background none -gravity center \
+        -extent "${canvas_width}x${canvas_height}" +repage -strip -depth 8 \
         "PNG32:$canvas_frame" || return 1
     done
 
@@ -4254,8 +4281,8 @@ action_animate() {
     durations="$(image_animation_packet_durations "$tmp")" || durations=''
 
     if [[ "$codec" != apng ||
-          "$out_width" != "$max_width" ||
-          "$out_height" != "$max_height" ||
+          "$out_width" != "$canvas_width" ||
+          "$out_height" != "$canvas_height" ||
           "$out_frames" != "$frames" ||
           "$play_count" != "$loops" ]] ||
        ! image_apng_animation_signature "$tmp" >/dev/null ||
@@ -10224,8 +10251,13 @@ Commands:
       Join selected image frames in order into a TIFF file.
       Supports destination selection and safe create/overwrite policy.
 
-  animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] [--] <files...>
-      Create an ordered animated GIF. Loop count 0 repeats forever.
+  animate [--format gif|apng] [--delay CENTISECONDS] [--loop COUNT]
+          [--canvas-mode fit|fill|preserve] [--output PATH] [--] <files...>
+      Create an ordered animated GIF (default) or APNG (.png).
+      APNG canvas: fit (default) fits entire images into the first image's
+      auto-oriented size; fill center-crops to that size; preserve centers
+      original pixels on the largest required canvas, without resizing.
+      Loop count 0 repeats forever. Canvas mode applies only to APNG.
       Delay defaults to 100 centiseconds (one second); loop defaults to 0.
 
   rename <mode> <files...>
