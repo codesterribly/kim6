@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Remove the ten KIM6 Dolphin menus and known KIM6 runtime files.
+# Remove current and obsolete KIM6 Dolphin menus and known runtime files.
 #
 # Usage: ./uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]
 #
@@ -206,14 +206,27 @@ if [ -d "$RUNTIME" ]; then
   fi
 fi
 
-# Remove recognized KIM6 menus only after verifying their contents.
-for name in "${menu_names[@]}"; do
-  path="$PREFIX/$name"
-  if menu_is_kim6 "$path"; then rm -f -- "$path"; fi
+# Remove recognized KIM6 menus, including obsolete filenames.
+# Leave unrelated entries, directories and symlinks untouched.
+for path in "$PREFIX"/kim*.desktop; do
+  [ -f "$path" ] && [ ! -L "$path" ] || continue
+
+  if menu_is_kim6 "$path"; then
+    rm -f -- "$path"
+  fi
 done
 
 if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
+  # Preserve identity if removal is interrupted after deleting kim_all.
+  if [ ! -f "$RUNTIME/.kim6-owned" ]; then
+    printf 'KIM6 runtime\n' > "$RUNTIME/.kim6-owned"
+    chmod 0644 -- "$RUNTIME/.kim6-owned"
+  fi
+
   for relative in "${runtime_files[@]}"; do
+    case "$relative" in
+      .kim6-owned|.kim6-manifest) continue ;;
+    esac
     path="$RUNTIME/$relative"
     if [ -f "$path" ]; then rm -f -- "$path"; fi
   done
@@ -227,7 +240,17 @@ if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
     rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" "$RUNTIME/locale/$language" 2>/dev/null || true
   done
   rmdir -- "$RUNTIME/docs/images" "$RUNTIME/docs/reference" 2>/dev/null || true
-    rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME" 2>/dev/null || true
+  rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" 2>/dev/null || true
+
+  # Unknown files are preserved. Keep ownership while any remain.
+  if [ -z "$(find "$RUNTIME" -mindepth 1 -maxdepth 1 \
+      ! -name '.kim6-owned' ! -name '.kim6-manifest' -print -quit)" ]; then
+    rm -f -- "$RUNTIME/.kim6-owned" "$RUNTIME/.kim6-manifest"
+    rmdir -- "$RUNTIME" 2>/dev/null || true
+  else
+    rm -f -- "$RUNTIME/.kim6-manifest"
+    echo 'uninstall.sh: retained runtime ownership marker for remaining files.' >&2
+  fi
 fi
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then

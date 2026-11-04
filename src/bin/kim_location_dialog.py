@@ -59,7 +59,7 @@ class LocationDialog(QDialog):
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(350)
         self.timer.timeout.connect(self.start_plan)
         top = QHBoxLayout()
-        title = QLabel('Location Privacy Report — read only' if kind == 'report' else TITLES[kind].rstrip('…'))
+        title = QLabel('Inspect Location Metadata — read only' if kind == 'report' else TITLES[kind].rstrip('…'))
         font = title.font(); font.setBold(True); title.setFont(font); top.addWidget(title, 1)
         measurement_label = QLabel('&Units:'); top.addWidget(measurement_label)
         self.unit_choice = QComboBox()
@@ -76,11 +76,13 @@ class LocationDialog(QDialog):
         sidebar = QWidget(); sidebar.setMinimumWidth(0)
         side_layout = QVBoxLayout(sidebar); side_layout.setContentsMargins(0, 0, 0, 0)
         self.controls = QWidget(); control_layout = QVBoxLayout(self.controls); control_layout.setContentsMargins(0, 0, 0, 0)
+        self.controls.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        control_layout.setAlignment(Qt.AlignTop)
         if kind == 'apply': self.build_location_methods(control_layout)
         elif kind == 'reduce': self.build_reduction_controls(control_layout)
         for form in self.controls.findChildren(QFormLayout): form.setRowWrapPolicy(QFormLayout.WrapAllRows)
         if kind == 'apply': self.source_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
-        if kind != 'report': visual_layout.insertWidget(0, self.controls)
+        if kind != 'report': visual_layout.insertWidget(0, self.controls, 0, Qt.AlignTop)
         destination_actions = QHBoxLayout()
         self.add_images = QPushButton(QIcon.fromTheme('list-add'), 'Add Images…')
         self.add_images.clicked.connect(self.add_destinations); self.add_images.setVisible(self.selection_only)
@@ -89,7 +91,7 @@ class LocationDialog(QDialog):
         self.remove_image.setToolTip('Remove the selected destination from this operation. The image is not deleted.')
         self.remove_image.clicked.connect(self.remove_destination); self.remove_image.setVisible(self.selection_only)
         destination_actions.addWidget(self.remove_image); side_layout.addLayout(destination_actions)
-        self.images_heading = QLabel('Images' if kind == 'report' else 'Apply coordinates to these images')
+        self.images_heading = QLabel('Images' if kind == 'report' else 'Images to update')
         heading_font = self.images_heading.font(); heading_font.setBold(True); self.images_heading.setFont(heading_font)
         side_layout.addWidget(self.images_heading)
         if kind != 'report': side_layout.addWidget(self.summary)
@@ -136,9 +138,9 @@ class LocationDialog(QDialog):
         self.photo_panel = photo_panel; self.visual_splitter.addWidget(photo_panel)
         map_panel = QWidget(); map_panel.setMinimumWidth(0)
         map_layout = QVBoxLayout(map_panel); map_layout.setContentsMargins(0, 0, 0, 0)
-        self.map_heading = QLabel('GPS Source Location' if self.uses_reference() else 'Camera location')
+        self.map_heading = QLabel('GPS Source Location' if self.uses_reference() else 'Photo GPS location')
         self.map_heading.setFont(heading_font); map_layout.addWidget(self.map_heading)
-        self.map_subject = QComboBox(); self.map_subject.addItem('Existing camera position', 'existing'); self.map_subject.addItem('Proposed camera position', 'proposed')
+        self.map_subject = QComboBox(); self.map_subject.addItem('Original GPS location', 'existing'); self.map_subject.addItem('New GPS location', 'proposed')
         self.map_subject.setCurrentIndex(1 if kind == 'reduce' else 0)
         self.map_subject.currentIndexChanged.connect(self.update_visual); map_layout.addWidget(self.map_subject); self.map_subject.hide()
         self.location_map = LocationMap(self, units=self.units); map_layout.addWidget(self.location_map, 1)
@@ -180,7 +182,7 @@ class LocationDialog(QDialog):
         self.image_list.list.itemClicked.connect(self.choose_reference_from_list)
         self.image_list.list.itemActivated.connect(self.choose_reference_from_list)
         self.photo_preview.idle.connect(self.visual_idle)
-        self.image_list.set_entries([dict(source=p, caption='Reading camera location…') for p in self.files])
+        self.image_list.set_entries([dict(source=p, caption='Reading GPS location…') for p in self.files])
         buttons_row = QHBoxLayout()
         self.refresh_button = QPushButton(QIcon.fromTheme('view-refresh'), '&Refresh'); self.refresh_button.clicked.connect(self.schedule_plan)
         buttons_row.addWidget(self.refresh_button); buttons_row.addStretch()
@@ -229,7 +231,7 @@ class LocationDialog(QDialog):
         self.method = QComboBox()
         for title, key in [('Another Image', 'photo'), ('Point on Map', 'map'), ('Manual Coordinates', 'manual'), ('GPX Track', 'gpx')]: self.method.addItem(title, key)
         form.addRow('&Location source', self.method); layout.addLayout(form)
-        self.method_pages = QStackedWidget(); layout.addWidget(self.method_pages)
+        self.method_pages = QStackedWidget(); self.method_pages.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum); layout.addWidget(self.method_pages)
         photo_page = QWidget(); photo_layout = QVBoxLayout(photo_page); photo_layout.setContentsMargins(0, 0, 0, 0)
         self.candidates = QComboBox(); self.candidates.setIconSize(QSize(48, 36))
         self.candidates.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon); self.candidates.setMinimumContentsLength(16)
@@ -265,6 +267,7 @@ class LocationDialog(QDialog):
         self.method.currentIndexChanged.connect(self.change_method)
         for i in range(self.method_pages.count()):
             self.method_pages.widget(i).setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred if i == 0 else QSizePolicy.Ignored)
+        self.fit_method_page()
 
     def add_candidate(self, path):
         self.candidates.addItem(self.placeholder_icon, Path(path).name + ' — Reading GPS…', path)
@@ -394,6 +397,14 @@ class LocationDialog(QDialog):
             self.accept_after_thumbnails = False; self.accept()
         else: self.start_thumbnails()
 
+    def fit_method_page(self):
+        """Avoid reserving GPX-form height when another source page is shown."""
+        page = self.method_pages.currentWidget()
+        if page is None: return
+        height = max(1, min(page.sizeHint().height(), page.maximumHeight()))
+        if self.method_pages.maximumHeight() != height:
+            self.method_pages.setMaximumHeight(height)
+
     def change_method(self, index):
         self.method_pages.setCurrentIndex(index)
         self.pending_reference_choice = ''
@@ -401,6 +412,7 @@ class LocationDialog(QDialog):
             self.initial_reference_checked = False
         for i in range(self.method_pages.count()):
             self.method_pages.widget(i).setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred if i == index else QSizePolicy.Ignored)
+        self.fit_method_page()
         self.schedule_plan(); self.update_visual()
 
     def capture_altitude(self):
@@ -551,7 +563,7 @@ class LocationDialog(QDialog):
         self.accept_after_thumbnails = False; self.plan = None
         if hasattr(self, 'report_copy'):
             self.report_copy.setEnabled(False); self.report_map.setEnabled(False)
-            self.location_map.set_position(None, 'Refreshing camera location…')
+            self.location_map.set_position(None, 'Refreshing GPS location…')
         if self.apply_button: self.apply_button.setEnabled(False)
         if self.worker: self.pending = True; self.worker.requestInterruption()
         self.timer.start()
@@ -629,7 +641,7 @@ class LocationDialog(QDialog):
         if self.kind == 'report':
             gps = sum(bool(e.get('location_before') and e['location_before']['position'] is not None) for e in entries)
             review = sum(bool(e.get('location_before') and e['location_before']['categories']['camera']['issues']) for e in entries)
-            self.summary.setText(f'{len(entries)} selected · Camera GPS: {gps} · Needs review: {review} · Unreadable: {errors}')
+            self.summary.setText(f'{len(entries)} selected · GPS locations: {gps} · Needs review: {review} · Unreadable: {errors}')
         self.summary.setToolTip(self.plan['privacy_summary'])
         self.render_image_list()
         if self.engine_kind() == 'gpx' and self.track_cache.get('track'):
@@ -838,7 +850,7 @@ class LocationDialog(QDialog):
             rows.append(dict(source=entry['source'], caption=caption, details='\n'.join(details), blocked=blocked))
         self.image_list.set_entries(rows)
         for path, icon in self.thumbnail_icons.items(): self.image_list.set_thumbnail(path, icon)
-        heading = 'Images' if self.kind == 'report' else 'Select a GPS source image' if self.uses_reference() and not self.reference else 'Apply coordinates to these images'
+        heading = 'Images' if self.kind == 'report' else 'Select a GPS source image' if self.uses_reference() and not self.reference else 'Images to update'
         self.images_heading.setText(heading + f' ({len(rows)})')
         if self.kind != 'report':
             def images(n): return f'{n} ' + ('image' if n == 1 else 'images')
@@ -880,16 +892,16 @@ class LocationDialog(QDialog):
         approved = entry.get('approved_location') if entry and not reference and self.plan and entry['status'] == 'change' else None
         position = info['position'] if info else None
         pending = path and not data and (not entry or self.worker)
-        self.selected_location.setText('Camera: ' + position_text(position) if position is not None else 'Reading camera location…' if pending else camera_status(info) if path else '')
-        if approved: self.selected_location.setText(self.selected_location.text() + '\nProposed: ' + position_text(approved['position']))
+        self.selected_location.setText('Original GPS: ' + position_text(position) if position is not None else 'Reading GPS location…' if pending else camera_status(info) if path else '')
+        if approved: self.selected_location.setText(self.selected_location.text() + '\nNew GPS: ' + position_text(approved['position']))
         self.report_copy.setEnabled(position is not None); self.report_map.setEnabled(position is not None)
         self.report_copy.setToolTip('Copy exact signed camera latitude and longitude' if position is not None else 'Requires valid, unambiguous camera coordinates.')
         self.report_map.setToolTip('Open the camera coordinates in your browser. This explicitly shares the position with OpenStreetMap.' if position is not None else 'Requires valid, unambiguous camera coordinates.')
         self.map_subject.setVisible(bool(approved)); self.map_subject.setEnabled(bool(approved))
         if approved and self.map_subject.currentData() == 'proposed':
-            position = approved['position']; self.map_heading.setText('Proposed output location')
-        else: self.map_heading.setText('GPS Source Location' if reference else 'Camera location')
-        empty = ('Choose a GPS source image with camera GPS.' if reference else 'Select an image to see its camera location.') if not path else camera_status(info) + '. No camera marker can be shown.'
+            position = approved['position']; self.map_heading.setText('New GPS location')
+        else: self.map_heading.setText('GPS Source Location' if reference else 'Photo GPS location')
+        empty = ('Choose a GPS source image with camera GPS.' if reference else 'Select an image to see its GPS location.') if not path else camera_status(info) + '. No camera marker can be shown.'
         self.location_map.set_position(position, empty)
         if reference:
             limitations = []

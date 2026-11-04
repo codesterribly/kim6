@@ -35,9 +35,9 @@ def render(library, dispatcher):
     if recipes: actions.append('_SEPARATOR_')
     actions += ['KIMRecipe0Run', 'KIMRecipe1Editor']
     command = exec_argument(str(dispatcher)) + ' recipe '
-    lines = ['[Desktop Entry]', 'Type=Service', 'Icon=view-list-details', 'Name=KIM6 Recipes',
+    lines = ['[Desktop Entry]', 'Type=Service', 'Icon=view-list-details', 'Name=KIM6',
              'X-KDE-ServiceTypes=KonqPopupMenu/Plugin', 'MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;', 'X-KDE-Protocol=file',
-             'X-KDE-Submenu=KIM6 Recipes', 'X-KIM6-Managed=true',
+             'X-KDE-Submenu=KIM6 — Recipes', 'X-KIM6-Managed=true',
              'Actions=' + ';'.join(actions) + ';']
     for r in recipes:
         duplicate = sum(x['name'].casefold() == r['name'].casefold() for x in recipes) > 1
@@ -45,7 +45,7 @@ def render(library, dispatcher):
         lines += ['', '[Desktop Action KIMRoot-' + r['id'] + ']', 'Name=' + value(label),
                   'Exec=' + command + '--run-id ' + r['id'] + ' -- %F']
     if recipes: lines += ['', '[Desktop Action _SEPARATOR_]', 'Name=Separator']
-    lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Run a Recipe…',
+    lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Choose Saved Recipe…',
               'Icon=view-list-details', 'Exec=' + command + '--choose -- %F',
               '', '[Desktop Action KIMRecipe1Editor]', 'Name=Recipe Editor…',
               'Icon=document-edit', 'Exec=' + command + '--editor', '']

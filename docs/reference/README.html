@@ -36,12 +36,12 @@
 <p>Select one file or an entire group of files, right-click, and choose what you want to do.</p>
 <p>KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.</p>
 <p align="center">
-  <a href="../images/kim6-recipes-menu.png"><img src="../images/kim6-recipes-menu.png" alt="KIM6 Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a Recipe and Recipe Editor" width="760"></a>
+  <a href="../images/kim6-recipes-menu.png"><img src="../images/kim6-recipes-menu.png" alt="KIM6 — Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a Recipe and Recipe Editor" width="760"></a>
 </p>
-<p align="center"><em>KIM6 Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
+<p align="center"><em>KIM6 — Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
 <h2 id="quick-start">Quick Start</h2>
-<p>For a reusable photo workflow, select photographs and open <strong>KIM6 Recipes → Run a Recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIM6 Recipes → Recipe Editor…</strong> to create your own. Recipes always create separate output files and leave the source photographs untouched.</p>
+<p>For a reusable photo workflow, select photographs and open <strong>KIM6 — Recipes → Choose Saved Recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIM6 — Recipes → Recipe Editor…</strong> to create your own. Recipes always create separate output files and leave the source photographs untouched.</p>
 <p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open <strong>Actions → KIM6 — Settings/About → Settings</strong>. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals.</p>
 <table>
 <thead>
@@ -54,12 +54,12 @@
 <tbody>
 <tr>
 <td>Run the built-in Web Export recipe</td>
-<td>KIM6 Recipes → Run a Recipe… → Web Export</td>
+<td>KIM6 — Recipes → Choose Saved Recipe… → Web Export</td>
 <td><code>lake_web.jpg</code> in a <code>Web</code> subfolder beside <code>lake.jpg</code></td>
 </tr>
 <tr>
 <td>Resize a photograph</td>
-<td>KIM6 — Resize/Rotate → Resize to 1600 × 1600</td>
+<td>KIM6 — Resize/Crop/Rotate → Resize to Fit 1600 × 1600</td>
 <td><code>lake_resized.jpg</code></td>
 </tr>
 <tr>
@@ -74,7 +74,7 @@
 </tr>
 <tr>
 <td>Remove GPS coordinates</td>
-<td>KIM6 — Organize/Metadata → Strip GPS Metadata</td>
+<td>KIM6 — Location/GPS → Remove GPS Metadata…</td>
 <td><code>trip_gps.jpg</code></td>
 </tr>
 <tr>
@@ -84,7 +84,7 @@
 </tr>
 <tr>
 <td>Resize several photographs</td>
-<td>KIM6 — Resize/Rotate → Resize to 1280 × 1280</td>
+<td>KIM6 — Resize/Crop/Rotate → Resize to Fit 1280 × 1280</td>
 <td><code>lake_resized.jpg</code>, <code>garden_resized.jpg</code>, <code>portrait_resized.jpg</code></td>
 </tr>
 </tbody>
@@ -99,9 +99,9 @@
 </p>
 <p align="center"><em>The Recipe Editor and its planned-output preview.</em></p>
 
-<p>KIM6 includes a dedicated <strong>KIM6 Recipes</strong> submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one photograph or an entire selection.</p>
+<p>KIM6 includes a dedicated <strong>KIM6 — Recipes</strong> submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one photograph or an entire selection.</p>
 <ul>
-<li><strong>Run saved recipes:</strong> Open <strong>Run a Recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
+<li><strong>Run saved recipes:</strong> Open <strong>Choose Saved Recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
 <li><strong>Build and edit workflows:</strong> Use <strong>Recipe Editor…</strong> to create, duplicate, and organize recipes. Give each recipe a meaningful name.</li>
 <li><strong>Combine processing steps:</strong> Choose among 25 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.</li>
 <li><strong>Enable or disable steps:</strong> Keep operations in a recipe without requiring every step to run each time.</li>
@@ -132,7 +132,7 @@
 <p align="center"><em>Photo dates, renaming and metadata tools in Dolphin.</em></p>
 
 <ul>
-<li><strong>Manage privacy and metadata:</strong> Use <strong>Strip GPS Metadata</strong> to remove recognized coordinates, <strong>Strip AI Metadata</strong> to remove recognized AI-generation fields, or <strong>Strip Metadata</strong> for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.</li>
+<li><strong>Manage privacy and metadata:</strong> Use <strong>Remove GPS Metadata…</strong> to remove recognized coordinates, <strong>Strip AI Metadata</strong> to remove recognized AI-generation fields, or <strong>Strip Metadata</strong> for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.</li>
 <li><strong>Manage photo dates:</strong> Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.</li>
 <li><strong>Update copyright information:</strong> Add or modify copyright metadata across multiple photographs.</li>
 <li><strong>Control what gets preserved:</strong> Choose appropriate metadata and output behavior for different operations.</li>
@@ -143,7 +143,7 @@
 <li><strong>Build photo galleries:</strong> Generate browsable HTML galleries, including the Dark Portfolio presentation.</li>
 <li><strong>Create collages:</strong> Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.</li>
 <li><strong>Create PDF albums and print layouts:</strong> Prepare photographs for viewing or printing, including printable contact-sheet layouts.</li>
-<li><strong>Work with TIFF and GIF:</strong> Combine images into multipage TIFF files or animated GIFs.</li>
+<li><strong>Work with TIFF and GIF:</strong> Combine images into multipage TIFF files or create animated GIF/APNG derivatives.</li>
 </ul>
 <h3 id="video-tools">Video tools</h3>
 <p>KIM6 also includes video operations directly in Dolphin. H.264 and H.265 have six MP4 presets each; AV1 has six MP4 presets:</p>
@@ -154,7 +154,7 @@
 <li>Save audio from video files.</li>
 <li>Remove audio tracks from videos to create silent copies.</li>
 <li>Convert short video clips into animated GIFs.</li>
-<li>Create MP4 slideshows from photographs.</li>
+<li>Create MP4 slideshows from images using one settings dialog for timing, dimensions, frame rate, background and destination.</li>
 </ul>
 <p>Available video codecs depend on FFmpeg and the encoders installed on your system.</p>
 <h2 id="how-kim6-works">How KIM6 works</h2>

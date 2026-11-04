@@ -5,7 +5,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
-Actions=Album;Animation;Collage;ContactSheet;Gallery;Print;Slideshow;TiffJoin;Emailfull;
+Actions=Gallery;Collage;ContactSheet;Album;Print;Slideshow;Animation;TiffJoin;Emailfull;
 _X-KDE-Submenu=KIM6 — Create/Publish
 X-KIM6-Managed=true
 
@@ -16,17 +16,17 @@ Exec=kim_all album -- %F
 
 [Desktop Action Animation]
 Icon=image-x-generic
-_Name=Create an animated GIF…
+_Name=Create an animated image…
 Exec=kim_all animate -- %F
 
 [Desktop Action Collage]
 Icon=folder-pictures
-_Name=Create a photo collage…
+_Name=Create a collage…
 Exec=kim_all collage -- %F
 
 [Desktop Action ContactSheet]
 Icon=view-grid
-_Name=Create a photo contact sheet…
+_Name=Create a contact sheet…
 Exec=kim_all contactsheet -- %F
 
 [Desktop Action Gallery]

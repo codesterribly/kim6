@@ -65,7 +65,7 @@ job_show_warnings() {
   local status="${1:-0}" label=''
   case "${cmd:-}" in
     album) label='PDF Album' ;; contactsheet) label='Contact Sheet' ;; collage) label='Collage' ;;
-    print) label='Print PDF' ;; tiffjoin) label='TIFF Document' ;; animate) label='Animated GIF' ;;
+    print) label='Print PDF' ;; tiffjoin) label='TIFF Document' ;; animate) label='Animated GIF/APNG' ;;
     gallery) label='Web Gallery' ;; slideshow) label='Slideshow' ;;
     convert) if [ -s "$KIMDIR/published.outputs" ]; then label='PDF files'; fi ;;
   esac
@@ -99,7 +99,7 @@ job_cleanup() {
 action_options_dialog() {
   local kind="$1"; shift
   case "$kind" in
-    convert|copyright|strip|rename)
+    convert|copyright|strip|rename|rotate)
       preview_run python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@" || return $?
       [ -f "$KIMDIR/options" ] || { progress_error 'The preview editor did not return its selected values. No images were changed.'; return 1; } ;;
     *) python3 "$DISPATCHER_DIR/kim_action_dialog.py" "$kind" "$KIMDIR/options" "$@" ;;
@@ -2134,7 +2134,7 @@ action_compress() {
             format_settings="$(gettext 'JPEG quality:') $QUALITY
 $(gettext 'Progressive JPEG:') $progressive_setting
 $(gettext 'JPEG Huffman optimization:') $optimize_setting" ;;
-          PNG) format_settings="$(gettext 'PNG lossless compression level:') $png_level" ;;
+          PNG) format_settings="$(gettext 'Compression level:') $png_level" ;;
           WEBP) format_settings="$(gettext 'WebP lossy quality:') $QUALITY" ;;
           AVIF) format_settings="$(gettext 'AVIF lossy quality:') $QUALITY" ;;
         esac
@@ -3841,57 +3841,74 @@ action_tiffjoin() {
   progress_close "$ref"
 }
 
-# Create an ordered animated GIF. Delay is in centiseconds and loop count zero
-# repeats forever, matching the historical service-menu command.
+# Create an ordered animated GIF or APNG without changing source images.
+# GIF retains the existing ImageMagick path; APNG uses normalized RGBA frames.
 action_animate() {
   require_action_tools animate setsid || return 1
-  local requested='' delay='' loops='' file dir mode output ref tmp='' info record format width height scenes
-  local rc=0 frames=0
+  local requested='' delay='' loops='' animation_format=gif file dir mode output ref tmp=''
+  local info record format width height scenes frames=0 extension
+  local work raw_frame canvas_frame dimensions source_width source_height
+  local max_width=0 max_height=0 frame_index=0 final_delay probe codec out_width out_height out_frames play_count durations
   local -a files=() source_geometry=()
+
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --format)
+        [ "$#" -ge 2 ] || return 2
+        animation_format="$2"
+        shift 2
+        ;;
       --output)
-        [ "$#" -ge 2 ] || return 1
+        [ "$#" -ge 2 ] || return 2
         requested="$2"
         shift 2
         ;;
       --delay)
-        [ "$#" -ge 2 ] || return 1
+        [ "$#" -ge 2 ] || return 2
         delay="$2"
         shift 2
         ;;
       --loop)
-        [ "$#" -ge 2 ] || return 1
+        [ "$#" -ge 2 ] || return 2
         loops="$2"
         shift 2
         ;;
-      --) shift; break ;;
-      *) break ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
     esac
   done
+
   local -a kim6_selected_inputs=("$@")
-  kim6_create_select_more kim6_selected_inputs "Animated GIF" || return 1
+  kim6_create_select_more kim6_selected_inputs 'Animated GIF/APNG' || return 1
+
   collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: select regular, unambiguous image files.')"
+    progress_error 'Animation: select regular, unambiguous image files.'
     return 1
   }
+
   dir="${files[0]%/*}"
 
-  # Collect all GIF options and the destination in one Qt dialog.
-  # Explicit CLI options remain supported without opening a dialog.
+  # One dialog selects format, timing, loop count, and destination.
+  # Supplying all CLI arguments retains noninteractive operation.
   if [ -z "$delay" ] || [ -z "$loops" ] || [ -z "$requested" ]; then
     local settings_file dialog_script
     local -a selections=()
 
-    dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
+    dialog_script="$DISPATCHER_DIR/kim_create_dialog.py"
+
     [ -r "$dialog_script" ] || {
-      kdialog --title "KIM6 — Animated GIF" --error         "The Animated GIF settings dialog is not installed."
+      progress_error 'The animation settings dialog is not installed.'
       return 1
     }
 
-    settings_file="$(mktemp)" || return 1
+    settings_file="$(mktemp "$KIMDIR/animation-settings.XXXXXX")" || return 1
 
-    if ! python3 "$dialog_script" gif "$settings_file"       "$dir" "${#files[@]}"; then
+    if ! python3 "$dialog_script" gif "$settings_file" "$dir" "${#files[@]}"; then
       rm -f -- "$settings_file"
       return 1
     fi
@@ -3899,86 +3916,279 @@ action_animate() {
     mapfile -d '' -t selections < "$settings_file"
     rm -f -- "$settings_file"
 
-    [ "${#selections[@]}" -eq 3 ] || return 1
+    [ "${#selections[@]}" -eq 4 ] || return 1
 
-    : "${delay:=${selections[0]}}"
-    : "${loops:=${selections[1]}}"
-    : "${requested:=${selections[2]}}"
+    animation_format="${selections[0]}"
+    : "${delay:=${selections[1]}}"
+    : "${loops:=${selections[2]}}"
+    : "${requested:=${selections[3]}}"
   fi
 
-  if ! [[ "$delay" =~ ^[0-9]{1,5}$ ]] ||
-     ((10#$delay > 65535)); then
-    kdialog --title "KIM6 — Animated GIF" --error       "Delay must be between 0 and 65535 centiseconds."
-    return 1
-  fi
+  [[ "$delay" =~ ^[0-9]{1,5}$ ]] && (( 10#$delay <= 65535 )) || {
+    progress_error 'Animation delay must be between 0 and 65535 centiseconds.'
+    return 2
+  }
+
   delay=$((10#$delay))
 
-  if ! [[ "$loops" =~ ^[0-9]{1,5}$ ]] ||
-     ((10#$loops > 65535)); then
-    kdialog --title "KIM6 — Animated GIF" --error       "Loop count must be between 0 and 65535."
-    return 1
-  fi
+  [[ "$loops" =~ ^[0-9]{1,5}$ ]] && (( 10#$loops <= 65535 )) || {
+    progress_error 'Animation loops must be between 0 and 65535.'
+    return 2
+  }
+
   loops=$((10#$loops))
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
-  for file in "${files[@]}"; do
-    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
-    info="$(cat -- "$KIMDIR/publication-records")" || {
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: an input image could not be decoded.')"
-      return 1
-    }
-    while IFS= read -r record; do
-      IFS='|' read -r format width height scenes <<< "$record"
-      [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || {
-        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: an input frame has invalid dimensions or format.')"
+
+  case "$animation_format" in
+    gif)
+      extension=gif
+      ;;
+    apng)
+      extension=png
+      (( delay >= 1 )) || {
+        progress_error 'APNG delay must be at least 1 centisecond.'
+        return 2
+      }
+      type -P ffmpeg >/dev/null && type -P ffprobe >/dev/null || {
+        progress_error 'APNG creation requires FFmpeg and FFprobe.'
         return 1
       }
+      ;;
+    *)
+      progress_error 'Animation format must be gif or apng.'
+      return 2
+      ;;
+  esac
+
+  case "${requested,,}" in
+    *.gif)
+      [ "$extension" = gif ] || {
+        progress_error 'APNG output needs a .png filename.'
+        return 2
+      }
+      ;;
+    *.png)
+      [ "$extension" = png ] || {
+        progress_error 'GIF output needs a .gif filename.'
+        return 2
+      }
+      ;;
+    *)
+      progress_error 'Animation output must end in .gif or .png.'
+      return 2
+      ;;
+  esac
+
+  ref="$(progress_open "${#files[@]}" 'Preparing source images…')" || return 1
+
+  for file in "${files[@]}"; do
+    publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
+
+    info="$(cat -- "$KIMDIR/publication-records")" || {
+      publication_fail "$ref" '' 'Animation: cannot inspect source frames.'
+      return 1
+    }
+
+    while IFS= read -r record; do
+      IFS='|' read -r format width height scenes <<< "$record"
+
+      if ! [[ "$format" =~ ^[A-Za-z0-9]+$ &&
+              "$width" =~ ^[1-9][0-9]*$ &&
+              "$height" =~ ^[1-9][0-9]*$ ]]; then
+        publication_fail "$ref" '' 'Animation: invalid source dimensions.'
+        return 1
+      fi
+
       source_geometry+=("$width|$height")
       frames=$((frames + 1))
     done <<< "$info"
   done
-  [ "$frames" -gt 0 ] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: no image frames were found.')"
+
+  (( frames > 0 )) || {
+    publication_fail "$ref" '' 'No image frames found.'
     return 1
   }
-  # Creation-only output; selected sources are protected.
+
+  # Both formats are derivative-only. Publication uses the existing
+  # destination-local stage and exclusive-create commit.
   mode=create
-  # Destination already supplied by CLI or Qt dialog.
-  [ -n "$requested" ] || return 1
-  prepare_derived_target "$requested" gif "$mode" "${files[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Animation: invalid or unsafe output destination.')"; return 1; }
-  output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
+
+  prepare_derived_target "$requested" "$extension" "$mode" "${files[@]}" || {
+    publication_fail "$ref" '' 'Animation: invalid or unsafe output destination.'
+    return 1
+  }
+
+  output="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
+
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
   fi
+
   tmp="$(tmp_for_target "$output")" || {
-    publication_fail "$ref" '' "$(gettext 'Animation: cannot create destination-local staging.')"
+    publication_fail "$ref" '' 'Animation: cannot create destination-local stage.'
     return 1
   }
-  if ! publication_render_stage "$ref" "$(gettext 'Rendering animated GIF…')" magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp"; then
-    return 1
+
+  if [ "$animation_format" = gif ]; then
+    if ! publication_render_stage "$ref" 'Rendering animated GIF…' \
+        magick -- "${files[@]}" -set delay "$delay" -loop "$loops" "$tmp"; then
+      return 1
+    fi
+
+    publication_render_stage "$ref" 'Inspecting animated GIF…' \
+      identify -regard-warnings -verbose -- "$tmp" || return 1
+
+    if ! validate_publication_gif "$tmp" "$delay" "$loops" \
+        source_geometry "$frames" "$KIMDIR/publication-records"; then
+      publication_fail "$ref" "$tmp" 'Animation: GIF verification failed.'
+      return 1
+    fi
+  else
+    # Do not silently flatten an animation or multi-page document.
+    if (( frames != ${#files[@]} || frames < 2 || frames > 360 )); then
+      publication_fail "$ref" "$tmp" 'APNG needs 2–360 single-frame images.'
+      return 1
+    fi
+
+    work="$(mktemp -d "$KIMDIR/apng.XXXXXX")" || {
+      publication_fail "$ref" "$tmp" 'Cannot prepare private APNG frames.'
+      return 1
+    }
+
+    for file in "${files[@]}"; do
+      if image_has_apng_control_chunk "$file"; then
+        publication_fail "$ref" "$tmp" \
+          'Animated APNG source cannot be used as one still frame.'
+        return 1
+      fi
+
+      raw_frame="$work/raw_$(printf '%06d' "$frame_index").png"
+
+      publication_render_stage "$ref" \
+        "Decoding APNG frame $((frame_index + 1))/$frames…" \
+        magick -- "$file" -auto-orient -colorspace sRGB \
+        -strip -depth 8 "PNG32:$raw_frame" || return 1
+
+      dimensions="$(identify -ping -format '%w|%h|%n' \
+        -- "$raw_frame" 2>/dev/null)" || {
+        publication_fail "$ref" "$tmp" 'Cannot inspect an APNG frame.'
+        return 1
+      }
+
+      IFS='|' read -r source_width source_height scenes <<< "$dimensions"
+
+      if ! [[ "$source_width" =~ ^[1-9][0-9]*$ &&
+              "$source_height" =~ ^[1-9][0-9]*$ &&
+              "$scenes" = 1 ]] ||
+         (( source_width > 4096 || source_height > 4096 )); then
+        publication_fail "$ref" "$tmp" \
+          'Invalid APNG frame or dimension exceeds 4096 pixels.'
+        return 1
+      fi
+
+      if (( source_width > max_width )); then
+        max_width="$source_width"
+      fi
+
+      if (( source_height > max_height )); then
+        max_height="$source_height"
+      fi
+
+      frame_index=$((frame_index + 1))
+    done
+
+    if (( max_width * max_height * frames > 200000000 )); then
+      publication_fail "$ref" "$tmp" \
+        'APNG exceeds the 200-million pixel-frame limit.'
+      return 1
+    fi
+
+    for ((frame_index = 0; frame_index < frames; frame_index++)); do
+      raw_frame="$work/raw_$(printf '%06d' "$frame_index").png"
+      canvas_frame="$work/frame_$(printf '%06d' "$frame_index").png"
+
+      publication_render_stage "$ref" \
+        "Preparing canvas $((frame_index + 1))/$frames…" \
+        magick -- "$raw_frame" -background none -gravity center \
+        -extent "${max_width}x${max_height}" \
+        "PNG32:$canvas_frame" || return 1
+    done
+
+    printf -v final_delay '%d.%02d' \
+      "$((delay / 100))" "$((delay % 100))"
+
+    publication_render_stage "$ref" 'Encoding animated PNG…' \
+      ffmpeg -hide_banner -v error -nostdin -y \
+      -framerate "100/$delay" -start_number 0 \
+      -i "$work/frame_%06d.png" \
+      -frames:v "$frames" \
+      -fps_mode passthrough \
+      -pix_fmt rgba \
+      -c:v apng \
+      -plays "$loops" \
+      -final_delay "$final_delay" \
+      -f apng "$tmp" || return 1
+
+    probe="$(ffprobe -v error -select_streams v:0 -count_frames \
+      -show_entries stream=codec_name,width,height,nb_read_frames \
+      -of default=noprint_wrappers=1 "$tmp" 2>/dev/null)" || {
+      publication_fail "$ref" "$tmp" 'Cannot inspect completed APNG.'
+      return 1
+    }
+
+    codec="$(sed -n 's/^codec_name=//p' <<< "$probe")"
+    out_width="$(sed -n 's/^width=//p' <<< "$probe")"
+    out_height="$(sed -n 's/^height=//p' <<< "$probe")"
+    out_frames="$(sed -n 's/^nb_read_frames=//p' <<< "$probe")"
+
+    play_count="$(image_apng_play_count "$tmp")" || play_count=''
+    durations="$(image_animation_packet_durations "$tmp")" || durations=''
+
+    if [[ "$codec" != apng ||
+          "$out_width" != "$max_width" ||
+          "$out_height" != "$max_height" ||
+          "$out_frames" != "$frames" ||
+          "$play_count" != "$loops" ]] ||
+       ! image_apng_animation_signature "$tmp" >/dev/null ||
+       ! awk -v expected="$((delay * 10))" -v frames="$frames" '
+         {
+           if ($1 !~ /^[0-9]+$/ ||
+               $1 < expected-1 ||
+               $1 > expected+1) exit 1
+           n++
+         }
+         END {
+           if (n != frames) exit 1
+         }
+       ' <<< "$durations"; then
+      publication_fail "$ref" "$tmp" \
+        'APNG frame, timing, or loop verification failed.'
+      return 1
+    fi
+
+    # Validate decoding, not merely the container headers.
+    publication_render_stage "$ref" 'Decoding completed APNG…' \
+      ffmpeg -hide_banner -v error -nostdin \
+      -i "$tmp" -f null - || return 1
   fi
-  if [ "$rc" -eq 0 ]; then
-    publication_render_stage "$ref" "$(gettext 'Verifying animated GIF…')" identify -regard-warnings -verbose -- "$tmp" || return 1
-  fi
-  if [ "$rc" -eq 0 ] && ! validate_publication_gif "$tmp" "$delay" "$loops" source_geometry "$frames" "$KIMDIR/publication-records"; then
-    rc=1
-  fi
-  if [ "$rc" -ne 0 ]; then
-    publication_fail "$ref" "$tmp" "$(gettext 'Animation: ImageMagick failed or produced an invalid GIF.')"
-    return 1
-  fi
+
   if progress_cancelled "$ref"; then
-    publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication interrupted; no output was written.')"
+    publication_fail "$ref" "$tmp" \
+      'Animation interrupted before publication.'
     return 1
   fi
-  progress_begin_item "$ref" "$(gettext 'Publishing completed output…')" || return 1
+
+  progress_begin_item "$ref" 'Publishing completed animation…' || return 1
+
   if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
-    publication_fail "$ref" "$tmp" "$(gettext 'Animation: publication failed; existing files were preserved.')"
+    publication_fail "$ref" "$tmp" \
+      'Animation publication failed; existing files preserved.'
     return 1
   fi
+
   progress_close "$ref"
 }
-
 
 ####################
 # Rename images using simple filename rules, with Create or overwrite behavior.
@@ -5038,19 +5248,49 @@ transform_icc_records() {
 action_transform_in_place() {
   local timestamp_policy="$1" operation="$2"
   shift 2
-  local -a transform=("$operation") files=()
+  local -a transform=("$operation") files=() rotate_angles=()
   if [ "$operation" = -rotate ]; then
     transform+=("$1")
     shift
   fi
+  local plan_file=''
+  if [ "$operation" = -rotate-batch ]; then
+    [ "$#" -ge 1 ] || return 1
+
+    plan_file="$1"
+    shift
+
+    [[ "$plan_file" == "$KIMDIR/"* &&
+       -f "$plan_file" &&
+       ! -L "$plan_file" ]] || return 1
+  fi
+
   # The existing per-file identity check reports duplicate transforms as failed
   # items without performing a second in-place modification.
   collect_valid_files_with_repeats files "$@" || return 1
   [ "${#files[@]}" -gt 0 ] || return 0
 
+  if [ "$operation" = -rotate-batch ]; then
+    mapfile -d '' -t rotate_angles < "$plan_file" || return 1
+
+    [ "${#rotate_angles[@]}" -eq "${#files[@]}" ] || return 1
+
+    local chosen
+
+    for chosen in "${rotate_angles[@]}"; do
+      case "$chosen" in
+        SKIP|EXIF) ;;
+        *)
+          [[ "$chosen" =~ ^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]] ||
+            return 1
+          ;;
+      esac
+    done
+  fi
+
   # Accept only the supported transformations.
   case "$operation" in
-    -rotate|-auto-orient|-flip|-flop) ;;
+    -rotate|-rotate-batch|-auto-orient|-flip|-flop) ;;
     *) return 1 ;;
   esac
 
@@ -5066,7 +5306,7 @@ action_transform_in_place() {
   report_init
   local ref i tmp rc interrupted counter=0 source_info actual expected frame format count produced
   local dimensions actual_dimensions identity source_icc actual_icc read_hint fixed_dimensions swap
-  local target dir stem ext affix n
+  local target dir stem ext affix n effective_operation effective_angle
   local -A seen=()
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Transforming images ...')")"
   for i in "${files[@]}"; do
@@ -5079,6 +5319,26 @@ action_transform_in_place() {
       report_fail "$i"
       break
     fi
+    effective_operation="$operation"
+
+    if [ "$operation" = -rotate-batch ]; then
+      effective_angle="${rotate_angles[$((counter - 1))]}"
+
+      if [ "$effective_angle" = SKIP ]; then
+        report_skip "$i"
+        progress_value "$ref" "$counter"
+        continue
+
+      elif [ "$effective_angle" = EXIF ]; then
+        effective_operation=-auto-orient
+        transform=(-auto-orient)
+
+      else
+        effective_operation=-rotate
+        transform=(-rotate "$effective_angle")
+      fi
+    fi
+
     rc=0
     # Refuse ambiguous ImageMagick filename syntax and destination links.
     # Repeated selections/parent aliases must not transform the same inode twice.
@@ -5110,7 +5370,7 @@ action_transform_in_place() {
     format=''
     fixed_dimensions=''
     swap=unknown
-    case "$operation" in
+    case "$effective_operation" in
       -flip|-flop) swap=false ;;
       -rotate)
         case "${transform[1]#+}" in
@@ -5144,7 +5404,7 @@ action_transform_in_place() {
         IFS= read -r ext
       } < <(split_path "$i")
 
-      case "$operation" in
+      case "$effective_operation" in
         -flop) affix=flipped_horizontal ;;
         -flip) affix=flipped_vertical ;;
         -auto-orient) affix=auto_rotated ;;
@@ -5234,8 +5494,9 @@ action_transform_in_place() {
 }
 
 action_rotate() {
-  local angle='' custom=false exif=false
+  local angle='' custom=false exif=false preview=false
   local -a files=()
+
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
@@ -5244,43 +5505,85 @@ action_rotate() {
           angle="$2"
           shift 2
           ;;
+
         --exif)
           exif=true
           shift
           ;;
+
+        --preview)
+          preview=true
+          shift
+          ;;
+
         --custom)
           custom=true
           shift
           ;;
+
         --)
           shift
           files+=("$@")
           break
           ;;
-        *) die "rotate: unknown option $1" ;;
+
+        *)
+          die "rotate: unknown option $1"
+          ;;
       esac
     done
+
     if [ "$custom" = true ]; then
-      [ -z "$angle" ] && [ "$exif" = false ] || die "rotate: --custom cannot be combined with another angle"
-      action_options_dialog rotate "${files[@]}" || return 1
-      local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-      angle="${choices[0]}"
+      [ -z "$angle" ] && [ "$exif" = false ] ||
+        die "rotate: --custom conflicts with other rotation flags"
+
+      angle=custom
+      preview=true
     fi
-    [ "$exif" = false ] || {
-      [ -z "$angle" ] || die "rotate: --exif cannot be combined with --angle"
+
+    if [ "$exif" = true ]; then
+      [ -z "$angle" ] ||
+        die "rotate: --exif conflicts with --angle"
+
       angle=EXIF
-    }
+    fi
+
   else
     angle="${1:-}"
     shift || true
     files+=("$@")
   fi
-  [ -n "$angle" ] && [ "${#files[@]}" -gt 0 ] || die "rotate: missing angle or files"
+
+  [ -n "$angle" ] && [ "${#files[@]}" -gt 0 ] ||
+    die "rotate: missing angle or images"
+
+  if [ "$preview" = true ]; then
+    case "$angle" in
+      90|270|180|EXIF|custom) ;;
+      *) die "rotate: invalid preview preset" ;;
+    esac
+
+    rm -f -- "$KIMDIR/options" || return 1
+
+    preview_run python3 "$DISPATCHER_DIR/kim_action_dialog.py"       rotatebatch "$KIMDIR/options" --preset "$angle"       "${files[@]}" || return $?
+
+    [ -f "$KIMDIR/options" ] || {
+      progress_error 'Rotation planner did not return an approved batch.'
+      return 1
+    }
+
+    action_transform_in_place preserve -rotate-batch       "$KIMDIR/options" "${files[@]}"
+
+    return $?
+  fi
+
+  # Noninteractive rotation commands retain their normal argument form.
   if [ "$angle" = EXIF ]; then
     action_transform_in_place preserve -auto-orient "${files[@]}"
   else
-    # ImageMagick's useful decimal, signed and conditional-angle grammar.
-    [[ "$angle" =~ ^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[\<\>]?$ ]] || die "rotate: invalid angle"
+    [[ "$angle" =~ ^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)[\<\>]?$ ]] ||
+      die "rotate: invalid angle"
+
     action_transform_in_place preserve -rotate "$angle" "${files[@]}"
   fi
 }
@@ -6238,7 +6541,7 @@ if not isinstance(files, list) or not files or any(not isinstance(p, str) or '\0
 sys.stdout.buffer.write(b''.join(p.encode('utf-8') + b'\0' for p in files))
 KIM6_LOCATION_INPUTS
     then
-      progress_error 'The selected images could not be read. No images were changed. Reopen Apply GPS to Images.'
+      progress_error 'The selected images could not be read. No images were changed. Reopen Modify GPS on Images.'
       return 1
     fi
     mapfile -d '' -t files < "$KIMDIR/location-inputs"
@@ -9402,11 +9705,54 @@ action_slideshow() {
     esac
   done
   if [ "$interactive" = true ]; then
-    seconds="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --inputbox "$(gettext 'Seconds per photo (1-30):')" "$seconds")" || return 1
-    size="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --menu "$(gettext 'Output frame size:')" 1280x720 '1280 × 720' 1920x1080 '1920 × 1080' 854x480 '854 × 480')" || return 1
-    fps="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --inputbox "$(gettext 'Frame rate (1-30 fps):')" "$fps")" || return 1
-    output="$(kdialog --title "$(gettext 'Kim — MP4 slideshow')" --getsavefilename "${PWD}/slideshow.mp4" 'video/mp4')" || return 1
-    [ -n "$output" ] || return 1
+    local settings_file dialog_script starting_dir
+    local -a selected_images=("${files[@]}") choices=()
+
+    [ "${#selected_images[@]}" -gt 0 ] || {
+      progress_error 'Select at least one image.'
+      return 1
+    }
+
+    kim6_create_select_more selected_images 'Video Slideshow' || return 1
+
+    collect_publication_inputs files "${selected_images[@]}" || {
+      progress_error 'Select valid, distinct local images for the slideshow.'
+      return 1
+    }
+
+    (( ${#files[@]} <= 200 )) || {
+      progress_error 'The slideshow limit is 200 images.'
+      return 2
+    }
+
+    starting_dir="${files[0]%/*}"
+    dialog_script="$DISPATCHER_DIR/kim_create_dialog.py"
+
+    [ -r "$dialog_script" ] || {
+      progress_error 'Slideshow dialog not installed.'
+      return 1
+    }
+
+    settings_file="$(mktemp "$KIMDIR/slideshow-settings.XXXXXX")" || return 1
+
+    if ! python3 "$dialog_script" slideshow "$settings_file" "$starting_dir"         "${#files[@]}" "$seconds" "$size" "$fps" "$background" "$output"; then
+      rm -f -- "$settings_file"
+      return 1
+    fi
+
+    mapfile -d '' -t choices < "$settings_file"
+    rm -f -- "$settings_file"
+
+    [ "${#choices[@]}" -eq 5 ] || {
+      progress_error 'Incomplete slideshow settings.'
+      return 1
+    }
+
+    seconds="${choices[0]}"
+    size="${choices[1]}"
+    fps="${choices[2]}"
+    background="${choices[3]}"
+    output="${choices[4]}"
   fi
   [[ "$seconds" =~ ^[0-9]{1,2}$ ]] && [ "$seconds" -ge 1 ] && [ "$seconds" -le 30 ] || { progress_error "$(gettext 'Slideshow seconds per photo must be 1-30.')"; return 2; }
   [[ "$fps" =~ ^[0-9]{1,2}$ ]] && [ "$fps" -ge 1 ] && [ "$fps" -le 30 ] || { progress_error "$(gettext 'Slideshow frame rate must be 1-30 fps.')"; return 2; }
@@ -9477,7 +9823,8 @@ action_slideshow() {
     fi
   done
   [ -n "$srgb_profile" ] || { progress_error "$(gettext 'An installed sRGB ICC profile is required for slideshow color conversion.')"; return 1; }
-  for profile_path in /usr/share/color/icc/Rec709.icc /usr/share/color/icc/Rec709-v4.icc /usr/share/color/icc/Rec709-v2-micro.icc; do
+  rec709_profile=''
+  for profile_path in /usr/share/color/icc/colord/Rec709.icc /usr/share/color/icc/Rec709.icc /usr/share/color/icc/Rec709-v4.icc /usr/share/color/icc/Rec709-v2-micro.icc; do
     if [ -s "$profile_path" ]; then
       rec709_profile="$profile_path"
       break

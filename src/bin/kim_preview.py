@@ -422,9 +422,11 @@ def save_plan(path,plan):
 # Lazy Qt imports keep publication guards usable without constructing a GUI.
 @lru_cache(maxsize=1)
 def qt_classes():
-    from PySide6.QtCore import QThread,Signal,Qt
+    from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
     from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
-                                  QDialog,QDialogButtonBox,QApplication)
+                                  QDialog,QDialogButtonBox,QApplication,QComboBox)
+
+    from PySide6.QtGui import QPixmap, QIcon
 
     class PreviewView(QWidget):
         def __init__(self,parent=None):
@@ -434,9 +436,56 @@ def qt_classes():
             self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel); self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
             self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             layout.addWidget(self.table)
+            self.table.setIconSize(QSize(84, 64))
+
+            self._thumbnail_jobs = []
+            self._thumbnail_timer = QTimer(self)
+            self._thumbnail_timer.setInterval(0)
+            self._thumbnail_timer.timeout.connect(
+                self.load_next_thumbnail
+            )
+
+
+        def load_next_thumbnail(self):
+            """Fill filename cells without modifying source images."""
+            if not self._thumbnail_jobs:
+                self._thumbnail_timer.stop()
+                return
+
+            row, path = self._thumbnail_jobs.pop(0)
+            item = self.table.item(row, 0)
+
+            if item is None:
+                return
+
+            try:
+                from kim_photo_selection import read_thumbnail
+
+                image, _stamp = read_thumbnail(
+                    path,
+                    QSize(84, 64)
+                )
+
+                if image.isNull():
+                    raise ValueError('No preview decoder')
+
+                item.setIcon(
+                    QIcon(QPixmap.fromImage(image))
+                )
+
+            except Exception as exc:
+                # An unavailable decoder does not invalidate a
+                # separately verified conversion plan.
+                item.setToolTip(
+                    item.toolTip()
+                    + '\nPreview unavailable: '
+                    + str(exc)
+                )
 
         def show_plan(self,plan):
             self.plan=plan
+            self._thumbnail_timer.stop()
+            self._thumbnail_jobs.clear()
             entries=plan['entries']; changes=sum(e['status']=='change' for e in entries); skips=sum(e['status']=='skip' for e in entries)
             errors=sum(e['status']=='error' for e in entries); warnings=sum(bool(e['warnings']) for e in entries)
             label={'rename':'Rename Images','convert':'Convert Format','copyright':'Set Creator and Copyright','strip':'Remove Metadata','date':'Photo Dates','location':'Image Location Tools'}[plan['operation']]
@@ -446,14 +495,14 @@ def qt_classes():
                 from kim_location import TITLES
                 label=TITLES[plan['config']['kind']]
             elif plan['operation']=='date':
-                label={'set':'Set Photo Capture Date','shift':'Adjust Photo Capture Date','exif-to-file':'Set File Date from Photo Capture Date','file-to-exif':'Set Photo Capture Date from File Date'}[plan['config']['kind']]
+                label={'set':'Set Capture Date','shift':'Adjust Capture Date','exif-to-file':'Set File Date from Capture Date','file-to-exif':'Set Capture Date'}[plan['config']['kind']]
             elif plan['operation']=='convert':
                 c=plan['config']; settings=' — '+c['format'].upper()
-                if c.get('jp2_mode'): settings+='; JPEG 2000 '+c['jp2_mode']+' (quality '+c.get('jp2_quality','75')+')'
-                if c.get('jpeg_scan'): settings+='; JPEG '+('progressive' if c['jpeg_scan']=='Plane' else 'baseline')
-                if c.get('jpeg_optimize')=='true': settings+='; optimized JPEG Huffman coding'
+                if c['format'].lower()=='jp2' and c.get('jp2_mode'): settings+='; JPEG 2000 '+c['jp2_mode']+' (quality '+c.get('jp2_quality','75')+')'
+                if c['format'].lower()=='jpeg' and c.get('jpeg_scan'): settings+='; JPEG '+('progressive' if c['jpeg_scan']=='Plane' else 'baseline')
+                if c['format'].lower()=='jpeg' and c.get('jpeg_optimize')=='true': settings+='; optimized JPEG Huffman coding'
                 if c.get('bmp5')=='true': settings+='; BMP5'
-            elif plan['operation']=='strip': settings=' — '+{'all':'Strip Metadata','gps':'Strip GPS Metadata','ai':'Strip AI Metadata'}[plan['config']['mode']]
+            elif plan['operation']=='strip': settings=' — '+{'all':'Strip Metadata','gps':'Remove GPS Metadata','ai':'Strip AI Metadata'}[plan['config']['mode']]
             self.summary.setText(f'{label}{settings} — {policy}\nSelected images: {plan["total"]}   Planned changes: {changes}   Skipped / unchanged: {skips}   Warnings: {warnings}   Blocking errors: {errors}')
             rename = plan['operation'] == 'rename'
 
@@ -466,11 +515,11 @@ def qt_classes():
                 ]
             elif plan['operation'] == 'convert':
                 names = [
-                    'Current filename',
+                    'Image / filename',
                     'Proposed filename',
                     'Destination directory',
                     'Planned transformation',
-                    'Status / warnings'
+                    'Status'
                 ]
             else:
                 names = [
@@ -511,15 +560,49 @@ def qt_classes():
                         if rename else values
                     )
 
+                    if plan['operation'] == 'convert':
+                        displayed = list(displayed)
+
+                        if entry['status'] == 'change':
+                            displayed[-1] = (
+                                'Ready (warnings)'
+                                if entry['warnings']
+                                else 'Ready'
+                            )
+                        elif entry['status'] == 'skip':
+                            displayed[-1] = 'Unchanged'
+                        else:
+                            displayed[-1] = 'Blocked'
+
+                    if plan['operation'] == 'convert':
+                        displayed = list(displayed)
+
+                        displayed[-1] = (
+                            'Ready'
+                            if entry['status'] == 'change'
+                            else 'Unchanged'
+                            if entry['status'] == 'skip'
+                            else 'Blocked'
+                        )
+
                     for col, value in enumerate(displayed):
-                        if col == len(displayed) - 1 and entry['warnings']:
+                        if col == len(displayed) - 1 and entry['warnings'] and plan['operation'] != 'convert':
                             value += '\n' + '\n'.join(entry['warnings'])
 
                         item = QTableWidgetItem(value)
                         item.setToolTip(value + '\n\n' + details)
                         self.table.setItem(row, col, item)
 
+                    if plan['operation'] == 'convert':
+                        self.table.setRowHeight(row, 76)
+                        self._thumbnail_jobs.append(
+                            (row, entry['source'])
+                        )
+
                     row += 1
+            if self._thumbnail_jobs:
+                self._thumbnail_timer.start()
+
             return not errors and changes>0
 
     class PlanWorker(QThread):
@@ -532,7 +615,7 @@ def qt_classes():
 
     class PreviewDialog(QDialog):
         def __init__(self,spec,parent=None):
-            super().__init__(parent); self.setWindowTitle('Preview Changes'); self.resize(1050,580); self.closing=False; self.plan=None; self.failure=None
+            super().__init__(parent); self.setWindowTitle('Preview Changes'); self.resize(850 if spec['operation']=='convert' else 1050,580); self.closing=False; self.plan=None; self.failure=None
             layout=QVBoxLayout(self); self.view=PreviewView(); layout.addWidget(self.view)
             self.buttons=QDialogButtonBox(QDialogButtonBox.Apply|QDialogButtonBox.Cancel); layout.addWidget(self.buttons)
             self.apply=self.buttons.button(QDialogButtonBox.Apply); self.apply.setText('Apply Changes'); self.apply.setEnabled(False); self.apply.clicked.connect(self.accept)

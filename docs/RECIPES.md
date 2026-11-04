@@ -1,13 +1,13 @@
 # Recipes: Reusable Photo Workflows
 
-Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 Recipes menu**. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source photographs**.
+Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 — Recipes menu**. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source photographs**.
 
 ## Start in Dolphin
 
-![KDE Dolphin KIM6 Recipes menu showing Root shortcuts, Run a Recipe, and Recipe Editor](images/kim6-recipes-menu.png)
+![KDE Dolphin KIM6 — Recipes menu showing Root shortcuts, Run a Recipe, and Recipe Editor](images/kim6-recipes-menu.png)
 
 1. Select one or more supported photographs and right-click.
-2. Open **KIM6 Recipes → Run a Recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
+2. Open **KIM6 — Recipes → Choose Saved Recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
 3. Review the selected photographs and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
 4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
 

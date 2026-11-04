@@ -33,8 +33,8 @@ from kim_preview import (absolute, identity, inspection_path, base_entry, alloca
 from kim_psd_source import checkpoint, inspection_context
 
 TITLES = {'gpx': 'GPX Geotagging', 'copy': 'Copy GPS from Image…',
-          'apply': 'Apply GPS to Images…', 'report': 'Location Privacy Report',
-          'reduce': 'Reduce Coordinate Precision'}
+          'apply': 'Modify GPS on Images…', 'report': 'Inspect Location Metadata',
+          'reduce': 'Approximate GPS Location'}
 FORMATS = {'JPEG': {'.jpg', '.jpeg'}, 'PNG': {'.png'}, 'WEBP': {'.webp'},
            'TIFF': {'.tif', '.tiff'}, 'HEIC': {'.heic', '.heif', '.hif'},
            'HEIF': {'.heic', '.heif', '.hif'}, 'AVIF': {'.avif'}}
@@ -52,7 +52,7 @@ PLACE_NAMES = {'City', 'State', 'Province-State', 'ProvinceState', 'Country',
                'WorldRegion', 'LocationCode', 'LocationName-eng', 'ContentLocationCode',
                'ContentLocationName'}
 STRUCTURES = ('LocationCreated', 'LocationShown', 'RatingRegion')
-COORDINATE_CATEGORIES = {'camera': 'Camera position',
+COORDINATE_CATEGORIES = {'camera': 'Photo GPS location',
                          'destination': 'Destination / subject position',
                          'depicted': 'Depicted location',
                          'structured': 'Other structured location',
@@ -901,7 +901,7 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                     entry['warnings'].append('Free-text captions, image content and external information may still reveal location. Narrative text is preserved.')
                 entry['approved_location'] = {'category': 'camera', 'position': position, 'altitude': altitude, 'direction': direction, 'direction_ref': direction_ref, 'altitude_ref': altitude_ref, 'reduce': kind == 'reduce'}
                 entry['args'] = args + assignments(position, altitude, direction, direction_ref, altitude_ref)
-                entry['rows'].append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set camera position; remove other recognized precise coordinate records'])
+                entry['rows'].append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set photo GPS location; remove other recognized precise coordinate records'])
                 entry['rows'].append([Path(path).name, 'GPS fix details', 'Existing altitude / time / direction / speed', 'Altitude: ' + (str(altitude) + ' m' if altitude is not None else 'absent') + '; direction: ' + (str(direction) + '° ' + direction_ref if direction is not None else 'absent'), 'Remove stale fix metadata; never invent a GPS timestamp'])
                 for key in removed:
                     entry['rows'].append([Path(path).name, key, json.dumps(info['fields'][key], ensure_ascii=False), 'Remove / reconcile', 'Explicit location field'])
@@ -935,7 +935,7 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
 def report_rows(path, info):
     name = Path(path).name
     rows = [[name, 'Location classification', privacy_classification(info), '', '; '.join(info['issues']) or 'No recognized conflicts'],
-            [name, 'Camera position', display_position(info['position']), '', 'Only unambiguous camera GPS is eligible for Copy / Reduce'],
+            [name, 'Photo GPS location', display_position(info['position']), '', 'Only unambiguous camera GPS is eligible for Copy / Reduce'],
             [name, 'Measurement accuracy', info['accuracy'], '', 'Stored decimal resolution is not measurement accuracy']]
     rows.append([name, 'Source format / inspection coverage', str(info['format']), '',
                  'Recognized ExifTool location fields only; editing uses a narrower verified format allowlist'])

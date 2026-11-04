@@ -30,12 +30,12 @@ def photo_filters():
             *[label + ' (' + patterns(exts) + ')' for label, exts in groups], 'All Files (*)']
 
 
-def read_thumbnail(path, size):
+def read_thumbnail(path, size, auto_orient=True):
     """Use descriptor-backed no-atime reads; never modify an image.
 
-    Large images require decoder-native downscaling. Other decoders get a
-    placeholder instead of a full-resolution allocation. QImageReader's own
-    allocation bound additionally covers malformed input / plugin behavior.
+    Prefer native decoder scaling. Other decoders may decode up to 24 MP
+    before Qt scales the image; larger inputs retain a placeholder.
+    The existing Qt allocation limit and source identity checks remain in force.
     """
     before = identity(path)
     with inspection_path(path) as (_, fd):
@@ -45,12 +45,12 @@ def read_thumbnail(path, size):
         try:
             reader = QImageReader(device)
             reader.setDecideFormatFromContent(True)
-            reader.setAutoTransform(True)
+            reader.setAutoTransform(auto_orient)
             dimensions = reader.size()
             if not dimensions.isValid() or dimensions.width() * dimensions.height() > 1_000_000_000:
                 raise ValueError('Preview dimensions unavailable or too large')
             native_scale = reader.supportsOption(QImageIOHandler.ScaledSize)
-            if not native_scale and dimensions.width() * dimensions.height() > 1_000_000:
+            if not native_scale and dimensions.width() * dimensions.height() > 24_000_000:
                 raise ValueError('Safe small preview unavailable for this decoder')
             reader.setScaledSize(dimensions.scaled(size, Qt.KeepAspectRatio))
             image = reader.read()

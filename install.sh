@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install KIM6's unified dispatcher, resources, translations, and eleven menus.
+# Install KIM6's unified dispatcher, resources, translations, and twelve menus.
 # Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY]. The default user path
 # is ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus; root uses the first
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
@@ -514,6 +514,12 @@ compile_translation() {
 }
 
 mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
+# Retain ownership from the first file write, including interruptions.
+temporary="$(mktemp "$RUNTIME/.kim6-owned.tmp.XXXXXX")"
+printf 'KIM6 runtime\n' > "$temporary"
+chmod 0644 -- "$temporary"
+mv -f -- "$temporary" "$RUNTIME/.kim6-owned"
+temporary=''
 install_file "$SOURCE_DIR/src/bin/kim_all" "$RUNTIME/bin/kim_all" 0755
 install_file "$SOURCE_DIR/src/bin/kim_image_ops.py" "$RUNTIME/bin/kim_image_ops.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_image_ops_dialog.py" "$RUNTIME/bin/kim_image_ops_dialog.py" 0644
@@ -619,33 +625,39 @@ for name in "${legacy_names[@]}"; do
   path="$RUNTIME/bin/$name"
   if [ -f "$path" ]; then rm -f -- "$path"; fi
 done
-rm -f -- "$RUNTIME/.kim6-owned" "$RUNTIME/.kim6-manifest"
+rm -f -- "$RUNTIME/.kim6-manifest"
 
 
-# Remove only obsolete KIM6-owned menus after replacement.
-# Never delete an unrelated file that happens to have the name.
-kim6_retire_consolidated_menus() {
-  local name path
+# Retire verified obsolete KIM6 menus, regardless of filename.
+# Never follow symlinks or remove unrelated desktop entries.
+kim6_retire_obsolete_menus() {
+  local path name expected current
 
-  for name in kim_compress.desktop kim_organize.desktop; do
-    path="$PREFIX/$name"
+  for path in "$PREFIX"/kim*.desktop; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    [ ! -L "$path" ] || continue
+    [ -f "$path" ] || continue
 
-    [ -e "$path" ] || continue
-    [ ! -L "$path" ] || {
-      echo "install.sh: refusing symlinked old menu: $path" >&2
-      return 1
-    }
+    name="${path##*/}"
+    current=false
 
-    if grep -Fxq 'X-KIM6-Managed=true' "$path"; then
-      rm -f -- "$path"
-    else
-      echo "install.sh: obsolete menu is not marked KIM6-owned: $path" >&2
-      return 1
+    for expected in "${menu_names[@]}"; do
+      if [ "$name" = "$expected" ]; then
+        current=true
+        break
+      fi
+    done
+
+    [ "$current" = false ] || continue
+
+    if menu_is_kim6 "$path"; then
+      rm -f -- "$path" || return 1
+      echo "install.sh: retired obsolete KIM6 menu: $name"
     fi
   done
 }
 
-kim6_retire_consolidated_menus
+kim6_retire_obsolete_menus
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
@@ -717,6 +729,25 @@ done
 
 [ "$menu_count" -eq "${#menu_names[@]}" ] ||
   die "expected ${#menu_names[@]} desktop menus, found $menu_count"
+
+# A successful installation must not leave obsolete KIM6 menus behind.
+for path in "$PREFIX"/kim*.desktop; do
+  [ -f "$path" ] && [ ! -L "$path" ] || continue
+
+  name="${path##*/}"
+  current=false
+
+  for expected in "${menu_names[@]}"; do
+    if [ "$name" = "$expected" ]; then
+      current=true
+      break
+    fi
+  done
+
+  if [ "$current" = false ] && menu_is_kim6 "$path"; then
+    die "obsolete KIM6 menu remains: $path"
+  fi
+done
 
 echo
 echo "VERIFIED QT HELPERS"

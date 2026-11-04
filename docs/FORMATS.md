@@ -9,8 +9,8 @@ KIM6 uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A re
 |---|---|---|---|
 | JPEG/JPG/JFIF | ImageMagick JPEG decoder | JPEG encoder; compression and conversion menus | Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant. |
 | PNG | ImageMagick PNG decoder | PNG encoder | Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported. |
-| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | Dedicated FFmpeg APNG conversion path | APNG-to-APNG conversion validates frames, timing, and looping. **Animated APNG input is refused by Resize, Web Export and resized email preparation** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
-| GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
+| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | FFmpeg APNG conversion and animation creation | APNG conversion and creation validate frames, timing, and looping. The creator requires 2–360 single-frame images and normalizes them to a transparent canvas. **Animated APNG input is refused by Resize, Web Export and resized email preparation** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
+| GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates GIF animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
 | TIFF/TIF | ImageMagick TIFF decoder | TIFF encoder; `tiffjoin` creates multi-page files | Multiple pages are supported where the selected operation permits them. |
 | BMP/DIB | ImageMagick BMP decoder | BMP encoder; menu selects BMP5 | Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee. |
 | WebP | ImageMagick WebP decoder when installed | Runtime-probed WebP encoder | May contain animation; frame and ICC handling depend on the coder and operation. |

@@ -2,12 +2,19 @@
 """Parameter-only standalone retrofits; Bash retains policy and publication."""
 import sys
 from pathlib import Path
-from PySide6.QtCore import QTimer, QThread, Qt
+from PySide6.QtCore import QTimer, QThread, Qt, QSize
 from PySide6.QtWidgets import (QApplication,QDialog,QVBoxLayout,QFormLayout,QLabel,
     QDialogButtonBox,QComboBox,QSpinBox,QLineEdit,QCheckBox,QPushButton,QFileDialog,QPlainTextEdit,
-    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout)
+    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout,QHBoxLayout,QWidget)
 from kim_ui import RotationInput, with_help
+from PySide6.QtGui import QPixmap, QTransform
 from kim_recipe_image import copyright_settings
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QIcon, QPixmap, QTransform
+from PySide6.QtWidgets import (
+    QWidget, QHBoxLayout, QScrollArea,
+    QDoubleSpinBox, QFrame, QButtonGroup
+)
 
 
 class SourceHeaders(QThread):
@@ -62,7 +69,7 @@ class ActionDialog(QDialog):
         super().__init__(parent); self.policy=policy; self.kind=kind; self.files=list(files); self.values=[]; self.fields={}
         self.compression_preset=preset
         self.worker=None; self.headers={}; self.header_error=None; self.closing=False; self.geometry_cache={}
-        self.setWindowTitle('KIM6 — '+{'rotate':'Rotate by Custom Angle','resize':'Resize to Custom Size','percent':'Resize by Percentage',
+        self.setWindowTitle('KIM6 — '+{'rotate':'Rotate','resize':'Resize to Custom Size','percent':'Resize by Percentage',
             'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
         self.layout=QVBoxLayout(self)
         if kind=='compress':
@@ -86,9 +93,69 @@ class ActionDialog(QDialog):
         self.apply=self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Apply')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); self.layout.addWidget(self.buttons)
         if kind=='rotate':
-            self.rotation=RotationInput(45); self.form.addRow('Rotation',self.rotation)
-            self.condition=self.choice('condition','Apply to',[('All images',''),('Landscape images','>'),('Portrait images','<')])
-            self.message.setText('Positive angles turn right. The angle acts on stored pixels; use Auto-Rotate Using EXIF first when needed. Signed and fractional angles are supported.')
+            self.rotate_exif = preset == 'EXIF'
+            starting_angle = (
+                0 if self.rotate_exif else
+                45 if preset == 'custom' else float(preset)
+            )
+
+            self.rotation = RotationInput(starting_angle)
+            self.form.addRow('Rotation', self.rotation)
+
+            self.condition = QComboBox()
+            self.condition.addItem('All selected images', '')
+
+            self.form.setRowVisible(
+                self.rotation, not self.rotate_exif
+            )
+
+            self.rotate_selector = QComboBox()
+            for filename in self.files:
+                self.rotate_selector.addItem(
+                    Path(filename).name, filename
+                )
+            self.form.addRow('Preview image', self.rotate_selector)
+
+            panel = QWidget()
+            image_row = QHBoxLayout(panel)
+            image_row.setContentsMargins(0, 0, 0, 0)
+            image_row.setSpacing(10)
+
+            self.before_picture = QLabel('Loading source preview…')
+            self.after_picture = QLabel('Loading rotated preview…')
+
+            for label in (
+                self.before_picture,
+                self.after_picture
+            ):
+                label.setAlignment(Qt.AlignCenter)
+                label.setMinimumSize(230, 190)
+                label.setWordWrap(True)
+
+            image_row.addWidget(self.before_picture)
+            image_row.addWidget(self.after_picture)
+
+            self.layout.insertWidget(self.layout.indexOf(self.message), panel, 0)
+            # The images are the preview. Remove the empty text area.
+            self.preview.hide()
+            self.message.hide()
+
+            self.before_picture.setMinimumSize(290, 250)
+            self.after_picture.setMinimumSize(290, 250)
+
+            self.resize(790, 490)
+
+            self.message.setText(
+                'Left: original image. Right: proposed rotation. '
+                'Review the result before applying.'
+            )
+
+            self.rotate_selector.currentIndexChanged.connect(
+                self.update_rotation_preview
+            )
+            self.rotation.degrees.valueChanged.connect(
+                self.update_rotation_preview
+            )
         elif kind in ('resize','percent'):
             if kind=='percent': self.spin('percent','Percentage',1,1000,50)
             else:
@@ -108,12 +175,60 @@ class ActionDialog(QDialog):
             self.fields['progressive']=QCheckBox('Progressive JPEG'); self.form.addRow(self.fields['progressive'])
             self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding'); self.form.addRow(self.fields['optimize'])
             self.fields['strip']=QCheckBox('Explicitly remove metadata for formats that cannot retain it'); self.form.addRow(self.fields['strip'])
-            self.form.addRow('Color profile',with_help(QLabel('Source ICC safety is verified before publication.'),'color'))
-            self.form.addRow('Encoder quality',with_help(QLabel('JPEG 2000 lossy mode exposes quality.'),'quality'))
-            self.message.setText('Format options apply at encoding. Unsupported metadata or ICC preservation stops the affected file with an explanation. Fixed-format menu shortcuts keep their existing behavior.')
+            self.format_profile_note = QLabel()
+            self.format_profile_note.setWordWrap(True)
+            self.form.addRow('Color profile', self.format_profile_note)
+
+            self.format_quality_note = QLabel()
+            self.format_quality_note.setWordWrap(True)
+            self.form.addRow('Encoder quality', self.format_quality_note)
+
+            self.message.setText('')
+
+            self.convert_selector = QComboBox()
+
+            for filename in self.files:
+                self.convert_selector.addItem(
+                    Path(filename).name,
+                    filename
+                )
+
+            self.form.addRow(
+                'Source image',
+                self.convert_selector
+            )
+
+            self.convert_picture = QLabel(
+                'Source image preview'
+            )
+            self.convert_picture.setAlignment(Qt.AlignCenter)
+            self.convert_picture.setMinimumHeight(180)
+            self.convert_picture.setMaximumHeight(280)
+            self.convert_picture.setWordWrap(True)
+
+            self.layout.insertWidget(
+                self.layout.indexOf(self.buttons),
+                self.convert_picture,
+                1
+            )
+
+            # The source image replaces the generic text preview.
+            self.preview.hide()
+            self.resize(760, 490)
+
+            self.convert_selector.currentIndexChanged.connect(
+                self.update_convert_preview
+            )
+
+            # Initialize after Qt has constructed the full dialog.
+            QTimer.singleShot(
+                0,
+                self.update_convert_preview
+            )
+
         elif kind=='compress':
             self.spin('quality','JPEG / WebP / AVIF quality',1,100,70 if preset=='maximum' else 85)
-            self.spin('png','PNG lossless compression level',0,9,9 if preset=='maximum' else 6)
+            self.spin('png','Compression level',0,9,9 if preset=='maximum' else 6)
             self.fields['progressive']=QCheckBox('Progressive JPEG'); self.fields['progressive'].setChecked(True)
             self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding')
             self.jpeg_help_rows={key:with_help(self.fields[key],key) for key in ('progressive','optimize')}
@@ -160,6 +275,120 @@ class ActionDialog(QDialog):
         if kind in ('resize','percent','compress') and self.files:
             self.worker=SourceHeaders(self.files,self); self.worker.finished.connect(self.headers_finished); self.worker.start()
         self.refresh()
+
+
+
+    def update_convert_preview(self, *_):
+        """Display a bounded source thumbnail without altering pixels."""
+        if self.kind != 'convert':
+            return
+
+        filename = self.convert_selector.currentData()
+
+        if not filename:
+            self.convert_picture.clear()
+            self.convert_picture.setText('No image selected')
+            return
+
+        try:
+            from kim_photo_selection import read_thumbnail
+
+            image, _identity = read_thumbnail(
+                filename,
+                QSize(460, 270)
+            )
+
+            if image.isNull():
+                raise ValueError('No thumbnail decoder')
+
+            pixmap = QPixmap.fromImage(image)
+
+            self.convert_picture.setPixmap(
+                pixmap.scaled(
+                    460,
+                    270,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+            )
+
+            self.convert_picture.setToolTip(
+                'Source image: ' + Path(filename).name
+            )
+
+        except Exception as exc:
+            self.convert_picture.clear()
+            self.convert_picture.setText(
+                'Source preview unavailable for this format'
+            )
+            self.convert_picture.setToolTip(str(exc))
+
+    def update_rotation_preview(self, *_):
+        """Inspect only bounded thumbnails. Never write source pixels."""
+        if self.kind != 'rotate':
+            return True
+
+        selected = self.rotate_selector.currentData()
+
+        if not selected:
+            self.before_picture.setText('No image selected')
+            self.after_picture.setText('No image selected')
+            return False
+
+        from kim_photo_selection import read_thumbnail
+
+        try:
+            original, stamp = read_thumbnail(
+                selected, QSize(360, 260), auto_orient=False
+            )
+
+            if self.rotate_exif:
+                rotated, second_stamp = read_thumbnail(
+                    selected, QSize(360, 260), auto_orient=True
+                )
+                if stamp != second_stamp:
+                    raise ValueError('Image changed during inspection')
+            else:
+                angle = self.rotation.degrees.value()
+                rotated = original.transformed(
+                    QTransform().rotate(angle),
+                    Qt.SmoothTransformation
+                )
+
+            if original.isNull() or rotated.isNull():
+                raise ValueError('Preview decoder unavailable')
+
+            left = QPixmap.fromImage(original)
+            right = QPixmap.fromImage(rotated)
+
+            self.before_picture.setPixmap(
+                left.scaled(
+                    340, 245,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+            )
+
+            self.after_picture.setPixmap(
+                right.scaled(
+                    340, 245,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+            )
+
+            self.before_picture.setToolTip('Before rotation')
+            self.after_picture.setToolTip('After rotation')
+            return True
+
+        except Exception as exc:
+            self.before_picture.setText(
+                'Preview unavailable: ' + str(exc)
+            )
+            self.after_picture.setText(
+                'No verified preview available'
+            )
+            return False
 
     def headers_finished(self):
         worker,self.worker=self.worker,None; self.headers=worker.headers; self.header_error=worker.error; worker.deleteLater()
@@ -235,8 +464,20 @@ class ActionDialog(QDialog):
         try:
             if self.header_error: raise ValueError(self.header_error)
             if self.kind=='rotate':
-                self.values=[f'{self.rotation.degrees.value():g}'+self.condition.currentData()]
-                lines=['90° Left = −90°; 90° Right = +90°; 180° = half turn.']
+                self.values = (
+                    ['EXIF'] if self.rotate_exif else
+                    [
+                        f'{self.rotation.degrees.value():g}'
+                        + self.condition.currentData()
+                    ]
+                )
+
+                if not self.update_rotation_preview():
+                    raise ValueError(
+                        'Cannot safely preview the selected image.'
+                    )
+
+                lines = []
             elif self.kind in ('resize','percent'):
                 if self.kind=='percent': geometry=str(self.fields['percent'].value())+'%'
                 else:
@@ -257,11 +498,65 @@ class ActionDialog(QDialog):
             elif self.kind=='convert':
                 fmt=self.fields['format'].currentData()
                 self.form.setRowVisible(self.fields['jp2_mode'],fmt=='jp2'); self.form.setRowVisible(self.fields['jp2_quality'],fmt=='jp2' and self.fields['jp2_mode'].currentData()=='lossy')
-                for key in ('progressive','optimize'): self.form.setRowVisible(self.fields[key],fmt=='jpeg')
+                for key in ('progressive','optimize'):
+                    self.form.setRowVisible(self.fields[key],fmt=='jpeg')
+
+                descriptions = {
+                    'jpeg': 'JPEG uses lossy compression and does not support transparency.',
+                    'png': 'PNG preserves full-color pixels and transparency using lossless encoding.',
+                    'webp': 'WebP supports modern image compression and transparency.',
+                    'avif': 'AVIF supports high-efficiency image compression and transparency.',
+                    'heic': 'HEIC output depends on the installed HEIF encoder. Unsupported metadata or profiles will be reported.',
+                    'bmp': 'BMP creates a widely compatible, typically uncompressed raster image.',
+                    'gif': 'GIF uses a limited color palette and supports binary transparency.',
+                    'pdf': 'PDF creates a document containing the converted image.',
+                    'tiff': 'TIFF supports high-quality raster storage and metadata.',
+                    'jp2': 'JPEG 2000 supports lossless and lossy encoding.',
+                    'jxl': 'JPEG XL is a modern image format with lossless and lossy capabilities.',
+                }
+
+                profile_notes = {
+                    'jpeg': 'Preserve the compatible source ICC profile.',
+                    'png': 'Preserve the compatible source ICC profile.',
+                    'webp': 'Preserve the compatible source ICC profile.',
+                    'avif': 'Verify compatible ICC/profile handling.',
+                    'heic': 'Verify compatible ICC/profile handling.',
+                    'bmp': 'Color-profile support is restricted for this output.',
+                    'gif': 'Color and palette limitations apply.',
+                    'pdf': 'Color handling depends on the generated PDF.',
+                    'tiff': 'Preserve the compatible source ICC profile.',
+                    'jp2': 'Verify compatible JPEG 2000 color-profile handling.',
+                    'jxl': 'Verify compatible JPEG XL color-profile handling.',
+                }
+
+                self.format_profile_note.setText(profile_notes[fmt])
+                self.format_quality_note.setText(
+                    'JPEG 2000 lossy quality applies only in Lossy mode.'
+                    if fmt == 'jp2' and
+                       self.fields['jp2_mode'].currentData() == 'lossy'
+                    else 'Lossless mode does not expose a quality setting.'
+                    if fmt == 'jp2' else ''
+                )
+                self.form.setRowVisible(
+                    self.format_quality_note, fmt == 'jp2'
+                )
+
+                self.message.setText(descriptions[fmt])
+
                 self.values=[fmt,self.fields['jp2_mode'].currentData(),str(self.fields['jp2_quality'].value()),'Plane' if self.fields['progressive'].isChecked() else 'None','true' if self.fields['optimize'].isChecked() else 'false','true' if self.fields['strip'].isChecked() else 'false']
-                lines=[('JPEG/BMP/PDF use an opaque background. PSD inputs are explicitly flattened onto white by their shared source adapter.' if fmt in ('jpeg','bmp','pdf') else
-                        'Transparency is retained where supported; GIF uses palette transparency.'),
-                       'ICC profiles are preserved where the encoder can carry them; incompatible outputs are refused rather than silently losing the profile.']
+                lines = [descriptions[fmt]]
+                if fmt in ('jpeg', 'bmp', 'pdf'):
+                    lines.append(
+                        'Transparent source areas use an opaque background.'
+                    )
+                elif fmt == 'gif':
+                    lines.append(
+                        'Transparency is limited by GIF palette encoding.'
+                    )
+                else:
+                    lines.append(
+                        'Transparency is retained where the selected encoder supports it.'
+                    )
             elif self.kind=='compress':
                 self.values=[str(self.fields['quality'].value()),str(self.fields['png'].value()),'Plane' if self.fields['progressive'].isChecked() else 'None','true' if self.fields['optimize'].isChecked() else 'false']
                 formats={record[2] for record in self.headers.values()}
@@ -277,7 +572,7 @@ class ActionDialog(QDialog):
                 for row in self.jpeg_help_rows.values(): self.form.setRowVisible(row,'JPEG' in formats)
                 self.form.labelForField(self.fields['quality']).setText(' / '.join(lossy)+(' quality' if lossy==['JPEG'] else ' lossy quality'))
                 info=[]
-                if 'PNG' in formats: info.append('PNG compression is lossless.')
+                if 'PNG' in formats: info.append('PNG compression is lossless. No image data is lost by compressing.')
                 if lossy: info.append(' / '.join(lossy)+' quality controls lossy compression.')
                 info.append('Each file keeps its format.')
                 self.message.setText(' '.join(info))
@@ -338,16 +633,427 @@ class ActionDialog(QDialog):
         if self.apply.isEnabled(): super().accept()
 
 
+
+class RotateBatchDialog(QDialog):
+    """Review one independent rotation per image before publication."""
+
+    CHOICES = (
+        ('90° CCW', '270', 'object-rotate-left'),
+        ('90° CW', '90', 'object-rotate-right'),
+        ('180°', '180', 'object-flip-vertical'),
+        ('Custom', 'custom', 'transform-rotate'),
+        ('EXIF', 'EXIF', 'transform-rotate'),
+        ('Skip', 'SKIP', 'process-stop'),
+    )
+
+    def __init__(self, files, preset):
+        super().__init__()
+
+        self.setWindowTitle('KIM6 — Rotate Images')
+        self.resize(970, 630)
+        self.setMinimumWidth(790)
+
+        self.rows = []
+        self.pending = []
+
+        outer = QVBoxLayout(self)
+
+        headline = QLabel(
+            f'{len(files)} selected image(s). '
+            'Choose a rotation for each image.'
+        )
+        outer.addWidget(headline)
+
+        # Toolbar for assigning the same rotation to every image.
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel('Apply to all:'))
+
+        for caption, mode, icon_name in self.CHOICES:
+            button = QPushButton(caption)
+            icon = QIcon.fromTheme(icon_name)
+
+            if not icon.isNull():
+                button.setIcon(icon)
+
+            button.clicked.connect(
+                lambda _checked=False, value=mode:
+                self.set_all(value)
+            )
+            toolbar.addWidget(button)
+
+        toolbar.addStretch(1)
+        outer.addLayout(toolbar)
+
+        headers = QHBoxLayout()
+
+        for text, width in (
+            ('Source', 265),
+            ('Rotation', 385),
+            ('Result', 160),
+        ):
+            label = QLabel(text)
+            label.setMinimumWidth(width)
+            headers.addWidget(label)
+
+        headers.addStretch(1)
+        outer.addLayout(headers)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        container = QWidget()
+        self.list_layout = QVBoxLayout(container)
+        self.list_layout.setSpacing(5)
+        self.list_layout.setContentsMargins(4, 4, 4, 4)
+
+        scroll.setWidget(container)
+        outer.addWidget(scroll, 1)
+
+        for path in files:
+            self.add_row(path, preset)
+
+        self.list_layout.addStretch(1)
+
+        self.status = QLabel('Loading source previews…')
+        outer.addWidget(self.status)
+
+        controls = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+
+        self.apply = controls.button(QDialogButtonBox.Ok)
+        self.apply.setText('Apply Changes')
+        self.apply.setEnabled(False)
+
+        controls.accepted.connect(self.accept)
+        controls.rejected.connect(self.reject)
+
+        outer.addWidget(controls)
+
+        # Process one thumbnail per event-loop turn, keeping the
+        # dialog responsive while reviewing a larger selection.
+        self.pending = list(self.rows)
+        QTimer.singleShot(0, self.load_next)
+
+    def add_row(self, path, preset):
+        frame = QFrame()
+        frame.setFrameShape(QFrame.StyledPanel)
+
+        line = QHBoxLayout(frame)
+        line.setContentsMargins(6, 6, 6, 6)
+        line.setSpacing(7)
+
+        original = QLabel('Loading…')
+        result = QLabel('Loading…')
+
+        for label in (original, result):
+            label.setFixedSize(145, 112)
+            label.setAlignment(Qt.AlignCenter)
+            label.setWordWrap(True)
+
+        name = QLabel(Path(path).name)
+        name.setToolTip(path)
+        name.setWordWrap(True)
+        name.setMaximumWidth(125)
+        name.setMinimumWidth(110)
+
+        left = QHBoxLayout()
+        left.addWidget(original)
+        left.addWidget(name, 1)
+        line.addLayout(left, 3)
+
+        center = QVBoxLayout()
+        buttons = QHBoxLayout()
+        button_group = QButtonGroup(self)
+
+        row = {
+            'path': path,
+            'mode': preset,
+            'original': original,
+            'result': result,
+            'source': None,
+            'oriented': None,
+            'stamp': None,
+            'error': None,
+            'result_error': None,
+            'controls': {},
+            'custom': None,
+        }
+
+        for caption, mode, icon_name in self.CHOICES:
+            button = QPushButton(caption)
+            button.setCheckable(True)
+            button.setMinimumHeight(29)
+            button.setToolTip(caption)
+
+            icon = QIcon.fromTheme(icon_name)
+
+            if not icon.isNull():
+                button.setIcon(icon)
+
+            button_group.addButton(button)
+            row['controls'][mode] = button
+
+            button.clicked.connect(
+                lambda _checked=False, current=row, value=mode:
+                self.set_mode(current, value)
+            )
+
+            buttons.addWidget(button)
+
+        center.addLayout(buttons)
+
+        degrees = QDoubleSpinBox()
+        degrees.setDecimals(3)
+        degrees.setRange(-360, 360)
+        degrees.setSuffix('°')
+        degrees.setValue(45)
+        degrees.setSingleStep(1)
+
+        degrees.valueChanged.connect(
+            lambda _value, current=row:
+            self.update_result(current)
+        )
+
+        center.addWidget(degrees)
+        row['custom'] = degrees
+
+        line.addLayout(center, 5)
+        line.addWidget(result, 2)
+
+        self.list_layout.addWidget(frame)
+        self.rows.append(row)
+
+        self.set_mode(row, preset)
+
+    def set_all(self, mode):
+        for row in self.rows:
+            self.set_mode(row, mode)
+
+    def set_mode(self, row, mode):
+        row['mode'] = mode
+
+        for key, button in row['controls'].items():
+            button.setChecked(key == mode)
+
+        row['custom'].setVisible(mode == 'custom')
+        self.update_result(row)
+
+    def selected_angle(self, row):
+        if row['mode'] == 'custom':
+            return f"{row['custom'].value():g}"
+
+        return row['mode']
+
+    def planned_angles(self):
+        return [
+            self.selected_angle(row)
+            for row in self.rows
+        ]
+
+    def load_next(self):
+        if not self.pending:
+            self.update_state()
+            return
+
+        row = self.pending.pop(0)
+
+        try:
+            from kim_photo_selection import read_thumbnail
+
+            source, stamp = read_thumbnail(
+                row['path'],
+                QSize(150, 112),
+                auto_orient=False
+            )
+
+            if source.isNull():
+                raise ValueError(
+                    'No supported source thumbnail decoder'
+                )
+
+            row['source'] = source
+            row['stamp'] = stamp
+
+            self.display_image(
+                row['original'],
+                source
+            )
+
+            self.update_result(row)
+
+        except Exception as exc:
+            row['error'] = str(exc)
+            row['original'].setText(
+                'Preview unavailable'
+            )
+            row['original'].setToolTip(str(exc))
+            row['result'].setText(
+                'Cannot verify result'
+            )
+
+        self.update_state()
+
+        if self.pending:
+            QTimer.singleShot(0, self.load_next)
+
+    @staticmethod
+    def display_image(label, image):
+        pixmap = QPixmap.fromImage(image)
+
+        label.setPixmap(
+            pixmap.scaled(
+                label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+        )
+
+    def update_result(self, row):
+        if row['source'] is None:
+            self.update_state()
+            return
+
+        if row['error']:
+            self.update_state()
+            return
+
+        row['result_error'] = None
+
+        try:
+            mode = row['mode']
+
+            if mode == 'EXIF':
+                if row['oriented'] is None:
+                    from kim_photo_selection import read_thumbnail
+
+                    oriented, stamp = read_thumbnail(
+                        row['path'],
+                        QSize(150, 112),
+                        auto_orient=True
+                    )
+
+                    if stamp != row['stamp'] or oriented.isNull():
+                        raise ValueError(
+                            'Image changed or EXIF preview unavailable'
+                        )
+
+                    row['oriented'] = oriented
+
+                output = row['oriented']
+
+            elif mode == 'SKIP':
+                output = row['source']
+
+            else:
+                angle = float(
+                    self.selected_angle(row)
+                )
+
+                output = row['source'].transformed(
+                    QTransform().rotate(angle),
+                    Qt.SmoothTransformation
+                )
+
+            self.display_image(
+                row['result'],
+                output
+            )
+
+            row['result'].setToolTip(
+                'No change' if mode == 'SKIP'
+                else f'Rotation: {self.selected_angle(row)}'
+            )
+
+        except Exception as exc:
+            row['result_error'] = str(exc)
+            row['result'].clear()
+            row['result'].setText(
+                'Preview unavailable'
+            )
+            row['result'].setToolTip(str(exc))
+
+        self.update_state()
+
+    def update_state(self):
+        if not hasattr(self, 'apply'):
+            return
+
+        active = [
+            row for row in self.rows
+            if row['mode'] != 'SKIP'
+        ]
+
+        blocked = [
+            row for row in active
+            if row['error']
+            or row['result_error']
+            or row['source'] is None
+        ]
+
+        self.apply.setEnabled(
+            bool(active)
+            and not blocked
+            and not self.pending
+        )
+
+        self.status.setText(
+            f'{len(active)} image(s) to rotate, '
+            f'{len(self.rows) - len(active)} skipped'
+            + (
+                f', {len(blocked)} preview(s) unavailable'
+                if blocked else ''
+            )
+        )
+
+    def accept(self):
+        self.update_state()
+
+        if self.apply.isEnabled():
+            super().accept()
+
+
 def main():
+    if len(sys.argv) >= 4 and sys.argv[1] == 'rotatebatch':
+        _, _, output, *arguments = sys.argv
+
+        if arguments[:1] != ['--preset'] or len(arguments) < 3:
+            raise ValueError(
+                'Rotation batch needs a preset and selected images'
+            )
+
+        preset, files = arguments[1], arguments[2:]
+
+        if preset not in ('90', '270', '180', 'custom', 'EXIF'):
+            raise ValueError('Unrecognized rotation preset')
+
+        app = QApplication(sys.argv[:1])
+        dialog = RotateBatchDialog(files, preset)
+
+        if dialog.exec() != QDialog.Accepted:
+            return 130
+
+        Path(output).write_bytes(
+            b''.join(
+                value.encode('ascii') + b'\0'
+                for value in dialog.planned_angles()
+            )
+        )
+
+        return 0
     kind,result,*files=sys.argv[1:]; initial=None; policy='create'; preset='custom'
     if kind=='compress' and files[:1]==['--preset']:
         _,preset,*files=files
         if preset not in ('recommended','maximum','custom'): raise ValueError('Invalid compression preset')
     if kind=='rename' and files and files[0] in ('create','overwrite'): policy=files.pop(0)
     if kind=='strip' and files and files[0] in ('all','gps','ai'): initial=files.pop(0)
+    if kind=='rotate' and files[:1]==['--preset']:
+        _,preset,*files=files
+        if preset not in ('90','270','180','custom','EXIF'):
+            raise ValueError('Invalid rotation preset')
     app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy,preset=preset)
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
-    if dialog.exec()!=QDialog.Accepted: return 130 if kind in ('convert','copyright','strip','rename') else 1
+    if dialog.exec()!=QDialog.Accepted: return 130 if kind in ('convert','copyright','strip','rename','rotate') else 1
     if kind=='rename':
         from kim_preview import save_plan
         save_plan(result+'.approved',dialog.rename_approved)

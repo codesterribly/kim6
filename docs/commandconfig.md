@@ -178,7 +178,7 @@ See [Output and File Handling](#output-and-file-handling), [copyright](#copyrigh
 
 ## Recipes
 
-The **KIM6 Recipes** submenu in Dolphin provides **Run a Recipe…** and **Recipe Editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+The **KIM6 — Recipes** submenu in Dolphin provides **Choose Saved Recipe…** and **Recipe Editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
 
 Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides **Load Photos & Run**. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
 
@@ -219,10 +219,10 @@ Prompts for one of eight PDF album layouts and a PDF destination. The optional f
 ### `animate`
 
 ```sh
-kim_all animate [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...
+kim_all animate [--format gif|apng] [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...
 ```
 
-Creates an animated GIF from still images and their frames, in selection order. Without explicit options it prompts for delay (default 100 centiseconds) and loop count (default 0, infinite). Delay and loop are integers from 0 through 65535. This is distinct from `videogif`, which samples a video segment.
+Creates an animated GIF or APNG derivative from selected still images using one settings dialog for format, frame delay, looping and destination. GIF retains its ImageMagick path and supports 0–65535-centisecond delays, including multi-frame inputs. APNG uses FFmpeg and requires 2–360 single-frame sources, delay 1–65535 centiseconds, a transparent normalized RGBA canvas up to 4096 × 4096 and a total budget of 200 million pixel-frames. APNG uses a `.png` filename and verifies frame count, dimensions, timing, looping and decoding before publication. The originals are never replaced. This is distinct from `videogif`, which samples video.
 
 ### `capturedate`
 
@@ -427,7 +427,7 @@ With `--color srgb` (the default), tagged images undergo ICC conversion to sRGB.
 kim_all slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30] [--background COLOR] [--output FILE] [--interactive] -- PHOTO...
 ```
 
-Creates a derived, silent H.264/yuv420p MP4. Photos are sorted in natural filename order, fitted without upscaling, and padded. Defaults are 3 seconds per photo, 1280×720, 25 fps, black background. Interactive size choices are 1280×720, 1920×1080, and 854×480. Limits: 200 photos, 600 seconds total, 18,000 frames and 1920×1080. RAW, layered, vector, HDR, and animated sources are rejected. H.264 encoder `libx264` is required.
+Creates a derived, silent H.264/yuv420p MP4. The interactive action uses one settings dialog for timing, resolution, frame rate, background (including custom `#RRGGBB`), destination and estimated duration. When one image is selected, more images may be added. Images are sorted by natural filename order, fitted without upscaling, and padded. Defaults: 3 seconds per image, 1280×720, 25 fps, black background. Size presets are 854×480, 1280×720 and 1920×1080. Limits: 200 images, 600 seconds, 18,000 frames and 1920×1080. The output must be a free `.mp4` path; existing files are not replaced. RAW, layered, vector, HDR and animated sources are rejected. H.264 encoder `libx264` is required.
 
 Slideshows do not include titles, transitions, pan, or zoom effects. They are intended for straightforward photo-to-video conversion, not video editing.
 

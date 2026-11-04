@@ -58,13 +58,13 @@
 <tr>
 <td>APNG</td>
 <td>PNG animation control detection and FFmpeg/ffprobe inspection</td>
-<td>Dedicated FFmpeg APNG conversion path</td>
-<td>APNG-to-APNG conversion validates frames, timing, and looping. <strong>Animated APNG input is refused by Resize, Web Export and resized email preparation</strong> because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported.</td>
+<td>FFmpeg APNG conversion and animation creation</td>
+<td>APNG conversion and creation validate frames, timing, and looping. The creator requires 2–360 single-frame images and normalizes them to a transparent canvas. <strong>Animated APNG input is refused by Resize, Web Export and resized email preparation</strong> because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported.</td>
 </tr>
 <tr>
 <td>GIF</td>
 <td>ImageMagick GIF decoder</td>
-<td>GIF encoder; <code>animate</code> creates animations</td>
+<td>GIF encoder; <code>animate</code> creates GIF animations</td>
 <td>Indexed color; frame count, delays, and looping are validated for animation operations.</td>
 </tr>
 <tr>

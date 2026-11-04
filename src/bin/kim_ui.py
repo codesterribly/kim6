@@ -1,8 +1,9 @@
 """Small shared Qt controls. Importing this module never starts an application."""
-from PySide6.QtCore import QDate, QLocale, QTime, Qt, Signal, QEvent
+from PySide6.QtCore import QDate, QLocale, QTime, Qt, Signal, QEvent, QRectF
 from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
     QPushButton, QToolButton, QCalendarWidget, QTimeEdit, QCheckBox, QComboBox,
     QSpinBox, QDoubleSpinBox, QButtonGroup, QLabel, QDialogButtonBox, QFormLayout)
+from PySide6.QtGui import QPainter, QPen, QColor
 
 def tr(text):
     import gettext
@@ -13,7 +14,7 @@ def tr(text):
 
 
 HELP = {
-    'capture': ('Photo Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
+    'capture': ('Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
     'timezone': ('Camera Timezone', "The timezone where the image was taken. If you don't know it, choose Unknown. KIM6 won't guess based on your computer's timezone."),
     'dates': ('Date Fields / All Dates', "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."),
     'settings': ('Reset from Settings', 'Use the value from KIM6 Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe.'),
@@ -74,7 +75,7 @@ class EmptyDateInput(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self); layout.setContentsMargins(0,0,0,0)
         self.edit = QLineEdit(); self.edit.setPlaceholderText('Choose date… (YYYY-MM-DD)')
-        self.edit.setClearButtonEnabled(True); self.edit.setAccessibleName('Photo Capture Date, YYYY-MM-DD')
+        self.edit.setClearButtonEnabled(True); self.edit.setAccessibleName('Capture Date, YYYY-MM-DD')
         layout.addWidget(self.edit)
         self.button = QPushButton('Calendar…'); self.button.clicked.connect(self.open_calendar); layout.addWidget(self.button)
         self.calendar = QCalendarWidget(); self.calendar.setMinimumDate(QDate(1,1,1)); self.calendar.setMaximumDate(QDate(9999,12,31))
@@ -118,7 +119,7 @@ class EmptyDateInput(QWidget):
         self.calendar.setSelectionMode(QCalendarWidget.SingleSelection if chosen.isValid() else QCalendarWidget.NoSelection)
         if chosen.isValid(): self.calendar.setSelectedDate(chosen)
         self.calendar.setCurrentPage(page.year(),page.month())
-        dialog = QDialog(self); dialog.setWindowTitle('Choose Photo Capture Date')
+        dialog = QDialog(self); dialog.setWindowTitle('Choose Capture Date')
         layout = QVBoxLayout(dialog); layout.addWidget(self.calendar)
         # Empty navigation must not commit today's internally selected date.
         # Explicit click or keyboard activation is the only calendar commit.
@@ -156,6 +157,161 @@ class EmptyTimeInput(QLineEdit):
     def setDisplayFormat(self, _): pass  # Clock syntax is intentionally explicit.
 
 
+
+
+class ClockFace(QWidget):
+    """Interactive 12-hour clock with separate hour and minute selection."""
+    timeSelected = Signal(QTime)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.selected = QTime(0, 0, 0)
+        self.stage = "hour"
+        self.setMinimumSize(230, 230)
+        self.setMaximumSize(280, 280)
+        self.setToolTip("Choose an hour, then a minute")
+
+    def setTime(self, value):
+        if value.isValid():
+            self.selected = value
+            self.update()
+
+    def paintEvent(self, event):
+        from math import pi, sin, cos
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QPainter, QPen, QColor, QFont
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.translate(self.width() / 2, self.height() / 2)
+
+        radius = min(self.width(), self.height()) / 2 - 12
+        ink = self.palette().color(self.foregroundRole())
+        painter.setPen(QPen(ink, 2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QRectF(-radius, -radius, 2*radius, 2*radius))
+
+        font = QFont(self.font())
+        font.setPointSize(11)
+        font.setBold(True)
+        painter.setFont(font)
+
+        for number in range(1, 13):
+            angle = number * pi / 6 - pi / 2
+            x = radius * .77 * cos(angle)
+            y = radius * .77 * sin(angle)
+            painter.drawText(
+                QRectF(x-15, y-12, 30, 24),
+                Qt.AlignCenter,
+                str(number)
+            )
+
+        def hand(angle, length, thickness, color):
+            painter.setPen(QPen(color, thickness, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(
+                0, 0,
+                int(length * cos(angle)),
+                int(length * sin(angle))
+            )
+
+        hour = (
+            self.selected.hour() % 12
+            + self.selected.minute() / 60
+        )
+        minute = (
+            self.selected.minute()
+            + self.selected.second() / 60
+        )
+
+        hand(hour*pi/6-pi/2, radius*.49, 5, ink)
+        hand(minute*pi/30-pi/2, radius*.67, 3, ink)
+        hand(
+            self.selected.second()*pi/30-pi/2,
+            radius*.70, 1.5, QColor("#d64d43")
+        )
+
+        painter.setBrush(ink)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QRectF(-4, -4, 8, 8))
+        painter.end()
+
+    def mousePressEvent(self, event):
+        from math import atan2, degrees
+
+        if event.button() != Qt.LeftButton:
+            return super().mousePressEvent(event)
+
+        point = event.position()
+        x = point.x() - self.width()/2
+        y = point.y() - self.height()/2
+
+        angle = (degrees(atan2(y, x)) + 90) % 360
+        old = self.selected
+
+        if self.stage == "hour":
+            chosen = round(angle/30) % 12
+            period = 12 if old.hour() >= 12 else 0
+            hour = chosen + period
+            if hour == 24:
+                hour = 12
+            updated = QTime(hour, old.minute(), old.second())
+            self.stage = "minute"
+            self.setToolTip("Choose the minute")
+        else:
+            minute = round(angle/6) % 60
+            updated = QTime(old.hour(), minute, old.second())
+            self.stage = "hour"
+            self.setToolTip("Choose the hour")
+
+        self.setTime(updated)
+        self.timeSelected.emit(updated)
+        event.accept()
+
+
+def choose_capture_time(parent, initial):
+    """A normal Qt time editor with a live analog display and Now button."""
+
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Choose Capture Time")
+    dialog.setMinimumWidth(300)
+
+    layout = QVBoxLayout(dialog)
+
+    face = ClockFace(dialog)
+    layout.addWidget(face, alignment=Qt.AlignHCenter)
+
+    editor = QTimeEdit(initial)
+    editor.setDisplayFormat("HH:mm:ss")
+    editor.setMinimumHeight(38)
+    editor.setAccessibleName("Capture time, hours minutes seconds")
+
+    layout.addWidget(editor)
+    face.setTime(editor.time())
+    editor.timeChanged.connect(face.setTime)
+    face.timeSelected.connect(editor.setTime)
+
+    now = QPushButton("Now")
+    now.setToolTip("Use the current system time")
+    layout.addWidget(now)
+
+    now.clicked.connect(
+        lambda: editor.setTime(QTime.currentTime())
+    )
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    if dialog.exec() == QDialog.Accepted:
+        return editor.time()
+
+    return None
+
+
 class CaptureDateInput(QWidget):
     """A nullable date with an ordinary whole-second clock, shared by both UIs."""
     changed = Signal(str)
@@ -164,10 +320,22 @@ class CaptureDateInput(QWidget):
         super().__init__(parent)
         layout = QFormLayout(self); layout.setContentsMargins(0,0,0,0)
         self.date = EmptyDateInput()
-        self.time = QTimeEdit(QTime(0,0,0)); self.time.setDisplayFormat('HH:mm:ss')
-        self.time.setAccessibleName('Photo Capture Time')
-        layout.addRow('Photo Capture Date',with_help(self.date,'capture'))
-        layout.addRow('Time',self.time)
+        self.time = QTimeEdit(QTime(0,0,0))
+        self.time.setDisplayFormat('HH:mm:ss')
+        self.time.setAccessibleName('Capture Time')
+
+        time_row = QWidget()
+        time_layout = QHBoxLayout(time_row)
+        time_layout.setContentsMargins(0,0,0,0)
+
+        time_layout.addWidget(self.time, 1)
+
+        self.clock_button = QPushButton('Clock…')
+        self.clock_button.clicked.connect(self.open_clock)
+        time_layout.addWidget(self.clock_button)
+
+        layout.addRow('Capture Date',with_help(self.date,'capture'))
+        layout.addRow('Time',time_row)
         if value:
             parts = value.replace('T',' ').split(' ',1)
             if len(parts) == 2:
@@ -176,6 +344,11 @@ class CaptureDateInput(QWidget):
                 if clock.isValid(): self.time.setTime(clock)
         self.date.dateChanged.connect(self.update_value)
         self.time.timeChanged.connect(self.update_value)
+
+    def open_clock(self):
+        value = choose_capture_time(self, self.time.time())
+        if value is not None:
+            self.time.setTime(value)
 
     def value(self):
         # The clock alone never supplies a date. An explicit date selection
@@ -204,7 +377,7 @@ class CaptureDateOptions(QWidget):
         if embedded: self.zone.addItem('Keep embedded timezone','embedded')
         self.zone.addItem('UTC (+00:00)','UTC'); self.zone.addItem('Explicit offset','custom')
         self.offset=QLineEdit(); self.offset.setPlaceholderText('±HH:MM')
-        self.fields=QComboBox(); self.fields.addItem('Photo Capture Date only','capture'); self.fields.addItem('All embedded dates','all')
+        self.fields=QComboBox(); self.fields.addItem('Capture Date only','capture'); self.fields.addItem('All embedded dates','all')
         self.form.addRow('Camera Timezone',with_help(self.zone,'timezone'))
         self.form.addRow('Explicit offset',self.offset)
         self.form.addRow('Date fields',with_help(self.fields,'dates'))
