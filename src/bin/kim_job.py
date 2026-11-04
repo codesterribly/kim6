@@ -70,7 +70,7 @@ def shell_warning_rows(directory):
     from types import SimpleNamespace
     path=Path(directory)/'warnings.jsonl'
     if not path.exists(): return []
-    return [SimpleNamespace(source=entry['source'],warnings=[entry['warning']])
+    return [SimpleNamespace(source=entry['source'],identity=entry.get('identity'),warnings=[entry['warning']])
             for line in path.read_text().splitlines() if line.strip()
             for entry in [json.loads(line)]]
 
@@ -115,7 +115,11 @@ def completion_dialog(action, outputs, groups):
 
 
 def publication_result(directory, action, outputs, status, graphical=None):
-    groups=grouped_warnings(shell_warning_rows(directory))
+    rows=shell_warning_rows(directory)
+    if status=='success' and outputs:
+        from kim_source_advisories import undisclosed_warning_rows
+        rows=undisclosed_warning_rows(directory,rows)
+    groups=grouped_warnings(rows)
     import sys
     # Only a successful, validated publication is a success. Failures retain
     # their existing action error UI; the EXIT adapter never adds a notice modal.

@@ -151,7 +151,7 @@ def camera_status(info):
     issues = info['categories']['camera']['issues']
     if issues:
         return 'Conflicting camera GPS' if any('conflict' in issue.lower() or 'contradict' in issue.lower() for issue in issues) else 'Invalid or incomplete camera GPS'
-    return 'Camera GPS recorded' if info['position'] is not None else 'No camera GPS recorded'
+    return 'GPS data exists' if info['position'] is not None else 'No GPS data'
 
 
 def blocked_destination(entry, inspecting=False):
@@ -383,8 +383,10 @@ def recorded_location_rows(info, units):
             value, ref = optional_gps_record(info['fields'], name, low, high)
             if value is None: continue
             if name == 'GPSAltitude':
-                reference = 'ellipsoidal surface' if ref in ('0', '1') else 'sea level'
-                text = height(abs(value), units) + (' below ' if ref in ('1', '3') else ' above ') + reference
+                # Display the signed recorded height in the
+                # selected units. Reference details remain in
+                # Technical Metadata.
+                text = height(value, units)
             else:
                 text = f'{value:g}° from ' + ('true north' if ref == 'T' else 'magnetic north')
             rows.append((label, text))
@@ -466,24 +468,40 @@ def operation_inspector_rows(entry, *, planned, inspecting, refreshing=False):
 
 
 def privacy_inspector_rows(entry, units):
-    if not entry: return [('Photo GPS location', 'Select an image')]
+    """Show recorded location facts without redundant privacy commentary."""
+    if not entry:
+        return [('GPS location', 'Select an image')]
+
     info = entry.get('location_before')
-    rows = [('Photo GPS location', position_text(info['position']) if info and info['position'] is not None else camera_status(info))]
+
+    rows = [(
+        'GPS location',
+        (
+            position_text(info['position'])
+            if info and info['position'] is not None
+            else camera_status(info)
+        ),
+    )]
+
     if info:
         additional = recorded_location_rows(info, units)
-        rows += additional or [('Other location information', 'No additional location metadata recorded.')]
-        privacy = []
-        if info['position'] is not None: privacy.append('Camera GPS coordinates are recorded in this image.')
-        elif info['categories']['camera']['issues']: privacy.append('Camera location metadata is present but cannot be interpreted reliably.')
-        if any(r['category'] != 'camera' for r in info['records']) or info['places']:
-            privacy.append('Other recorded location information may reveal a location.')
-        if info['fields'] and not privacy: privacy.append('Recorded location information is available in Technical Metadata.')
-        if privacy: rows.append(('Privacy', '\n'.join(privacy)))
+
+        rows += additional or [(
+            'Other location information',
+            'No additional location metadata recorded.',
+        )]
     else:
-        rows.append(('Inspection', 'Could not read location metadata. See Technical Metadata for the cause.'))
+        rows.append((
+            'Inspection',
+            'Could not read location metadata. '
+            'See Technical Metadata for the cause.',
+        ))
+
     warning = inspection_warning(entry)
-    if warning: rows.append(('Review', warning))
-    rows.append(('Privacy reminder', 'Visible photograph content and other metadata may reveal a location even when GPS is absent.'))
+
+    if warning:
+        rows.append(('Review', warning))
+
     return rows
 
 

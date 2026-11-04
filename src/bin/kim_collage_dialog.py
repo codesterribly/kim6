@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from kim_create_dialog import SourceAdvisoryNotice
+
 
 def collision_message(filename):
     """Advisory only: the renderer rechecks using create-only publication."""
@@ -39,7 +41,7 @@ def main():
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Create a Photo Collage")
+    dialog.setWindowTitle("KIM6 — Create Collage")
     dialog.setMinimumWidth(460)
 
     layout = QVBoxLayout(dialog)
@@ -159,6 +161,10 @@ def main():
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    buttons.button(QDialogButtonBox.Ok).setText("Create")
+    source_notice = SourceAdvisoryNotice(dialog)
+    source_notice.set_sources(pictures)
+    layout.addWidget(source_notice)
     layout.addWidget(buttons)
 
     def accept():
@@ -222,6 +228,13 @@ def main():
         destination.write_bytes(
             b"".join(value.encode("utf-8") + b"\0" for value in values)
         )
+        try:
+            if not source_notice.approve(pictures):
+                return
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(dialog, 'Cannot approve source advisories', str(exc))
+            return
+
         dialog.accept()
 
     buttons.accepted.connect(accept)

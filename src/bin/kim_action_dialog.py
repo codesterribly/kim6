@@ -18,29 +18,296 @@ from PySide6.QtWidgets import (
 
 
 class SourceHeaders(QThread):
-    def __init__(self,files,parent):
-        super().__init__(parent); self.files=files; self.headers={}; self.error=None
+    """Inspect individual sources without losing a mixed selection."""
+
+    def __init__(self, files, parent):
+        super().__init__(parent)
+        self.files = list(files)
+        self.headers = {}
+        self.stamps = {}
+        self.problems = {}
+        self.error = None
+        self.tolerant = getattr(parent, 'kind', None) == 'compress'
+        self.compression_inspection = (
+            getattr(parent, 'kind', None) == 'compress'
+        )
 
     def run(self):
+        if self.compression_inspection:
+            self.inspect_compression_sources()
+            return
         import json
-        from kim_psd_source import run_process, inspection_context
-        from kim_recipe_image import capture_date, canonical_file_type
+        import stat
+
+        from kim_psd_source import (
+            run_process,
+            inspection_context,
+        )
+        from kim_recipe_image import (
+            capture_date,
+            canonical_file_type,
+        )
+
+        def stamp(item):
+            return (
+                item.st_dev,
+                item.st_ino,
+                item.st_size,
+                item.st_mtime_ns,
+                item.st_ctime_ns,
+            )
+
         try:
-            with inspection_context(cancelled=self.isInterruptionRequested):
-                for path in self.files:
-                    if self.isInterruptionRequested(): break
-                    import stat
-                    info=Path(path).lstat()
-                    if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:
-                        raise ValueError('Select an unlinked, regular local image: '+Path(path).name)
-                    result=run_process(['exiftool','-json','-G1','-ImageWidth','-ImageHeight','-FileType','-DateTimeOriginal','-OffsetTimeOriginal',str(path)],text=True)
-                    if result.returncode: raise ValueError('Cannot inspect selected image: '+Path(path).name)
-                    record=json.loads(result.stdout)[0]; plain={k.split(':')[-1]:v for k,v in record.items()}
-                    raw=record.get('ExifIFD:DateTimeOriginal') or record.get('XMP-exif:DateTimeOriginal')
-                    try: capture=capture_date({'DateTimeOriginal':raw,'OffsetTimeOriginal':record.get('ExifIFD:OffsetTimeOriginal')})
-                    except ValueError: capture=None
-                    self.headers[str(path)]=(plain.get('ImageWidth'),plain.get('ImageHeight'),canonical_file_type(plain.get('FileType')),capture)
-        except Exception as exc: self.error=str(exc)
+            with inspection_context(
+                cancelled=self.isInterruptionRequested
+            ):
+                for filename in self.files:
+                    if self.isInterruptionRequested():
+                        break
+
+                    path = str(filename)
+
+                    try:
+                        info = Path(path).lstat()
+
+                        if (
+                            not stat.S_ISREG(info.st_mode)
+                            or info.st_nlink != 1
+                        ):
+                            raise ValueError(
+                                'Source must be an independent regular image'
+                            )
+
+                        result = run_process([
+                            'exiftool',
+                            '-json',
+                            '-G1',
+                            '-ImageWidth',
+                            '-ImageHeight',
+                            '-FileType',
+                            '-DateTimeOriginal',
+                            '-OffsetTimeOriginal',
+                            path,
+                        ], text=True)
+
+                        if result.returncode:
+                            raise ValueError(
+                                'ExifTool could not inspect this image'
+                            )
+
+                        records = json.loads(result.stdout)
+
+                        if (
+                            not records
+                            or not isinstance(records[0], dict)
+                        ):
+                            raise ValueError(
+                                'ExifTool returned no usable image record'
+                            )
+
+                        record = records[0]
+
+                        if any(
+                            key.endswith(':Error')
+                            for key in record
+                        ):
+                            raise ValueError(
+                                'ExifTool reported a source error'
+                            )
+
+                        plain = {
+                            key.split(':')[-1]: value
+                            for key, value in record.items()
+                        }
+
+                        fmt = canonical_file_type(
+                            plain.get('FileType')
+                        )
+
+                        if not fmt:
+                            raise ValueError(
+                                'Image format could not be identified'
+                            )
+
+                        # Compression needs format eligibility, not
+                        # capture-date parsing. Invalid capture dates
+                        # must not exclude otherwise valid photographs.
+                        capture = None
+
+                        if not self.tolerant:
+                            raw = (
+                                record.get(
+                                    'ExifIFD:DateTimeOriginal'
+                                )
+                                or record.get(
+                                    'XMP-exif:DateTimeOriginal'
+                                )
+                            )
+
+                            try:
+                                capture = capture_date({
+                                    'DateTimeOriginal': raw,
+                                    'OffsetTimeOriginal':
+                                        record.get(
+                                            'ExifIFD:OffsetTimeOriginal'
+                                        ),
+                                })
+                            except ValueError:
+                                capture = None
+
+                        after = Path(path).lstat()
+
+                        if stamp(info) != stamp(after):
+                            raise ValueError(
+                                'Source changed during inspection'
+                            )
+
+                        self.stamps[path] = stamp(after)
+
+                        self.headers[path] = (
+                            plain.get('ImageWidth'),
+                            plain.get('ImageHeight'),
+                            fmt,
+                            capture,
+                        )
+
+                    except Exception as exc:
+                        if not self.tolerant:
+                            raise
+
+                        self.problems[path] = str(exc)
+
+        except Exception as exc:
+            self.error = str(exc)
+
+    def inspect_compression_sources(self):
+        """Inspect formats independently without modifying sources."""
+        import json
+        import stat
+
+        from kim_psd_source import (
+            run_process,
+            inspection_context,
+        )
+        from kim_recipe_image import canonical_file_type
+
+        self.headers = {}
+        self.stamps = {}
+        self.problems = {}
+        self.error = None
+
+        def stamp(info):
+            return (
+                info.st_dev,
+                info.st_ino,
+                info.st_size,
+                info.st_mtime_ns,
+                info.st_ctime_ns,
+            )
+
+        try:
+            with inspection_context(
+                cancelled=self.isInterruptionRequested
+            ):
+                for filename in self.files:
+                    if self.isInterruptionRequested():
+                        break
+
+                    path = str(filename)
+
+                    try:
+                        before = Path(path).lstat()
+
+                        if (
+                            not stat.S_ISREG(before.st_mode)
+                            or before.st_nlink != 1
+                        ):
+                            raise ValueError(
+                                'Not an independent regular file'
+                            )
+
+                        result = run_process(
+                            [
+                                'exiftool',
+                                '-json',
+                                '-G1',
+                                '-FileType',
+                                path,
+                            ],
+                            text=True,
+                            timeout=30,
+                        )
+
+                        if result.returncode:
+                            raise ValueError(
+                                'ExifTool could not read the file type'
+                            )
+
+                        records = json.loads(
+                            result.stdout
+                        )
+
+                        if (
+                            not records
+                            or not isinstance(records[0], dict)
+                        ):
+                            raise ValueError(
+                                'Missing image-format information'
+                            )
+
+                        record = records[0]
+
+                        if any(
+                            key.endswith(':Error')
+                            for key in record
+                        ):
+                            raise ValueError(
+                                'ExifTool reported an invalid source'
+                            )
+
+                        raw_type = next(
+                            (
+                                value
+                                for key, value in record.items()
+                                if key.split(':')[-1] == 'FileType'
+                            ),
+                            None,
+                        )
+
+                        fmt = canonical_file_type(
+                            raw_type
+                        )
+
+                        if not fmt:
+                            raise ValueError(
+                                'Unrecognized image format'
+                            )
+
+                        after = Path(path).lstat()
+
+                        if stamp(before) != stamp(after):
+                            raise ValueError(
+                                'Source changed during inspection'
+                            )
+
+                        self.headers[path] = (
+                            None,
+                            None,
+                            fmt,
+                            None,
+                        )
+
+                        self.stamps[path] = stamp(after)
+
+                    except Exception as exc:
+                        # One failed source does not erase results
+                        # already collected for other images.
+                        self.problems[path] = str(exc)
+
+        except Exception as exc:
+            self.error = str(exc)
+
+
 
 
 class GeometryPlan(QThread):
@@ -68,7 +335,11 @@ class ActionDialog(QDialog):
     def __init__(self, kind, files=(), parent=None, policy='create', preset='custom'):
         super().__init__(parent); self.policy=policy; self.kind=kind; self.files=list(files); self.values=[]; self.fields={}
         self.compression_preset=preset
-        self.worker=None; self.headers={}; self.header_error=None; self.closing=False; self.geometry_cache={}
+        if kind == 'compress' and not self.files:
+            raise ValueError(
+                'Compress received no selected files from Dolphin'
+            )
+        self.worker=None; self.headers={}; self.header_stamps={}; self.compress_eligible=[]; self.header_error=None; self.closing=False; self.geometry_cache={}
         self.setWindowTitle('KIM6 — '+{'rotate':'Rotate','resize':'Resize to Custom Size','percent':'Resize by Percentage',
             'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
         self.layout=QVBoxLayout(self)
@@ -80,7 +351,7 @@ class ActionDialog(QDialog):
                 notice.setWordWrap(True); self.layout.addWidget(notice)
         self.form=QFormLayout(); self.layout.addLayout(self.form)
         if kind=='compress':
-            self.setMinimumWidth(520); self.layout.setSizeConstraint(QLayout.SetFixedSize)
+            self.setMinimumWidth(560)
         else: self.resize(660,270 if kind=='rotate' else 460)
         self.message=QLabel(); self.message.setWordWrap(True); self.layout.addWidget(self.message)
         if kind=='compress':
@@ -227,14 +498,42 @@ class ActionDialog(QDialog):
             )
 
         elif kind=='compress':
-            self.spin('quality','JPEG / WebP / AVIF quality',1,100,70 if preset=='maximum' else 85)
+            base_quality=70 if preset=='maximum' else 85
+            self.compression_type=QComboBox()
+            self.form.addRow('Image type',self.compression_type)
+            self.compression_type.currentIndexChanged.connect(self.refresh)
+            for codec,label in (('jpeg','JPEG'),('webp','WebP'),('avif','AVIF')):
+                self.spin(codec+'_quality',label+' quality',1,100,base_quality)
             self.spin('png','Compression level',0,9,9 if preset=='maximum' else 6)
             self.fields['progressive']=QCheckBox('Progressive JPEG'); self.fields['progressive'].setChecked(True)
             self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding')
             self.jpeg_help_rows={key:with_help(self.fields[key],key) for key in ('progressive','optimize')}
             for row in self.jpeg_help_rows.values(): self.form.addRow(row); self.form.setRowVisible(row,False)
-            for key in ('quality','png'): self.form.setRowVisible(self.fields[key],False)
+            for key in ('jpeg_quality','webp_quality','avif_quality','png'): self.form.setRowVisible(self.fields[key],False)
             self.message.setText('Inspecting selected image formats…')
+
+            self.compress_table=QTableWidget(0,3)
+            self.compress_table.setHorizontalHeaderLabels(
+                ('Image / filename','Format','Status')
+            )
+            self.compress_table.setEditTriggers(
+                QAbstractItemView.NoEditTriggers
+            )
+            self.compress_table.setSelectionBehavior(
+                QAbstractItemView.SelectRows
+            )
+            self.compress_table.setIconSize(QSize(84,64))
+            header=self.compress_table.horizontalHeader()
+            header.setSectionResizeMode(0,QHeaderView.Stretch)
+            header.setSectionResizeMode(1,QHeaderView.ResizeToContents)
+            header.setSectionResizeMode(2,QHeaderView.ResizeToContents)
+            self.compress_table.setFixedHeight(160)
+            self.layout.insertWidget(
+                self.layout.indexOf(self.buttons),
+                self.compress_table,1
+            )
+            self.compress_pending=[]
+            self.resize(640,380)
         elif kind=='copyright':
             self.apply.setText('Preview Changes…')
             self.inherited=copyright_settings()
@@ -263,10 +562,10 @@ class ActionDialog(QDialog):
             self.apply.setText('Apply Changes')
             self.rename_approved=None; self.rename_pending=False
             self.preview.setMaximumHeight(75)
+            self.preview.hide()
             self.update_rename_controls()
             self.fields['directory']=QLineEdit(); self.fields['directory'].setPlaceholderText('Beside each source'); self.form.addRow('Destination directory',self.fields['directory'])
             browse=QPushButton('Choose Directory…'); browse.clicked.connect(self.browse); self.form.addRow(browse)
-            self.form.addRow('Output filenames',with_help(QLabel('Create renamed copies' if self.policy=='create' else 'Rename selected originals'),'output'))
             self.message.setText('Before → after updates as you edit. '+('New copies protect original files.' if self.policy=='create' else 'You explicitly approved renaming originals; their old names will be removed after publication.')+' Names are checked again when saving.')
         self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(100); self.timer.timeout.connect(self.refresh)
         for widget in self.fields.values():
@@ -275,6 +574,8 @@ class ActionDialog(QDialog):
         if kind in ('resize','percent','compress') and self.files:
             self.worker=SourceHeaders(self.files,self); self.worker.finished.connect(self.headers_finished); self.worker.start()
         self.refresh()
+        if kind == 'compress':
+            self.populate_compression_table()
 
 
 
@@ -390,10 +691,216 @@ class ActionDialog(QDialog):
             )
             return False
 
+    def populate_compression_types(self):
+        from collections import Counter
+        counts=Counter(record[2] for record in self.headers.values())
+        previous=self.compression_type.currentData()
+        self.compression_type.blockSignals(True)
+        self.compression_type.clear()
+        for kind in ('JPEG','PNG','WEBP','AVIF'):
+            if counts[kind]:
+                self.compression_type.addItem(f'{kind} ({counts[kind]} images)',kind)
+        if previous is not None:
+            index=self.compression_type.findData(previous)
+            if index>=0: self.compression_type.setCurrentIndex(index)
+        self.compression_type.blockSignals(False)
+
+    def populate_compression_table(self):
+        """Display every selected file, including failed inspections."""
+        from kim_preview import (
+            fit_review_table,
+            review_row_style,
+        )
+
+        self.compress_table.setRowCount(
+            len(self.files)
+        )
+
+        self.compress_pending = []
+
+        problems = getattr(
+            self,
+            'header_errors',
+            {},
+        )
+
+        inspected = self.worker is None
+
+        for index, filename in enumerate(self.files):
+            path = str(filename)
+            record = self.headers.get(path)
+
+            fmt = (
+                str(record[2])
+                if record
+                else 'Unknown'
+            )
+
+            issue = problems.get(path)
+
+            if not inspected and not record and not issue:
+                status = 'Inspecting…'
+                explanation = (
+                    'Checking the selected image format'
+                )
+
+            elif issue:
+                status = 'Blocked'
+                explanation = issue
+
+            elif path in self.compress_eligible:
+                status = 'Ready'
+                explanation = (
+                    'Eligible for format-specific compression'
+                )
+
+            elif record:
+                status = 'Skipped'
+                explanation = (
+                    'Compression supports JPEG, PNG, '
+                    'WebP and AVIF'
+                )
+
+            else:
+                status = 'Blocked'
+                explanation = (
+                    'No verified image-format result'
+                )
+
+            values = (
+                Path(path).name,
+                fmt,
+                status,
+            )
+
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+
+                item.setToolTip(
+                    path + '\\n' + explanation
+                )
+
+                self.compress_table.setItem(
+                    index,
+                    column,
+                    item,
+                )
+
+            self.compress_table.setRowHeight(
+                index,
+                74,
+            )
+
+            review_row_style(
+                self.compress_table,
+                index,
+                status == 'Skipped',
+            )
+
+            if inspected:
+                self.compress_pending.append(
+                    (index, path)
+                )
+
+        table_height = fit_review_table(
+            self.compress_table
+        )
+
+        self.resize(
+            640,
+            min(
+                760,
+                max(320, table_height + 240),
+            ),
+        )
+
+        if self.compress_pending:
+            QTimer.singleShot(
+                0,
+                self.load_compression_thumbnail,
+            )
+
+
+
+    def load_compression_thumbnail(self):
+        if not self.compress_pending or self.closing:
+            return
+
+        index,path=self.compress_pending.pop(0)
+        item=self.compress_table.item(index,0)
+
+        if item is not None:
+            try:
+                from kim_photo_selection import read_thumbnail
+
+                image,_stamp=read_thumbnail(
+                    path,QSize(84,64)
+                )
+                if not image.isNull():
+                    from kim_preview import review_icon
+                    item.setIcon(review_icon(image,path not in self.compress_eligible))
+            except Exception as exc:
+                item.setToolTip(
+                    item.toolTip()+'\\nThumbnail unavailable: '+str(exc)
+                )
+
+        if self.compress_pending:
+            QTimer.singleShot(0,self.load_compression_thumbnail)
+
     def headers_finished(self):
-        worker,self.worker=self.worker,None; self.headers=worker.headers; self.header_error=worker.error; worker.deleteLater()
-        if self.closing: super().reject()
-        else: self.refresh()
+        worker, self.worker = self.worker, None
+
+        self.headers = dict(worker.headers)
+        self.header_stamps = dict(worker.stamps)
+        self.header_error = worker.error
+
+        self.header_errors = dict(
+            getattr(worker, 'problems', {})
+        )
+
+        worker.deleteLater()
+
+        if self.closing:
+            super().reject()
+            return
+
+        if self.kind != 'compress':
+            self.refresh()
+            return
+
+        if self.header_error:
+            for filename in self.files:
+                if filename not in self.headers:
+                    self.header_errors.setdefault(
+                        filename,
+                        self.header_error,
+                    )
+
+        for filename in self.files:
+            if filename not in self.headers:
+                self.header_errors.setdefault(
+                    filename,
+                    'Image inspection did not complete',
+                )
+
+        self.populate_compression_types()
+        self.refresh()
+        self.populate_compression_table()
+
+        if self.header_errors:
+            self.apply.setEnabled(False)
+
+            problems = '; '.join(
+                Path(filename).name + ': ' + reason
+                for filename, reason
+                in self.header_errors.items()
+            )
+
+            self.message.setText(
+                'Inspection blocked: ' + problems
+            )
+
+
 
     def geometry_finished(self):
         worker,self.worker=self.worker,None
@@ -451,10 +958,30 @@ class ActionDialog(QDialog):
         if value:
             for key in ('width','height'): self.fields[key].setValue(int(value))
 
-    def set_preview_text(self,text):
-        if self.kind=='compress':
-            self.preview.setText(text); self.preview.setVisible(bool(text))
-        else: self.preview.setPlainText(text)
+    def set_preview_text(self, text):
+        if self.kind == 'compress':
+            self.preview.setText(text)
+            self.preview.setVisible(bool(text))
+        else:
+            self.preview.setPlainText(text)
+
+            if self.kind == 'rename':
+                normal = (
+                    text.startswith(
+                        'Preview Changes — planning'
+                    )
+                    or text.startswith(
+                        'Preview Changes — final'
+                    )
+                )
+
+                # Keep errors visible, not the redundant
+                # successful-plan explanation.
+                self.preview.setVisible(
+                    bool(text) and not normal
+                )
+
+
 
     def refresh(self):
         if self.kind=='rename':
@@ -558,27 +1085,52 @@ class ActionDialog(QDialog):
                         'Transparency is retained where the selected encoder supports it.'
                     )
             elif self.kind=='compress':
-                self.values=[str(self.fields['quality'].value()),str(self.fields['png'].value()),'Plane' if self.fields['progressive'].isChecked() else 'None','true' if self.fields['optimize'].isChecked() else 'false']
-                formats={record[2] for record in self.headers.values()}
-                # Only applicable, approved encoder values determine adjustment.
-                baseline_quality,baseline_png=(70,9) if self.compression_preset=='maximum' else (85,6)
-                adjusted=(bool(formats & {'JPEG','WEBP','AVIF'}) and self.fields['quality'].value()!=baseline_quality or
-                          'PNG' in formats and self.fields['png'].value()!=baseline_png or
-                          'JPEG' in formats and (not self.fields['progressive'].isChecked() or self.fields['optimize'].isChecked()))
-                self.values.append('true' if adjusted else 'false')
-                lossy=[name for fmt,name in (('JPEG','JPEG'),('WEBP','WebP'),('AVIF','AVIF')) if fmt in formats]
-                self.form.setRowVisible(self.fields['quality'],bool(lossy))
-                self.form.setRowVisible(self.fields['png'],'PNG' in formats)
-                for row in self.jpeg_help_rows.values(): self.form.setRowVisible(row,'JPEG' in formats)
-                self.form.labelForField(self.fields['quality']).setText(' / '.join(lossy)+(' quality' if lossy==['JPEG'] else ' lossy quality'))
-                info=[]
-                if 'PNG' in formats: info.append('PNG compression is lossless. No image data is lost by compressing.')
-                if lossy: info.append(' / '.join(lossy)+' quality controls lossy compression.')
-                info.append('Each file keeps its format.')
-                self.message.setText(' '.join(info))
-                unsupported=[Path(path).name for path,record in self.headers.items() if record[2] not in ('JPEG','PNG','WEBP','AVIF')]
-                if unsupported: raise ValueError('Compression supports JPEG, PNG, WebP and AVIF. Convert these files first: '+', '.join(unsupported))
-                lines=['Re-encoding does not guarantee a smaller file. EXIF metadata and ICC color profiles are preserved, but other descriptive metadata may be removed.']
+                if not self.files:
+                    raise ValueError(
+                        'No selected file paths were received from Dolphin.'
+                    )
+
+                if getattr(self, 'header_errors', {}):
+                    raise ValueError(
+                        'Inspection failed for: '
+                        + ', '.join(
+                            Path(path).name
+                            for path in self.header_errors
+                        )
+                    )
+                formats={path:record[2] for path,record in self.headers.items()}
+                allowed=('JPEG','PNG','WEBP','AVIF')
+                counts={kind:sum(fmt==kind for fmt in formats.values()) for kind in allowed}
+                self.compress_eligible=[path for path in self.files
+                    if formats.get(path) in allowed]
+                chosen=self.compression_type.currentData()
+                field={'JPEG':'jpeg_quality','WEBP':'webp_quality',
+                       'AVIF':'avif_quality','PNG':'png'}.get(chosen)
+                for key in ('jpeg_quality','webp_quality','avif_quality','png'):
+                    self.form.setRowVisible(self.fields[key],key==field)
+                for key,row in self.jpeg_help_rows.items():
+                    self.form.setRowVisible(row,chosen=='JPEG')
+                baseline_q,baseline_png=(70,9) if self.compression_preset=='maximum' else (85,6)
+                adjusted=(any(counts[kind] and self.fields[key].value()!=baseline_q
+                    for kind,key in (('JPEG','jpeg_quality'),('WEBP','webp_quality'),
+                                     ('AVIF','avif_quality')))
+                    or counts['PNG'] and self.fields['png'].value()!=baseline_png
+                    or counts['JPEG'] and (not self.fields['progressive'].isChecked()
+                        or self.fields['optimize'].isChecked()))
+                self.values=[str(self.fields[key].value()) for key in
+                    ('jpeg_quality','webp_quality','avif_quality','png')]
+                self.values += ['Plane' if self.fields['progressive'].isChecked() else 'None',
+                    'true' if self.fields['optimize'].isChecked() else 'false',
+                    'true' if adjusted else 'false']
+                if chosen=='PNG':
+                    self.message.setText('PNG compression is lossless. Higher levels may take longer.')
+                else:
+                    self.message.clear()
+                if not self.compress_eligible:
+                    raise ValueError('No JPEG, PNG, WebP or AVIF images are eligible.')
+                lines=[f'{len(self.compress_eligible)} eligible, '
+                       f'{len(self.files)-len(self.compress_eligible)} skipped. '
+                       'Each file retains its original format; EXIF and ICC are preserved.']
             elif self.kind=='copyright':
                 self.values=[self.fields[k].text() for k in ('creator','notice','rights')]
                 if not any(self.values): raise ValueError('Enter at least one creator, copyright or usage-rights value, or reset from Settings.')
@@ -618,6 +1170,7 @@ class ActionDialog(QDialog):
         else:
             self.rename_approved=worker.plan
             self.apply.setEnabled(self.rename_view.show_plan(worker.plan))
+            self.resize(1050,min(790,max(370,self.rename_table.height()+265)))
             self.set_preview_text('Preview Changes — final paths are available in each row’s tooltip. Changed sources or destinations require a fresh review.')
         worker.deleteLater()
 
@@ -819,7 +1372,12 @@ class RotateBatchDialog(QDialog):
         row['custom'] = degrees
 
         line.addLayout(center, 5)
-        line.addWidget(result, 2)
+        result_column=QVBoxLayout()
+        result_column.addWidget(result)
+        row['caption']=QLabel('')
+        row['caption'].setAlignment(Qt.AlignCenter)
+        result_column.addWidget(row['caption'])
+        line.addLayout(result_column,2)
 
         self.list_layout.addWidget(frame)
         self.rows.append(row)
@@ -840,10 +1398,16 @@ class RotateBatchDialog(QDialog):
         self.update_result(row)
 
     def selected_angle(self, row):
-        if row['mode'] == 'custom':
-            return f"{row['custom'].value():g}"
+        value=(
+            f"{row['custom'].value():g}"
+            if row['mode']=='custom'
+            else row['mode']
+        )
 
-        return row['mode']
+        if value not in ('SKIP','EXIF') and float(value)%360==0:
+            return 'SKIP'
+
+        return value
 
     def planned_angles(self):
         return [
@@ -942,7 +1506,7 @@ class RotateBatchDialog(QDialog):
 
                 output = row['oriented']
 
-            elif mode == 'SKIP':
+            elif self.selected_angle(row) == 'SKIP':
                 output = row['source']
 
             else:
@@ -960,8 +1524,12 @@ class RotateBatchDialog(QDialog):
                 output
             )
 
+            angle=self.selected_angle(row)
+            row['caption'].setText('No change (0°)' if mode=='custom' and angle=='SKIP'
+                else 'Skipped' if angle=='SKIP'
+                else 'EXIF orientation' if mode=='EXIF' else 'Rotate '+angle+'°')
             row['result'].setToolTip(
-                'No change' if mode == 'SKIP'
+                'No change' if self.selected_angle(row) == 'SKIP'
                 else f'Rotation: {self.selected_angle(row)}'
             )
 
@@ -981,7 +1549,7 @@ class RotateBatchDialog(QDialog):
 
         active = [
             row for row in self.rows
-            if row['mode'] != 'SKIP'
+            if self.selected_angle(row) != 'SKIP'
         ]
 
         blocked = [
@@ -1054,6 +1622,27 @@ def main():
     app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy,preset=preset)
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
     if dialog.exec()!=QDialog.Accepted: return 130 if kind in ('convert','copyright','strip','rename','rotate') else 1
+    if kind=='compress':
+        import os
+        approved=[]
+
+        for path in dialog.compress_eligible:
+            info=os.lstat(path)
+            stamp=(
+                info.st_dev,info.st_ino,info.st_size,
+                info.st_mtime_ns,info.st_ctime_ns
+            )
+            if stamp!=dialog.header_stamps[path]:
+                raise ValueError(
+                    'Image changed after compression review: '
+                    +Path(path).name
+                )
+            approved.extend((
+                path,':'.join(map(str,stamp))
+            ))
+
+        dialog.values.extend(approved)
+
     if kind=='rename':
         from kim_preview import save_plan
         save_plan(result+'.approved',dialog.rename_approved)

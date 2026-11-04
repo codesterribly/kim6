@@ -4,6 +4,7 @@ import copy
 import sys
 import uuid
 from pathlib import Path
+from kim_photo_selection import choose_images, RECIPE_IMAGE_EXTENSIONS
 from PySide6.QtCore import QTimer, Qt, QThread, Signal, Slot, QDate, QTime
 from PySide6.QtGui import QIcon, QPalette, QKeySequence
 from PySide6.QtWidgets import (QApplication, QWidget, QDialog, QVBoxLayout, QHBoxLayout,
@@ -798,7 +799,8 @@ class RecipeWidget(QWidget):
         self.update_preview()
 
     def choose_examples(self):
-        files, _ = QFileDialog.getOpenFileNames(self, 'Choose Example Photo — text preview only')
+        files = choose_images(self, title='Choose Example Photos',
+                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Use Example Photos')
         if files:
             self.set_examples(files)
 
@@ -894,7 +896,8 @@ class RecipeWidget(QWidget):
             else:
                 self.select(self.active_index, force=True)
         snapshot = copy.deepcopy(self.recipe)
-        files, _ = QFileDialog.getOpenFileNames(self, 'Load Photos for Recipe Execution')
+        files = choose_images(self, title='Load Photos for Recipe Execution',
+                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Load Photos')
         if not files: return
         try:
             self.run_dialog = RunRecipeDialog(snapshot, files, self.folders, self)

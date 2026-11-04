@@ -170,7 +170,7 @@ def record_warnings(directory, source, identity, warnings):
     # derived TIFF/JPEG name as an additional affected source.
     with (Path(directory)/'warnings.jsonl').open('a') as log:
         for warning in warnings:
-            log.write(json.dumps({'source':source,'identity':list(identity[:2]),'warning':warning})+'\n')
+            log.write(json.dumps({'source':source,'identity':list(identity),'warning':warning})+'\n')
 
 
 def normalize(path, directory, rgb=False):

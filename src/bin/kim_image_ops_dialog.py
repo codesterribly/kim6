@@ -11,6 +11,7 @@ import tempfile
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
+from kim_photo_selection import choose_images, RECIPE_IMAGE_EXTENSIONS
 from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog,
     QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFontComboBox, QFormLayout,
     QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
@@ -841,7 +842,10 @@ class ImageOperationDialog(QDialog):
         if self.pending: self.refresh()
 
     def choose_image(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, 'Choose Preview Image', '', 'Images (*);;All Files (*)')
+        current = self.images.currentData()
+        paths = choose_images(self, str(Path(current).parent) if current else '',
+                              title='Choose Preview Image', multiple=False,
+                              extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Use Preview Image')
         for path in paths:
             if self.images.findData(path) < 0: self.images.addItem(Path(path).name, path)
         if paths: self.images.setCurrentIndex(self.images.findData(paths[0])); self.schedule()

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from kim_ui import tr
 from kim_annotations import clean_text
+from kim_create_dialog import SourceAdvisoryNotice
 
 LAYOUTS = [
     ("1 × 1, Portrait", "1"),
@@ -131,6 +132,10 @@ def main():
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    source_notice = SourceAdvisoryNotice(dialog)
+    source_notice.set_sources(images)
+    layout.addWidget(source_notice)
+    buttons.button(QDialogButtonBox.Ok).setText("Create")
     layout.addWidget(buttons)
 
     def save():
@@ -161,6 +166,13 @@ def main():
             values.extend(clean_text(editor.toPlainText()) for editor in editors)
             for value in values:
                 stream.write(value.encode("utf-8") + b"\0")
+
+        try:
+            if not source_notice.approve(images):
+                return
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(dialog, 'Cannot approve source advisories', str(exc))
+            return
 
         dialog.accept()
 

@@ -194,6 +194,9 @@ def inspect_png_removal(entry,mode,remove_ai):
                 stream.seek(length,1)
             stream.seek(4,1)
             if tag==b'IEND': break
+    if matching==0 and other==0:
+        entry['status']='skip'
+        entry['skip_reason']='No matching removable PNG metadata.'
     entry['rows'].append([Path(entry['source']).name,'PNG container text / ancillary metadata',
                           f'{matching} matching text / EXIF blocks; {other} other removable chunks',
                           'Apply native '+mode+' filter','Container filter; image data, ICC and presentation chunks preserved'])
@@ -235,29 +238,39 @@ def format_class(fmt):
     return fmt
 
 
+class InapplicableConversion(ValueError):
+    """Valid input, but the requested conversion cannot preserve content."""
+
+
 def conversion_rules(input_format,frames,apng,webp_animation,config,extension):
     """The standalone encoder and its preview share these exact refusals/no-op rules.
 
     Header inspection supplies facts; pixel decoding and output verification
     remain in the established encoder after confirmation.
     """
-    fmt=config['format']; source=format_class(input_format)
+    fmt=config['format'].lower(); source=format_class(input_format)
     if source in ('EXR','HDR') and input_format.upper()!=fmt.upper():
-        raise ValueError('HDR / OpenEXR requires explicit tone mapping before conversion.')
-    if apng and fmt!='apng': raise ValueError('Animated PNG requires APNG output to preserve playback.')
+        raise InapplicableConversion('HDR / OpenEXR requires explicit tone mapping before conversion.')
+    if apng and fmt!='apng': raise InapplicableConversion('Animated PNG requires APNG output to preserve playback.')
     if frames>1 and fmt not in ('gif','tif','tiff','tiff64','webp','avif','heic','heif','apng','pdf','ico','cur'):
-        raise ValueError('Requested format cannot preserve this multi-frame input.')
-    if (config['policy']=='overwrite' and extension.lower()==fmt and not config.get('jpeg_scan') and
-        config.get('jpeg_optimize')!='true' and config.get('bmp5')!='true' and source==format_class(fmt)):
+        raise InapplicableConversion('Requested format cannot preserve this multi-frame input.')
+    # Same-format conversion without explicit processing is unnecessary.
+    # Keep processing if the extension does not describe the actual format.
+    if (source==format_class(fmt) and format_class(extension)==source and
+        not config.get('jpeg_scan') and
+        config.get('jpeg_optimize')!='true' and
+        config.get('bmp5')!='true' and
+        config.get('strip_metadata') not in ('true', True) and
+        not (fmt in ('jp2','jxl','heic','heif') and config.get('jp2_mode'))):
         return 'skip'
     if frames>1 and not apng:
-        if source=='GIF' and fmt not in ('gif','apng'): raise ValueError('Animated GIF playback is not verified for this output format.')
-        if source=='WEBP' and fmt!='webp': raise ValueError('Animated WebP playback cannot be preserved in this format.')
-        if source in ('AVIF','HEIC'): raise ValueError('Multi-image AVIF/HEIC sequences cannot safely be re-encoded.')
+        if source=='GIF' and fmt not in ('gif','apng'): raise InapplicableConversion('Animated GIF playback is not verified for this output format.')
+        if source=='WEBP' and fmt!='webp': raise InapplicableConversion('Animated WebP playback cannot be preserved in this format.')
+        if source in ('AVIF','HEIC'): raise InapplicableConversion('Multi-image AVIF/HEIC sequences cannot safely be re-encoded.')
         if source not in ('GIF','WEBP','AVIF','HEIC') and fmt in ('gif','gif87','webp','apng','avif','heic','heif'):
-            raise ValueError('Multipage images cannot safely be converted to animated formats.')
+            raise InapplicableConversion('Multipage images cannot safely be converted to animated formats.')
     if frames==1 and source=='WEBP' and webp_animation and fmt!='webp':
-        raise ValueError('Animated WebP requires WebP output to preserve playback.')
+        raise InapplicableConversion('Animated WebP requires WebP output to preserve playback.')
     return 'change'
 
 
@@ -303,8 +316,13 @@ def conversion_plan(entry,config,registry):
                     if tag in (b'acTL',b'ANIM',b'ANMF'): animated=True
                     stream.seek(length+(4 if png else length%2),1)
         _,ext=split_name(entry['source'])
+        entry['input_format']=input_format
+        entry['psd']=psd
         entry['status']=conversion_rules(input_format,frames,animated and format_class(input_format)=='PNG',
                                          animated and format_class(input_format)=='WEBP',config,ext[1:])
+    if entry['status']=='skip':
+        entry['skip_reason']='Already '+format_class(input_format)+'; no conversion required.'
+        return
     data=read_metadata(entry['source'],['-ICC_Profile:ProfileDescription','-ICC_Profile:ProfileFileSignature','-EXIF:all','-IPTC:all','-XMP:all'])
     has_icc=bool(field(data,'ICC_Profile:ProfileFileSignature'))
     if psd and mode==4 and not has_icc:
@@ -366,7 +384,21 @@ def build_plan(operation,policy,files,config=None,seeds=None,progress=lambda *_:
                     directory=config.get('directory') or str(Path(source).parent)
                     if not Path(directory).is_absolute(): raise ValueError('Choose an absolute destination directory.')
                     candidate=str(Path(directory)/(name+ext))
-                    target=allocate(source,candidate,policy,reserved,'_' if method=='exifdate' or policy=='create' else None,number if method=='sequential' else None,rename=True)
+                    unchanged=(
+                        method in (
+                            'lowercase','uppercase','spacestodash',
+                            'spacestounderscore','underscorestospace',
+                            'dashestospace','overwrite'
+                        )
+                        and absolute(candidate)==source
+                    )
+                    if unchanged:
+                        entry['status']='skip'
+                        entry['skip_reason']='Filename already satisfies this rename.'
+                        target=source
+                        reserved.add(source)
+                    else:
+                        target=allocate(source,candidate,policy,reserved,'_' if method=='exifdate' or policy=='create' else None,number if method=='sequential' else None,rename=True)
                     if target!=absolute(candidate): entry['warnings'].append('Filename collision: the displayed filename includes planned collision numbering.')
                     if method=='sequential': number[0]+=1
                     if target==source: entry['status']='skip'
@@ -376,16 +408,33 @@ def build_plan(operation,policy,files,config=None,seeds=None,progress=lambda *_:
                     if operation=='copyright': rights_plan(entry,config)
                     elif operation=='strip': removal_plan(entry,config)
                     elif operation=='date': date_plan(entry,config)
-                    elif operation=='convert': conversion_plan(entry,config,registry)
+                    elif operation=='convert':
+                        try:
+                            conversion_plan(entry,config,registry)
+                        except InapplicableConversion as exc:
+                            entry['status']='skip'
+                            entry['skip_reason']=str(exc)
+                            entry['input_format']=entry.get('input_format','Image')
                     else: raise ValueError('Unsupported preview operation')
                     candidate=seeds[index] if seeds else source
                     effective='create' if entry.get('psd') else policy
-                    target=allocate(source,candidate,effective,reserved,'_' if operation=='convert' else '-')
+                    if entry['status']=='skip':
+                        target=source
+                        reserved.add(source)
+                    else:
+                        target=allocate(source,candidate,effective,reserved,'_' if operation=='convert' else '-')
                     finish_entry(entry,target,effective)
-                    if target!=absolute(candidate): entry['warnings'].append('Filename collision: the displayed filename includes planned collision numbering.')
+                    if entry['status']!='skip' and target!=absolute(candidate):
+                        entry['warnings'].append('Filename collision: the displayed filename includes planned collision numbering.')
                     if operation=='convert':
-                        entry['rows']=[[Path(source).name,Path(target).name,str(Path(target).parent),entry['input_format']+' → '+config['format'].upper(),
-                                        'Unchanged' if entry['status']=='skip' else ('Replace file' if entry['publication']=='overwrite' else 'Create file')]]
+                        skipped=entry['status']=='skip'
+                        entry['rows']=[[
+                            Path(source).name,
+                            '(no output)' if skipped else Path(target).name,
+                            '' if skipped else str(Path(target).parent),
+                            entry.get('skip_reason',entry['input_format']+' → '+config['format'].upper()) if skipped else entry['input_format']+' → '+config['format'].upper(),
+                            'Skipped' if skipped else ('Replace file' if entry['publication']=='overwrite' else 'Create file')
+                        ]]
                 if identity(source)!=entry['identity']: raise ValueError('Source changed during inspection; review a fresh plan.')
             except Exception as exc:
                 entry['status']='error'; entry['error']=str(exc)
@@ -421,6 +470,119 @@ def save_plan(path,plan):
 
 # Lazy Qt imports keep publication guards usable without constructing a GUI.
 @lru_cache(maxsize=1)
+def review_row_style(table, row, skipped):
+    """Give skipped rows a palette-derived muted appearance."""
+    if not skipped:
+        return
+
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtGui import QBrush, QPalette
+
+    palette = QApplication.palette()
+
+    foreground = QBrush(
+        palette.color(QPalette.Disabled, QPalette.Text)
+    )
+
+    background = QBrush(
+        palette.color(QPalette.AlternateBase)
+    )
+
+    for column in range(table.columnCount()):
+        item = table.item(row, column)
+
+        if item is not None:
+            item.setForeground(foreground)
+            item.setBackground(background)
+
+
+def review_icon(image, skipped):
+    from PySide6.QtGui import QIcon, QPixmap, QPainter
+    from PySide6.QtCore import Qt
+
+    pixmap = QPixmap.fromImage(image)
+
+    if not skipped:
+        return QIcon(pixmap)
+
+    result = QPixmap(pixmap.size())
+    result.fill(Qt.transparent)
+
+    painter = QPainter(result)
+    painter.setOpacity(0.45)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+
+    return QIcon(result)
+
+
+def fit_review_table(table, maximum_rows=6):
+    """Fit small selections, scroll larger selections."""
+    count = min(table.rowCount(), maximum_rows)
+
+    height = (
+        table.horizontalHeader().height()
+        + 2 * table.frameWidth()
+        + 12
+        + sum(
+            table.rowHeight(row)
+            for row in range(count)
+        )
+    )
+
+    table.setFixedHeight(max(94, height))
+    return table.height()
+
+
+def format_plan_row(entry, mode):
+    """Summarize each inspected metadata operation."""
+    status = entry['status']
+
+    if status == 'error':
+        return [
+            Path(entry['source']).name,
+            'Inspection failed',
+            entry.get('error', 'Cannot inspect'),
+            'Blocked',
+        ]
+
+    category = {
+        'gps': 'Recognized GPS coordinates',
+        'ai': 'Recognized AI fields',
+    }.get(mode)
+
+    matches = [
+        row for row in entry['rows']
+        if len(row) > 2 and row[1] == category
+    ]
+
+    evidence = (
+        matches[0][2]
+        if matches
+        else 'Descriptive / container metadata'
+    )
+
+    if status == 'skip':
+        evidence = 'None requiring removal'
+
+    operation = {
+        'gps': 'recognized GPS coordinates',
+        'ai': 'recognized AI fields',
+        'all': 'descriptive metadata',
+    }[mode]
+
+    return [
+        Path(entry['source']).name,
+        evidence,
+        (
+            'Remove ' + operation
+            if status == 'change'
+            else entry.get('skip_reason', 'No change')
+        ),
+        'Ready' if status == 'change' else 'Skipped',
+    ]
+
+
 def qt_classes():
     from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
     from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
@@ -452,7 +614,7 @@ def qt_classes():
                 self._thumbnail_timer.stop()
                 return
 
-            row, path = self._thumbnail_jobs.pop(0)
+            row, path, skipped = self._thumbnail_jobs.pop(0)
             item = self.table.item(row, 0)
 
             if item is None:
@@ -470,7 +632,7 @@ def qt_classes():
                     raise ValueError('No preview decoder')
 
                 item.setIcon(
-                    QIcon(QPixmap.fromImage(image))
+                    review_icon(image, skipped)
                 )
 
             except Exception as exc:
@@ -482,128 +644,253 @@ def qt_classes():
                     + str(exc)
                 )
 
-        def show_plan(self,plan):
-            self.plan=plan
+        def show_plan(self, plan):
+            self.plan = plan
             self._thumbnail_timer.stop()
             self._thumbnail_jobs.clear()
-            entries=plan['entries']; changes=sum(e['status']=='change' for e in entries); skips=sum(e['status']=='skip' for e in entries)
-            errors=sum(e['status']=='error' for e in entries); warnings=sum(bool(e['warnings']) for e in entries)
-            label={'rename':'Rename Images','convert':'Convert Format','copyright':'Set Creator and Copyright','strip':'Remove Metadata','date':'Photo Dates','location':'Image Location Tools'}[plan['operation']]
-            policy=('Create renamed copies' if plan['operation']=='rename' else 'Create new files (originals untouched)') if plan['policy']=='create' else ('Rename selected originals' if plan['operation']=='rename' else 'Explicitly approved replacement')
-            settings=''
-            if plan['operation']=='location':
-                from kim_location import TITLES
-                label=TITLES[plan['config']['kind']]
-            elif plan['operation']=='date':
-                label={'set':'Set Capture Date','shift':'Adjust Capture Date','exif-to-file':'Set File Date from Capture Date','file-to-exif':'Set Capture Date'}[plan['config']['kind']]
-            elif plan['operation']=='convert':
-                c=plan['config']; settings=' — '+c['format'].upper()
-                if c['format'].lower()=='jp2' and c.get('jp2_mode'): settings+='; JPEG 2000 '+c['jp2_mode']+' (quality '+c.get('jp2_quality','75')+')'
-                if c['format'].lower()=='jpeg' and c.get('jpeg_scan'): settings+='; JPEG '+('progressive' if c['jpeg_scan']=='Plane' else 'baseline')
-                if c['format'].lower()=='jpeg' and c.get('jpeg_optimize')=='true': settings+='; optimized JPEG Huffman coding'
-                if c.get('bmp5')=='true': settings+='; BMP5'
-            elif plan['operation']=='strip': settings=' — '+{'all':'Strip Metadata','gps':'Remove GPS Metadata','ai':'Strip AI Metadata'}[plan['config']['mode']]
-            self.summary.setText(f'{label}{settings} — {policy}\nSelected images: {plan["total"]}   Planned changes: {changes}   Skipped / unchanged: {skips}   Warnings: {warnings}   Blocking errors: {errors}')
-            rename = plan['operation'] == 'rename'
 
-            if rename:
-                names = [
+            operation = plan['operation']
+            entries = plan['entries']
+
+            ready = sum(
+                e['status'] == 'change' for e in entries
+            )
+            skipped = sum(
+                e['status'] == 'skip' for e in entries
+            )
+            blocked = sum(
+                e['status'] == 'error' for e in entries
+            )
+            warnings = sum(
+                bool(e['warnings']) for e in entries
+            )
+
+            labels = {
+                'rename': 'Rename Images',
+                'convert': 'Convert Format',
+                'copyright': 'Set Creator and Copyright',
+                'strip': 'Remove Metadata',
+                'date': 'Photo Dates',
+                'location': 'Image Location Tools',
+            }
+
+            name = labels[operation]
+
+            if operation == 'location':
+                from kim_location import TITLES
+                name = TITLES[plan['config']['kind']]
+
+            elif operation == 'date':
+                name = {
+                    'set': 'Set Capture Date',
+                    'shift': 'Adjust Capture Date',
+                    'exif-to-file': 'Set File Date from Capture Date',
+                    'file-to-exif': 'Set Capture Date',
+                }[plan['config']['kind']]
+
+            elif operation == 'convert':
+                name += ' — ' + plan['config']['format'].upper()
+
+            elif operation == 'strip':
+                name += ' — ' + {
+                    'gps': 'Remove GPS Coordinates',
+                    'ai': 'Remove AI Metadata',
+                    'all': 'Remove Descriptive Metadata',
+                }[plan['config']['mode']]
+
+            if plan['policy'] == 'create':
+                policy = (
+                    'Create renamed copies'
+                    if operation == 'rename'
+                    else 'Create new files (originals untouched)'
+                )
+            else:
+                policy = (
+                    'Rename selected originals'
+                    if operation == 'rename'
+                    else 'Explicitly approved replacement'
+                )
+
+            summary = (
+                f'{name} — {policy}\n'
+                f'Selected: {plan["total"]}   '
+                f'Ready: {ready}   '
+                f'Skipped: {skipped}   '
+                f'Warnings: {warnings}   '
+                f'Blocked: {blocked}'
+            )
+
+            if not ready and not blocked:
+                summary += (
+                    '\nNo selected files require this operation.'
+                )
+
+            self.summary.setText(summary)
+
+            if operation == 'rename':
+                headings = (
                     'Current filename',
                     'Proposed filename',
                     'Destination directory',
-                    'Status / warnings'
-                ]
-            elif plan['operation'] == 'convert':
-                names = [
+                    'Status',
+                )
+
+            elif operation == 'convert':
+                headings = (
                     'Image / filename',
                     'Proposed filename',
                     'Destination directory',
                     'Planned transformation',
-                    'Status'
-                ]
+                    'Status',
+                )
+
+            elif operation == 'strip':
+                headings = (
+                    'Image / filename',
+                    'Recognized metadata',
+                    'Planned operation',
+                    'Status',
+                )
+
             else:
-                names = [
+                headings = (
                     'Current filename',
                     'Field or category',
                     'Current value',
                     'Proposed change',
-                    'Status / warnings'
-                ]
+                    'Status / warnings',
+                )
 
-            self.table.setColumnCount(len(names))
-            self.table.setHorizontalHeaderLabels(names)
-            self.table.setRowCount(sum(len(e['rows']) for e in entries))
+            self.table.setColumnCount(len(headings))
+            self.table.setHorizontalHeaderLabels(headings)
+
+            self.table.setRowCount(
+                len(entries)
+                if operation == 'strip'
+                else sum(
+                    len(entry['rows'])
+                    for entry in entries
+                )
+            )
 
             header = self.table.horizontalHeader()
             header.setSectionResizeMode(QHeaderView.Stretch)
 
-            if plan['operation'] == 'convert':
-                header.setSectionResizeMode(3, QHeaderView.Fixed)
-                self.table.setColumnWidth(3, 160)
+            if operation == 'convert':
+                header.setSectionResizeMode(
+                    3, QHeaderView.Fixed
+                )
+                self.table.setColumnWidth(3, 165)
 
             row = 0
 
             for entry in entries:
-                details = '\n'.join([
-                    entry['source'],
-                    *(
-                        ['Destination: ' + entry['target']]
-                        if 'target' in entry else []
-                    ),
-                    entry.get('error', ''),
-                    *entry['warnings']
-                ])
+                status = entry['status']
 
-                for values in entry['rows']:
-                    displayed = (
-                        (values[0], values[1], values[2], values[4])
-                        if rename else values
+                status_label = {
+                    'change': 'Ready',
+                    'skip': 'Skipped',
+                    'error': 'Blocked',
+                }[status]
+
+                tooltip = '\n'.join(filter(None, [
+                    entry['source'],
+                    entry.get('error', ''),
+                    entry.get('skip_reason', ''),
+                    *entry['warnings'],
+                    *(
+                        ' | '.join(
+                            str(value)
+                            for value in values
+                        )
+                        for values in entry['rows']
+                    ),
+                ]))
+
+                if operation == 'strip':
+                    rows = [
+                        format_plan_row(
+                            entry,
+                            plan['config']['mode'],
+                        )
+                    ]
+
+                elif operation == 'rename':
+                    rows = [
+                        [
+                            values[0],
+                            values[1],
+                            values[2],
+                            status_label,
+                        ]
+                        for values in entry['rows']
+                    ]
+
+                elif operation == 'convert':
+                    rows = [
+                        [
+                            values[0],
+                            values[1],
+                            values[2],
+                            values[3],
+                            status_label,
+                        ]
+                        for values in entry['rows']
+                    ]
+
+                else:
+                    rows = [
+                        list(values)
+                        for values in entry['rows']
+                    ]
+
+                for values in rows:
+                    if (
+                        operation not in (
+                            'rename', 'convert', 'strip'
+                        )
+                        and entry['warnings']
+                    ):
+                        values[-1] += (
+                            '\n' + '\n'.join(entry['warnings'])
+                        )
+
+                    for column, value in enumerate(values):
+                        item = QTableWidgetItem(str(value))
+                        item.setToolTip(tooltip)
+
+                        self.table.setItem(
+                            row, column, item
+                        )
+
+                    self.table.setRowHeight(
+                        row,
+                        76 if operation in (
+                            'strip', 'convert'
+                        ) else 30,
                     )
 
-                    if plan['operation'] == 'convert':
-                        displayed = list(displayed)
+                    review_row_style(
+                        self.table,
+                        row,
+                        status == 'skip',
+                    )
 
-                        if entry['status'] == 'change':
-                            displayed[-1] = (
-                                'Ready (warnings)'
-                                if entry['warnings']
-                                else 'Ready'
-                            )
-                        elif entry['status'] == 'skip':
-                            displayed[-1] = 'Unchanged'
-                        else:
-                            displayed[-1] = 'Blocked'
-
-                    if plan['operation'] == 'convert':
-                        displayed = list(displayed)
-
-                        displayed[-1] = (
-                            'Ready'
-                            if entry['status'] == 'change'
-                            else 'Unchanged'
-                            if entry['status'] == 'skip'
-                            else 'Blocked'
-                        )
-
-                    for col, value in enumerate(displayed):
-                        if col == len(displayed) - 1 and entry['warnings'] and plan['operation'] != 'convert':
-                            value += '\n' + '\n'.join(entry['warnings'])
-
-                        item = QTableWidgetItem(value)
-                        item.setToolTip(value + '\n\n' + details)
-                        self.table.setItem(row, col, item)
-
-                    if plan['operation'] == 'convert':
-                        self.table.setRowHeight(row, 76)
-                        self._thumbnail_jobs.append(
-                            (row, entry['source'])
-                        )
+                    if operation in ('strip', 'convert'):
+                        self._thumbnail_jobs.append((
+                            row,
+                            entry['source'],
+                            status == 'skip',
+                        ))
 
                     row += 1
+
+            fit_review_table(self.table)
+
             if self._thumbnail_jobs:
                 self._thumbnail_timer.start()
 
-            return not errors and changes>0
+            return not blocked and ready > 0
 
     class PlanWorker(QThread):
         progress=Signal(int,int,str)
@@ -614,45 +901,249 @@ def qt_classes():
             except Exception as exc: self.error=str(exc)
 
     class PreviewDialog(QDialog):
-        def __init__(self,spec,parent=None):
-            super().__init__(parent); self.setWindowTitle('Preview Changes'); self.resize(850 if spec['operation']=='convert' else 1050,580); self.closing=False; self.plan=None; self.failure=None
-            layout=QVBoxLayout(self); self.view=PreviewView(); layout.addWidget(self.view)
-            self.buttons=QDialogButtonBox(QDialogButtonBox.Apply|QDialogButtonBox.Cancel); layout.addWidget(self.buttons)
-            self.apply=self.buttons.button(QDialogButtonBox.Apply); self.apply.setText('Apply Changes'); self.apply.setEnabled(False); self.apply.clicked.connect(self.accept)
+        def __init__(self, spec, parent=None):
+            super().__init__(parent)
+
+            self.spec = spec
+            self.plan = None
+            self.failure = None
+            self.worker = None
+            self.closing = False
+            self.pending = False
+
+            self.setWindowTitle(
+                'KIM6 — Remove Metadata'
+                if spec['operation'] == 'strip'
+                else 'Preview Changes'
+            )
+
+            layout = QVBoxLayout(self)
+            self.mode_select = None
+
+            if spec['operation'] == 'strip':
+                from PySide6.QtWidgets import QHBoxLayout
+
+                controls = QHBoxLayout()
+                controls.addWidget(QLabel('Remove'))
+
+                self.mode_select = QComboBox()
+
+                for label, mode in (
+                    ('Recognized GPS coordinates', 'gps'),
+                    ('Recognized AI metadata', 'ai'),
+                    (
+                        'Descriptive metadata '
+                        '(keep ICC and orientation)',
+                        'all',
+                    ),
+                ):
+                    self.mode_select.addItem(label, mode)
+
+                selected = self.mode_select.findData(
+                    spec['config']['mode']
+                )
+                self.mode_select.setCurrentIndex(
+                    max(0, selected)
+                )
+
+                controls.addWidget(
+                    self.mode_select, 1
+                )
+                layout.addLayout(controls)
+
+                note = QLabel(
+                    'Removes recognized metadata only. '
+                    'Original pixels, ICC profiles, and '
+                    'orientation are preserved. '
+                    'Unrecognized location/provenance and '
+                    'signed credentials may remain.'
+                )
+                note.setWordWrap(True)
+                layout.addWidget(note)
+
+            self.view = PreviewView()
+            layout.addWidget(self.view)
+
+            self.buttons = QDialogButtonBox(
+                QDialogButtonBox.Apply
+                | QDialogButtonBox.Cancel
+            )
+            layout.addWidget(self.buttons)
+
+            self.apply = self.buttons.button(
+                QDialogButtonBox.Apply
+            )
+            self.apply.setText('Apply Changes')
+            self.apply.setEnabled(False)
+
+            self.apply.clicked.connect(self.accept)
             self.buttons.rejected.connect(self.reject)
-            self.worker=PlanWorker(spec['operation'],spec['policy'],spec['files'],spec['config'],spec['seeds'],self)
-            self.worker.progress.connect(lambda i,n,p:self.view.summary.setText(f'Inspecting image {i+1} of {n}: {Path(p).name}'))
-            # QDialog.finished(int) is a native signal; never name this handler
-            # "finished", which PySide replaces with that incompatible signal.
-            self.worker.finished.connect(self.plan_finished); self.worker.start()
+
+            if self.mode_select is not None:
+                self.mode_select.currentIndexChanged.connect(
+                    self.mode_changed
+                )
+
+            self.start_plan()
+
+        def start_plan(self):
+            self.plan = None
+            self.failure = None
+            self.apply.setEnabled(False)
+
+            config = dict(self.spec['config'])
+            seeds = self.spec['seeds']
+
+            if self.mode_select is not None:
+                mode = self.mode_select.currentData()
+                config['mode'] = mode
+                seeds = self.spec['strip_seeds'][mode]
+
+            self.worker = PlanWorker(
+                self.spec['operation'],
+                self.spec['policy'],
+                self.spec['files'],
+                config,
+                seeds,
+                self,
+            )
+
+            self.worker.progress.connect(
+                lambda i, n, path:
+                self.view.summary.setText(
+                    f'Inspecting image {i+1} of {n}: '
+                    f'{Path(path).name}'
+                )
+            )
+
+            self.worker.finished.connect(
+                self.plan_finished
+            )
+            self.worker.start()
+
+        def mode_changed(self, *_):
+            self.apply.setEnabled(False)
+            self.plan = None
+
+            self.view._thumbnail_timer.stop()
+            self.view._thumbnail_jobs.clear()
+            self.view.table.setRowCount(0)
+            self.view.summary.setText(
+                'Inspecting selected images…'
+            )
+
+            if self.worker:
+                self.pending = True
+                self.worker.requestInterruption()
+            else:
+                self.start_plan()
+
         def plan_finished(self):
-            worker,self.worker=self.worker,None
+            worker, self.worker = self.worker, None
+
             try:
-                if self.closing: super().reject()
-                elif worker.error: self.show_failure(worker.error)
+                if self.closing:
+                    super().reject()
+
+                elif self.pending:
+                    self.pending = False
+                    self.start_plan()
+
+                elif worker.error:
+                    self.show_failure(worker.error)
+
                 else:
-                    self.plan=worker.plan; self.apply.setEnabled(self.view.show_plan(self.plan))
-                    errors=[entry['error'] for entry in self.plan['entries'] if entry['status']=='error']
+                    self.plan = worker.plan
+
+                    self.apply.setEnabled(
+                        self.view.show_plan(self.plan)
+                    )
+
+                    errors = [
+                        entry['error']
+                        for entry in self.plan['entries']
+                        if entry['status'] == 'error'
+                    ]
+
                     if errors:
-                        self.failure='\n'.join(errors)
-                        print('Preview Changes: '+self.failure,file=sys.stderr)
-            except Exception as exc: self.show_failure(str(exc))
-            finally: worker.deleteLater()
-        def show_failure(self,message):
-            self.failure=message; self.apply.setEnabled(False)
-            self.view.summary.setText('Preview Changes could not be planned. No images were changed.\n'+message+'\nCancel and review a fresh plan.')
-            print('Preview Changes: '+message,file=sys.stderr)
+                        self.failure = '\n'.join(errors)
+                        print(
+                            'Preview Changes: ' + self.failure,
+                            file=sys.stderr,
+                        )
+
+                    width = (
+                        990
+                        if self.spec['operation'] == 'convert'
+                        else 880
+                        if self.mode_select
+                        else 1050
+                    )
+
+                    extra = (
+                        178 if self.mode_select else 125
+                    )
+
+                    self.resize(
+                        width,
+                        min(
+                            785,
+                            max(
+                                245,
+                                self.view.table.height() + extra,
+                            ),
+                        ),
+                    )
+
+            except Exception as exc:
+                self.show_failure(str(exc))
+
+            finally:
+                worker.deleteLater()
+
+        def show_failure(self, message):
+            self.failure = message
+            self.apply.setEnabled(False)
+
+            self.view.summary.setText(
+                'Preview Changes could not be planned. '
+                'No images were changed.\n'
+                + message
+                + '\nCancel and review a fresh plan.'
+            )
+
+            print(
+                'Preview Changes: ' + message,
+                file=sys.stderr,
+            )
+
         def accept(self):
-            if self.worker or not self.apply.isEnabled(): return
-            try: verify_plan(self.plan)
-            except Exception as exc: self.show_failure(str(exc)); return
+            if self.worker or not self.apply.isEnabled():
+                return
+
+            try:
+                verify_plan(self.plan)
+            except Exception as exc:
+                self.show_failure(str(exc))
+                return
+
             super().accept()
+
         def reject(self):
-            if self.worker: self.closing=True; self.worker.requestInterruption(); self.apply.setEnabled(False); return
-            super().reject()
-        def closeEvent(self,event):
-            if self.worker: self.reject(); event.ignore()
-            else: event.accept()
+            if self.worker:
+                self.closing = True
+                self.worker.requestInterruption()
+                self.apply.setEnabled(False)
+            else:
+                super().reject()
+
+        def closeEvent(self, event):
+            if self.worker:
+                self.reject()
+                event.ignore()
+            else:
+                event.accept()
+
     return PreviewView,PlanWorker,PreviewDialog
 
 
@@ -668,7 +1159,17 @@ def main():
     if command=='spec':
         operation,policy,*pairs=args
         values=Path(path+'.inputs').read_bytes().decode().split('\0')[:-1]
-        Path(path).write_text(json.dumps(dict(operation=operation,policy=policy,files=values[::2],seeds=values[1::2],config=dict(zip(pairs[::2],pairs[1::2])))))
+        spec=dict(operation=operation,policy=policy,files=values[::2],
+                  seeds=values[1::2],config=dict(zip(pairs[::2],pairs[1::2])))
+        if operation=='strip':
+            spec['strip_seeds']={}
+            for mode in ('gps','ai','all'):
+                raw=Path(path+'.strip-'+mode+'.seeds').read_bytes().split(b'\0')[:-1]
+                values=[os.fsdecode(v) for v in raw]
+                if len(values)!=len(spec['files']):
+                    raise ValueError('Incomplete metadata output filenames')
+                spec['strip_seeds'][mode]=values
+        Path(path).write_text(json.dumps(spec))
     elif command=='confirm':
         from PySide6.QtWidgets import QApplication,QDialog
         app=QApplication(sys.argv[:1]); dialog=qt_classes()[2](json.loads(Path(path).read_text()))
@@ -677,6 +1178,8 @@ def main():
     else:
         plan=json.loads(Path(path).read_text())
         if command=='verify': verify_plan(plan)
+        elif command=='policy': print(plan['policy'])
+        elif command=='config': print(plan['config'][args[0]])
         elif command=='guard':
             if plan.get('operation') == 'location':
                 from kim_location import verify_dependencies

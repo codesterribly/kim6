@@ -1,9 +1,11 @@
 """Read-only confirmation, responsive batch inspection, and shared recipe property view."""
 import copy
 import os
+import re
 import sys
 import time
 from pathlib import Path
+from kim_photo_selection import choose_images, RECIPE_IMAGE_EXTENSIONS
 from PySide6.QtCore import QThread, Signal, Slot, Qt, QTimer, QStandardPaths
 from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
@@ -425,8 +427,10 @@ class RunRecipeDialog(QDialog):
             preferred = Path.home() / 'Pictures'
             start = str(preferred) if preferred.is_dir() else (QStandardPaths.writableLocation(QStandardPaths.PicturesLocation) or str(Path.home()))
         if not Path(start).is_dir(): start = str(Path.home())
-        paths, _ = QFileDialog.getOpenFileNames(self, 'Add Photos', start,
-            ';;'.join(self._input_filters), self._input_filters[0])
+        extensions = set(re.findall(r'\*\.([a-zA-Z0-9]+)', self._input_filters[0]))
+        paths = choose_images(self, start, title='Add Photos',
+                              extensions=extensions or RECIPE_IMAGE_EXTENSIONS,
+                              accept_label='Add Photos')
         self.add_files(paths)
         self.update_summary()
 

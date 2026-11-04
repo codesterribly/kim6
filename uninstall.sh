@@ -112,7 +112,7 @@ manual_files=(
   docs/images/kim6-settings-general.png
 )
 runtime_files=(
-  bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json
+  bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json
   bin/kim_collage_dialog.py
   bin/kim_contactsheet_dialog.py
   bin/kim_video_dialog.py

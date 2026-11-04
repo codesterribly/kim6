@@ -19,7 +19,7 @@ from kim_location_ui import (preferred_units, unit_preference, persist_units, al
     altitude_from_metres, distance, position_text, reference_caption, location_unit_choices,
     open_camera_map, output_description, location_result_message, camera_status, destination_status, blocked_destination, gps_metadata_changes, gps_summary_changes,
     LocationInspector, ElidedImageLabel, operation_inspector_rows, privacy_inspector_rows)
-from kim_photo_selection import PhotoChooser, ThumbnailWorker, PhotoPreview, ImageList, photo_filters
+from kim_photo_selection import choose_images, ThumbnailWorker, PhotoPreview, ImageList, photo_extensions
 from kim_location_map import LocationMap, check_graphical_session
 
 
@@ -79,7 +79,12 @@ class LocationDialog(QDialog):
         self.controls.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         control_layout.setAlignment(Qt.AlignTop)
         if kind == 'apply': self.build_location_methods(control_layout)
-        elif kind == 'reduce': self.build_reduction_controls(control_layout)
+        elif kind == 'reduce':
+            self.build_reduction_controls(control_layout)
+            self.controls.setSizePolicy(
+                QSizePolicy.Preferred,
+                QSizePolicy.Maximum,
+            )
         for form in self.controls.findChildren(QFormLayout): form.setRowWrapPolicy(QFormLayout.WrapAllRows)
         if kind == 'apply': self.source_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         if kind != 'report': visual_layout.insertWidget(0, self.controls, 0, Qt.AlignTop)
@@ -138,7 +143,7 @@ class LocationDialog(QDialog):
         self.photo_panel = photo_panel; self.visual_splitter.addWidget(photo_panel)
         map_panel = QWidget(); map_panel.setMinimumWidth(0)
         map_layout = QVBoxLayout(map_panel); map_layout.setContentsMargins(0, 0, 0, 0)
-        self.map_heading = QLabel('GPS Source Location' if self.uses_reference() else 'Photo GPS location')
+        self.map_heading = QLabel('GPS Source Location' if self.uses_reference() else 'GPS Location')
         self.map_heading.setFont(heading_font); map_layout.addWidget(self.map_heading)
         self.map_subject = QComboBox(); self.map_subject.addItem('Original GPS location', 'existing'); self.map_subject.addItem('New GPS location', 'proposed')
         self.map_subject.setCurrentIndex(1 if kind == 'reduce' else 0)
@@ -305,12 +310,35 @@ class LocationDialog(QDialog):
         layout.addWidget(matching)
 
     def build_reduction_controls(self, layout):
-        layout.addWidget(self.label('Replace precise camera GPS with the center of an approximate geographic grid. Recognized precise location details and structured place names will be removed.'))
-        form = QFormLayout(); self.grid = QComboBox()
-        for value in (100, 1000, 5000, 10000): self.grid.addItem('', value)
-        self.grid.setCurrentIndex(1); self.update_grid_labels(); self.grid.currentIndexChanged.connect(self.schedule_plan)
-        form.addRow('Approximate grid cell size', self.grid); layout.addLayout(form)
-        layout.addWidget(self.label('This reduces detail; it does not guarantee privacy. Captions, the picture itself and other information can still identify the location. Preview the original location, new location, movement and removed information below.'))
+        # Give the image list, photo preview and map the available height.
+        layout.setSpacing(5)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel('Reduce GPS precision to:'))
+
+        self.grid = QComboBox()
+
+        for value in (100, 1000, 5000, 10000):
+            self.grid.addItem('', value)
+
+        self.grid.setCurrentIndex(1)
+        self.update_grid_labels()
+        self.grid.currentIndexChanged.connect(self.schedule_plan)
+
+        row.addWidget(self.grid, 1)
+        layout.addLayout(row)
+
+        note = self.label(
+            'Exact coordinates are replaced by the grid center; '
+            'structured place names are removed.'
+        )
+        note.setSizePolicy(
+            QSizePolicy.Preferred,
+            QSizePolicy.Maximum,
+        )
+
+        layout.addWidget(note)
+
 
     def update_grid_labels(self):
         for index in range(self.grid.count()): self.grid.setItemText(index, 'About ' + distance(self.grid.itemData(index), self.units) + ' across')
@@ -324,10 +352,10 @@ class LocationDialog(QDialog):
         if picker.exec() == QDialog.Accepted and picker.selectedFiles(): self.gpx_inputs['gpx'].setText(picker.selectedFiles()[0])
 
     def choose_reference(self):
-        picker = PhotoChooser(self, str(Path(self.reference or self.files[0]).parent))
-        accepted = picker.exec() == QDialog.Accepted
-        paths = picker.selectedFiles(); picker.deleteLater()
-        if not accepted or not paths: return
+        paths = choose_images(self, str(Path(self.reference or self.files[0]).parent),
+                              title='Choose a GPS Source Image', multiple=False,
+                              extensions=photo_extensions(), accept_label='Choose GPS Source')
+        if not paths: return
         path = absolute(paths[0])
         item = self.candidate_items.get(path)
         if item is None:
@@ -532,12 +560,12 @@ class LocationDialog(QDialog):
 
     def add_destinations(self):
         if not self.selection_only: return
-        chooser = QFileDialog(self, 'Add Destination Images'); chooser.setFileMode(QFileDialog.ExistingFiles)
-        chooser.setSupportedSchemes(['file']); chooser.setNameFilters(photo_filters())
-        if chooser.exec() != QDialog.Accepted: return
+        paths = choose_images(self, str(Path(self.files[0]).parent), title='Add Destination Images',
+                              extensions=photo_extensions())
+        if not paths: return
         try:
             added = []
-            for raw in chooser.selectedFiles():
+            for raw in paths:
                 path = absolute(raw); identity(path)
                 if path not in self.files and path not in added: added.append(path)
             if len(self.files) + len(added) > MAX_FILES: raise ValueError(f'Select at most {MAX_FILES} images.')
@@ -900,7 +928,7 @@ class LocationDialog(QDialog):
         self.map_subject.setVisible(bool(approved)); self.map_subject.setEnabled(bool(approved))
         if approved and self.map_subject.currentData() == 'proposed':
             position = approved['position']; self.map_heading.setText('New GPS location')
-        else: self.map_heading.setText('GPS Source Location' if reference else 'Photo GPS location')
+        else: self.map_heading.setText('GPS Source Location' if reference else 'GPS Location')
         empty = ('Choose a GPS source image with camera GPS.' if reference else 'Select an image to see its GPS location.') if not path else camera_status(info) + '. No camera marker can be shown.'
         self.location_map.set_position(position, empty)
         if reference:

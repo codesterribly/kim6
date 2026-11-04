@@ -345,7 +345,7 @@ manual_files=(
   docs/images/kim6-metadata-menu.png
   docs/images/kim6-settings-general.png
 )
-runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
   README.md
   docs/ACTIONS.md
@@ -439,7 +439,7 @@ for name in "${menu_names[@]}"; do
 done
 
 # Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
+for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_source_advisories.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -544,6 +544,7 @@ install_file "$SOURCE_DIR/src/bin/kim_recipe_core.py" "$RUNTIME/bin/kim_recipe_c
 install_file "$SOURCE_DIR/src/bin/kim_recipe_image.py" "$RUNTIME/bin/kim_recipe_image.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_dates.py" "$RUNTIME/bin/kim_recipe_dates.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_psd_source.py" "$RUNTIME/bin/kim_psd_source.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_source_advisories.py" "$RUNTIME/bin/kim_source_advisories.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_dialog.py" "$RUNTIME/bin/kim_recipe_dialog.py" 0644
 install_file "$SOURCE_DIR/src/recipes/builtins.json" "$RUNTIME/recipes/builtins.json" 0644
 install_file "$SOURCE_DIR/src/bin/kim_png_metadata.py" "$RUNTIME/bin/kim_png_metadata.py" 0644

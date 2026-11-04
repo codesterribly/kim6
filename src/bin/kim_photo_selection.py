@@ -1,9 +1,14 @@
 """Local image selection and bounded, orientation-aware read-only previews."""
+from collections import Counter, OrderedDict
+import os
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QIODevice, QSize, Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QBrush, QImage, QImageIOHandler, QImageReader, QPalette, QPixmap
-from PySide6.QtWidgets import QFileDialog, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QFile, QIODevice, QRect, QSize, Qt, QThread, Signal, QTimer
+from PySide6.QtGui import QBrush, QImage, QImageIOHandler, QImageReader, QPalette
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
+    QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
+    QMessageBox, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
+    QVBoxLayout, QWidget)
 from kim_preview import identity, inspection_path
 from kim_location import descriptor_identity
 from kim_psd_source import inspection_context
@@ -15,19 +20,33 @@ PHOTO_GROUPS = [
     ('PNG', ('png',)), ('WebP', ('webp',)), ('TIFF', ('tif', 'tiff')),
     ('HEIC / HEIF', ('heic', 'heif', 'hif')), ('AVIF', ('avif',)),
 ]
+IMAGE_GROUPS = PHOTO_GROUPS + [
+    ('GIF / APNG', ('gif', 'apng')), ('BMP', ('bmp',)),
+    ('JPEG 2000', ('jp2', 'j2k', 'jpf')), ('JPEG XL', ('jxl',)),
+    ('Photoshop', ('psd',)), ('Portable images', ('ppm', 'pgm', 'pbm', 'pnm')),
+    ('Camera RAW', ('dng', 'cr2', 'cr3', 'nef', 'arw', 'raf', 'orf', 'rw2', 'pef', 'srw')),
+]
+# Extra aliases used by creation / recipe callers, without broadening GPS browsing.
+IMAGE_GROUPS = [(label, extensions + {'JPEG': ('jfif',), 'AVIF': ('avifs',)}.get(label, ()))
+                for label, extensions in IMAGE_GROUPS]
+CREATE_IMAGE_EXTENSIONS = frozenset({
+    'jpg', 'jpeg', 'jpe', 'png', 'webp', 'avif', 'avifs', 'heic', 'heif',
+    'tif', 'tiff', 'bmp', 'gif', 'jxl', 'jp2', 'j2k', 'jpf', 'apng', 'psd',
+})
+RECIPE_IMAGE_EXTENSIONS = frozenset({
+    'jpg', 'jpeg', 'jpe', 'jfif', 'png', 'webp', 'avif', 'tif', 'tiff',
+    'heic', 'heif', 'bmp', 'gif', 'jp2', 'jxl', 'psd', 'ppm', 'pnm',
+})
 OTHER_PHOTOS = {'bmp', 'gif', 'jp2', 'j2k', 'jxl', 'ppm', 'pgm', 'pbm',
                 'dng', 'cr2', 'cr3', 'nef', 'arw', 'raf', 'orf', 'rw2', 'pef', 'srw', 'psd'}
 
 
-def photo_filters():
+def photo_extensions():
+    """GPS browsing eligibility; metadata/write validation stays with Location."""
     readable = {bytes(fmt).decode('ascii', errors='ignore').lower() for fmt in QImageReader.supportedImageFormats()}
     other = sorted(OTHER_PHOTOS & (readable | {'dng', 'cr2', 'cr3', 'nef', 'arw', 'raf', 'orf', 'rw2', 'pef', 'srw', 'psd'}))
     groups = PHOTO_GROUPS + ([('Other readable images', tuple(other))] if other else [])
-    def patterns(exts):
-        return ' '.join(pattern for ext in exts for pattern in ('*.' + ext, '*.' + ext.upper()))
-    supported = sorted({ext for _, exts in groups for ext in exts})
-    return ['Supported images (' + patterns(supported) + ')',
-            *[label + ' (' + patterns(exts) + ')' for label, exts in groups], 'All Files (*)']
+    return {ext for _, exts in groups for ext in exts}
 
 
 def read_thumbnail(path, size, auto_orient=True):
@@ -78,61 +97,344 @@ class ThumbnailWorker(QThread):
                 if not self.isInterruptionRequested(): self.thumbnail_ready.emit(path, image, stamp)
 
 
-class PhotoChooser(QFileDialog):
-    """Non-native Qt file chooser with a real highlighted-photo preview."""
-    def __init__(self, parent=None, directory=''):
-        super().__init__(parent, 'Choose a GPS source image', directory)
-        self.setFileMode(QFileDialog.ExistingFile)
-        self.setSupportedSchemes(['file'])
-        self.setOption(QFileDialog.DontUseNativeDialog, True)
-        self.setNameFilters(photo_filters())
-        self.preview = QLabel('Highlight an image to preview it')
-        self.preview.setAlignment(Qt.AlignCenter); self.preview.setWordWrap(True)
-        self.preview.setMinimumSize(180, 160)
-        self.caption = QLabel(); self.caption.setWordWrap(True); self.caption.setTextFormat(Qt.PlainText)
-        panel = QWidget(); bar = QVBoxLayout(panel); bar.addWidget(self.preview, 1); bar.addWidget(self.caption)
-        grid = self.layout()
-        grid.addWidget(panel, 0, grid.columnCount(), grid.rowCount(), 1)
-        self.resize(950, 600)
-        self.preview_worker = None; self.requested = ''; self.finish_result = None
-        self.preview_timer = QTimer(self); self.preview_timer.setSingleShot(True); self.preview_timer.setInterval(180)
-        self.preview_timer.timeout.connect(self.start_preview)
-        self.currentChanged.connect(self.queue_preview)
+class ImageTileDelegate(QStyledItemDelegate):
+    """Paint the slideshow's full thumbnail/caption tiles without per-file widgets."""
 
-    def queue_preview(self, path):
-        self.requested = path
-        self.preview.setText('Preview unavailable' if not Path(path).is_file() else 'Loading preview…')
-        self.caption.setText(Path(path).name)
-        if self.preview_worker: self.preview_worker.requestInterruption()
-        self.preview_timer.start()
+    def paint(self, painter, option, index):
+        picker = self.parent()
+        kind, path = index.data(Qt.UserRole)
+        background = QStyleOptionViewItem(option)
+        self.initStyleOption(background, index)
+        background.text = ''
+        option.widget.style().drawControl(QStyle.CE_ItemViewItem, background, painter, option.widget)
+        rect = option.rect.adjusted(5, 4, -5, -4)
+        preview = QRect(rect.x(), rect.y(), rect.width(), 108)
+        painter.save()
+        selected = bool(option.state & QStyle.State_Selected)
+        painter.setPen(option.palette.color(QPalette.HighlightedText if selected else QPalette.Text))
+        cached = picker.thumbnail_cache.get(path)
+        if kind == 'directory':
+            icon = option.widget.style().standardIcon(QStyle.SP_DirIcon)
+            icon.paint(painter, preview, Qt.AlignCenter)
+        elif cached is not None:
+            image = cached[1]
+            size = image.size().scaled(preview.size(), Qt.KeepAspectRatio)
+            target = QRect(0, 0, size.width(), size.height())
+            target.moveCenter(preview.center())
+            painter.drawImage(target, image)
+        else:
+            message = 'Preview unavailable' if path in picker.unavailable else 'Loading preview…'
+            painter.drawText(preview, Qt.AlignCenter | Qt.TextWordWrap, message)
+        caption = QRect(rect.x(), rect.y() + 111, rect.width(), rect.height() - 111)
+        painter.drawText(caption, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
+                         option.fontMetrics.elidedText(Path(path).name, Qt.ElideMiddle, rect.width() * 2))
+        painter.restore()
 
-    def start_preview(self):
-        if self.preview_worker or self.finish_result is not None: return
-        if not Path(self.requested).is_file(): return
-        self.preview_worker = ThumbnailWorker([self.requested], QSize(280, 220), self)
-        self.preview_worker.thumbnail_ready.connect(self.receive_preview)
-        self.preview_worker.finished.connect(self.preview_finished)
-        self.preview_worker.start()
 
-    def receive_preview(self, path, image, stamp):
-        if path != self.requested: return
-        try: valid = stamp is not None and identity(path) == stamp
-        except (OSError, ValueError): valid = False
+class ImagePicker(QDialog):
+    """Local image inputs in selection order, independent of folder and filter.
+
+    Extensions are browsing eligibility only. Callers must retain their source
+    validation. selected_paths() returns approved paths only, or [] on cancel.
+    One owned ThumbnailWorker loads visible tiles through read_thumbnail().
+    """
+
+    def __init__(self, parent=None, directory='', *, title='Add Images',
+                 multiple=True, extensions=None, accept_label='Add Selected Images'):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(780, 560)
+        self.setMinimumSize(480, 350)
+        self.multiple = multiple
+        self.extensions = frozenset(extensions if extensions is not None else photo_extensions())
+        self.selection = {}  # Ordered across folders; rebuilding the view never changes it.
+        self.approved_paths = []
+        self.worker = None
+        self.finish_result = None
+        self.pending_directory = None
+        self.current_directory = None
+        self.image_items = {}
+        self.thumbnail_cache = OrderedDict()
+        self.unavailable = set()
+        self.cache_limit = 192
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(40)
+        self.timer.timeout.connect(self.load_visible_thumbnails)
+
+        layout = QVBoxLayout(self)
+        location = QHBoxLayout()
+        self.up_button = QPushButton('Up')
+        self.path_label = QLineEdit()
+        self.path_label.setReadOnly(True)
+        self.path_label.setAccessibleName('Current image folder')
+        self.folder_button = QPushButton('Choose Folder…')
+        location.addWidget(self.up_button)
+        location.addWidget(self.path_label, 1)
+        location.addWidget(self.folder_button)
+        layout.addLayout(location)
+
+        self.filter = QComboBox()
+        self.filter.setAccessibleName('Image file type')
+        layout.addWidget(self.filter)
+        self.grid = QListWidget()
+        self.grid.setViewMode(QListView.IconMode)
+        self.grid.setResizeMode(QListView.Adjust)
+        self.grid.setMovement(QListView.Static)
+        self.grid.setWrapping(True)
+        self.grid.setSelectionMode(QAbstractItemView.ExtendedSelection if multiple else QAbstractItemView.SingleSelection)
+        self.grid.setGridSize(QSize(170, 174))
+        self.grid.setSpacing(5)
+        self.grid.setUniformItemSizes(True)
+        self.grid.setWordWrap(True)
+        self.grid.setItemDelegate(ImageTileDelegate(self))
+        self.grid.setAccessibleName('Image thumbnails and folders')
+        self.grid.installEventFilter(self)
+        layout.addWidget(self.grid, 1)
+        self.status = QLabel()
+        layout.addWidget(self.status)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.add_button = buttons.button(QDialogButtonBox.Ok)
+        self.add_button.setText(accept_label)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        self.up_button.clicked.connect(self.go_up)
+        self.folder_button.clicked.connect(self.choose_directory)
+        self.grid.itemActivated.connect(self.open_item)
+        self.grid.itemSelectionChanged.connect(self.update_selection)
+        self.filter.currentIndexChanged.connect(self.apply_filter)
+        self.grid.verticalScrollBar().valueChanged.connect(self.queue_thumbnails)
+        self.open_directory(directory or Path.home())
+
+    def selected_paths(self):
+        return list(self.approved_paths)
+
+    def update_selection(self):
+        visible = {path for path, item in self.image_items.items() if not item.isHidden()}
+        selected = self.grid.selectedItems()
+        chosen = [item.data(Qt.UserRole)[1] for item in selected
+                  if item.data(Qt.UserRole)[0] == 'file' and not item.isHidden()]
+        if not chosen and any(item.data(Qt.UserRole)[0] == 'directory' for item in selected):
+            # Opening a folder starts with a click that clears Qt's selection.
+            # Navigation must not discard images already picked in this folder.
+            if self.multiple:
+                self.grid.blockSignals(True)
+                for path in visible:
+                    self.image_items[path].setSelected(path in self.selection)
+                self.grid.blockSignals(False)
+            self.update_status()
+            return
+        if not self.multiple and chosen:
+            self.selection.clear()
+        else:
+            for path in visible - set(chosen):
+                self.selection.pop(path, None)
+        for path in chosen:
+            self.selection[path] = None
+        self.update_status()
+
+    def update_status(self):
+        self.add_button.setEnabled(bool(self.selection) and self.finish_result is None)
+        self.status.setText(f'{len(self.image_items)} images in folder · {len(self.selection)} selected')
+
+    def go_up(self):
+        if self.current_directory is not None:
+            self.open_directory(self.current_directory.parent)
+
+    def choose_directory(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Choose Image Folder',
+            str(self.current_directory or Path.home()), QFileDialog.ShowDirsOnly)
+        if folder:
+            self.open_directory(folder)
+
+    def open_item(self, item):
+        kind, path = item.data(Qt.UserRole)
+        if kind == 'directory':
+            self.open_directory(path)
+        elif not self.multiple:
+            self.accept()
+
+    def eventFilter(self, watched, event):
+        if (watched is self.grid and event.type() == QEvent.KeyPress
+                and event.key() in (Qt.Key_Return, Qt.Key_Enter)):
+            item = self.grid.currentItem()
+            if item is not None and item.data(Qt.UserRole)[0] == 'directory':
+                # Consume Enter: QDialog's default Add button must not also fire.
+                self.open_item(item)
+                return True
+        return super().eventFilter(watched, event)
+
+    def open_directory(self, directory):
+        if self.finish_result is not None:
+            return
+        try:
+            folder = Path(directory).resolve(strict=True)
+            if not folder.is_dir():
+                raise ValueError('Not a folder')
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, 'Cannot Open Folder', str(exc))
+            return
+        self.timer.stop()
+        if self.worker is not None:
+            self.pending_directory = folder
+            self.grid.setEnabled(False)
+            self.add_button.setEnabled(False)
+            self.worker.requestInterruption()
+        else:
+            self.show_directory(folder)
+
+    def show_directory(self, folder):
+        try:
+            with os.scandir(folder) as entries:
+                rows = [(entry.is_dir(follow_symlinks=False), entry.name) for entry in entries
+                        if entry.is_dir(follow_symlinks=False) or
+                        (entry.is_file(follow_symlinks=False) and
+                         Path(entry.name).suffix.lower().lstrip('.') in self.extensions)]
+        except OSError as exc:
+            self.grid.setEnabled(True)
+            self.update_status()
+            QMessageBox.warning(self, 'Cannot Read Folder', str(exc))
+            return
+        self.current_directory = folder
+        self.path_label.setText(str(folder))
+        self.up_button.setEnabled(folder.parent != folder)
+        self.grid.blockSignals(True)
+        self.grid.clear()
+        self.image_items.clear()
+        self.unavailable.clear()
+        for directory, name in sorted(rows, key=lambda row: (not row[0], row[1].casefold())):
+            path = str(folder / name)
+            item = QListWidgetItem(name)
+            item.setData(Qt.UserRole, ('directory' if directory else 'file', path))
+            item.setToolTip(('Open folder: ' if directory else '') + path)
+            item.setSizeHint(QSize(160, 168))
+            self.grid.addItem(item)
+            if not directory:
+                self.image_items[path] = item
+            item.setSelected(path in self.selection)
+        self.grid.blockSignals(False)
+        self.grid.setEnabled(True)
+        self.filter.blockSignals(True)
+        self.filter.clear()
+        self.filter.addItem('All supported images', None)
+        counts = Counter(Path(path).suffix.lower().lstrip('.') for path in self.image_items)
+        grouped = set()
+        for label, extensions in IMAGE_GROUPS:
+            count = sum(counts[ext] for ext in extensions)
+            grouped.update(extensions)
+            if count:
+                self.filter.addItem(f'{label} ({count})', frozenset(extensions))
+        for ext in sorted(counts.keys() - grouped):
+            self.filter.addItem(f'{ext.upper()} ({counts[ext]})', frozenset({ext}))
+        self.filter.blockSignals(False)
+        self.apply_filter()
+
+    def apply_filter(self, *_):
+        extensions = self.filter.currentData()
+        self.grid.blockSignals(True)
+        for path, item in self.image_items.items():
+            item.setHidden(extensions is not None and Path(path).suffix.lower().lstrip('.') not in extensions)
+            item.setSelected(path in self.selection)
+        self.grid.blockSignals(False)
+        self.grid.doItemsLayout()
+        self.update_status()
+        self.queue_thumbnails()
+
+    def queue_thumbnails(self, *_):
+        if self.finish_result is None and self.pending_directory is None:
+            self.timer.start()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.queue_thumbnails()
+
+    def load_visible_thumbnails(self):
+        if self.worker is not None or self.finish_result is not None or self.pending_directory is not None:
+            return
+        viewport = self.grid.viewport().rect()
+        paths = []
+        for path, item in self.image_items.items():
+            if item.isHidden() or not self.grid.visualItemRect(item).intersects(viewport):
+                continue
+            cached = self.thumbnail_cache.get(path)
+            if cached is not None:
+                try:
+                    if identity(path) == cached[0]:
+                        self.thumbnail_cache.move_to_end(path)
+                        continue
+                except (OSError, ValueError):
+                    pass
+                del self.thumbnail_cache[path]
+            if path not in self.unavailable:
+                paths.append(path)
+        if not paths:
+            return
+        self.worker = ThumbnailWorker(paths[:16], QSize(140, 106), self)
+        self.worker.thumbnail_ready.connect(self.receive_thumbnail)
+        self.worker.finished.connect(self.thumbnails_finished)
+        self.worker.start()
+
+    def receive_thumbnail(self, path, image, stamp):
+        if self.finish_result is not None or self.pending_directory is not None or path not in self.image_items:
+            return
+        try:
+            valid = stamp is not None and identity(path) == stamp
+        except (OSError, ValueError):
+            valid = False
         if image.isNull() or not valid:
-            self.preview.setText('Preview unavailable\nYou can still select this image.')
-        else: self.preview.setPixmap(QPixmap.fromImage(image))
+            self.unavailable.add(path)
+        else:
+            self.thumbnail_cache[path] = (stamp, image)
+            self.thumbnail_cache.move_to_end(path)
+            while len(self.thumbnail_cache) > self.cache_limit:
+                self.thumbnail_cache.popitem(last=False)
+        self.grid.viewport().update(self.grid.visualItemRect(self.image_items[path]))
 
-    def preview_finished(self):
-        worker, self.preview_worker = self.preview_worker, None
-        last = worker.paths[0]; worker.deleteLater()
-        if self.finish_result is not None: super().done(self.finish_result)
-        elif last != self.requested: self.start_preview()
+    def thumbnails_finished(self):
+        worker, self.worker = self.worker, None
+        worker.wait()  # finished can be delivered just before native thread teardown.
+        worker.deleteLater()
+        if self.finish_result is not None:
+            super().done(self.finish_result)
+        elif self.pending_directory is not None:
+            folder, self.pending_directory = self.pending_directory, None
+            self.show_directory(folder)
+        else:
+            self.queue_thumbnails()
 
     def done(self, result):
-        self.preview_timer.stop()
-        if self.preview_worker:
-            self.finish_result = result; self.preview_worker.requestInterruption(); return
-        super().done(result)
+        if self.finish_result is not None:
+            return
+        if result == QDialog.Accepted and not self.selection:
+            return
+        self.approved_paths = list(self.selection) if result == QDialog.Accepted else []
+        self.finish_result = result
+        self.timer.stop()
+        self.grid.setEnabled(False)
+        self.add_button.setEnabled(False)
+        if self.worker is not None:
+            self.worker.requestInterruption()
+        else:
+            super().done(result)
+
+    def closeEvent(self, event):
+        self.reject()
+        if self.worker is not None:
+            event.ignore()
+        else:
+            event.accept()
+
+
+def choose_images(parent=None, directory='', *, title='Add Images', multiple=True,
+                  extensions=None, accept_label='Add Selected Images'):
+    """Return approved local paths; [] is a normal cancellation."""
+    picker = ImagePicker(parent, directory, title=title, multiple=multiple,
+                         extensions=extensions, accept_label=accept_label)
+    result = picker.exec()
+    paths = picker.selected_paths() if result == QDialog.Accepted else []
+    picker.deleteLater()
+    return paths
 
 
 class ImageCanvas(QWidget):
@@ -289,3 +591,26 @@ class ImageList(QWidget):
 
     def set_thumbnail(self, path, icon):
         if path in self.items: self.items[path].setIcon(icon)
+
+
+def main():
+    """Creation dispatcher protocol: only approved paths, separated by NUL."""
+    import argparse
+    import sys
+    from PySide6.QtWidgets import QApplication
+
+    parser = argparse.ArgumentParser(description='KIM6 thumbnail image picker')
+    parser.add_argument('--title', default='Add Images')
+    parser.add_argument('--directory', default='')
+    args = parser.parse_args()
+    app = QApplication(sys.argv[:1])
+    paths = choose_images(directory=args.directory, title=args.title,
+                          extensions=CREATE_IMAGE_EXTENSIONS)
+    if not paths:
+        return 1
+    sys.stdout.buffer.write(b''.join(os.fsencode(path) + b'\0' for path in paths))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

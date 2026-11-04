@@ -158,8 +158,25 @@ preview_confirm() {
     else candidate="$dir/$(affixed_filename "$stem" "$tag" "$ext")"; fi
     printf '%s\0%s\0' "$source" "$candidate" >> "$KIMDIR/preview.inputs" || { progress_error 'Could not prepare Preview Changes inputs. No images were changed.'; return 1; }
   done
+  if [ "$operation" = strip ]; then
+    local mode_tag seed_tag seed_path
+    for mode_tag in gps ai all; do
+      seed_tag="$mode_tag"
+      [ "$mode_tag" != all ] || seed_tag=stripped
+      seed_path="$KIMDIR/preview.strip-${mode_tag}.seeds"
+      : > "$seed_path" || return 1
+      for source in "${files[@]}"; do
+        if [ "$policy" = overwrite ]; then
+          candidate="$source"
+        else
+          candidate="$(metadata_output_path "$source" "$seed_tag" "$policy")" || return 1
+        fi
+        printf '%s\0' "$candidate" >> "$seed_path" || return 1
+      done
+    done
+  fi
   preview_run python3 "$DISPATCHER_DIR/kim_preview.py" spec "$KIMDIR/preview" "$operation" "$policy" "$@" || return 1
-  preview_run python3 "$DISPATCHER_DIR/kim_preview.py" confirm "$KIMDIR/preview" || return 1
+  preview_run python3 "$DISPATCHER_DIR/kim_preview.py" confirm "$KIMDIR/preview" || return $?
   preview_run preview_verify || return 1
 }
 
@@ -205,6 +222,8 @@ die() {
 # One temp folder per run, always cleaned up on exit.
 mk_workdir() {
   KIMDIR="$(mktemp -d /tmp/kim.XXXXXXXX)" || die "mktemp failed"
+  # Dialog approvals live in this owned job only, even before PSD staging is enabled.
+  export KIM_SOURCE_ADVISORY_DIR="$KIMDIR/psd"
   trap 'job_cleanup "$?"' EXIT
 }
 
@@ -1363,7 +1382,7 @@ progress_value() {
 kim6_create_select_more() {
   local -n selected_ref="$1"
   local action_title="$2"
-  local choice selection chosen initial_dir
+  local choice selection_file initial_dir
   local -a additions=()
   local -A seen=()
   local item
@@ -1394,20 +1413,15 @@ or continue with the selected image?"
     *) return 1 ;;
   esac
 
-  selection="$(
-    kdialog \
-      --title "KIM6 — Select Images for ${action_title}" \
-      --getopenfilename "$initial_dir" \
-      'Images (*.jpg *.jpeg *.jpe *.png *.webp *.avif *.avifs *.heic *.heif *.tif *.tiff *.bmp *.gif *.jxl *.jp2 *.j2k *.jpf *.apng *.JPG *.JPEG *.PNG *.WEBP *.AVIF *.HEIC *.HEIF *.TIF *.TIFF *.BMP *.GIF *.JXL *.JP2)' \
-      --multiple --separate-output
-  )" || return 1
-
-  [ -n "$selection" ] || return 1
-
-  while IFS= read -r chosen; do
-    [ -n "$chosen" ] || continue
-    additions+=("$chosen")
-  done <<< "$selection"
+  selection_file="$(mktemp "$KIMDIR/image-selection.XXXXXX")" || return 1
+  if python3 "$DISPATCHER_DIR/kim_photo_selection.py" \
+      --title "Add Images for ${action_title}" --directory "$initial_dir" > "$selection_file"; then
+    mapfile -d '' -t additions < "$selection_file"
+  else
+    rm -f -- "$selection_file"
+    return 1
+  fi
+  rm -f -- "$selection_file"
 
   [ "${#additions[@]}" -gt 0 ] || return 1
 
@@ -1939,7 +1953,7 @@ $(cat -- "$errors")"; return 1
 
 action_compress() {
   local QUALITY='' outdir='' custom=false preset='' jpeg_scan='' jpeg_optimize=false interactive=false
-  local png_level=6 preset_label='' preset_adjusted=false
+  local png_level=6 jpeg_quality='' webp_quality='' avif_quality='' preset_label='' preset_adjusted=false
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -1991,15 +2005,85 @@ action_compress() {
     [ -n "$preset" ] || die 'compress: --interactive requires --recommended, --maximum or --custom'
     action_options_dialog compress --preset "$preset" "${files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-    [ "${#choices[@]}" -eq 5 ] || return 1
-    QUALITY="${choices[0]}"; png_level="${choices[1]}"
-    jpeg_scan="${choices[2]}"; jpeg_optimize="${choices[3]}"; preset_adjusted="${choices[4]}"
+    [ "${#choices[@]}" -ge 9 ] || return 1
+
+    local -a reviewed_files=()
+
+    # Verify the approved subset and source identities before
+    # choosing a publication policy or producing any output.
+    python3 - "$KIMDIR/options" "$KIMDIR/compress-approved" "${files[@]}" <<'PYCHECK' || return 1
+import os
+import stat
+import sys
+from pathlib import Path
+
+options,output,*originals=sys.argv[1:]
+values=Path(options).read_bytes().split(b'\0')[:-1]
+
+if len(values)<9 or (len(values)-7)%2:
+    raise SystemExit('Incomplete compression approval')
+
+allowed=set(originals)
+seen=set()
+approved=[]
+
+for offset in range(7,len(values),2):
+    path=os.fsdecode(values[offset])
+    signature=os.fsdecode(values[offset+1])
+
+    if path not in allowed or path in seen:
+        raise SystemExit(
+            'Compression approval contains an unexpected file'
+        )
+
+    seen.add(path)
+    info=os.lstat(path)
+
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:
+        raise SystemExit(
+            'Compression source is not an independent regular file'
+        )
+
+    current=':'.join(map(str,(
+        info.st_dev,info.st_ino,info.st_size,
+        info.st_mtime_ns,info.st_ctime_ns
+    )))
+
+    if current!=signature:
+        raise SystemExit(
+            'Image changed since compression review: '+path
+        )
+
+    approved.append(os.fsencode(path))
+
+Path(output).write_bytes(
+    b''.join(path+b'\0' for path in approved)
+)
+PYCHECK
+
+    mapfile -d '' -t reviewed_files < "$KIMDIR/compress-approved"
+    [ "${#reviewed_files[@]}" -gt 0 ] || return 1
+
+    files=("${reviewed_files[@]}")
+    nbfiles="${#files[@]}"
+    jpeg_quality="${choices[0]}"; webp_quality="${choices[1]}"; avif_quality="${choices[2]}"
+    png_level="${choices[3]}"; jpeg_scan="${choices[4]}"
+    jpeg_optimize="${choices[5]}"; preset_adjusted="${choices[6]}"
     [[ "$png_level" =~ ^[0-9]$ ]] || return 1
     case "$jpeg_scan:$jpeg_optimize:$preset_adjusted" in
       Plane:true:true|Plane:true:false|Plane:false:true|Plane:false:false|None:true:true|None:true:false|None:false:true|None:false:false) ;;
       *) return 1 ;;
     esac
   fi
+  if [ "$interactive" != true ]; then
+    jpeg_quality="$QUALITY"; webp_quality="$QUALITY"; avif_quality="$QUALITY"
+  fi
+  local quality_value
+  for quality_value in "$jpeg_quality" "$webp_quality" "$avif_quality"; do
+    [[ "$quality_value" =~ ^[0-9]{1,3}$ ]] || return 1
+    (( 10#$quality_value >= 1 && 10#$quality_value <= 100 )) || return 1
+  done
+  QUALITY="$jpeg_quality"
   if [ "$preset" != custom ] && [ "$preset_adjusted" = true ]; then
     preset_label+=" $(gettext '(adjusted)')"
   fi
@@ -2110,15 +2194,18 @@ action_compress() {
 
     case "$input_kind" in
       JPEG)
-        encode_options=(-interlace "${jpeg_scan:-Plane}" -quality "$QUALITY")
+        encode_options=(-interlace "${jpeg_scan:-Plane}" -quality "$jpeg_quality")
         [ "$jpeg_optimize" != true ] ||
           encode_options+=(-define jpeg:optimize-coding=true)
         ;;
       PNG)
         encode_options=(-define "png:compression-level=$png_level")
         ;;
-      WEBP|AVIF)
-        encode_options=(-quality "$QUALITY")
+      WEBP)
+        encode_options=(-quality "$webp_quality")
+        ;;
+      AVIF)
+        encode_options=(-quality "$avif_quality")
         ;;
       *) rc=1 ;;
     esac
@@ -2131,12 +2218,12 @@ action_compress() {
             progressive_setting="$(gettext 'Yes')"; optimize_setting="$(gettext 'No')"
             [ "${jpeg_scan:-Plane}" != None ] || progressive_setting="$(gettext 'No')"
             [ "$jpeg_optimize" != true ] || optimize_setting="$(gettext 'Yes')"
-            format_settings="$(gettext 'JPEG quality:') $QUALITY
+            format_settings="$(gettext 'JPEG quality:') $jpeg_quality
 $(gettext 'Progressive JPEG:') $progressive_setting
 $(gettext 'JPEG Huffman optimization:') $optimize_setting" ;;
           PNG) format_settings="$(gettext 'Compression level:') $png_level" ;;
-          WEBP) format_settings="$(gettext 'WebP lossy quality:') $QUALITY" ;;
-          AVIF) format_settings="$(gettext 'AVIF lossy quality:') $QUALITY" ;;
+          WEBP) format_settings="$(gettext 'WebP lossy quality:') $webp_quality" ;;
+          AVIF) format_settings="$(gettext 'AVIF lossy quality:') $avif_quality" ;;
         esac
         COMPRESSION_SETTINGS+="${COMPRESSION_SETTINGS:+$'\n\n'}$format_settings"
         compression_formats[$input_kind]=true
@@ -2876,9 +2963,8 @@ action_flipflop() {
 #
 # Behavior:
 # - Prompts for gallery title, author, column count, appearance, and resolution.
-# - Prompts for a base output directory (chooser starts in <dir> if valid).
-# - Creates a timestamped folder:
-#     kim-gallery-YYYYMMDD-HHMMSS/
+# - Approves a parent directory and explicit, collision-safe gallery folder name.
+# - Creates a new gallery folder:
 #       images/   (copies of selected files)
 #       thumbs/   (generated thumbnails)
 #       index.html
@@ -2894,11 +2980,10 @@ action_flipflop() {
 action_gallery() {
   # Build and verify gallery assets before publishing the HTML index.
   # Keep fallback generation inside the staging area.
-  local start_dir="${1:-}" base_dir target_dir base_name timestamp number=1
+  local start_dir="${1:-}" base_dir target_dir base_name
   shift || true
   local -a files=() image_assets=() thumb_assets=()
   local -a kim6_selected_inputs=("$@")
-  kim6_create_select_more kim6_selected_inputs "HTML Gallery" || return 1
   collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
     return 1
@@ -2922,7 +3007,7 @@ action_gallery() {
 
   settings_file="$(mktemp)" || return 1
 
-  if ! python3 "$dialog_script" gallery "$settings_file"     "$start_dir" "$nbfiles"; then
+  if ! python3 "$dialog_script" gallery "$settings_file"     "$start_dir" "$nbfiles" "${files[@]}"; then
     rm -f -- "$settings_file"
     return 1
   fi
@@ -2930,7 +3015,9 @@ action_gallery() {
   mapfile -d '' -t selections < "$settings_file"
   rm -f -- "$settings_file"
 
-  [ "${#selections[@]}" -eq 6 ] || return 1
+  [ "${#selections[@]}" -ge 8 ] || {
+    progress_error 'Gallery: invalid dialog settings.'; return 1
+  }
 
   TITLE="${selections[0]}"
   AUTHOR="${selections[1]}"
@@ -2938,6 +3025,11 @@ action_gallery() {
   gallery_theme="${selections[3]}"
   gallery_max="${selections[4]}"
   base_dir="${selections[5]}"
+  base_name="${selections[6]}"
+  if ! collect_publication_inputs files "${selections[@]:7}"; then
+    progress_error 'Gallery: approved images are no longer valid.'; return 1
+  fi
+  nbfiles="${#files[@]}"
 
   case "$gallery_theme" in
     dark|light) ;;
@@ -2961,13 +3053,19 @@ action_gallery() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: selected output folder is unavailable.')"
     return 1
   }
-  timestamp="$(date +%Y%m%d-%H%M%S)" || return 1
-  base_name="kim-gallery-$timestamp"
+  [[ -n "$base_name" && "$base_name" != . && "$base_name" != .. && "$base_name" != */* &&
+     "$base_name" != *$'\n'* && "$base_name" != *$'\r'* &&
+     "$base_dir" != *$'\n'* && "$base_dir" != *$'\r'* ]] &&
+     [ -w "$base_dir" ] && [ -x "$base_dir" ] || {
+    progress_error 'Gallery: invalid or unsafe output destination.'; return 1
+  }
   target_dir="$base_dir/$base_name"
-  while [ -e "$target_dir" ] || [ -L "$target_dir" ]; do
-    target_dir="$base_dir/${base_name}_$number"
-    number=$((number + 1))
-  done
+  # The dialog displays numbering before approval. If another creator takes
+  # that approved name, fail closed rather than silently choosing a new one.
+  if [ -e "$target_dir" ] || [ -L "$target_dir" ]; then
+    progress_error 'Gallery: the approved destination now exists. Review the destination again.'
+    return 1
+  fi
 
   local ref tmp='' stage_dir gallery_dir index_file script_dir resource_dir tpl1 tpl2
   ref="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
@@ -3390,8 +3488,6 @@ action_contactsheet() {
     esac
   done
 
-  kim6_create_select_more files "Contact Sheet" || return 1
-
   if [ "$interactive" = true ]; then
   # Selected Dolphin images are the inputs, without another picker.
   [ "${#files[@]}" -gt 0 ] || {
@@ -3409,7 +3505,7 @@ action_contactsheet() {
 
   mapfile -d '' -t settings < "$settings_file"
 
-  [ "${#settings[@]}" -eq 11 ] || {
+  [ "${#settings[@]}" -ge 12 ] || {
     progress_error "$(gettext 'Contact sheet: invalid dialog settings.')"
     return 1
   }
@@ -3424,6 +3520,7 @@ action_contactsheet() {
   title="${settings[7]}"
   requested="${settings[8]}"
   font_size="${settings[9]}"; label_placement="${settings[10]}"
+  files=("${settings[@]:11}")
 fi
 
 case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
@@ -3451,6 +3548,19 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     return 1
   }
   files=("${selected[@]}")
+  if [ -z "$requested" ]; then
+    requested="$(kdialog --getsavefilename "${files[0]%/*}" 'contact-sheet.pdf')" || return 1
+    [ -n "$requested" ] || return 1
+  fi
+  # Creation-only output; source images are never overwritten.
+  mode=create
+  prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
+    return 1
+  }
+  target="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
+
   ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   : > "$KIMDIR/contactsheet-dimensions"
   for file in "${files[@]}"; do
@@ -3469,19 +3579,6 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
       cat -- "$KIMDIR/publication-records" >> "$KIMDIR/contactsheet-dimensions"
     fi
   done
-
-  if [ -z "$requested" ]; then
-    requested="$(kdialog --getsavefilename "${files[0]%/*}" 'contact-sheet.pdf')" || return 1
-    [ -n "$requested" ] || return 1
-  fi
-  # Creation-only output; source images are never overwritten.
-  mode=create
-  prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
-    return 1
-  }
-  target="$DERIVED_TARGET"
-  mode="$DERIVED_MODE"
 
   # Work in raster pixels at the requested DPI; keep print geometry fixed.
   if [ "$paper" = letter ]; then
@@ -3673,21 +3770,21 @@ action_print() {
   dir="${1:-}"
   shift || true
   local -a kim6_selected_inputs=("$@")
-  kim6_create_select_more kim6_selected_inputs "Print Layout" || return 1
   if ! collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
     return 1
   fi
   case "$dir" in ''|--*) dir="${files[0]%/*}" ;; esac
   [ -d "$dir" ] || dir="${files[0]%/*}"
-  nb="$(kdialog --radiolist "$(gettext 'Kim - Select print layout:')" \
-    1 "$(gettext '9x13 cm: 2x2 images, landscape')" off \
-    2 "$(gettext '10x15 cm: 1x2 images, portrait')" off \
-    3 "$(gettext '11.5x15 cm: 1x2 images, portrait')" on \
-    4 "$(gettext '13x18 cm: 1x2 images, portrait')" off \
-    5 "$(gettext '20x25 cm: 1 image, landscape')" off \
-    6 "$(gettext '3x2 portrait album')" off \
-    7 "$(gettext 'Thumbnails: 4x5 images, portrait')" off)" || return 1
+  local settings_file="$KIMDIR/print-settings"
+  local -a settings=()
+  python3 "$DISPATCHER_DIR/kim_create_dialog.py" print "$settings_file" "$dir" "${#files[@]}" "${files[@]}" || return 1
+  mapfile -d '' -t settings < "$settings_file"
+  [ "${#settings[@]}" -ge 3 ] || { progress_error 'Print: invalid dialog settings.'; return 1; }
+  nb="${settings[0]}"; outpdf="${settings[1]}"
+  if ! collect_publication_inputs files "${settings[@]:2}"; then
+    progress_error 'Print: approved images are no longer valid.'; return 1
+  fi
   case "$nb" in
     1) tile=2x2; geometry=368x255+5+5; page=842x595; width=842; height=595 ;;
     # Preserve the labelled 15 cm image height; two copies need A3 portrait.
@@ -3701,6 +3798,14 @@ action_print() {
   esac
   capacity=$(( ${tile%x*} * ${tile#*x} ))
   frames=0
+  # Creation-only output; selected sources are protected.
+  mode=create
+  [ -n "$outpdf" ] || return 1
+  prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
+    return 1
+  }
+  outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
   ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
@@ -3711,15 +3816,6 @@ action_print() {
     frames=$((frames + frame_count))
   done
   expected_pages=$(( (frames + capacity - 1) / capacity ))
-  # Creation-only output; selected sources are protected.
-  mode=create
-  outpdf="$(kdialog --title "KIM6 — Save Print Layout PDF" --getsavefilename "$dir" "print.pdf")" || return 1
-  [ -n "$outpdf" ] || return 1
-  prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
-    return 1
-  }
-  outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -3762,9 +3858,30 @@ action_tiffjoin() {
     esac
   done
   local -a kim6_selected_inputs=("$@")
-  kim6_create_select_more kim6_selected_inputs "Multi-page TIFF" || return 1
   collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
   dir="${files[0]%/*}"
+  if [ -z "$requested" ]; then
+    local settings_file="$KIMDIR/tiffjoin-settings"
+    local -a settings=()
+    python3 "$DISPATCHER_DIR/kim_create_dialog.py" tiffjoin "$settings_file" "$dir" "${#files[@]}" "${files[@]}" || return 1
+    mapfile -d '' -t settings < "$settings_file"
+    [ "${#settings[@]}" -ge 2 ] || { progress_error 'TIFF join: invalid dialog settings.'; return 1; }
+    requested="${settings[0]}"
+    if ! collect_publication_inputs files "${settings[@]:1}"; then
+      progress_error 'TIFF join: approved images are no longer valid.'; return 1
+    fi
+  fi
+  # Creation-only output; selected sources are protected.
+  mode=create
+  [ -n "$requested" ] || return 1
+  local extension=tiff
+  [[ "${requested,,}" == *.tif ]] && extension=tif
+  prepare_derived_target "$requested" "$extension" "$mode" "${files[@]}" || {
+    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
+    return 1
+  }
+  output="$DERIVED_TARGET"
+  mode="$DERIVED_MODE"
   ref="$(progress_open "${#files[@]}" "$(gettext 'Preparing source images…')")" || return 1
   for file in "${files[@]}"; do
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
@@ -3786,20 +3903,6 @@ action_tiffjoin() {
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"
     return 1
   }
-  # Creation-only output; selected sources are protected.
-  mode=create
-  if [ -z "$requested" ]; then
-    requested="$(kdialog --title "KIM6 — Save Multi-page TIFF" --getsavefilename "$dir" "my_images.tiff")" || return 1
-  fi
-  [ -n "$requested" ] || return 1
-  local extension=tiff
-  [[ "${requested,,}" == *.tif ]] && extension=tif
-  prepare_derived_target "$requested" "$extension" "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
-    return 1
-  }
-  output="$DERIVED_TARGET"
-  mode="$DERIVED_MODE"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -3883,45 +3986,50 @@ action_animate() {
     esac
   done
 
-  local -a kim6_selected_inputs=("$@")
-  kim6_create_select_more kim6_selected_inputs 'Animated GIF/APNG' || return 1
-
-  collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
+  # The integrated editor owns adding images; no separate pre-selection prompt.
+  collect_publication_inputs files "$@" || {
     progress_error 'Animation: select regular, unambiguous image files.'
     return 1
   }
 
   dir="${files[0]%/*}"
 
-  # One dialog selects format, timing, loop count, and destination.
   # Supplying all CLI arguments retains noninteractive operation.
   if [ -z "$delay" ] || [ -z "$loops" ] || [ -z "$requested" ]; then
-    local settings_file dialog_script
-    local -a selections=()
+    local settings_file dialog_script rc
+    local -a selections=() revalidated_files=()
 
     dialog_script="$DISPATCHER_DIR/kim_create_dialog.py"
-
     [ -r "$dialog_script" ] || {
       progress_error 'The animation settings dialog is not installed.'
       return 1
     }
-
     settings_file="$(mktemp "$KIMDIR/animation-settings.XXXXXX")" || return 1
 
-    if ! python3 "$dialog_script" gif "$settings_file" "$dir" "${#files[@]}"; then
+    if python3 "$dialog_script" animate "$settings_file" "$dir" "${#files[@]}" \
+        "$animation_format" "${delay:-100}" "${loops:-0}" "$requested" "${files[@]}"; then
+      :
+    else
+      rc=$?
       rm -f -- "$settings_file"
+      [ "$rc" -eq 130 ] && return 130
       return 1
     fi
 
     mapfile -d '' -t selections < "$settings_file"
     rm -f -- "$settings_file"
-
-    [ "${#selections[@]}" -eq 4 ] || return 1
+    (( ${#selections[@]} >= 5 )) || return 1
 
     animation_format="${selections[0]}"
-    : "${delay:=${selections[1]}}"
-    : "${loops:=${selections[2]}}"
-    : "${requested:=${selections[3]}}"
+    delay="${selections[1]}"
+    loops="${selections[2]}"
+    requested="${selections[3]}"
+    # Revalidate added sources without sorting the exact approved order.
+    if ! collect_publication_inputs revalidated_files "${selections[@]:4}"; then
+      progress_error 'Animation selection contains an unsafe or duplicate file.'
+      return 1
+    fi
+    files=("${revalidated_files[@]}")
   fi
 
   [[ "$delay" =~ ^[0-9]{1,5}$ ]] && (( 10#$delay <= 65535 )) || {
@@ -4545,6 +4653,12 @@ Would you like to choose another rename method?"; then
       report_fail "$source"
       break
     fi
+    if preview_active && [ "$(preview_value state "$source")" = skip ]; then
+      report_skip "$source"
+      progress_value "$ref" "$counter"
+      continue
+    fi
+
     rc=0; tmp=''; published=false
     stamp="$(rename_source_stamp "$source")" || rc=1
     [ "$stamp" = "${stamps[$index]}" ] || rc=1
@@ -4840,6 +4954,23 @@ action_resize() {
       progress_value "$dbusRef" "$counter"
       continue
     fi
+    # A bounded fit that does not enlarge this single image
+    # has no pixel-size change. Exclude auto-orient percent workflows.
+    if [ "$source_frames" -eq 1 ] && [ -z "$percent" ]; then
+      read -r source_format current_width current_height <<< "$source_info"
+
+      local fit_bounds='^([1-9][0-9]*)x([1-9][0-9]*)>$'
+
+      if { [[ "$SCALE" = 100% ]] ||
+           { [[ "$SCALE" =~ $fit_bounds ]] &&
+             (( current_width <= BASH_REMATCH[1] &&
+                current_height <= BASH_REMATCH[2] )); }; }; then
+        report_skip "$i"
+        progress_value "$dbusRef" "$counter"
+        continue
+      fi
+    fi
+
     expected_format="${ext^^}"
     [ -n "$expected_format" ] || expected_format="$source_format"
     case "$expected_format" in
@@ -5288,6 +5419,17 @@ action_transform_in_place() {
     done
   fi
 
+  # A zero or full turn does not require re-encoding.
+  if [ "$operation" = -rotate ]; then
+    local raw_angle="${transform[1]}"
+    local zero_angle='^[+-]?0+([.]0*)?([<>])?$'
+    local full_angle='^[+-]?360([.]0*)?([<>])?$'
+
+    if [[ "$raw_angle" =~ $zero_angle || "$raw_angle" =~ $full_angle ]]; then
+      return 0
+    fi
+  fi
+
   # Accept only the supported transformations.
   case "$operation" in
     -rotate|-rotate-batch|-auto-orient|-flip|-flop) ;;
@@ -5395,6 +5537,17 @@ action_transform_in_place() {
       progress_value "$ref" "$counter"
       continue
     fi
+    if [ "$effective_operation" = -auto-orient ]; then
+      local orientation=''
+
+      if orientation="$(exiftool -s3 -n -Orientation -- "$i" 2>/dev/null)" &&
+         { [ -z "$orientation" ] || [ "$orientation" = 1 ]; }; then
+        report_skip "$i"
+        progress_value "$ref" "$counter"
+        continue
+      fi
+    fi
+
     target="$i"
     if [ "$mode" = create ]; then
       {
@@ -5664,10 +5817,12 @@ action_stripmeta() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -le 0 ] && return 0
 
+  local approved_policy=''
   if [ "$interactive" = true ]; then
-    action_options_dialog strip "$strip_mode" "${files[@]}" || return 1
-    local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
-    strip_mode="${choices[0]}"
+    approved_policy="$(choose_output_mode "$(gettext 'Kim')"       "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
+    [ "$approved_policy" != cancel ] || return 130
+    preview_confirm strip "$approved_policy" stripped mode "$strip_mode" remove_ai "$remove_ai" || return $?
+    strip_mode="$(preview_value config mode)" || return 1
     case "$strip_mode" in all|gps|ai) : ;; *) return 1 ;; esac
   fi
   if [ "$strip_mode" != all ]; then
@@ -5679,12 +5834,16 @@ action_stripmeta() {
   fi
 
   local mode
-  mode="$(choose_output_mode \
-    "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
+  if [ "$interactive" = true ]; then
+    mode="$approved_policy"
+  else
+    mode="$(choose_output_mode \
+      "$(gettext 'Kim')" \
+      "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
+  fi
   [ "$mode" != cancel ] || return 1
 
-  if [ "$interactive" = true ]; then preview_confirm strip "$mode" stripped mode all remove_ai "$remove_ai" || return 1; fi
+
   report_init
   local dbusRef interrupted
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
@@ -5718,6 +5877,10 @@ action_stripmeta() {
     if progress_cancelled "$dbusRef"; then
       report_fail "$i"
       break
+    fi
+
+    if preview_active && [ "$(preview_value state "$i")" = skip ]; then
+      report_skip "$i"; progress_value "$dbusRef" "$counter"; continue
     fi
 
     # PNG/APNG full stripping removes custom ancillary metadata and text.
@@ -6391,9 +6554,13 @@ action_stripmeta_selective() {
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
   fi
   METADATA_INTERRUPTED=false
-  publication_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
-  [ "$publication_mode" != cancel ] || return 1
-  if [ "$interactive" = true ]; then
+  if preview_active; then
+    publication_mode="$(preview_value policy .)" || return 1
+  else
+    publication_mode="$(choose_output_mode "$(gettext 'Kim')"       "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
+    [ "$publication_mode" != cancel ] || return 1
+  fi
+  if [ "$interactive" = true ] && ! preview_active; then
     local preview_tag="$strip_mode"
     [ "$remove_ai" != true ] || preview_tag="${preview_tag}_ai"
     preview_confirm strip "$publication_mode" "$preview_tag" mode "$strip_mode" remove_ai "$remove_ai" || return 1
@@ -6408,6 +6575,12 @@ action_stripmeta_selective() {
     tag="$strip_mode"
     [ "$remove_ai" != true ] || tag="${tag}_ai"
     progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
+    if preview_active && [ "$(preview_value state "$source")" = skip ]; then
+      report_skip "$source"
+      progress_value "$ref" "$counter"
+      continue
+    fi
+
     # PNG metadata is filtered at the container level.
     # Other formats retain the existing selective ExifTool path.
     case "${source##*.}" in
@@ -7937,7 +8110,7 @@ action_collage() {
       *) files+=("$@"); break ;;
     esac
   done
-  kim6_create_select_more files "Photo Collage" || return 1
+  kim6_create_select_more files "Collage" || return 1
   if ! collect_publication_inputs files "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
@@ -9705,46 +9878,38 @@ action_slideshow() {
     esac
   done
   if [ "$interactive" = true ]; then
-    local settings_file dialog_script starting_dir
-    local -a selected_images=("${files[@]}") choices=()
+    local settings_file dialog_script
+    local -a choices=()
 
-    [ "${#selected_images[@]}" -gt 0 ] || {
-      progress_error 'Select at least one image.'
+    [ "${#files[@]}" -gt 0 ] || {
+      progress_error 'Select at least one image for the slideshow.'
       return 1
     }
 
-    kim6_create_select_more selected_images 'Video Slideshow' || return 1
-
-    collect_publication_inputs files "${selected_images[@]}" || {
-      progress_error 'Select valid, distinct local images for the slideshow.'
-      return 1
-    }
-
-    (( ${#files[@]} <= 200 )) || {
-      progress_error 'The slideshow limit is 200 images.'
-      return 2
-    }
-
-    starting_dir="${files[0]%/*}"
     dialog_script="$DISPATCHER_DIR/kim_create_dialog.py"
 
     [ -r "$dialog_script" ] || {
-      progress_error 'Slideshow dialog not installed.'
+      progress_error 'Slideshow dialog is not installed.'
       return 1
     }
 
     settings_file="$(mktemp "$KIMDIR/slideshow-settings.XXXXXX")" || return 1
 
-    if ! python3 "$dialog_script" slideshow "$settings_file" "$starting_dir"         "${#files[@]}" "$seconds" "$size" "$fps" "$background" "$output"; then
+    if python3 "$dialog_script" slideshow "$settings_file" "${files[0]%/*}" \
+      "${#files[@]}" "$seconds" "$size" "$fps" "$background" "$output" "${files[@]}"; then
+      :
+    else
+      rc=$?
       rm -f -- "$settings_file"
+      [ "$rc" -eq 130 ] && return 130
       return 1
     fi
 
     mapfile -d '' -t choices < "$settings_file"
     rm -f -- "$settings_file"
 
-    [ "${#choices[@]}" -eq 5 ] || {
-      progress_error 'Incomplete slideshow settings.'
+    (( ${#choices[@]} >= 6 )) || {
+      progress_error 'Incomplete slideshow settings or image list.'
       return 1
     }
 
@@ -9753,6 +9918,17 @@ action_slideshow() {
     fps="${choices[2]}"
     background="${choices[3]}"
     output="${choices[4]}"
+    files=("${choices[@]:5}")
+    # Recheck images added in the picker through the normal
+    # KIM6 source safeguards. Preserve approved playback order.
+    local -a revalidated_files=()
+
+    if ! collect_publication_inputs revalidated_files "${files[@]}"; then
+      progress_error 'Slideshow selection contains an unsafe or duplicate file.'
+      return 1
+    fi
+
+    files=("${revalidated_files[@]}")
   fi
   [[ "$seconds" =~ ^[0-9]{1,2}$ ]] && [ "$seconds" -ge 1 ] && [ "$seconds" -le 30 ] || { progress_error "$(gettext 'Slideshow seconds per photo must be 1-30.')"; return 2; }
   [[ "$fps" =~ ^[0-9]{1,2}$ ]] && [ "$fps" -ge 1 ] && [ "$fps" -le 30 ] || { progress_error "$(gettext 'Slideshow frame rate must be 1-30 fps.')"; return 2; }
@@ -9786,18 +9962,23 @@ action_slideshow() {
   for source in "${files[@]}"; do
     [[ "$source" != *$'\n'* ]] || { progress_error "$(gettext 'Slideshow filenames cannot contain newlines.')"; return 2; }
   done
-  # Encode separators before version sorting by basename; the original
-  # paths travel alongside keys, so filenames are never reconstructed.
-  for source in "${files[@]}"; do
-    record_key="${source##*/}"
-    record_key="${record_key//%/%25}"
-    record_key="${record_key//$'\t'/%09}"
-    sort_pairs+=("$record_key"$'\t'"$source")
-  done
-  mapfile -d '' sorted_records < <(printf '%s\0' "${sort_pairs[@]}" | LC_ALL=C sort -z -t $'\t' -k1,1V -k2,2V)
-  for record_key in "${sorted_records[@]}"; do
-    ordered+=("${record_key#*$'\t'}")
-  done
+  if [ "$interactive" = true ]; then
+    # Preserve the exact image order approved in the picker.
+    ordered=("${files[@]}")
+  else
+    # Encode separators before version sorting by basename; the original
+    # paths travel alongside keys, so filenames are never reconstructed.
+    for source in "${files[@]}"; do
+      record_key="${source##*/}"
+      record_key="${record_key//%/%25}"
+      record_key="${record_key//$'\t'/%09}"
+      sort_pairs+=("$record_key"$'\t'"$source")
+    done
+    mapfile -d '' sorted_records < <(printf '%s\0' "${sort_pairs[@]}" | LC_ALL=C sort -z -t $'\t' -k1,1V -k2,2V)
+    for record_key in "${sorted_records[@]}"; do
+      ordered+=("${record_key#*$'\t'}")
+    done
+  fi
   [ "${#ordered[@]}" -eq "${#files[@]}" ] || return 1
   if [ -n "$output" ]; then
     [[ "${output,,}" == *.mp4 ]] || { progress_error "$(gettext 'Slideshow output must use the .mp4 extension.')"; return 2; }
