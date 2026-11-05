@@ -28,13 +28,9 @@ REPORT_DIR = QA_DIR / "reports"
 PLAN_PATH = QA_DIR / "ACCEPTANCE_PLAN.md"
 OWNER_TEXT = "KIM6 human acceptance workspace v1\n"
 STATE_VERSION = 1
-MENU_TITLES = {
-    "kim_compress.desktop.in": "JPEG compression",
-    "kim_compressandresize.desktop.in": "Resize, web export and email",
-    "kim_convertandrotate.desktop.in": "Convert, rotate and flip",
-    "kim_compressandresizevideo.desktop.in": "Video tools",
-    "kim_publication.desktop.in": "Publish and organize",
-}
+SEPARATOR_ID = "_SEPARATOR_"
+# Case-local names may intentionally disagree with the pristine master's format.
+FIXTURE_MASTERS = {"mislabeled.jpg": "photo.png"}
 
 class InventoryError(RuntimeError):
     pass
@@ -52,28 +48,16 @@ class ValidationResult:
         return {"errors": self.errors, "warnings": self.warnings, "checks": self.checks}
 
 
-def parse_menu(path: Path) -> list[dict[str, str]]:
-    text = path.read_text(encoding="utf-8")
-    main: dict[str, str] = {}
-    actions: dict[str, dict[str, str]] = {}
-    section = ""
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("[") and line.endswith("]"):
-            section = line[1:-1]
-            continue
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        if section == "Desktop Entry":
-            main[key] = value
-        elif section.startswith("Desktop Action "):
-            action_id = section[len("Desktop Action "):]
-            actions.setdefault(action_id, {})[key] = value
+def parse_menu(path: Path) -> list[dict[str, Any]]:
+    """Validate all declared sections and return only executable actions."""
+    main, actions = _desktop_sections(path.read_text(encoding="utf-8"))
     declared = [item for item in main.get("Actions", "").split(";") if item]
-    duplicates = sorted({item for item in declared if declared.count(item) > 1})
+    if not declared:
+        raise InventoryError(f"{path.name}: no declared actions")
+    invalid = [item for item in declared if not re.fullmatch(r"[A-Za-z0-9_-]+", item)]
+    if invalid:
+        raise InventoryError(f"{path.name}: malformed action ID(s): {invalid}")
+    duplicates = sorted({item for item in declared if item != SEPARATOR_ID and declared.count(item) > 1})
     if duplicates:
         raise InventoryError(f"{path.name}: duplicate action ID(s): {', '.join(duplicates)}")
     undeclared = sorted(set(actions) - set(declared))
@@ -83,7 +67,13 @@ def parse_menu(path: Path) -> list[dict[str, str]]:
     result = []
     for action_id in declared:
         fields = actions[action_id]
+        if action_id == SEPARATOR_ID:
+            if fields.get("Exec", "").strip():
+                raise InventoryError(f"{path.name}/{action_id}: separator must not have an Exec command")
+            continue
         label = fields.get("_Name", fields.get("Name", ""))
+        if not label.strip():
+            raise InventoryError(f"{path.name}/{action_id}: missing action label")
         command = fields.get("Exec", "")
         try:
             words = shlex.split(command)
@@ -95,7 +85,7 @@ def parse_menu(path: Path) -> list[dict[str, str]]:
             raise InventoryError(f"{path.name}/{action_id}: missing dispatcher command")
         result.append({
             "menu": path.name,
-            "menu_title": MENU_TITLES.get(path.name, main.get("Name", path.stem)),
+            "menu_title": main.get("_X-KDE-Submenu", main.get("X-KDE-Submenu", main.get("Name", path.stem))),
             "submenu": main.get("_X-KDE-Submenu", main.get("X-KDE-Submenu", main.get("Name", path.stem))),
             "action_id": action_id,
             "label": label,
@@ -110,20 +100,31 @@ def _desktop_sections(text: str) -> tuple[dict[str, str], dict[str, dict[str, st
     main: dict[str, str] = {}
     actions: dict[str, dict[str, str]] = {}
     section = ""
+    seen_sections: set[str] = set()
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("[") and line.endswith("]"):
             section = line[1:-1]
+            if section in seen_sections:
+                raise InventoryError(f"duplicate desktop section: {section}")
+            seen_sections.add(section)
+            if section.startswith("Desktop Action "):
+                actions[section[len("Desktop Action "):]] = {}
             continue
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
         if section == "Desktop Entry":
+            if key in main:
+                raise InventoryError(f"duplicate desktop field: {section}/{key}")
             main[key] = value
         elif section.startswith("Desktop Action "):
-            actions.setdefault(section[len("Desktop Action "):], {})[key] = value
+            fields = actions[section[len("Desktop Action "):]]
+            if key in fields:
+                raise InventoryError(f"duplicate desktop field: {section}/{key}")
+            fields[key] = value
     return main, actions
 
 
@@ -131,57 +132,69 @@ def _route_and_args(entry: dict[str, Any]) -> tuple[str, list[str]]:
     return entry["dispatcher"][0], entry["dispatcher"][1:]
 
 
-def _fixture_class(route: str, args: list[str], action_id: str, menu: str = "") -> list[str]:
-    if route in {"about", "license", "manual"}:
+def _fixture_class(route: str, args: list[str], menu: str = "") -> list[str]:
+    if route in {"about", "license", "manual", "settings"} or (route == "recipe" and "--editor" in args):
         # The dispatcher takes no media argument, but a right-click context
         # menu needs a harmless selected file to expose its informational item.
         return ["video-audio.mp4"] if "video" in menu else ["photo.jpg"]
     if route in {"video", "videoframes", "videoaudio", "videogif"}:
-        if route == "video" and action_id in {"Videohd72017264mp4", "Av1hd720Balanced"}:
+        if route == "video" and _arg_value(args, "--size") == "hd720" and (
+            (_arg_value(args, "--codec") == "libx264" and _arg_value(args, "--crf") == "17")
+            or (_arg_value(args, "--codec") == "av1" and _arg_value(args, "--av1-quality") == "balanced")
+        ):
             return ["video-silent.mp4"]
-        if route == "videoaudio" and ("mute" in action_id.lower() or action_id == "ExtractVideoAudio"):
+        if route == "videoaudio":
             return ["video-multiaudio.mkv"]
         return ["video-audio.mp4"]
     if route in {"album", "print", "contactsheet", "tiffjoin", "animate", "collage", "slideshow", "gallery"}:
         return ["sequence-red.png", "sequence-green.png", "sequence-blue.png"]
     if route == "rename":
         return ["dated-photo.jpg", "sequence-red.png", "-leading ü [1].jpg"]
-    if route in {"copyright", "timeshift", "datesync", "stripmeta"}:
+    if route in {"copyright", "timeshift", "datesync", "stripmeta", "capturedate",
+                 "location-apply", "location-report", "location-reduce", "overlay"}:
         return ["metadata.jpg"]
-    if route == "rotate" and "exif" in action_id.lower():
+    if route == "rotate" and "--exif" in args:
         return ["orientation-6.jpg"]
     if route == "convert":
-        if "GIF" in action_id:
+        fmt = _arg_value(args, "--format")
+        if fmt == "gif":
             return ["animated.gif"]
-        if action_id == "ConvertJPG":
+        if fmt == "jpg":
             return ["orientation-6.jpg"]
-        if action_id == "ConvertPNG":
+        if fmt == "png":
             return ["transparent.png"]
-        if action_id in {"ConvertAVIF", "ConvertHEIC", "ConvertJXL", "ConvertJP2Lossless", "ConvertJP2Lossy"}:
+        if fmt in {"avif", "heic", "jxl", "jp2"}:
             return ["profile-wide.jpg"]
-        if action_id == "ConvertPDF":
+        if fmt == "pdf":
             return ["photo.tif"]
-        return ["photo.png"] if "JPG" in action_id else ["photo.jpg"]
+        return ["photo.jpg"]
     if route == "resizeandsend":
         return ["photo.jpg", "wide.jpg"]
     if route == "webexport":
         return ["profile-wide.jpg"]
     if route == "resize":
-        return ["large.jpg", "unicode photo ü [1].jpg"] if action_id == "ResizePercent" else ["large.jpg"]
+        return ["large.jpg", "unicode photo ü [1].jpg"] if "--custom-percent" in args else ["large.jpg"]
     if route in {"compress", "rotate", "flipflop"}:
-        return ["-leading ü [1].jpg"] if action_id == "CompressCustom" else ["photo.jpg"]
+        return ["-leading ü [1].jpg"] if route == "compress" and "--custom" in args else ["photo.jpg"]
+    if route == "crop":
+        return ["wide.jpg"]
+    if route == "recipe":
+        return ["orientation-6.jpg"]
+    if route == "checkextensions":
+        return ["mislabeled.jpg"]  # PNG bytes; a disposable extension mismatch.
     return ["photo.png"]
 
 
-def _source_behavior(route: str) -> str:
-    if route in {"about", "license", "manual"}:
+def _source_behavior(route: str, args: list[str] | None = None) -> str:
+    if route in {"about", "license", "manual", "settings", "location-report"} or (route == "recipe" and "--editor" in (args or [])):
         return "none"
     if route in {"rotate", "rotatewithexif", "flipflop"}:
         return "in_place"
     if route == "rename":
         return "rename"
     if route in {"webexport", "resizeandsend", "videoframes", "videoaudio", "videogif", "slideshow",
-                 "gallery", "collage", "album", "print", "contactsheet", "tiffjoin", "animate"}:
+                 "gallery", "collage", "album", "print", "contactsheet", "tiffjoin", "animate",
+                 "crop", "overlay", "recipe", "checkextensions"}:
         return "derived"
     return "authorized_overwrite"
 
@@ -190,7 +203,18 @@ def _expected(route: str, args: list[str]) -> str:
     if route in {"about", "license", "manual"}:
         return {"about": "KDialog About text opens.", "license": "Installed LICENSE.md opens.",
                 "manual": "Installed docs/index.html and its stylesheet open."}[route]
+    if route == "recipe" and "--editor" in args:
+        return "Recipe Editor opens; inspect the built-in recipe and close without saving or running."
     targets = {
+        "settings": "Settings opens; inspect the tabs and close without saving changes.",
+        "location-report": "The location inspector displays the disposable image's GPS metadata without changing it.",
+        "location-apply": "A reviewed derivative with the chosen GPS coordinates, or an explicitly authorized replacement.",
+        "location-reduce": "A reviewed result with reduced GPS precision and unrelated metadata preserved.",
+        "capturedate": "A reviewed result with the chosen capture date and timezone handling; pixels remain unchanged.",
+        "crop": "A separate cropped image in the case directory matching the preview; source remains unchanged.",
+        "overlay": "A separate watermarked image in the case directory matching the preview; source remains unchanged.",
+        "checkextensions": "A correctly named PNG copy with identical bytes; the mismatched source remains unchanged.",
+        "recipe": "The built-in Web Export recipe creates a JPEG in this case's Web subfolder; source remains unchanged.",
         "compress": "A validated JPEG beside the selected image, tagged _compressed (or configured prefix), collision numbered.",
         "convert": "A validated output in the selected target format, in the case directory; choose it in the save dialog.",
         "resize": "A validated resized image beside the source, tagged _resized; percentage/preset geometry is visible in dimensions.",
@@ -246,11 +270,23 @@ def _dependencies(route: str) -> list[str]:
             "slideshow": ["ffmpeg", "ffprobe", "magick", "identify", "libx264", "qdbus", "kdialog"]}
     if route in {"rotate", "rotatewithexif", "flipflop"}:
         return ["magick", "identify", "exiftool", "qdbus", "kdialog"]
+    if route in {"crop", "overlay", "recipe", "settings", "location-apply", "location-report",
+                 "location-reduce", "capturedate", "checkextensions"}:
+        return ["python3", "PySide6", "magick", "exiftool"]
     return deps.get(route, ["see action help"])
 
 
 def _checks(route: str) -> list[str]:
     checks = {
+        "settings": ["Human: confirm Settings opens and closes without saving; no media output is expected."],
+        "location-report": ["Human: inspect GPS coordinates; source hashes must remain unchanged."],
+        "location-apply": ["Automated: decode and source policy are checked. Human: read back the chosen GPS coordinates and unrelated metadata."],
+        "location-reduce": ["Automated: decode and source policy are checked. Human: compare GPS precision and unrelated metadata before and after."],
+        "capturedate": ["Automated: decode and source policy are checked. Human: read back the chosen capture date, timezone and unrelated metadata."],
+        "crop": ["Automated: decode and source preservation are checked. Human: compare crop bounds and dimensions to the preview."],
+        "overlay": ["Automated: decode and source preservation are checked. Human: compare watermark text, placement and opacity to the preview."],
+        "checkextensions": ["Automated: decode and source preservation are checked. Human: confirm the corrected extension and identical bytes."],
+        "recipe": ["Automated: decode and source preservation are checked for recipe outputs. Human: inspect the chosen recipe and its output preview, or confirm the editor opens and closes without saving."],
         "about": ["Dialog is legible and identifies KIM6."],
         "license": ["Opened document is the installed GPL license."],
         "manual": ["Manual renders and stylesheet loads."],
@@ -285,6 +321,15 @@ def _checks(route: str) -> list[str]:
 
 def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
     choices: dict[str, list[str]] = {
+        "settings": ["Inspect Settings tabs, then close without saving; use the isolated QA session."],
+        "location-report": ["Inspect the seeded GPS coordinates, then close the read-only inspector."],
+        "location-apply": ["Choose manual coordinates on the disposable metadata image, create mode and the case folder; review the output plan."],
+        "location-reduce": ["Choose reduced coordinate precision and create mode; review the output plan in the case folder."],
+        "capturedate": ["Set a specific capture date and timezone handling, choose create mode and review the preview."],
+        "crop": ["Choose a crop in the preview and save a separate image in the case folder."],
+        "overlay": ["Use a text watermark and save a separate image in the case folder."],
+        "checkextensions": ["Inspect the mismatched extension, review the plan and create a correctly named copy in the case folder."],
+        "recipe": ["Choose the built-in Web Export recipe and review its plan; for the editor, inspect and close without saving."],
         "compress": ["Custom quality when the menu entry is custom.", "Create or overwrite policy when not fixed by KIM_POLICY."],
         "resize": ["Custom geometry or percentage where requested.", "Create or overwrite policy when not fixed by KIM_POLICY."],
         "webexport": ["Export destination and configured output format/color policy.", "Never overwrites selected sources."],
@@ -328,8 +373,8 @@ def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
 
 def load_cases(repo: Path = ROOT) -> list[dict[str, Any]]:
     menu_paths = sorted((repo / "src").glob("kim_*.desktop.in"))
-    if len(menu_paths) != 5:
-        raise InventoryError(f"Expected five service menus, found {len(menu_paths)}")
+    if not menu_paths:
+        raise InventoryError("No service-menu templates found in src/kim_*.desktop.in")
     cases = []
     seen_ids: set[str] = set()
     seen_menu_actions: set[tuple[str, str]] = set()
@@ -341,8 +386,8 @@ def load_cases(repo: Path = ROOT) -> list[dict[str, Any]]:
             seen_ids.add(case_id)
             seen_menu_actions.add((menu.name, entry["action_id"]))
             route, args = _route_and_args(entry)
-            behavior = _source_behavior(route)
-            fixtures = _fixture_class(route, args, entry["action_id"], menu.name)
+            behavior = _source_behavior(route, args)
+            fixtures = _fixture_class(route, args, menu.name)
             cases.append({
                 **entry,
                 "id": case_id,
@@ -390,12 +435,13 @@ def _human_checks(route: str, label: str) -> list[str]:
 
 
 def render_plan(cases: list[dict[str, Any]]) -> str:
-    lines = ["# KIM6 Human Acceptance Plan", "", f"Generated from the five current service-menu templates: **{len(cases)} menu actions**.",
+    menus = sorted({case["menu"] for case in cases})
+    lines = ["# KIM6 Human Acceptance Plan", "", f"Generated from {len(menus)} current service-menu templates: **{len(cases)} executable menu actions**.",
              "", "Regenerate with `python3 qa/acceptance.py inventory`. Do not edit the action list by hand.",
              "Each case has a disposable input copy under `qa/generated/cases/`. Actions must be invoked manually in Dolphin; command execution is not equivalent to GUI acceptance.", ""]
-    for menu in sorted({case["menu"] for case in cases}):
+    for menu in menus:
         group = [case for case in cases if case["menu"] == menu]
-        lines += [f"## {MENU_TITLES.get(menu, menu)} (`{menu}`)", "", "| Case ID | Action ID | Visible label | Dispatcher command | Sources | Source policy |", "|---|---|---|---|---|---|"]
+        lines += [f"## {group[0]['menu_title']} (`{menu}`)", "", "| Case ID | Action ID | Visible label | Dispatcher command | Sources | Source policy |", "|---|---|---|---|---|---|"]
         for case in group:
             args = " ".join(case["dispatcher"])
             fixtures = ", ".join(case["fixtures"]) or "none"
@@ -425,7 +471,7 @@ def write_plan(repo: Path, cases: list[dict[str, Any]]) -> Path:
         raise SafetyError(f"refusing symlink acceptance plan: {path}")
     if path.exists():
         previous = path.read_text(encoding="utf-8")
-        if previous != content and not previous.startswith("# KIM6 Human Acceptance Plan\n\nGenerated from the five current service-menu templates:"):
+        if previous != content and not re.match(r"\A# KIM6 Human Acceptance Plan\n\nGenerated from (?:the five|\d+) current service-menu templates:", previous):
             raise SafetyError(f"refusing to overwrite an unrecognized plan file: {path}")
     if not path.exists() or path.read_text(encoding="utf-8") != content:
         _write_atomic_text(path, content, 0o644)
@@ -684,7 +730,11 @@ def check_source_preservation(case: dict[str, Any], baseline: dict[str, str], cu
     result = ValidationResult()
     behavior = case["source_behavior"]
     if behavior == "none":
-        result.checks.append("No media source is selected.")
+        changed = [name for name, digest in baseline.items() if current.get(name) != digest]
+        if changed:
+            result.errors.append(f"Non-processing action changed or removed context fixture(s): {changed}")
+        else:
+            result.checks.append("Selected context fixture hashes are unchanged; no media output is expected.")
         return result
     missing = [name for name in baseline if name not in current]
     changed = [name for name, digest in baseline.items() if name in current and current[name] != digest]
@@ -933,8 +983,8 @@ def validate_case_data(case: dict[str, Any], case_dir: Path, baseline: dict[str,
     unavailable = case_record.get("unavailable_fixtures", [])
     if unavailable:
         result.errors.append("Required test media could not be generated: " + ", ".join(unavailable))
-    if route in {"about", "license", "manual"}:
-        result.checks.append("Informational action requires direct human confirmation; no media output is expected.")
+    if case["source_behavior"] == "none":
+        result.checks.append("Non-processing action requires direct human confirmation; no media output is expected.")
     elif case["source_behavior"] == "in_place":
         if not outputs:
             result.errors.append("No selected disposable source changed; verify the operation was completed.")
@@ -1394,8 +1444,8 @@ def _instructions(case: dict[str, Any], case_dir: Path) -> str:
     policy = _validation_policy(case)
     guidance, expected = _case_guidance(case)
     behavior = case["source_behavior"]
-    if case["route"] in {"about", "license", "manual"}:
-        output_location = "No output file; the selected case image only opens the context menu."
+    if behavior == "none":
+        output_location = "No output file; inspect the window and close it without saving."
     elif case["route"] == "resizeandsend":
         output_location = "Use the persistent attachment folder reported by the action; the email draft is temporary and must not be sent during this test."
     elif behavior == "derived":
@@ -1409,7 +1459,8 @@ def _instructions(case: dict[str, Any], case_dir: Path) -> str:
     lines = [f"KIM6 Dolphin acceptance case: {case['label']}", f"Case ID: {case['id']}", "",
              f"1. Open this case directory in Dolphin: {case_dir}",
              f"2. Select: {', '.join(case['fixtures']) if case['fixtures'] else '(no files)' }.",
-             "   Informational actions use a selected file only to expose the context menu; the file is not passed to kim_all.",
+             ("   The selected case files are passed to kim_all." if "%F" in case["exec"] or "%U" in case["exec"]
+              else "   The selected file only exposes the context menu; it is not passed to kim_all."),
              f"3. Menu path: {case['submenu']} → {case['label']}.",
              f"4. {guidance}",
              f"5. Output location: {output_location}",
@@ -1473,7 +1524,7 @@ def _source_explanation(case: dict[str, Any]) -> str:
         return "This action renames or moves the selected disposable files. Check that no unrelated case file is displaced."
     if behavior == "authorized_overwrite":
         return "Choose create mode for this test when asked; in create mode the selected source remains unchanged. Neither configuration nor environment settings can silently authorize overwrite. Only explicit two-stage confirmation may replace a selected original; never use personal media. Use `--policy overwrite` when recording that result."
-    return "No media source is changed by this informational action."
+    return "The selected disposable context image must remain unchanged; no media output is expected."
 
 
 def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
@@ -1484,7 +1535,30 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
         quality = _arg_value(args, "--quality")
         if quality:
             return f"Use the menu preset at JPEG quality {quality}. Do not confuse this with resizing; it changes JPEG encoding quality.", f"A JPEG tagged `_compressed` (normally `{Path(case['fixtures'][0]).stem}_compressed.jpg` with the default suffix setting)."
+        for option, preset in (("--recommended", "Recommended"), ("--maximum", "Maximum")):
+            if option in args:
+                return f"Use the {preset} compression preset; review its format-specific settings and choose create mode.", f"A derivative tagged `_compressed` (normally `{Path(case['fixtures'][0]).stem}_compressed.jpg` for this JPEG fixture); the selected source remains unchanged."
         return "Enter a JPEG quality from 1 to 100 when prompted; use 50 for this check.", "A JPEG derivative tagged `_compressed`, or the explicitly selected overwrite result."
+    if route == "settings":
+        return "Use the isolated QA session, inspect Settings tabs, then close without saving.", case["expected"]
+    if route == "recipe":
+        if "--editor" in args:
+            return "Inspect the built-in Web Export recipe in Recipe Editor, then close without saving or running.", case["expected"]
+        return "Choose Built-In → Web Export; review the output preview and run only on this case's disposable image. Keep the Web destination inside this case folder.", case["expected"]
+    if route == "location-report":
+        return "Inspect the seeded GPS latitude 42 and longitude 3, then close the read-only inspector.", case["expected"]
+    if route == "location-apply":
+        return "Choose manual coordinates 41, 2 on the disposable metadata image. Choose create mode, keep outputs in this case folder, and review the GPS plan before applying.", case["expected"]
+    if route == "location-reduce":
+        return "Choose reduced GPS precision and create mode; review the planned coordinates before applying. The integer-valued fixture may remain numerically unchanged at coarser precision.", case["expected"]
+    if route == "capturedate":
+        return "Set capture date to 2024-03-01 12:00:00, choose UTC and create mode, and review the date preview before applying.", case["expected"]
+    if route == "crop":
+        return "Choose a centered square crop in the visual preview; keep the source format and save in this case folder.", case["expected"]
+    if route == "overlay":
+        return "Choose text watermark `KIM6 QA`, bottom-right placement and a visible opacity; save a separate result in this case folder.", case["expected"]
+    if route == "checkextensions":
+        return "Inspect mislabeled.jpg (PNG bytes), select it for a correctly named copy, review the plan and create mislabeled.png in this case folder.", case["expected"]
     if route == "resize":
         size = _arg_value(args, "--size")
         if "--custom-percent" in args:
@@ -1531,6 +1605,8 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
         return "Choose `2x2 landscape album` (the default), then accept the suggested output name in this case folder.", "A multi-page PDF album with the three selected images in order."
     if route == "print":
         return "Choose `11.5x15 cm: 1x2 images, portrait` (the default), then save the PDF in this case folder.", "A print-layout PDF with portrait physical pages and the selected images."
+    if route == "contactsheet":
+        return "Choose A4, a 3x3 grid and filename labels; save the PDF in this case folder.", "A readable PDF contact sheet showing all selected images and their filename labels; compare order, grid and page size visually."
     if route == "gallery":
         return "Enter title `KIM6 acceptance`, author `QA`, and 3 columns; choose this case folder for the gallery output if asked.", "A gallery directory with an index, full-size images and thumbnails."
     if route == "collage":
@@ -1628,14 +1704,15 @@ def prepare(generated: Path = GENERATED, state_dir: Path = STATE_DIR, repo: Path
         if unexpected:
             raise SafetyError(f"incomplete case contains unrecognized entries; inspect manually: {destination}: {sorted(unexpected)}")
         for name in case["fixtures"]:
-            source = masters / name
+            master_name = FIXTURE_MASTERS.get(name, name)
+            source = masters / master_name
             if not source.is_file() or source.is_symlink():
                 if name.startswith("video-"):
                     continue
                 raise SafetyError(f"required fixture master is unavailable: {name}")
             target = destination / name
             if target.exists():
-                if target.is_symlink() or not target.is_file() or sha256(target) != master_manifest["sha256"][name]:
+                if target.is_symlink() or not target.is_file() or sha256(target) != master_manifest["sha256"][master_name]:
                     raise SafetyError(f"partial case fixture differs from pristine master; refusing to overwrite: {target}")
             else:
                 with source.open("rb") as src, target.open("xb") as dst:
@@ -1671,7 +1748,7 @@ def prepare(generated: Path = GENERATED, state_dir: Path = STATE_DIR, repo: Path
                   "baseline_image_info": image_baselines,
                   "baseline_video_info": video_baselines,
                   "baseline_icc_sha256": icc_hashes,
-                  "master_sha256": {name: master_manifest["sha256"][name] for name in available},
+                  "master_sha256": {name: master_manifest["sha256"][FIXTURE_MASTERS.get(name, name)] for name in available},
                   "prepared_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         _write_exclusive(destination / "case.json", json.dumps(record, indent=2, sort_keys=True) + "\n")
         _write_exclusive(destination / "INSTRUCTIONS.txt", _instructions(case_for_instructions, destination))
@@ -1703,7 +1780,7 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
     for menu in sorted({case["menu"] for case in cases}):
         group = [c for c in cases if c["menu"] == menu]
         menu_passed = sum(state.get("results", {}).get(c["id"], {}).get("status") == "passed" for c in group)
-        parts += [f"<section class='group'><h2>{html.escape(MENU_TITLES.get(menu, menu))} — {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>Test type</th><th>Technical validation</th><th>Outputs</th><th>Instructions / files</th><th>Recorded environment</th><th>Notes</th></tr></thead><tbody>"]
+        parts += [f"<section class='group'><h2>{html.escape(group[0].get('menu_title', menu))} — {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>Test type</th><th>Technical validation</th><th>Outputs</th><th>Instructions / files</th><th>Recorded environment</th><th>Notes</th></tr></thead><tbody>"]
         for case in (c for c in cases if c["menu"] == menu):
             row = state.get("results", {}).get(case["id"], {})
             status = row.get("status", "pending")
@@ -2072,7 +2149,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             for menu in sorted({case["menu"] for case in cases}):
                 group = [c for c in cases if c["menu"] == menu]
                 counts = result_totals(group, state)
-                print(f"{MENU_TITLES.get(menu, menu)}: {counts['passed']}/{len(group)} passed; {counts['failed']} failed; {counts['skipped']} skipped; {counts['blocked']} blocked; {counts['pending']} pending")
+                print(f"{group[0].get('menu_title', menu)}: {counts['passed']}/{len(group)} passed; {counts['failed']} failed; {counts['skipped']} skipped; {counts['blocked']} blocked; {counts['pending']} pending")
             for case in cases:
                 row = state.get("results", {}).get(case["id"], {})
                 status = row.get("status", "pending")
@@ -2224,18 +2301,29 @@ def _check_isolated_install(generated: Path) -> int:
         if installed.is_symlink() or not installed.is_file() or installed.stat().st_mode & 0o111:
             print(f"Missing installed menu: {installed}", file=sys.stderr); return 1
         text = installed.read_text(encoding="utf-8", errors="replace")
-        installed_main, installed_actions = _desktop_sections(text)
+        try:
+            installed_main, installed_actions = _desktop_sections(text)
+        except InventoryError as error:
+            print(f"Malformed installed menu {menu_name}: {error}", file=sys.stderr)
+            return 1
         template_path = ROOT / "src" / f"{menu_name}.in"
         expected_main, expected_actions = _desktop_sections(template_path.read_text(encoding="utf-8"))
         declared_match = installed_main.get("Actions")
         actual_ids = [item for item in declared_match.split(";") if item] if declared_match else []
-        expected_ids = [entry["action_id"] for entry in entries]
+        expected_ids = [item for item in expected_main.get("Actions", "").split(";") if item]
         if actual_ids != expected_ids:
             print(f"Installed action inventory differs for {menu_name}: expected {len(expected_ids)}, got {len(actual_ids)}", file=sys.stderr)
             return 1
         if set(installed_actions) != set(expected_actions):
             print(f"Installed action sections differ from {menu_name} template.", file=sys.stderr)
             return 1
+        if SEPARATOR_ID in expected_actions:
+            separator = installed_actions[SEPARATOR_ID]
+            if separator.get("Exec", "").strip() or any(
+                separator.get(key) != value for key, value in expected_actions[SEPARATOR_ID].items()
+            ):
+                print(f"Installed separator differs from {menu_name} template.", file=sys.stderr)
+                return 1
         for key, value in expected_main.items():
             if key == "Actions":
                 continue
@@ -2282,7 +2370,7 @@ def _check_isolated_install(generated: Path) -> int:
     else:
         print("No same-name service menus were found in the checked XDG_DATA_DIRS roots.")
     print("This verifies installed files, not successful live Dolphin GUI behavior.")
-    return 0 if total == 108 else 1
+    return 0 if templates and total == sum(len(entries) for entries in templates.values()) else 1
 
 
 SECOND_PASS = """KIM6 second-pass safety acceptance checklist

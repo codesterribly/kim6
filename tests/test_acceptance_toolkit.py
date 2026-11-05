@@ -1,9 +1,11 @@
 """Behavioral tests for the human Dolphin acceptance toolkit."""
+import configparser
 import hashlib
 import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import re
+import shlex
 import tempfile
 import sys
 import unittest
@@ -21,45 +23,73 @@ from qa import acceptance
 class AcceptanceInventoryTests(unittest.TestCase):
     def test_every_menu_action_has_one_complete_unique_case(self):
         cases = acceptance.load_cases(ROOT)
-        self.assertEqual(108, len(cases))
         ids = [case["id"] for case in cases]
         self.assertEqual(len(ids), len(set(ids)))
-        expected = {
-            (menu.name, entry["action_id"])
-            for menu in sorted((ROOT / "src").glob("kim_*.desktop.in"))
-            for entry in acceptance.parse_menu(menu)
-        }
-        self.assertEqual(expected, {(case["menu"], case["action_id"]) for case in cases})
+        # Read templates independently: a parser omission must not shrink both
+        # the expected inventory and the generated cases unnoticed.
+        expected = {}
+        menus = sorted((ROOT / "src").glob("kim_*.desktop.in"))
+        self.assertTrue(menus)
+        for menu in menus:
+            desktop = configparser.RawConfigParser()
+            desktop.optionxform = str
+            desktop.read(menu, encoding="utf-8")
+            main = desktop["Desktop Entry"]
+            declared = [item for item in main["Actions"].split(";") if item != "_SEPARATOR_" and item]
+            for action_id in declared:
+                fields = desktop[f"Desktop Action {action_id}"]
+                expected[menu.name, action_id] = (
+                    fields.get("_Name", fields.get("Name")),
+                    main["_X-KDE-Submenu"], shlex.split(fields["Exec"]),
+                )
+        self.assertEqual(len(expected), len(cases))
+        self.assertEqual(expected.keys(), {(case["menu"], case["action_id"]) for case in cases})
+        dispatcher = (ROOT / "src/bin/kim_all").read_text().rsplit('  case "$cmd" in', 1)[1]
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                label, submenu, command = expected[case["menu"], case["action_id"]]
+                self.assertEqual(label, case["label"])
+                self.assertEqual(submenu, case["submenu"])
+                self.assertEqual(submenu, case["menu_title"])
+                self.assertEqual(["kim_all", *case["dispatcher"]], command)
+                self.assertEqual([case["route"], *case["args"]], command[1:])
+                self.assertTrue(
+                    re.search(rf"(?m)^    (?:[a-z0-9-]+\|)*{re.escape(case['route'])}(?:\|[a-z0-9-]+)*\)", dispatcher),
+                    f"Missing dispatcher route {case['route']}",
+                )
         for case in cases:
             with self.subTest(case=case["id"]):
                 for key in ("label", "dispatcher", "fixtures", "expected", "source_behavior",
                             "dependencies", "technical_checks", "human_checks", "interactive_choices"):
                     self.assertTrue(case[key], f"{case['id']} missing {key}")
+                self.assertNotEqual(["see action help"], case["dependencies"])
+                self.assertNotIn("follow the action's destination prompt", case["expected"])
         info = [case for case in cases if case["dispatcher"][0] in {"about", "license", "manual"}]
-        self.assertEqual(6, len(info))
+        self.assertEqual({"about", "license", "manual"}, {case["route"] for case in info})
+        self.assertEqual(3, len(info))
 
     def test_case_instructions_use_real_submenu_and_action_specific_steps(self):
         cases = acceptance.load_cases(ROOT)
-        preset = next(case for case in cases if case["action_id"] == "Compress50")
+        preset = next(case for case in cases if case["action_id"] == "2001CompressRecommended")
         text = acceptance._instructions(preset, Path("/qa/generated/cases/example"))
-        self.assertIn("KIM6 — JPEG compression → JPEG quality: 50%", text)
+        self.assertIn("KIM6 — Convert/Compress → Compress Recommended", text)
         self.assertIn("Menu path:", text)
         self.assertIn("Output location: This case folder", text)
-        self.assertIn("quality 50", text.lower())
+        self.assertIn("recommended", text.lower())
         self.assertIn("photo_compressed.jpg", text)
         self.assertIn("selected source remains unchanged", text.lower())
         self.assertNotIn("KIM6 → JPEG compression →", text)
-        rotate = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "Rotate90")
+        rotate = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "10Rotate90")
         rotate_text = acceptance._instructions(rotate, Path("/qa/generated/cases/rotate"))
         self.assertIn("validate --policy in-place", rotate_text)
         self.assertIn("pass --mode gui --policy in-place", rotate_text)
-        convert = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "ConvertWEBP")
+        convert = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "12ConvertWEBP")
         self.assertEqual(["photo.jpg"], convert["fixtures"])
         self.assertIn("WEBP", acceptance._case_guidance(convert)[1])
-        percent = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "ResizePercent")
+        percent = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "04ResizePercent")
         self.assertIn("50%", acceptance._case_guidance(percent)[0])
         self.assertIn("half the source width and height", acceptance._case_guidance(percent)[1])
-        av1 = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "Av1hd720Balanced")
+        av1 = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "05Av1hd720Balanced")
         self.assertIn("AV1 balanced quality", acceptance._case_guidance(av1)[0])
         self.assertNotIn("CRF ", acceptance._case_guidance(av1)[0])
         self.assertNotIn("custom AV1", " ".join(acceptance._interactive_choices("video", ["--codec", "libx264", "--crf", "23"], "Transcode 720 medium H.264" )).lower())
@@ -109,7 +139,7 @@ class AcceptanceInventoryTests(unittest.TestCase):
             root = Path(tmp)
             first_state = acceptance._owned_tree(root / "first-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
             second_state = acceptance._owned_tree(root / "second-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
-            case_id = "kim_compress.desktop:Compress10"
+            case_id = "kim_convertandrotate.desktop:2001CompressRecommended"
             acceptance._save_result(first_state / "progress.json", case_id, "passed", "gui", "visual check done")
             bundle = root / "transfer.json"
             exported = acceptance.run_cli(["--state-dir", str(first_state), "export", "--output", str(bundle)])
@@ -151,21 +181,129 @@ class AcceptanceInventoryTests(unittest.TestCase):
             with self.assertRaisesRegex(acceptance.InventoryError, "duplicate"):
                 acceptance.parse_menu(menu)
 
+    def test_separators_are_repeatable_but_never_executable_cases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "src").mkdir()
+            menu = repo / "src/kim_test.desktop.in"
+            menu.write_text("""[Desktop Entry]
+Actions=_SEPARATOR_;One;_SEPARATOR_;Two;
+_X-KDE-Submenu=Actual submenu
+[Desktop Action One]
+_Name=First
+Exec=kim_all about
+[Desktop Action Two]
+_Name=Second
+Exec=kim_all manual
+[Desktop Action _SEPARATOR_]
+Name=Separator
+""")
+            cases = acceptance.load_cases(repo)
+            self.assertEqual(["One", "Two"], [case["action_id"] for case in cases])
+            self.assertEqual({"Actual submenu"}, {case["menu_title"] for case in cases})
+            # Inventory is discovered, including newly added source templates.
+            shutil.copy2(menu, repo / "src/kim_added.desktop.in")
+            self.assertEqual(4, len(acceptance.load_cases(repo)))
+
+    def test_empty_inventory_and_malformed_actions_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "src").mkdir()
+            with self.assertRaises(acceptance.InventoryError):
+                acceptance.load_cases(repo)
+            menu = repo / "src/kim_test.desktop.in"
+            valid = "[Desktop Entry]\nActions=One;\n[Desktop Action One]\n_Name=First\nExec=kim_all about\n"
+            malformed = {
+                "missing section": valid.replace("Actions=One;", "Actions=One;Missing;"),
+                "undeclared section": valid.replace("Actions=One;", "Actions=Other;"),
+                "duplicate section": valid + "[Desktop Action One]\nExec=kim_all manual\n",
+                "duplicate executable field": valid + "Exec=kim_all manual\n",
+                "missing executable": valid.replace("Exec=kim_all about", ""),
+                "missing route": valid.replace("Exec=kim_all about", "Exec=kim_all"),
+                "wrong executable": valid.replace("kim_all about", "other about"),
+                "malformed quoting": valid.replace("kim_all about", 'kim_all "about'),
+                "missing label": valid.replace("_Name=First", ""),
+                "invalid ID": valid.replace("One", "Bad ID"),
+                "missing separator section": valid.replace("Actions=One;", "Actions=One;_SEPARATOR_;"),
+                "executable separator": valid.replace("Actions=One;", "Actions=One;_SEPARATOR_;")
+                    + "[Desktop Action _SEPARATOR_]\nName=Separator\nExec=kim_all about\n",
+            }
+            for reason, text in malformed.items():
+                with self.subTest(reason=reason):
+                    menu.write_text(text)
+                    with self.assertRaises(acceptance.InventoryError):
+                        acceptance.parse_menu(menu)
+
+    def test_current_dispatcher_options_select_disposable_fixture_and_source_policy(self):
+        cases = {case["action_id"]: case for case in acceptance.load_cases(ROOT)}
+        expected = {
+            "07ConvertJPG": (["orientation-6.jpg"], "authorized_overwrite"),
+            "10ConvertPNG": (["transparent.png"], "authorized_overwrite"),
+            "03ConvertGIF": (["animated.gif"], "authorized_overwrite"),
+            "01ConvertAVIF": (["profile-wide.jpg"], "authorized_overwrite"),
+            "04ConvertHEIC": (["profile-wide.jpg"], "authorized_overwrite"),
+            "08ConvertJXL": (["profile-wide.jpg"], "authorized_overwrite"),
+            "05ConvertJP2Lossless": (["profile-wide.jpg"], "authorized_overwrite"),
+            "06ConvertJP2Lossy": (["profile-wide.jpg"], "authorized_overwrite"),
+            "09ConvertPDF": (["photo.tif"], "authorized_overwrite"),
+            "14Rotateexif": (["orientation-6.jpg"], "in_place"),
+            "04ResizePercent": (["large.jpg", "unicode photo ü [1].jpg"], "authorized_overwrite"),
+            "2203CompressCustom": (["-leading ü [1].jpg"], "authorized_overwrite"),
+            "05Av1hd720Balanced": (["video-silent.mp4"], "authorized_overwrite"),
+            "Videohd72017264mp4": (["video-silent.mp4"], "authorized_overwrite"),
+            "A01ExtractVideoAudio": (["video-multiaudio.mkv"], "derived"),
+            "A04MuteVideo": (["video-multiaudio.mkv"], "derived"),
+            "06Crop": (["wide.jpg"], "derived"),
+            "04Overlay": (["metadata.jpg"], "derived"),
+            "02SetCaptureDate": (["metadata.jpg"], "authorized_overwrite"),
+            "03Apply": (["metadata.jpg"], "authorized_overwrite"),
+            "05Reduce": (["metadata.jpg"], "authorized_overwrite"),
+            "04Report": (["metadata.jpg"], "none"),
+            "00CheckExtensions": (["mislabeled.jpg"], "derived"),
+            "KIMRecipe0Run": (["orientation-6.jpg"], "derived"),
+            "KIMRecipe1Editor": (["photo.jpg"], "none"),
+            "01Settings": (["photo.jpg"], "none"),
+        }
+        for action_id, (fixtures, behavior) in expected.items():
+            with self.subTest(action=action_id):
+                case = cases[action_id]
+                self.assertEqual(fixtures, case["fixtures"])
+                self.assertEqual(behavior, case["source_behavior"])
+                guidance, _ = acceptance._case_guidance(case)
+                self.assertNotIn("Follow the choices printed by the action", guidance)
+
+    def test_plan_regeneration_recognizes_old_and_current_generated_headers_only(self):
+        cases = acceptance.load_cases(ROOT)
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "qa").mkdir()
+            plan = repo / "qa/ACCEPTANCE_PLAN.md"
+            plan.write_text("# KIM6 Human Acceptance Plan\n\nGenerated from the five current service-menu templates: old inventory\n")
+            acceptance.write_plan(repo, cases)
+            self.assertEqual(acceptance.render_plan(cases), plan.read_text())
+            acceptance.write_plan(repo, cases[:-1])
+            self.assertEqual(acceptance.render_plan(cases[:-1]), plan.read_text())
+            plan.write_text("User-authored notes; keep these")
+            with self.assertRaises(acceptance.SafetyError):
+                acceptance.write_plan(repo, cases)
+            self.assertEqual("User-authored notes; keep these", plan.read_text())
+
     def test_case_plan_is_derived_from_templates_and_has_correct_fixture_classes(self):
         cases = acceptance.load_cases(ROOT)
-        image = next(case for case in cases if case["action_id"] == "Compress10")
+        image = next(case for case in cases if case["action_id"] == "2001CompressRecommended")
         video = next(case for case in cases if case["action_id"].startswith("Videohd"))
-        manual = next(case for case in cases if case["action_id"] == "Manual")
+        manual = next(case for case in cases if case["action_id"] == "04Manual")
         self.assertTrue(any(name.endswith(".jpg") for name in image["fixtures"]))
         self.assertTrue(any("video" in name for name in video["fixtures"]))
         self.assertTrue(manual["fixtures"], "a context-menu file is needed to reveal this menu entry")
         self.assertNotIn("%F", manual["exec"], "informational action must not receive the context file")
-        audio = next(case for case in cases if case["action_id"] == "ExtractVideoAudio")
+        audio = next(case for case in cases if case["action_id"] == "A01ExtractVideoAudio")
         self.assertIn("video-multiaudio.mkv", audio["fixtures"])
         plan = acceptance.render_plan(cases)
-        self.assertIn("108 menu actions", plan)
-        self.assertIn("Manual", plan)
-        self.assertEqual(108, len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
+        self.assertIn(f"{len(cases)} executable menu actions", plan)
+        self.assertIn(f"{len({case['menu'] for case in cases})} current service-menu templates", plan)
+        self.assertIn("KIM6 User Guide", plan)
+        self.assertEqual(len(cases), len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
 
     def test_media_duration_and_probe_rate_helpers_handle_common_shapes(self):
         self.assertEqual(2.5, acceptance._media_duration({"format": {"duration": "2.5"}}))
@@ -176,12 +314,12 @@ class AcceptanceInventoryTests(unittest.TestCase):
 
     def test_generated_checklist_separates_measured_properties_from_human_review(self):
         cases = acceptance.load_cases(ROOT)
-        for action_id in ("Album", "Print", "TiffJoin", "Animation", "VideoToGif", "Slideshow", "VideoContactSheet"):
+        for action_id in ("Album", "Print", "TiffJoin", "Animation", "z02VideoToGif", "Slideshow", "z01VideoContactSheet"):
             case = next(item for item in cases if item["action_id"] == action_id)
             text = " ".join(case["technical_checks"])
             self.assertIn("Automated:", text)
             self.assertIn("Human:", text)
-        self.assertIn("Human: inspect timing and loop behavior", " ".join(next(c for c in cases if c["action_id"] == "VideoToGif")["technical_checks"]))
+        self.assertIn("Human: inspect timing and loop behavior", " ".join(next(c for c in cases if c["action_id"] == "z02VideoToGif")["technical_checks"]))
 
 
 class AcceptanceStateAndSafetyTests(unittest.TestCase):
@@ -268,7 +406,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
             root = Path(tmp)
             generated = acceptance.claim_workspace(root / "generated")
             acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
-            case_id = "kim_compressandresizevideo.desktop:ExtractVideoAudio"
+            case_id = "kim_videoutilities.desktop:A01ExtractVideoAudio"
             case_dir = acceptance.create_owned_case_dir(generated, case_id)
             (case_dir / "video-audio.mp4").write_bytes(b"old recorded fixture")
             (case_dir / "case.json").write_text(json.dumps({"id": case_id, "fixtures": ["video-audio.mp4"]}))
@@ -356,7 +494,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
             root = Path(tmp)
             generated = acceptance.claim_workspace(root / "generated")
             acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
-            case_id = "kim_compress.desktop:Compress10"
+            case_id = "kim_convertandrotate.desktop:2001CompressRecommended"
             case_dir = acceptance.create_owned_case_dir(generated, case_id)
             (case_dir / "case.json").write_text(json.dumps({"id": case_id, "fixtures": ["photo.jpg"],
                                                              "unavailable_fixtures": []}))
@@ -371,7 +509,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
                 result = acceptance.run_cli(["--generated", str(generated), "--state-dir", str(state_dir),
                                              "next", "--no-open", "--case-id", case_id])
             self.assertEqual(0, result)
-            self.assertIn("JPEG quality: 10%", output.getvalue())
+            self.assertIn("Compress Recommended", output.getvalue())
             self.assertEqual("failed", acceptance.load_state(state_dir / "progress.json")["results"][case_id]["status"])
 
     def test_dashboard_links_cases_and_never_calls_technical_validation_gui_acceptance(self):
@@ -406,6 +544,72 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
                 target.write_text(installed_text, encoding="utf-8")
                 target.chmod(0o644)
             self.assertEqual(0, acceptance._check_isolated_install(generated))
+            # Mutate only the temporary install: arguments, labels and separator
+            # placement must still be checked independently of executable totals.
+            installed_menu = prefix / "kim_compressandresize.desktop"
+            original = installed_menu.read_text()
+            mutations = {
+                "wrong arguments": original.replace("--size 1600x1600", "--size 1x1"),
+                "wrong label": original.replace("Resize to Fit 1600 × 1600", "Wrong action"),
+                "missing separator": original.replace(";_SEPARATOR_;", ";", 1),
+                "executable separator": original.replace("Name=Separator", f'Name=Separator\nExec="{runtime}" about'),
+                "duplicate section": original + "\n[Desktop Action 01Resize1600]\n",
+            }
+            from contextlib import redirect_stderr
+            from io import StringIO
+            for reason, text in mutations.items():
+                with self.subTest(reason=reason), redirect_stderr(StringIO()):
+                    installed_menu.write_text(text)
+                    self.assertEqual(1, acceptance._check_isolated_install(generated))
+            installed_menu.write_text(original)
+
+    def test_non_processing_cases_require_human_review_and_preserve_context_fixtures(self):
+        cases = [case for case in acceptance.load_cases(ROOT) if case["source_behavior"] == "none"]
+        self.assertEqual({"about", "license", "manual", "settings", "location-report", "recipe"},
+                         {case["route"] for case in cases})
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = Path(tmp)
+            source = case_dir / "context.jpg"
+            for case in cases:
+                with self.subTest(action=case["action_id"]):
+                    source.write_bytes(b"disposable context image")
+                    baseline = {source.name: acceptance.sha256(source)}
+                    result = acceptance.validate_case_data(case, case_dir, baseline)
+                    self.assertFalse(result["errors"], result)
+                    self.assertTrue(any("human confirmation" in check for check in result["checks"]))
+                    source.unlink()
+                    result = acceptance.validate_case_data(case, case_dir, baseline)
+                    self.assertTrue(any("context fixture" in error for error in result["errors"]))
+
+    @unittest.skipUnless(shutil.which("magick") and shutil.which("identify"), "ImageMagick unavailable")
+    def test_prepare_extension_case_copies_png_bytes_under_disposable_jpg_name(self):
+        case = next(case for case in acceptance.load_cases(ROOT) if case["route"] == "checkextensions")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            (repo / "qa").mkdir(parents=True)
+            generated = acceptance.claim_workspace(root / "generated")
+            masters = acceptance._owned_tree(generated / "masters", ".kim6-masters-owner",
+                                            "KIM6 acceptance pristine fixture masters v1\n")
+            master = masters / "photo.png"
+            acceptance._draw_image(shutil.which("magick"), master, "#cc2244", 64, 48)
+            digest = acceptance.sha256(master)
+            manifest = {"sha256": {master.name: digest}, "capabilities": {}, "environment_capabilities": {}}
+            (masters / "manifest.json").write_text(json.dumps(manifest))
+            with mock.patch.object(acceptance, "QA_DIR", repo / "qa"), \
+                    mock.patch.object(acceptance, "load_cases", return_value=[case]):
+                acceptance.prepare(generated, root / "state", repo)
+            case_dir = acceptance.assert_case_directory(generated, case["id"])
+            fixture = case_dir / "mislabeled.jpg"
+            self.assertEqual(digest, acceptance.sha256(fixture))
+            self.assertEqual("PNG", acceptance._image_info(fixture)[0])
+            self.assertEqual(digest, acceptance.sha256(master))
+            record = json.loads((case_dir / "case.json").read_text())
+            self.assertEqual({fixture.name: digest}, record["baseline_sha256"])
+            output = case_dir / "mislabeled.png"
+            shutil.copy2(fixture, output)
+            result = acceptance.validate_case_data(case, case_dir, record["baseline_sha256"])
+            self.assertFalse(result["errors"], result)
 
     def test_isolated_dolphin_uses_qa_user_data_and_warns_about_system_menus(self):
         if not shutil.which("dolphin") or not shutil.which("dbus-run-session"):
