@@ -11,7 +11,7 @@ from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QPlainTextEdit, QFileDialog, QProgressDialog, QMessageBox, QProgressBar)
-from kim_job import JobStatus, grouped_warnings
+from kim_job import JobStatus, grouped_warnings, WarningGroups
 from kim_recipe_core import (RecipeError, PreviewRow, builtins, load_library, lookup_recipe,
                              recipe_title, RecipeLibrary, library_groups, handler, preview, execute, validate)
 
@@ -55,13 +55,29 @@ class WarningView(QWidget):
         self.expand=QPushButton('Show affected files and technical details'); self.expand.setCheckable(True); layout.addWidget(self.expand)
         self.details=QPlainTextEdit(); self.details.setReadOnly(True); self.details.hide(); layout.addWidget(self.details)
         self.copy=QPushButton('Copy Details'); self.copy.hide(); layout.addWidget(self.copy)
-        self.expand.toggled.connect(self.details.setVisible); self.expand.toggled.connect(self.copy.setVisible)
+        self.expand.toggled.connect(self.refresh_details); self.expand.toggled.connect(self.details.setVisible); self.expand.toggled.connect(self.copy.setVisible)
         self.copy.clicked.connect(lambda: QApplication.clipboard().setText(self.details.toPlainText()))
 
     def set_rows(self, rows):
-        grouped=grouped_warnings(rows); self.setVisible(bool(grouped))
-        self.summary.setText('\n'.join(caption for caption,_ in grouped))
-        self.details.setPlainText('\n\n'.join(caption+'\n'+details for caption,details in grouped))
+        self.groups = WarningGroups()
+        for row in rows: self.groups.add(row)
+        self.refresh_summary()
+
+    def add_row(self, row):
+        if not row.warnings: return
+        self.groups.add(row)
+        self.refresh_summary()
+
+    def refresh_summary(self):
+        self.setVisible(bool(self.groups.categories))
+        self.summary.setText('\n'.join(self.groups.captions()))
+        self.details_dirty = True
+        if self.expand.isChecked(): self.refresh_details()
+
+    def refresh_details(self, *args):
+        if getattr(self, 'details_dirty', False):
+            self.details.setPlainText('\n\n'.join(caption+'\n'+details for caption, details in self.groups.groups()))
+            self.details_dirty = False
 
 
 class InputFilesView(QTreeWidget):
@@ -142,6 +158,10 @@ class RecipeWorker(QThread):
         self.results, self.error, self.cancelled = [], None, False
 
     def run(self):
+        from kim_image_ops import logo_inspections
+        with logo_inspections(): self.execute_files()
+
+    def execute_files(self):
         from kim_psd_source import inspection_context
         try:
             from kim_image_ops import has_image_operations, preflight_batch
@@ -225,6 +245,10 @@ class PreflightWorker(QThread):
         self.cancelled = False
 
     def run(self):
+        from kim_image_ops import logo_inspections
+        with logo_inspections(): self.inspect_files()
+
+    def inspect_files(self):
         outputs = set()
         for index, source in enumerate(self.files, 1):
             if self.isInterruptionRequested():
@@ -318,6 +342,8 @@ class RunRecipeDialog(QDialog):
                 pass
         self.chosen = chosen
         self.preflight_worker = None; self.worker = None
+        self.ready_count = self.problem_count = self.repair_count = 0
+        self.problem_messages = {}; self._last_problem_index = -1; self._selected_presentation = None
         self.rows = {}; self._restart = False; self._closing = False
         self.preflight_active = None
         self.preflight_clock = QTimer(self); self.preflight_clock.setInterval(1000)
@@ -654,6 +680,8 @@ class RunRecipeDialog(QDialog):
         self.validated_snapshot = None
         self.run_button.setEnabled(False)
         self.preflight_active=None; self.preflight_clock.stop(); self.preflight_busy.hide(); self.cancel_button.setText('Cancel')
+        self.ready_count = self.problem_count = self.repair_count = 0
+        self.problem_messages.clear(); self._last_problem_index = -1; self._selected_presentation = None
         self.rows.clear(); self.properties.set_fields([]); self.diagnostics.clear(); self.warning_view.set_rows([])
         self.fix_recipe_button.hide()
         for index in range(len(self.files)): self.inputs.topLevelItem(index).setText(1, 'Queued' if self.recipe else 'Waiting for recipe')
@@ -709,10 +737,28 @@ class RunRecipeDialog(QDialog):
     @Slot(object, int)
     def inspected(self, row, index):
         if self.sender().generation != self.generation: return
+        previous = self.rows.get(index)
+        for item, change in ((previous, -1), (row, 1)):
+            if item is None: continue
+            self.ready_count += change * (not item.problems and not item.properties.get('_cancelled'))
+            self.problem_count += change * bool(item.problems)
+            self.repair_count += change * (item.properties.get('_repair') == 'add_convert_format')
         self.rows[index] = row
         self.inputs.topLevelItem(index).setText(1, 'Cancelled' if row.properties.get('_cancelled') else 'Problem' if row.problems else 'Ready')
+        if row.problems or (previous is not None and previous.problems):
+            ordered = previous is None and index > self._last_problem_index
+            self._last_problem_index = max(index, self._last_problem_index)
+            self.problem_messages[index] = [str(self.files[index]) + ': ' + issue for issue in row.problems]
+            if ordered: self.diagnostics.appendPlainText('\n'.join(self.problem_messages[index]))
+            else: self.diagnostics.setPlainText('\n'.join(message for i in sorted(self.problem_messages) for message in self.problem_messages[i]))
+        if previous is not None and previous.warnings:
+            self.warning_view.set_rows(self.rows.values())
+        else: self.warning_view.add_row(row)
         self.preflight_active=None
-        if not self._closing: self.update_summary(); self.show_selected()
+        if not self._closing:
+            self.update_summary()
+            selected = self.inputs.currentItem()
+            if selected is not None and self.inputs.indexOfTopLevelItem(selected) == index: self.show_selected()
 
     @Slot()
     def preflight_finished(self):
@@ -733,22 +779,19 @@ class RunRecipeDialog(QDialog):
     def update_summary(self):
         if self.recipe is None:
             self.summary.setText('Waiting for recipe selection'); self.run_button.setEnabled(False); return
-        ready = sum(not r.problems and not r.properties.get('_cancelled') for r in self.rows.values())
-        problems = sum(bool(r.problems) for r in self.rows.values())
+        ready, problems = self.ready_count, self.problem_count
         pending = len(self.files) - len(self.rows)
         self.summary.setText(file_count(len(self.files)) + f' selected; {ready} ready; {problems} ' + ('problem' if problems == 1 else 'problems') + (f'; {pending} pending' if pending else ''))
-        messages = []
-        for index, row in sorted(self.rows.items()):
-            messages += [str(self.files[index]) + ': ' + issue for issue in row.problems]
-        self.diagnostics.setPlainText('\n'.join(messages))
-        self.warning_view.set_rows(list(self.rows.values()))
-        self.fix_recipe_button.setVisible(not self.operation_title and any(row.properties.get('_repair')=='add_convert_format' for row in self.rows.values()) and self.editor_dialog is None and not self._pending_picker)
-        self.run_button.setEnabled(self.recipe is not None and self.reviewed_generation == self.generation and bool(self.files) and not pending and not problems and self.preflight_worker is None and self.worker is None and not self._closing and self.add_worker is None and not self._addition_queue and self.editor_dialog is None and not self._pending_picker)
+        self.fix_recipe_button.setVisible(not self.operation_title and self.repair_count > 0 and self.editor_dialog is None and not self._pending_picker)
+        self.run_button.setEnabled(self.recipe is not None and self.reviewed_generation == self.generation and bool(self.files) and ready == len(self.files) and not pending and not problems and self.preflight_worker is None and self.worker is None and not self._closing and self.add_worker is None and not self._addition_queue and self.editor_dialog is None and not self._pending_picker)
 
     def show_selected(self, *args):
         item = self.inputs.currentItem()
         index = self.inputs.indexOfTopLevelItem(item) if item else -1
         row = self.rows.get(index)
+        previous = self._selected_presentation
+        if previous is not None and previous[0] == (self.generation, index) and previous[1] is row and previous[2] is self.execution_recipe: return
+        self._selected_presentation = ((self.generation, index), row, self.execution_recipe)
         self.properties.set_fields(property_fields(self.execution_recipe, row) if row else [])
 
     def select_destination(self):

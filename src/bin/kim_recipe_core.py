@@ -1,6 +1,7 @@
 """Declarative recipes, storage, planning and create-only batch publication."""
 from kim_psd_source import source_session, header as psd_header, PSDError
 import argparse
+import contextlib
 import copy
 import json
 import os
@@ -365,6 +366,7 @@ class PreviewRow:
     problems: list = field(default_factory=list)
     certainty: str = 'The filename is checked again when saving and may change if another file appears.'
     warnings: list = field(default_factory=list)
+    identity: tuple | None = None
 
 
 @dataclass
@@ -420,6 +422,7 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     proposed = str(directory / name) if directory is not None else '<choose directory at run>/' + name
     row = PreviewRow(str(source), proposed, recipe['media'], state['format'],
                      state['properties'], state['metadata'])
+    row.identity = (before.st_dev, before.st_ino)
     row.warnings.extend(state.get('warnings', []))
     row.properties['_proposed_output'] = proposed
     if directory is not None and os.path.lexists(directory / name):
@@ -432,6 +435,13 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     return Plan(recipe, source, directory, name, state, row)
 
 
+@contextlib.contextmanager
+def recipe_inspections():
+    from kim_image_ops import logo_inspections
+    with logo_inspections(): yield
+
+
+@recipe_inspections()
 def preview(recipe, sources, chosen=None, start_index=1):
     rows = []
     for index, source in enumerate(sources, start_index):
@@ -464,6 +474,7 @@ def publish(stage, directory_fd, name):
     raise RecipeError('Too many output filename collisions')
 
 
+@recipe_inspections()
 def execute(recipe, sources, chosen=None, progress=None, start_index=1):
     recipe = validate(recipe)
     from kim_image_ops import has_image_operations, preflight_batch

@@ -1008,11 +1008,11 @@ def approval_digest(plan):
     return hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest()
 
 
-def verify_dependencies(plan):
+def verify_dependencies(plan, *, integrity=True):
     if plan.get('operation') != 'location': return
     if plan.get('pending_input') or plan.get('config', {}).get('inspect_only'):
         raise ValueError('Select complete location inputs and approve a fresh Preview Changes before publication')
-    if plan.get('approval_digest') != approval_digest(plan):
+    if integrity and plan.get('approval_digest') != approval_digest(plan):
         raise ValueError('Approved location configuration or plan changed; review a fresh plan')
     for dep in plan['dependencies']:
         if identity(dep['path']) != dep['identity']: raise ValueError('Reference image or GPX file changed; review a fresh plan: ' + dep['path'])
@@ -1075,7 +1075,8 @@ def png_core(path):
 
 def approved_entry(plan, source):
     verify_dependencies(plan)
-    entry = next(e for e in plan['entries'] if e['source'] == absolute(source))
+    source = absolute(source)
+    entry = next(e for e in plan['entries'] if e['source'] == source)
     verify_entry(entry)
     if entry['status'] != 'change': raise ValueError('Image has no approved modification')
     # Recheck the saved numeric configuration against the saved assignments.
@@ -1086,8 +1087,13 @@ def approved_entry(plan, source):
     return entry
 
 
-def verify_output(plan, source, output):
-    entry = approved_entry(plan, source)
+def verify_output(plan, source, output, *, entry=None):
+    if entry is None: entry = approved_entry(plan, source)
+    else:
+        # The same parsed plan was integrity-checked before writing. Only that
+        # immutable computation is reused; all live authorizations run again.
+        verify_dependencies(plan, integrity=False)
+        verify_entry(entry)
     records = read_many([source, output])
     if any(r.get('error') for r in records.values()): raise ValueError('Staged location output cannot be inspected reliably')
     raw = records[output]['raw']; info = summarize(raw)
@@ -1112,12 +1118,13 @@ def verify_output(plan, source, output):
 def main():
     command, plan_path, source, *rest = sys.argv[1:]
     plan = json.loads(Path(plan_path).read_text())
-    if command == 'write':
+    if command in ('write', 'stage'):
         entry = approved_entry(plan, source)
         result = location_process(['exiftool', *entry['args'], '-o', rest[0], '--', source], limit=1024*1024, timeout=150)
         from kim_psd_source import metadata_diagnostics
         diagnostic = metadata_diagnostics(['exiftool'], result.returncode, result.stderr)
         if result.returncode or diagnostic: raise ValueError('ExifTool GPS staging failed: ' + diagnostic.strip())
+        if command == 'stage': verify_output(plan, source, rest[0], entry=entry)
     elif command == 'verify': verify_output(plan, source, rest[0])
     else: raise ValueError('Unknown location engine command')
     return 0

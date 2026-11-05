@@ -143,6 +143,37 @@ def selected_metadata(path, tags):
                       if key.split(':')[-1] == tag.split(':')[-1]), None) for tag in tags}
 
 
+def planning_metadata(path, *, psd=False):
+    """One text-valued observation for the selected planning fields.
+
+    Header/date numbers are deliberately read separately by inspect(). Family
+    zero and one retain EXIF/IPTC/XMP and ICC subgroup distinctions here.
+    """
+    import fnmatch
+    copyright_tags = [tag for tags in COPYRIGHT_TAGS.values() for tag in tags]
+    ai_tags = AI_TAGS + ('XMP-iptcExt:DigitalSourceType',)
+    tags = copyright_tags + list(GPS_TAGS) + list(ai_tags)
+    # PSD ICC reads deliberately use the normalized composite, while rights,
+    # GPS and provenance must describe the original Photoshop document.
+    if not psd: tags.append('ICC_Profile:all')
+    data = json.loads(run(['exiftool', '-json', '-G0:1'] + ['-' + tag for tag in tags] + [str(path)]))[0]
+    if psd:
+        profile_data = json.loads(run(['exiftool', '-json', '-G0:1', '-ICC_Profile:all', str(path)]))[0]
+        data.update({key: value for key, value in profile_data.items() if key != 'SourceFile'})
+
+    def matches(key, tag):
+        parts = key.split(':')
+        group, name = tag.split(':')
+        return group in parts[:-1] and (name == 'all' or fnmatch.fnmatchcase(parts[-1], name))
+
+    def selected(tags):
+        return {tag: next((value for key, value in data.items() if matches(key, tag)), None) for tag in tags}
+
+    gps = any(any(matches(key, tag) for tag in GPS_TAGS) for key in data)
+    profile = {key.split(':')[-1]: value for key, value in data.items() if key.startswith('ICC_Profile:')}
+    return selected(copyright_tags), gps, selected(ai_tags), profile
+
+
 TOOL_TIMEOUT = 180
 
 def run(args, allow_icc_removal=False, allow_png_iptc=False):
@@ -751,14 +782,11 @@ class ImageHandler:
         if conversion: fmt = conversion['format']
         if compression and fmt not in ('jpeg','png','webp','avif'):
             raise RecipeError('Compress Image supports JPEG, PNG, WebP and AVIF. Choose one of these in Convert Format or disable Compress Image.')
-        copyright_values = selected_metadata(source, [tag for tags in COPYRIGHT_TAGS.values() for tag in tags])
-        # Wildcard queries need presence of any returned field, rather than one tag name.
-        gps_data = json.loads(run(['exiftool', '-json'] + ['-' + tag for tag in GPS_TAGS] + [str(source)]))[0]
-        ai_values = selected_metadata(source, AI_TAGS + ('XMP-iptcExt:DigitalSourceType',))
-        gps_state = 'present (recognized fields)' if len(gps_data) > 1 else 'absent (recognized fields)'
+        copyright_values, gps_present, ai_values, source_profile = planning_metadata(source, psd=info.get('FileType') == 'PSD')
+        gps_state = 'present (recognized fields)' if gps_present else 'absent (recognized fields)'
         ai_present = {tag: value for tag, value in ai_values.items() if value is not None}
         ai_state = ('preserved ' + json.dumps(ai_present, ensure_ascii=False) if ai_present else 'absent (recognized fields)') + '; unrecognized provenance unknown'
-        icc = selected_metadata(source, ('ICC_Profile:ProfileDescription',)).get('ICC_Profile:ProfileDescription')
+        icc = source_profile.get('ProfileDescription')
         color_state = 'preserved ' + str(icc) if icc is not None else 'absent in input'
         if info.get('FileType') == 'PSD':
             color_state = 'PSD decoded profile: ' + (str(icc) if icc else 'unavailable')
@@ -766,8 +794,6 @@ class ImageHandler:
             if document is None: raise RecipeError('Source changed during inspection; try again')
             if document[3] in (1, 4):
                 color_state += '; normalized to sRGB before image operations'
-        source_profile = json.loads(run(['exiftool','-json','-ICC_Profile:all',str(source)]))[0]
-        source_profile.pop('SourceFile', None)
         color_record = run(['magick','identify','-ping','-format','%[colorspace]|%z',str(source)]).strip().lower()
         colorspace, source_depth = color_record.split('|')
         source_depth = int(source_depth)

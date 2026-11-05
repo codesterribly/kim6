@@ -4,6 +4,8 @@ Standalone dialogs and Recipes use these same planners and renderers. Geometry
 is always measured after orientation normalization. No source is opened writable.
 """
 import copy
+import contextlib
+import contextvars
 import json
 import math
 import os
@@ -181,9 +183,34 @@ def reference_identity(path):
         raise RecipeError('Missing or unreadable watermark image: ' + str(path)) from exc
 
 
+_LOGO_INSPECTIONS = contextvars.ContextVar('kim_logo_inspections', default=None)
+
+
+@contextlib.contextmanager
+def logo_inspections():
+    """Bound logo observations to one batch/generation, including nested previews."""
+    if _LOGO_INSPECTIONS.get() is not None:
+        yield
+        return
+    token = _LOGO_INSPECTIONS.set({})
+    try: yield
+    finally: _LOGO_INSPECTIONS.reset(token)
+
+
 def inspect_logo(path):
-    from kim_recipe_image import inspect, run, srgb_profile
+    from kim_recipe_image import inspect, run, srgb_profile, inspection_identity
     before = reference_identity(path)
+    cache = _LOGO_INSPECTIONS.get()
+    key = os.path.abspath(path)
+    # Conversion policy is part of the observation, even when the logo is stable.
+    profile_path = srgb_profile()
+    policy = os.stat(profile_path)
+    signature = (before, profile_path, policy.st_dev, policy.st_ino, policy.st_size,
+                 policy.st_mtime_ns, policy.st_ctime_ns)
+    if cache is not None and key in cache and cache[key][0] == signature:
+        from kim_psd_source import checkpoint
+        checkpoint()
+        return cache[key][1]
     try:
         info, _, width, height = inspect(Path(path))
         if info.get('Orientation') in (5, 6, 7, 8): width, height = height, width
@@ -200,7 +227,13 @@ def inspect_logo(path):
         raise RecipeError('Cannot decode watermark image ' + str(path) + ': ' + str(exc)) from exc
     if before != reference_identity(path): raise RecipeError('Watermark image changed during inspection: ' + str(path))
     if min(width, height) < 1 or width * height > 100000000: raise RecipeError('Watermark image exceeds safe dimensions: ' + str(path))
-    return before, opaque, width, height
+    result = before, opaque, width, height
+    policy_after = os.stat(profile_path)
+    if inspection_identity(policy) != inspection_identity(policy_after): raise RecipeError('Watermark color policy changed during inspection')
+    if cache is not None:
+        if len(cache) >= 64: cache.clear()
+        cache[key] = signature, result
+    return result
 
 
 def watermark_fields(step):

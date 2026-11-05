@@ -1185,6 +1185,15 @@ def main():
                 from kim_location import verify_dependencies
                 verify_dependencies(plan)
             target=absolute(args[0]); entry=next(e for e in plan['entries'] if e.get('target')==target); verify_entry(entry)
+        elif command == 'entry':
+            # One pre-item observation; publication guards still reload the plan.
+            if plan.get('operation') == 'location':
+                from kim_location import verify_dependencies
+                verify_dependencies(plan)
+            source = absolute(args[0])
+            entry = next(e for e in plan['entries'] if e['source'] == source)
+            verify_entry(entry)
+            sys.stdout.buffer.write(b''.join(value.encode() + b'\0' for value in (entry['status'], entry['target'])))
         elif command in ('target','args','state','date'):
             source=absolute(args[0]); entry=next(e for e in plan['entries'] if e['source']==source)
             if command=='target': print(entry['target'])

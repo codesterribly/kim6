@@ -17,12 +17,19 @@ class JobStatus:
     def start(self, source, index):
         self.source, self.index = str(source), index
 
-    def finish(self, result): self.results.append(result)
+    def __post_init__(self):
+        self._succeeded = sum(r.get('ok', False) for r in self.results)
+        self._cancelled = sum(r.get('cancelled', False) for r in self.results)
+        self._skipped = sum(r.get('skipped', False) for r in self.results)
+
+    def finish(self, result):
+        self.results.append(result)
+        self._succeeded += result.get('ok', False)
+        self._cancelled += result.get('cancelled', False)
+        self._skipped += result.get('skipped', False)
 
     def counts(self):
-        succeeded=sum(r.get('ok',False) for r in self.results)
-        cancelled=sum(r.get('cancelled',False) for r in self.results)
-        skipped=sum(r.get('skipped',False) for r in self.results)
+        succeeded, cancelled, skipped = self._succeeded, self._cancelled, self._skipped
         failed=len(self.results)-succeeded-cancelled-skipped
         return succeeded,failed,cancelled,skipped,max(0,self.total-len(self.results))
 
@@ -40,29 +47,41 @@ def warning_category(warning):
     return warning
 
 
+class WarningGroups:
+    """Presentation observations, scoped to one result generation."""
+    def __init__(self): self.categories = {}
+
+    def add(self, row):
+        if not row.warnings: return
+        source = os.path.realpath(row.source)
+        identity = getattr(row, 'identity', None)
+        if identity is None:
+            try:
+                st = os.stat(source); identity = (st.st_dev, st.st_ino)
+            except OSError: identity = source
+        else: identity = tuple(identity[:2])
+        for warning in row.warnings:
+            files = self.categories.setdefault(warning_category(warning), {})
+            entry = files.setdefault(identity, {'source': source, 'details': []})
+            if warning not in entry['details']: entry['details'].append(warning)
+
+    def captions(self):
+        for category, files in self.categories.items():
+            n = len(files)
+            yield {'psd': f'{n} PSD file(s) used Photoshop composites / best-effort reconstruction',
+                   'digest': f'{n} source file(s) emitted an IPTC staging digest notice',
+                   'unprofiled': f'{n} unprofiled RGB/grayscale source file(s) assumed sRGB'}.get(category, f'{n} source file(s): {category}')
+
+    def groups(self):
+        return [(caption, '\n\n'.join(entry['source']+'\n'+'\n'.join(entry['details']) for entry in files.values()))
+                for caption, files in zip(self.captions(), self.categories.values())]
+
+
 def grouped_warnings(rows):
     """Deduplicate by original source identity, never by a derived/staging path."""
-    categories={}
-    for row in rows:
-        if not row.warnings: continue
-        source=os.path.realpath(row.source)
-        try:
-            st=os.stat(source); identity=(st.st_dev,st.st_ino)
-        except OSError: identity=source
-        for warning in row.warnings:
-            category=warning_category(warning)
-            files=categories.setdefault(category,{})
-            entry=files.setdefault(identity,{'source':source,'details':[]})
-            if warning not in entry['details']: entry['details'].append(warning)
-    result=[]
-    for category,files in categories.items():
-        n=len(files)
-        caption={'psd':f'{n} PSD file(s) used Photoshop composites / best-effort reconstruction',
-                 'digest':f'{n} source file(s) emitted an IPTC staging digest notice',
-                 'unprofiled':f'{n} unprofiled RGB/grayscale source file(s) assumed sRGB'}.get(category,f'{n} source file(s): {category}')
-        details='\n\n'.join(entry['source']+'\n'+'\n'.join(entry['details']) for entry in files.values())
-        result.append((caption,details))
-    return result
+    groups = WarningGroups()
+    for row in rows: groups.add(row)
+    return groups.groups()
 
 
 def shell_warning_rows(directory):

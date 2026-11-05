@@ -1309,11 +1309,24 @@ progress_cancelled() {
 progress_begin_item() {
   [ ! -f "$KIMDIR/preview.invalid" ] || return 1
   local ref="$1" text="$2"
+  if [ "${location_plan:-}" = "$KIMDIR/preview.approved" ]; then
+    preview_active || return 1
+  fi
   if preview_active; then
     local preview_source="${source:-${i:-}}" preview_target
     if [ -n "$preview_source" ]; then
-      preview_target="$(preview_value target "$preview_source")" || return 1
-      preview_guard "$preview_target" || return 1
+      if [ "${location_plan:-}" = "$KIMDIR/preview.approved" ]; then
+        # A combined read and live guard replaces four per-item helper calls.
+        # The values only select work; both publication guards reload approval.
+        python3 "$DISPATCHER_DIR/kim_preview.py" entry "$location_plan" "$preview_source" > "$KIMDIR/preview.item" || return 1
+        local -a preview_item=()
+        mapfile -d '' -t preview_item < "$KIMDIR/preview.item"
+        [ "${#preview_item[@]}" -eq 2 ] || return 1
+        PREVIEW_ITEM_STATE="${preview_item[0]}"; PREVIEW_ITEM_TARGET="${preview_item[1]}"
+      else
+        preview_target="$(preview_value target "$preview_source")" || return 1
+        preview_guard "$preview_target" || return 1
+      fi
     fi
   fi
   if progress_cancelled "$ref"; then
@@ -6396,6 +6409,58 @@ metadata_query() {
   exiftool -s3 "$@" -- "$file" 2>/dev/null
 }
 
+# Empty selective-removal expectations can share a union query: any remaining
+# selected value is a failure. Scalar/date checks retain ExifTool's exact -s3
+# formatting; they are not interchangeable with structured JSON values.
+metadata_verify_expected() {
+  local file="$1" name="$2" pair tag value actual rc=0 removal=true
+  local -n pairs="$name"
+  local -a queries=()
+  [ "${#pairs[@]}" -gt 0 ] || return 0
+  for pair in "${pairs[@]}"; do
+    tag="${pair%%$'\034'*}"; value="${pair#*$'\034'}"
+    queries+=("$tag")
+    [ -z "$value" ] || removal=false
+    case "$tag" in
+      '-GPS:all'|'-XMP-exif:GPS*'|'-XMP:GPS*'|'-XMP-iptcExt:LocationShownGPSLatitude'|'-XMP-iptcExt:LocationShownGPSLongitude'|'-XMP-iptcExt:LocationShownGPSAltitude'|'-XMP-iptcExt:LocationShownGPSAltitudeRef'|'-XMP-iptcExt:LocationCreatedGPSLatitude'|'-XMP-iptcExt:LocationCreatedGPSLongitude'|'-XMP-iptcExt:LocationCreatedGPSAltitude'|'-XMP-iptcExt:LocationCreatedGPSAltitudeRef'|'-XMP-iptcExt:RatingRegionGPSLatitude'|'-XMP-iptcExt:RatingRegionGPSLongitude'|'-XMP-iptcExt:RatingRegionGPSAltitude'|'-XMP-iptcExt:RatingRegionGPSAltitudeRef'|'-XMP-iptcExt:AIPromptInformation'|'-XMP-iptcExt:AIPromptWriterName'|'-XMP-iptcExt:AISystemUsed'|'-XMP-iptcExt:AISystemVersionUsed'|'-XMP-iptcExt:DigitalSourceType') ;;
+      *) removal=false ;;
+    esac
+  done
+  if [ "$removal" = true ] && command -v python3 >/dev/null 2>&1; then
+    # Family 0/1/4, duplicates and structures stay intact. No namespace matching
+    # or flattening is needed: every returned selected field must be empty.
+    exiftool -json -G0:1:4 -a -struct "${queries[@]}" -- "$file" > "$KIMDIR/metadata-expected.json" 2>/dev/null || return 1
+    python3 - "$KIMDIR/metadata-expected.json" <<'KIM6_VERIFY_REMOVAL'
+import json
+import sys
+
+def unique(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result: raise ValueError('Duplicate verification field')
+        result[key] = value
+    return result
+
+with open(sys.argv[1], encoding='utf-8') as stream:
+    records = json.load(stream, object_pairs_hook=unique)
+if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict):
+    raise ValueError('Invalid metadata verification response')
+record = records[0]
+if 'SourceFile' not in record: raise ValueError('Missing verification source')
+# A present empty string and an absent tag both satisfy the existing removal
+# contract. Objects, arrays, zero, errors and unknown values never do.
+raise SystemExit(0 if all(value == '' for key, value in record.items() if key != 'SourceFile') else 1)
+KIM6_VERIFY_REMOVAL
+    return $?
+  fi
+  for pair in "${pairs[@]}"; do
+    tag="${pair%%$'\034'*}"; value="${pair#*$'\034'}"
+    actual="$(metadata_query "$file" "$tag")" || rc=1
+    [ "$actual" = "$value" ] || rc=1
+  done
+  return "$rc"
+}
+
 metadata_is_raw() {
   local ext="${1##*.}"
   case "${ext^^}" in
@@ -6415,8 +6480,7 @@ metadata_publish_one() {
   # Expected tag/value pairs use ASCII file separator (0x1c).
   local source="$1" target="$2" publication_mode="$3" ref="$4" expected_name="$5"
   shift 5
-  local -n expected_pairs="$expected_name"
-  local tmp source_info output_info source_icc output_icc rc=0 pair actual tag value
+  local tmp source_info output_info source_icc output_icc rc=0
   local verification_extension="${source##*.}" location_active=false
   case "${cmd:-}" in
     location-gpx|location-copy|location-apply|location-reduce)
@@ -6435,7 +6499,7 @@ metadata_publish_one() {
   fi
   if [ "$location_active" = true ]; then
     # Only approved location assignments reach the shared staging publisher.
-    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" write "$location_plan" "$source" "$tmp" || rc=$?
+    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" stage "$location_plan" "$source" "$tmp" || rc=$?
   else
     exiftool "$@" -o "$tmp" -- "$source" >/dev/null 2>&1 || rc=$?
   fi
@@ -6505,18 +6569,11 @@ metadata_publish_one() {
     fi
   fi
 
-  if [ "$rc" -eq 0 ] && [ "$location_active" = true ]; then
-    # Verify actual GPS, removed fields, retained dates/rights and PNG encoded
-    # chunks before the existing atomic publisher can see this stage.
-    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" verify "$location_plan" "$source" "$tmp" || rc=$?
-  fi
+  # The location stage command already verified GPS and retained metadata
+  # within its parsed-plan lifetime. Independent pixel/ICC/container checks
+  # above and fresh publication authorization below remain mandatory.
 
-  for pair in "${expected_pairs[@]}"; do
-    tag="${pair%%$'\034'*}"
-    value="${pair#*$'\034'}"
-    actual="$(metadata_query "$tmp" "$tag")" || rc=1
-    [ "$actual" = "$value" ] || rc=1
-  done
+  metadata_verify_expected "$tmp" "$expected_name" || rc=1
   if [ "$rc" -eq 0 ]; then
     chmod --reference="$source" "$tmp" || rc=$?
     [ "$rc" -ne 0 ] || touch -r "$source" -- "$tmp" || rc=$?
@@ -6765,11 +6822,11 @@ KIM6_LOCATION_INPUTS
     if ! progress_begin_item "$ref" "Location metadata: ${source##*/}"; then
       report_fail "$source — processing stopped or approved plan changed; review a fresh plan"; rc=1; break
     fi
-    if [ "$(preview_value state "$source")" = skip ]; then
+    if [ "$PREVIEW_ITEM_STATE" = skip ]; then
       location_unchanged+=("$source")
       report_skip "$source"; progress_value "$ref" "$counter"; continue
     fi
-    target="$(preview_value target "$source")" || { rc=1; break; }
+    target="$PREVIEW_ITEM_TARGET"
     if metadata_publish_one "$source" "$target" "$policy" "$ref" expected; then
       report_ok; location_saved+=("$target")
     else
