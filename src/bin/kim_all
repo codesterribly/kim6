@@ -2141,7 +2141,7 @@ PYCHECK
   local counter=0
   local f dir base stem ext
   local OUTFILE OUTTMP n rc actual input_info
-  local interrupted original_bytes output_bytes source_stamp source_links source_device source_inode remainder
+  local interrupted original_bytes output_bytes source_stamp _
 
   for f in "${files[@]}"; do
     counter=$((counter + 1))
@@ -2168,7 +2168,7 @@ PYCHECK
     if [ -L "$f" ] || ! source_stamp="$(stat -c '%h:%d:%i:%s:%y:%z' -- "$f")"; then
       report_fail "$f"; progress_value "$dbusRef" "$counter" || break; continue
     fi
-    IFS=: read -r source_links source_device source_inode original_bytes remainder <<< "$source_stamp"
+    IFS=: read -r _ _ _ original_bytes _ <<< "$source_stamp"
     input_info=""
     if [[ "$f" != *$'\n'* ]] &&
        input_info="$(identify -regard-warnings +ping -format '%m %w %h\n' - < "$f" 2>/dev/null)" &&
@@ -3344,7 +3344,7 @@ action_checkextensions() {
   local -a inputs=() inspected=() files=() targets=() stamps=()
   local helper="$DISPATCHER_DIR/kim_extensions_dialog.py" result="$KIMDIR/extension-selection"
   local plan="$KIMDIR/extension-plan" source ext stamp target base stem ref='' stage index n rc
-  local interrupted=false processed=0 not_scheduled=0 summary result_option
+  local interrupted=false processed=0 not_scheduled_count=0 summary result_option
   local -a saved=() interrupted_files=()
   local -A reserved=()
   while [ "$#" -gt 0 ]; do
@@ -3433,7 +3433,7 @@ action_checkextensions() {
     [ "$interrupted" = false ] || break
     if progress_cancelled "$ref" || ! progress_value "$ref" "$processed"; then interrupted=true; break; fi
   done
-  not_scheduled=$((${#files[@]}-processed))
+  not_scheduled_count=$((${#files[@]}-processed))
   for source in "${files[@]:processed}"; do report_skip "$source"; done
   if ! progress_close "$ref"; then
     interrupted=true
@@ -3451,12 +3451,12 @@ action_checkextensions() {
   summary+="$(printf '\n\n%s %d\n%s %d\n%s %d\n%s %d\n%s %d' \
     "$(gettext 'Succeeded:')" "$REPORT_OK" "$(gettext 'Failed:')" "$REPORT_FAIL" \
     "$(gettext 'Cancelled:')" "$REPORT_CANCELLED" "$(gettext 'Interrupted:')" "${#interrupted_files[@]}" \
-    "$(gettext 'Not scheduled:')" "$not_scheduled")"
+    "$(gettext 'Not scheduled:')" "$not_scheduled_count")"
   if [ "${#saved[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Saved copies:')"$'\n'"$(printf '%s\n' "${saved[@]}")"; fi
   if [ "${#REPORT_FAIL_LIST[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Failed files (first 10):')"$'\n'"$(printf '%s\n' "${REPORT_FAIL_LIST[@]}")"; fi
   if [ "${#REPORT_CANCEL_LIST[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Cancelled files:')"$'\n'"$(printf '%s\n' "${REPORT_CANCEL_LIST[@]}")"; fi
   if [ "${#interrupted_files[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Interrupted files:')"$'\n'"$(printf '%s\n' "${interrupted_files[@]}")"; fi
-  if [ "$not_scheduled" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Files not scheduled:')"$'\n'"$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"; fi
+  if [ "$not_scheduled_count" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Files not scheduled:')"$'\n'"$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"; fi
   if [ -s "$PROGRESS_ERROR_FILE" ]; then summary+=$'\n\n'"$(cat -- "$PROGRESS_ERROR_FILE")"; fi
   kdialog --title "$(gettext 'KIM6 — Correctly named copies')" "$result_option" "$summary" || true
   [ "$interrupted" = false ] && [ "$REPORT_OK" -eq "${#files[@]}" ] && [ ! -f "$KIMDIR/job.cancelled" ]
@@ -6780,14 +6780,14 @@ action_location() {
   shift
   datesync_collect_files files "$@" || { progress_error "${DATESYNC_SELECTION_ERROR:-Select local regular images without symbolic or hard links.}"; return 1; }
   if [ "$kind" = report ]; then
-    KIM_LOCATION_CONFIG= preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" report "$KIMDIR/location-report" create - "${files[@]}"
+    KIM_LOCATION_CONFIG='' preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" report "$KIMDIR/location-report" create - "${files[@]}"
     return $?
   fi
   if [ "$kind" = apply ] || [ "$kind" = gpx ]; then
     # Select source and destinations before the unchanged output-policy decision.
     # This returns input configuration only, never an approved publication plan.
     selection_config="$KIMDIR/location-selection"
-    KIM_LOCATION_CONFIG= preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
+    KIM_LOCATION_CONFIG='' preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
     if ! python3 - "$selection_config" > "$KIMDIR/location-inputs" <<'KIM6_LOCATION_INPUTS'
 import json
 from pathlib import Path
@@ -6876,7 +6876,7 @@ KIM6_LOCATION_INPUTS
 # publisher. The planner emits NUL-delimited arguments, never executable shell.
 action_photo_date() {
   local kind=set interactive=false clock='' zone='' seconds=0 fields=capture source target policy ref config result counter=0 argument epoch stage rc
-  local -a files=() args=() expected=() identities=()
+  local -a files=() args=() expected=() photo_date_identities=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --mode|--direction) kind="$2"; shift 2 ;;
@@ -6891,7 +6891,7 @@ action_photo_date() {
   done
   if [ "$interactive" = true ]; then preview_selection "${files[@]}" || return 1; fi
   datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Select local, unambiguous photo files.')"; return 1; }
-  for source in "${files[@]}"; do identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
+  for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
     policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
@@ -6927,7 +6927,7 @@ PYDATE
   ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Photo dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
-    if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${identities[$((counter-1))]}" ]; then
+    if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
       report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"
       if preview_active; then break; fi
       continue
@@ -7194,7 +7194,7 @@ action_timeshift() {
 # Legacy CLI EXIF conversion refuses unknown zones; the shared Qt route also
 # supports XMP capture dates and an informed, explicit timezone choice.
 datesync_exif_epoch() {
-  local file="$1" stamp subsec offset iso epoch normalized fraction delta alternate
+  local file="$1" stamp subsec offset iso epoch fraction
   stamp="$(metadata_query "$file" -DateTimeOriginal)" || return 1
   [[ "$stamp" =~ ^([0-9]{4}):([0-9]{2}):([0-9]{2})\ ([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]] || return 1
   iso="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]} ${BASH_REMATCH[4]}:${BASH_REMATCH[5]}:${BASH_REMATCH[6]}"
