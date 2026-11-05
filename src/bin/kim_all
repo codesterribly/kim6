@@ -9092,12 +9092,13 @@ video_utility_target() {
     number=$((number + 1))
   done
   VIDEO_UTILITY_TARGET="$target"
+  VIDEO_UTILITY_NEXT_NUMBER="$number"
 }
 
 # Publish without clobbering a file that appeared after target selection.
 # Retry an exclusive create with a numbered name when a collision races us.
 video_utility_publish() {
-  local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" joiner="${6:-_}" retry=0 number=1 directory base stem target
+  local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" target="$6" number="$7" joiner="${8:-_}" directory base stem
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
   base="${source##*/}"
@@ -9106,7 +9107,7 @@ video_utility_publish() {
   else
     stem="$base"
   fi
-  target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "" "_" "$joiner")"
+  # Start with the candidate chosen before processing, then continue its numbering.
   while :; do
     if progress_cancelled "$ref"; then
       return 130
@@ -9114,10 +9115,14 @@ video_utility_publish() {
     if commit_tmp_to_target "$stage" "$target" create; then
       return 0
     fi
-    if { [ -e "$target" ] || [ -L "$target" ]; } && [ "$retry" -lt 1000 ]; then
-      retry=$((retry + 1))
-      target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number" "_" "$joiner")"
-      number=$((number + 1))
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      # Skip known collisions; the exclusive create still handles new races.
+      while :; do
+        progress_cancelled "$ref" && return 130
+        target="$directory/$(affixed_filename "$stem" "$tag" "$extension" "$number" "_" "$joiner")"
+        number=$((number + 1))
+        [ -e "$target" ] || [ -L "$target" ] || break
+      done
       continue
     fi
     return 1
@@ -9162,6 +9167,7 @@ video_utility_init() {
 }
 
 action_videoframes() {
+  local target_number
   # Extract one frame, a midpoint thumbnail, or a validated contact sheet.
   # Do not publish partially rendered frames on cancellation.
   local mode='' at='' format=png grid=3x3 interactive=false option source duration sample
@@ -9307,7 +9313,7 @@ action_videoframes() {
       contact) tag=contact-sheet ;;
     esac
     video_utility_target "$source" "$tag" "$ext"
-    target="$VIDEO_UTILITY_TARGET"
+    target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     stage="$(tmp_for_target "$target")" || {
       report_fail "$source — $(gettext 'staging failed')"
       progress_value "$ref" "$index"
@@ -9349,7 +9355,7 @@ action_videoframes() {
       progress_value "$ref" "$index"
       continue
     fi
-    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$ext"; then
+    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$ext" "$target" "$target_number"; then
       report_ok
     else
       report_fail "$source — $(gettext 'publication failed or operation interrupted')"
@@ -9367,6 +9373,7 @@ action_videoframes() {
 }
 
 action_videoaudio() {
+  local target_number
   # Extract or remove audio using destination-local staging.
   # Probe source streams before encoding and validate final output.
   local mode='' format=m4a interactive=false option source duration codec tag extension encoder target stage error_file ref rc=0 index=0
@@ -9477,7 +9484,7 @@ action_videoaudio() {
       tag=audio
       target="$source"
       video_utility_target "$source" "$tag" "$extension" "-"
-      target="$VIDEO_UTILITY_TARGET"
+      target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     else
       if [ "$VU_AUDIO_COUNT" -eq 0 ]; then
         report_ok
@@ -9508,19 +9515,8 @@ action_videoaudio() {
           ;;
       esac
       video_utility_target "$source" "$tag" "$extension" "-"
-      target="$VIDEO_UTILITY_TARGET"
+      target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     fi
-    # Resolve an available sibling path; create-mode publication rechecks it
-    # atomically, so a concurrent file cannot be overwritten.
-    while [ -e "$target" ] || [ -L "$target" ]; do
-      local stem="${target%.*}"
-      local suffix="${extension:+.$extension}"
-      local collision=1
-      while [ -e "$target" ] || [ -L "$target" ]; do
-        target="${stem}_$collision$suffix"
-        collision=$((collision+1))
-      done
-    done
     stage="$(tmp_for_target "$target")" || {
       report_fail "$source — $(gettext 'staging failed')"
       progress_value "$ref" "$index"
@@ -9597,7 +9593,7 @@ action_videoaudio() {
       progress_value "$ref" "$index"
       continue
     fi
-    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension" "-"; then
+    if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension" "$target" "$target_number" "-"; then
       report_ok
     else
       report_fail "$source — $(gettext 'publication failed or operation interrupted')"
@@ -9615,6 +9611,7 @@ action_videoaudio() {
 }
 
 action_videogif() {
+  local target_number
   # Bound requested GIF duration and frames before encoding.
   # Verify the resulting animation before publishing it.
   local start='' duration='' fps='' width='' loop='' interactive=false option source info tag
@@ -9751,7 +9748,7 @@ action_videogif() {
     fi
     tag=animated
     video_utility_target "$source" "$tag" gif
-    target="$VIDEO_UTILITY_TARGET"
+    target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     stage="$(tmp_for_target "$target")" || {
       report_fail "$source — $(gettext 'staging failed')"
       progress_value "$ref" "$index"
@@ -9812,7 +9809,7 @@ action_videogif() {
       progress_value "$ref" "$index"
       continue
     fi
-    if video_utility_publish "$ref" "$stage" "$source" "$tag" gif; then
+    if video_utility_publish "$ref" "$stage" "$source" "$tag" gif "$target" "$target_number"; then
       report_ok
     else
       report_fail "$source — $(gettext 'publication failed or operation interrupted')"
@@ -9863,6 +9860,7 @@ slideshow_run_magick_monitored() {
 }
 
 action_slideshow() {
+  local target_number
   # Normalize input frames and color profiles before FFmpeg assembly.
   # Publish only after geometry, timing and video stream checks pass.
   local seconds=3 size=1280x720 fps=25 background=black output='' interactive=false option
@@ -10019,7 +10017,7 @@ action_slideshow() {
     target="$output"
   else
     video_utility_target "${ordered[0]}" slideshow mp4
-    target="$VIDEO_UTILITY_TARGET"
+    target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
   fi
   # Convert photo profiles through sRGB to a Rec. 709 video frame profile;
   # fail rather than publish untagged or ambiguously converted output.
@@ -10177,7 +10175,7 @@ action_slideshow() {
     else
       report_ok
     fi
-  elif video_utility_publish "$ref" "$stage" "${ordered[0]}" slideshow mp4; then
+  elif video_utility_publish "$ref" "$stage" "${ordered[0]}" slideshow mp4 "$target" "$target_number"; then
     report_ok
   else
     report_fail "$(gettext 'Slideshow publication failed or was interrupted.')"

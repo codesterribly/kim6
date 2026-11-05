@@ -470,6 +470,7 @@ class PhotoPreview(QWidget):
         self.canvas = ImageCanvas(self); layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0); layout.addWidget(self.canvas)
         self.worker = None; self.requested = ''; self.stamp = None; self.stopped = False
+        self.request_id = 0
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(150)
         self.timer.timeout.connect(self.start_preview)
 
@@ -479,7 +480,7 @@ class PhotoPreview(QWidget):
         try: unchanged = path == self.requested and self.stamp is not None and identity(path) == self.stamp
         except (OSError, ValueError): unchanged = False
         if unchanged: return
-        self.requested = path; self.stamp = None
+        self.requested = path; self.stamp = None; self.request_id += 1
         self.canvas.image = QImage(); self.canvas.message = 'Loading image preview…' if path else 'Select an image'
         self.canvas.setToolTip(path); self.canvas.update()
         if self.worker: self.worker.requestInterruption()
@@ -487,15 +488,19 @@ class PhotoPreview(QWidget):
 
     def start_preview(self):
         if self.worker or not self.requested or self.stopped: return
+        self.timer.stop()  # Starting the latest request consumes its debounce.
         ratio = self.devicePixelRatioF()
         size = QSize(min(1600, max(640, round(self.canvas.width()*ratio))),
                      min(1200, max(480, round(self.canvas.height()*ratio))))
         self.worker = ThumbnailWorker([self.requested], size, self)
+        # A pathname can recur after its original worker was interrupted.
+        self.worker.request_id = self.request_id
         self.worker.thumbnail_ready.connect(self.receive_preview)
         self.worker.finished.connect(self.preview_finished); self.worker.start()
 
     def receive_preview(self, path, image, stamp):
-        if path != self.requested or self.stopped: return
+        if (self.worker is None or self.sender() is not self.worker or self.worker.request_id != self.request_id
+                or path != self.requested or self.stopped): return
         try: valid = stamp is not None and identity(path) == stamp
         except (OSError, ValueError): valid = False
         if image.isNull() or not valid:
@@ -505,9 +510,13 @@ class PhotoPreview(QWidget):
         self.canvas.update()
 
     def preview_finished(self):
-        worker, self.worker = self.worker, None
-        previous = worker.paths[0]; worker.deleteLater()
-        if not self.stopped and previous != self.requested: self.start_preview()
+        worker = self.worker
+        worker.wait()  # finished can arrive before native thread teardown.
+        if not self.stopped and worker.request_id == self.request_id and self.stamp is None:
+            # Completion without a delivered image must leave a real error.
+            self.receive_preview(worker.paths[0], QImage(), None)
+        self.worker = None; worker.deleteLater()
+        if not self.stopped and worker.request_id != self.request_id: self.start_preview()
         self.idle.emit()
 
     def stop(self):

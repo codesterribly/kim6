@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 from kim_recipe_core import ROOT_FOLDER, RecipeError, load_library
+from kim_desktop_exec import exec_argument as desktop_exec_argument
 
 
 def value(text):
@@ -19,11 +20,10 @@ def value(text):
 
 
 def exec_argument(text):
-    # Desktop Entry: Exec quoting is decoded after the string escape layer.
-    if any(ord(c) < 32 for c in text):
-        raise RecipeError('Control character in dispatcher path')
-    quoted = '"' + ''.join('\\' + c if c in '\\"`$' else c for c in text.replace('%', '%%')) + '"'
-    return quoted.replace('\\', '\\\\')
+    try:
+        return desktop_exec_argument(text)
+    except ValueError as exc:
+        raise RecipeError(str(exc)) from exc
 
 
 def render(library, dispatcher):

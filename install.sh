@@ -44,8 +44,9 @@ if [ -z "$PREFIX" ]; then
     PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
   fi
 fi
-[[ "$PREFIX" != *$'\n'* && "$PREFIX" != *$'\r'* ]] || {
-  echo "install.sh: prefix contains a newline" >&2
+# Validate before creating directories or replacing any installed files.
+python3 -B "$SOURCE_DIR/src/bin/kim_desktop_exec.py" "$PREFIX" >/dev/null || {
+  echo "install.sh: prefix cannot be represented in a Desktop Entry" >&2
   exit 2
 }
 # Display required and optional dependencies without installing packages.
@@ -345,7 +346,7 @@ manual_files=(
   docs/images/kim6-metadata-menu.png
   docs/images/kim6-settings-general.png
 )
-runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
+runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_desktop_exec.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
   docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
   README.md
   docs/ACTIONS.md
@@ -439,7 +440,7 @@ for name in "${menu_names[@]}"; do
 done
 
 # Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_source_advisories.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
+for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_desktop_exec.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_source_advisories.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
     INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -539,6 +540,7 @@ install_file "$SOURCE_DIR/src/bin/kim_job.py" "$RUNTIME/bin/kim_job.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_job_process.py" "$RUNTIME/bin/kim_job_process.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_action_dialog.py" "$RUNTIME/bin/kim_action_dialog.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_menu.py" "$RUNTIME/bin/kim_recipe_menu.py" 0644
+install_file "$SOURCE_DIR/src/bin/kim_desktop_exec.py" "$RUNTIME/bin/kim_desktop_exec.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_run.py" "$RUNTIME/bin/kim_recipe_run.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_core.py" "$RUNTIME/bin/kim_recipe_core.py" 0644
 install_file "$SOURCE_DIR/src/bin/kim_recipe_image.py" "$RUNTIME/bin/kim_recipe_image.py" 0644
@@ -587,19 +589,23 @@ else
   echo "install.sh: msgfmt is unavailable; menu translations will still be installed, compiled message catalogs were skipped." >&2
 fi
 
-# Escape the installed executable path for a quoted KDE Exec argument and for
-# sed's replacement syntax. Paths containing newlines were rejected above.
-exec_path="$RUNTIME/bin/kim_all"
-exec_path="${exec_path//\\/\\\\}"
-exec_path="${exec_path//\"/\\\"}"
-exec_path="${exec_path//%/%%}"
-exec_path="${exec_path//&/\\&}"
-exec_path="${exec_path//#/\\#}"
+# Use the same Desktop Entry encoder as Recipe rendering and ownership checks.
+exec_path="$(python3 -B "$RUNTIME/bin/kim_desktop_exec.py" "$RUNTIME/bin/kim_all")"
 for name in "${menu_names[@]}"; do
   destination="$PREFIX/$name"
   temporary="$(mktemp "$PREFIX/.${name}.tmp.XXXXXX")"
   intltool-merge --desktop-style "$SOURCE_DIR/po" "$SOURCE_DIR/src/$name.in" "$temporary" >/dev/null
-  sed -i "s#^Exec=kim_all\\([[:space:]]\\|$\\)#Exec=\"$exec_path\"\\1#" "$temporary"
+  # Pass data as arguments; a callable replacement adds no sed/regex escaping.
+  python3 - "$exec_path" "$temporary" <<'KIM6_EXEC_REPLACE'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[2])
+content = re.sub(r'^Exec=kim_all(?=[ \t]|$)', lambda _: 'Exec=' + sys.argv[1],
+                 path.read_text(encoding='utf-8'), flags=re.MULTILINE)
+path.write_text(content, encoding='utf-8')
+KIM6_EXEC_REPLACE
   if [ "$name" = kim_location.desktop ]; then
     # Replacing the complete managed artifact removes the old Copy action too.
     if grep -Eq '^\[Desktop Action 02Copy\]$|^Exec=.*[[:space:]]location-copy[[:space:]]' "$temporary" ||
