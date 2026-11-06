@@ -457,7 +457,7 @@ class LocationMap(QWidget):
         outer_layout = QVBoxLayout(self); outer_layout.setContentsMargins(0, 0, 0, 0)
         self.online = QPushButton('Enable Maps')
         self.online.setCheckable(False); self.online.setAutoDefault(False)
-        self.online.setToolTip('Enable Automatically load online maps in KIM6 Settings. Visible map areas are requested from OpenStreetMap; image names stay local.')
+        self.online.setToolTip('Enable online maps and save this preference in KIM6 Settings. Visible map areas are requested from OpenStreetMap; image names stay local.')
         outer_layout.addWidget(self.online)
         map_area = QWidget(); layout = QVBoxLayout(map_area); layout.setContentsMargins(0, 0, 0, 0)
         self.canvas = TileMap(self, interactive, units)

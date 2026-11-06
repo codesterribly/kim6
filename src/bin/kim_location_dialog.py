@@ -956,7 +956,7 @@ class LocationDialog(QDialog):
         if narrow == self.visual_tab_mode: return
         self.visual_tab_mode = narrow
         if narrow:
-            self.visual_tabs.addTab(self.photo_panel, 'Photograph'); self.visual_tabs.addTab(self.map_panel, 'Map')
+            self.visual_tabs.addTab(self.photo_panel, 'Image'); self.visual_tabs.addTab(self.map_panel, 'Map')
             self.visual_splitter.hide(); self.visual_tabs.show()
         else:
             while self.visual_tabs.count(): self.visual_tabs.removeTab(0)
