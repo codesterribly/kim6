@@ -16,7 +16,7 @@ def transform(name, step, index=1, capture=None):
         return name.replace(value,step['replacement'])
     if method=='sequential': return value+str(step['start']+index-1).zfill(step['padding'])
     if method=='capture_date':
-        if capture is None: raise ValueError('The output name needs a capture date. Add Set Capture Date before Change Output Filename.')
+        if capture is None: raise ValueError('The output name needs an image capture date. Add Set Image Capture Date before Change Output Filename.')
         if value not in ('',*DATE_FORMATS): raise ValueError('Date filename style must be compact, iso, day_first or camera.')
         return capture.strftime(DATE_FORMATS[value or 'compact'])
     raise ValueError('Unknown filename method')

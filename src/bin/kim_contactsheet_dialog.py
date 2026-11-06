@@ -76,7 +76,7 @@ class ContactSheetDialog(OrderedImageDialog):
             ("Number only", "number"),
             ("Filename only", "filename"),
             ("No captions", "none"),
-            (tr("Capture date"), "capture"),
+            (tr("Image Capture Date"), "capture"),
             (tr("Camera and lens"), "camera"),
             (tr("Embedded caption"), "embedded"),
         ])
@@ -417,7 +417,7 @@ class ContactSheetDialog(OrderedImageDialog):
                 elif caption_mode == "both":
                     caption = f"{index + 1}. {name}"
                 elif caption_mode == "capture":
-                    caption = "Capture date"
+                    caption = "Image Capture Date"
                 elif caption_mode == "camera":
                     caption = "Camera / lens"
                 elif caption_mode == "embedded":

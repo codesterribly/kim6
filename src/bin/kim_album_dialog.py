@@ -92,7 +92,7 @@ class AlbumDialog(OrderedImageDialog):
             tr("Caption source:"), self.caption_source
         )
 
-        self.capture_date = QCheckBox(tr("Include capture date"))
+        self.capture_date = QCheckBox(tr("Include image capture date"))
         self.camera_lens = QCheckBox(
             tr("Include camera and lens")
         )

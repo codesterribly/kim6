@@ -602,7 +602,7 @@ class ActionDialog(QDialog):
             self.choice('mode','Remove',[('Descriptive Metadata (keep color and orientation)','all'),('GPS Location','gps'),('Recognized AI Metadata','ai')])
             self.form.addRow('Full removal in Recipes',with_help(QLabel('Recipes also offers Remove All Metadata, including ICC.'),'strip'))
         elif kind=='rename':
-            self.choice('method','Method',[(label,value) for label,value in [('Sequential numbering','sequential'),('Rename using Photo Capture Date','exifdate'),('Lowercase','lowercase'),('Uppercase','uppercase'),('Spaces to dashes','spacestodash'),('Spaces to underscores','spacestounderscore'),('Underscores to spaces','underscorestospace'),('Dashes to spaces','dashestospace'),('Add prefix','addprefix'),('Add suffix','addsuffix'),('Replace text','overwrite')]])
+            self.choice('method','Method',[(label,value) for label,value in [('Sequential numbering','sequential'),('Rename using Image Capture Date','exifdate'),('Lowercase','lowercase'),('Uppercase','uppercase'),('Spaces to dashes','spacestodash'),('Spaces to underscores','spacestounderscore'),('Underscores to spaces','underscorestospace'),('Dashes to spaces','dashestospace'),('Add prefix','addprefix'),('Add suffix','addsuffix'),('Replace text','overwrite')]])
             for field,label,default in [('value','Base name','photo_'),('replacement','Replace with','')]:
                 self.fields[field]=QLineEdit(default); self.form.addRow(label,self.fields[field])
             self.spin('start','Starting number',0,1000000000,1); self.spin('padding','Minimum digits',1,18,3)

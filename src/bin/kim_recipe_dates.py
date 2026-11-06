@@ -17,14 +17,14 @@ def timezone(value):
 
 def specific(value, zone):
     if value == '':
-        raise RecipeError('Choose a capture date and time to continue.')
+        raise RecipeError('Choose an image capture date and time to continue.')
     if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?', value):
-        raise RecipeError('Enter a complete capture date and time (YYYY-MM-DD HH:MM:SS); date-only values are ambiguous.')
+        raise RecipeError('Enter a complete image capture date and time (YYYY-MM-DD HH:MM:SS); date-only values are ambiguous.')
     tz=timezone(zone)
     try:
         result = dt.datetime.fromisoformat(value).replace(tzinfo=tz)
     except ValueError as exc:
-        raise RecipeError('That capture date or time is impossible. Correct the date and time above.') from exc
+        raise RecipeError('That image capture date or time is impossible. Correct the date and time above.') from exc
     return result, value.split('.', 1)[1] if '.' in value else ''
 
 
@@ -73,8 +73,8 @@ def display(capture, fraction=''):
 def epoch_ns(capture, fraction):
     """A camera clock is not an instant until its offset is explicitly known."""
     if capture is None:
-        raise RecipeError('No photo capture date was found. No date was changed. Choose Set Photo Capture Date… to enter one.')
+        raise RecipeError('No image capture date was found. No date was changed. Choose Set Image Capture Date… to enter one.')
     if capture.tzinfo is None:
-        raise RecipeError('The camera timezone is unknown. Choose the timezone where this photo was taken before setting its File Modification Date.')
+        raise RecipeError('The camera timezone is unknown. Choose the timezone where this image was captured before setting its File Modification Date.')
     delta = capture.astimezone(dt.timezone.utc) - dt.datetime(1970,1,1,tzinfo=dt.timezone.utc)
     return (delta.days*86400 + delta.seconds)*10**9 + int((fraction+'000000000')[:9])

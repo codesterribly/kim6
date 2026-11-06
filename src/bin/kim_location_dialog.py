@@ -302,7 +302,7 @@ class LocationDialog(QDialog):
         layout.addWidget(track_group)
         clock = QGroupBox('Camera clock and timezone'); form = QFormLayout(clock)
         form.addRow('Camera timezone', self.add_text('timezone', 'UTC, ±HH:MM, or a timezone such as America/New_York'))
-        form.addRow(self.label('Embedded camera timezone offsets take priority. Without an embedded offset, enter the camera timezone explicitly. Capture dates stay unchanged.'))
+        form.addRow(self.label('Embedded camera timezone offsets take priority. Without an embedded offset, enter the camera timezone explicitly. Image capture dates stay unchanged.'))
         advanced_toggle = QCheckBox('Advanced clock calibration'); form.addRow(advanced_toggle); self.clock_advanced = advanced_toggle
         advanced = QWidget(); advanced_form = QFormLayout(advanced)
         advanced_form.addRow('Clock correction (seconds)', self.add_text('seconds', 'Signed seconds, including fractions; positive moves time later', '0'))

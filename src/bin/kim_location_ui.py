@@ -262,7 +262,7 @@ def reference_caption(path, data, units):
             lines.append('Altitude: ' + (height(altitude, units) if altitude is not None else 'not recorded'))
         except ValueError as exc: lines.append('Altitude needs review: ' + str(exc))
         stamps = list(dict.fromkeys(str(v) for k, v in raw.items() if k.split(':')[-1] == 'DateTimeOriginal'))
-        lines.append('Capture date: ' + (' / '.join(stamps) if stamps else 'not recorded'))
+        lines.append('Image capture date: ' + (' / '.join(stamps) if stamps else 'not recorded'))
         others = [COORDINATE_CATEGORIES[r['category']] for r in info['records'] if r['category'] != 'camera' and r['position'] is not None]
         if others: lines.append('Other location records: ' + ', '.join(dict.fromkeys(others)) + ' (not copied)')
         if info['issues']: lines.append('Location information needs review; see Technical Metadata.')
@@ -293,10 +293,10 @@ def location_sections(entry, units, technical=False):
         if technical and entry.get('rows'):
             sections.append(('Inspection and change details', [' | '.join(row[1:]) for row in entry['rows']]))
         return sections
-    groups = {title: [] for title in ('Photo GPS location', 'Other locations depicted or described', 'Place names recorded in the file',
+    groups = {title: [] for title in ('GPS location', 'Other locations depicted or described', 'Place names recorded in the file',
         'Altitude, direction and movement', 'Location timestamps', 'Precision and measurement accuracy', 'Conflicts or warnings')}
     for r in info['records']:
-        group = 'Photo GPS location' if r['category'] == 'camera' else 'Other locations depicted or described'
+        group = 'GPS location' if r['category'] == 'camera' else 'Other locations depicted or described'
         rendered = position_text(r['position'])
         if r['issues']: rendered += ' — ' + '; '.join(r['issues'])
         if r['category'] != 'camera': rendered = COORDINATE_CATEGORIES[r['category']] + ': ' + rendered
@@ -347,10 +347,10 @@ def location_sections(entry, units, technical=False):
     groups['Conflicts or warnings'].extend(dict.fromkeys([*info['issues'], *entry.get('warnings', []), entry.get('error', '')]))
     if entry.get('approved_location') and entry.get('status') == 'change':
         approved = entry['approved_location']
-        groups['Photo GPS location'].append('New location: ' + position_text(approved['position']))
+        groups['GPS location'].append('New location: ' + position_text(approved['position']))
         groups['Altitude, direction and movement'].append('New altitude: ' + (height(approved['altitude'], units) if approved['altitude'] is not None else 'not retained'))
     if 'displacement_m' in entry:
-        groups['Photo GPS location'].append('Approximate displacement: ' + distance(entry['displacement_m'], units))
+        groups['GPS location'].append('Approximate displacement: ' + distance(entry['displacement_m'], units))
     if entry.get('removed_fields') and entry.get('status') == 'change':
         groups['Conflicts or warnings'].append('Location metadata being removed or replaced: ' + ', '.join(friendly_field(k) for k in entry['removed_fields']))
     if entry.get('output_description'):
@@ -568,7 +568,7 @@ def metadata_summary_sections(entry, sections):
         if label == 'New altitude': changes.append((label, value))
         elif ' — ' in label: other.append((label, value))
         else: camera.append((label, value))
-    result.append(('Photo GPS location', camera))
+    result.append(('GPS location', camera))
     if other: result.append(('Other location information', other))
     quality = [('Coordinate interpretation', camera_status(info))] if info['position'] is not None else []
     warning = inspection_warning(entry).replace(' — see Technical Metadata', '')
@@ -582,7 +582,7 @@ def metadata_summary_sections(entry, sections):
     for label, value in metadata_display_rows(evidence.get('Precision and measurement accuracy', [])):
         quality.append(('Precision limitation' if label == 'Information' else label, value))
     result.append(('Quality and conflicts', quality))
-    for label, value in metadata_display_rows(evidence.get('Photo GPS location', [])):
+    for label, value in metadata_display_rows(evidence.get('GPS location', [])):
         if label in ('New location', 'Approximate displacement'): changes.append((label, value))
     if entry.get('approved_location') and entry.get('status') == 'change':
         changes.insert(0, ('Action', destination_status(entry, entry['approved_location']['position'])))

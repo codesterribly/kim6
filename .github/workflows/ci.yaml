@@ -24,10 +24,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ShellCheck and FFmpeg
+      - name: Install ShellCheck
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends shellcheck ffmpeg
+          # Video tests are not part of the fast-check workflow.
+          sudo apt-get install -y --no-install-recommends shellcheck
 
       - name: Bash syntax and ShellCheck
         run: |

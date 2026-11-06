@@ -74,11 +74,11 @@ LABELS = {
     'image.flip': 'Flip Image', 'image.color': 'Color Profile', 'image.convert': 'Convert Format',
     'image.compress': 'Compress Image', 'image.resize_long_edge': 'Resize Long Edge',
     'image.resize_geometry': 'Resize with Custom Geometry',
-    'metadata.set_capture': 'Set Capture Date', 'metadata.strip_descriptive': 'Remove Descriptive Metadata',
+    'metadata.set_capture': 'Set Image Capture Date', 'metadata.strip_descriptive': 'Remove Descriptive Metadata',
     'file.name_transform': 'Change Output Filename',
     'metadata.strip_all': 'Remove All Metadata', 'metadata.strip_gps': 'Remove GPS Location',
     'metadata.strip_ai': 'Remove AI Metadata', 'metadata.copyright': 'Set Copyright',
-    'metadata.shift_capture': 'Adjust Capture Date', 'file.rename_output': 'Rename Output File',
+    'metadata.shift_capture': 'Adjust Image Capture Date', 'file.rename_output': 'Rename Output File',
     'file.sync_date': 'Synchronize File Date', 'file.preserve_date': 'Keep Source File Date', 'metadata.creator': 'Set Creator / Artist',
     'metadata.copyright_notice': 'Set Copyright Notice', 'metadata.usage_rights': 'Set Usage Rights',
 }
@@ -370,7 +370,7 @@ def capture_date(info):
         value = value.replace(microsecond=0)
         return value
     except ValueError as exc:
-        raise RecipeError('The embedded capture date is invalid or incomplete') from exc
+        raise RecipeError('The embedded image capture date is invalid or incomplete') from exc
 
 
 def srgb_profile():
@@ -425,7 +425,7 @@ class ImageHandler:
                     'max_width': 'Maximum width', 'max_height': 'Maximum height',
                     'pattern':'Output filename pattern', 'upscale': 'Allow upscaling', 'creator': 'Creator / Artist',
                     'notice': 'Copyright notice', 'rights': 'Usage rights',
-                    'datetime': 'Capture date and time', 'timezone': 'Camera timezone', 'fields':'Date fields',
+                    'datetime': 'Image capture date and time', 'timezone': 'Camera timezone', 'fields':'Date fields',
                     'png_level':'PNG lossless compression level', 'jpeg_optimize':'Optimize JPEG Huffman coding',
                 }.get(key, key.replace('_', ' ').capitalize())}
                 if type(default) is bool:
@@ -470,9 +470,9 @@ class ImageHandler:
             if op == 'image.resize_exact': definitions[op]['description'] = 'Sets both dimensions exactly; the image may stretch.'
             descriptions = {
                 'image.compress': 'One final encode. Recommended: lossy quality 85 / lossless PNG level 6. Maximum: quality 70 / PNG level 9 (smaller files, more loss for JPEG/WebP/AVIF). Custom exposes quality, PNG level and JPEG options. Final encoder settings apply once at save time, including to later pixel transformations.',
-                'metadata.set_capture': 'Enter when the photo was taken, use its embedded date, or use its file modification time (which may reflect copying). Choose Unknown if you do not know the camera timezone. All dates also sets embedded creation and modification dates. File timestamps change only with Synchronize File Date.',
-                'metadata.shift_capture': 'Advanced: adjust an existing capture clock by days, hours, minutes and seconds. Use Set Capture Date for a missing date. All also shifts existing EXIF creation/modification dates. Camera timezone and fractional seconds are retained.',
-                'metadata.strip_descriptive': 'Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation. Capture dates and copyright are removed. Add new date or rights steps afterwards if needed.',
+                'metadata.set_capture': 'Enter when the image was captured, use its embedded date, or use its file modification time (which may reflect copying). Choose Unknown if you do not know the camera timezone. All dates also sets embedded creation and modification dates. File timestamps change only with Synchronize File Date.',
+                'metadata.shift_capture': 'Advanced: adjust an existing capture clock by days, hours, minutes and seconds. Use Set Image Capture Date for a missing date. All also shifts existing EXIF creation/modification dates. Camera timezone and fractional seconds are retained.',
+                'metadata.strip_descriptive': 'Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation. Image capture dates and copyright are removed. Add new date or rights steps afterwards if needed.',
                 'file.name_transform': 'Changes the planned output filename without its extension. Uses the current planned name; {filename}, {date} and {index} templates are available in Rename Output File. Numbered names are checked again on publication.',
                 'image.rotate': 'Rotate the displayed image; orientation is baked into pixels. Custom angles use a transparent background (white in opaque output formats).',
                 'image.resize_geometry': 'ImageMagick geometry: WIDTHxHEIGHT fits, ! stretches, ^ fills without cropping, > only shrinks, < only enlarges. Width-only (1600x), height-only (x1200), and maximum pixel area (1000000@) are allowed. Use Resize by Percentage for percentages.',
@@ -531,7 +531,7 @@ class ImageHandler:
     def validate_context(self, steps):
         for step in enabled_steps(steps):
             if step['op'] == 'metadata.set_capture' and step['mode'] == 'specific' and not step['datetime']:
-                raise RecipeError('Choose a capture date and time to continue.')
+                raise RecipeError('Choose an image capture date and time to continue.')
             if step['op'] == 'image.overlay' and step['kind'] == 'text':
                 from kim_image_ops import watermark_text
                 watermark_text(step)
@@ -691,7 +691,7 @@ class ImageHandler:
         if op == 'metadata.set_capture':
             from kim_recipe_dates import specific, timezone
             text(step['datetime']); text(step['timezone'])
-            if step['mode'] not in ('specific','embedded','file_mtime'): raise RecipeError('Choose the capture date source')
+            if step['mode'] not in ('specific','embedded','file_mtime'): raise RecipeError('Choose the image capture date source')
             if step['fields'] not in ('capture','all'): raise RecipeError('Choose capture or all date fields')
             if step['mode'] == 'specific':
                 # Empty is a serializable draft, never a processing default.
@@ -747,19 +747,19 @@ class ImageHandler:
         except RecipeError as exc:
             capture = None
             capture_problem = str(exc)
-            date_warnings.append(str(exc) + '. Choose Set Capture Date to replace this invalid embedded date.')
+            date_warnings.append(str(exc) + '. Choose Set Image Capture Date to replace this invalid embedded date.')
         logical_capture = capture
         fraction = str(info.get('SubSecTimeOriginal', '')) if capture else ''
         if capture and not fraction and '.' in str(info.get('DateTimeOriginal','')):
             import re
             found = re.search(r'\.(\d+)',info['DateTimeOriginal'])
             fraction = found.group(1) if found else ''
-        date_source = info.get('_capture_source','embedded capture date') if capture else 'no usable embedded capture date'
+        date_source = info.get('_capture_source','embedded image capture date') if capture else 'no usable embedded image capture date'
         if capture and info.get('_xmp_capture') and info.get('_capture_source') == 'EXIF DateTimeOriginal' and any(s['op'] == 'metadata.shift_capture' or (s['op'] == 'metadata.set_capture' and s['mode'] == 'embedded') for s in steps):
             try: xmp_capture = capture_date({'DateTimeOriginal':info['_xmp_capture']})
             except RecipeError: xmp_capture = None
             if xmp_capture != capture:
-                date_warnings.append('EXIF DateTimeOriginal and XMP-exif DateTimeOriginal disagree (possibly in timezone). Embedded mode uses EXIF. Enter a specific capture date/time to replace both.')
+                date_warnings.append('EXIF DateTimeOriginal and XMP-exif DateTimeOriginal disagree (possibly in timezone). Embedded mode uses EXIF. Enter a specific image capture date/time to replace both.')
         removed_at = None
         working_dates = dict(info.get('_date_fields', {}))
         original_width, original_height = width, height
@@ -873,10 +873,10 @@ class ImageHandler:
                         if capture_problem and not removed_at:
                             raise RecipeError(capture_problem + '. Enter a specific date/time above or use the source file modification time.')
                         reason = (f'Step {removed_at} removes capture metadata before Step {step_number}. Enter a specific date here, use source file modification time, or move this step before Step {removed_at}.' if removed_at else
-                                  f'This {info["FileType"]} has no embedded capture date. Choose a specific date above or use its file modification time.')
+                                  f'This {info["FileType"]} has no embedded image capture date. Choose a specific date above or use its file modification time.')
                         raise RecipeError(reason)
                     if step['timezone'] != 'embedded': capture = capture.replace(tzinfo=timezone(step['timezone']))
-                    date_source = 'working embedded capture date'
+                    date_source = 'working embedded image capture date'
                 logical_capture = capture
                 date_edits = assignments(capture, fraction, step['fields'], fmt not in NO_LEGACY_IPTC)
                 working_dates.update(edit[1:].split('=',1) for edit in date_edits
@@ -890,12 +890,12 @@ class ImageHandler:
                     if removed_at:
                         raise RecipeError(f'Step {removed_at} removes capture metadata before Step {step_number} tries to adjust it. Set a specific date at Step {step_number}, or move the adjustment before Step {removed_at}.')
                     if capture_problem:
-                        raise RecipeError(capture_problem + '. Add Set Capture Date to replace it before Adjust Capture Date.')
-                    raise RecipeError(f'This {info["FileType"]} has no embedded capture date. Add Set Capture Date to enter a date or use its file modification time before Adjust Capture Date.')
+                        raise RecipeError(capture_problem + '. Add Set Image Capture Date to replace it before Adjust Image Capture Date.')
+                    raise RecipeError(f'This {info["FileType"]} has no embedded image capture date. Add Set Image Capture Date to enter a date or use its file modification time before Adjust Image Capture Date.')
                 try:
                     capture += dt.timedelta(seconds=step['seconds'])
                 except OverflowError as exc:
-                    raise RecipeError('Capture date out of range') from exc
+                    raise RecipeError('Image Capture Date out of range') from exc
                 logical_capture = capture
                 date_source += '; adjusted by ' + str(dt.timedelta(seconds=step['seconds']))
                 date_edits = assignments(capture, fraction, 'capture', fmt not in NO_LEGACY_IPTC)
@@ -955,7 +955,7 @@ class ImageHandler:
                         if year and (not year.isascii() or not year.isdigit() or len(year) != 4 or year == '0000'):
                             raise RecipeError('Copyright year must be four digits, or blank to use the capture year.')
                         if not year and logical_capture is None:
-                            raise RecipeError('Copyright {YEAR} needs a capture date. Enter a copyright year or add Set Capture Date before this step.')
+                            raise RecipeError('Copyright {YEAR} needs an image capture date. Enter a copyright year or add Set Image Capture Date before this step.')
                         value = value.replace('{YEAR}', year or str(logical_capture.year))
                     for tag in tags:
                         args.append('-' + tag + '=' + value)
@@ -963,7 +963,7 @@ class ImageHandler:
                 if args: edits.append(args)
             elif op == 'file.rename_output':
                 if capture is None and any(field == 'date' for _,field,_,_ in string.Formatter().parse(step['pattern'])):
-                    raise RecipeError('The output name needs a capture date. Add Set Capture Date before Rename Output File.')
+                    raise RecipeError('The output name needs an image capture date. Add Set Image Capture Date before Rename Output File.')
                 name = format_output_pattern(step['pattern'],stem if stem is not None else source.stem,
                                              date=capture.strftime('%Y%m%d_%H%M%S') if capture else '',index=index)
             elif op == 'file.name_transform':
@@ -976,9 +976,9 @@ class ImageHandler:
                 timestamp_state = dt.datetime.fromtimestamp(timestamp, dt.timezone.utc).isoformat()
             elif op == 'file.sync_date':
                 if capture is None:
-                    raise RecipeError('The output file timestamp needs a capture date. Add Set Capture Date before Synchronize File Date.')
+                    raise RecipeError('The output file timestamp needs an image capture date. Add Set Image Capture Date before Synchronize File Date.')
                 if capture.tzinfo is None:
-                    raise RecipeError('File date synchronization needs an explicit capture timezone (OffsetTimeOriginal). Choose UTC or a camera offset in Set Capture Date before this step.')
+                    raise RecipeError('File date synchronization needs an explicit image capture timezone (OffsetTimeOriginal). Choose UTC or a camera offset in Set Image Capture Date before this step.')
                 from kim_recipe_dates import epoch_ns
                 timestamp_ns = epoch_ns(capture,fraction)
                 timestamp = timestamp_ns / 1000000000
@@ -1075,15 +1075,15 @@ class ImageHandler:
                                  f'{fmt.upper()} lossy quality {quality}')
             if fmt == 'jpeg': compression_label += '; ' + ('progressive' if compression['jpeg_progressive'] else 'baseline') + ('; optimized Huffman coding' if compression['jpeg_optimize'] else '')
             compression_label += '; one final encode; smaller size is not guaranteed'
-        final_metadata = ['Capture time: ' + (display(capture,fraction) if capture else 'absent'),
-                          'Capture date source: ' + date_source,
+        final_metadata = ['Image capture time: ' + (display(capture,fraction) if capture else 'absent'),
+                          'Image capture date: ' + date_source,
                           'Orientation: ' + (str(orientation_tag) if orientation_tag is not None else 'absent (normal display)'),
                           'GPS: ' + gps_state, 'AI fields: ' + ai_state,
                           'ICC: ' + color_state, 'Output timestamp: ' + timestamp_state]
         if conversion and conversion['quality'] is None and quality_setting(fmt) and not compression:
             final_metadata.append('Quality source: KIM6 Settings — ' + quality_setting(fmt))
         if capture and capture.tzinfo is None and any(s['op'] in ('metadata.set_capture','metadata.shift_capture') for s in steps):
-            final_metadata.append('Capture timezone: Unknown; EXIF/XMP have no offset. IPTC time is omitted to avoid an invented timezone.')
+            final_metadata.append('Image capture timezone: Unknown; EXIF/XMP have no offset. IPTC time is omitted to avoid an invented timezone.')
         output_depth = (conversion or {}).get('depth','preserve')
         if fmt in ('jpeg','webp','bmp','gif','pdf','heic','heif'): output_depth = '8'
         precision = str(source_depth) + '-bit source; '
@@ -1230,6 +1230,6 @@ class ImageHandler:
         if state.get('timestamp_ns') is not None:
             os.utime(output, ns=(state['timestamp_ns'],state['timestamp_ns']))
             if output.stat().st_mtime_ns != state['timestamp_ns']:
-                raise RecipeError('The destination filesystem cannot store this File Modification Date at the requested precision. Disable file-date synchronization or choose a compatible destination; the Photo Capture Date can remain embedded.')
+                raise RecipeError('The destination filesystem cannot store this File Modification Date at the requested precision. Disable file-date synchronization or choose a compatible destination; the Image Capture Date can remain embedded.')
         elif state['timestamp'] is not None:
             os.utime(output, (state['timestamp'], state['timestamp']))

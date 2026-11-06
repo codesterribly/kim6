@@ -2,6 +2,7 @@
 import copy
 import os
 import re
+import stat
 import sys
 import time
 from pathlib import Path
@@ -127,7 +128,7 @@ class PropertyView(QTableWidget):
                 item = QTableWidgetItem(text); item.setToolTip(text)
                 if column == 1 and text.casefold().startswith(('removed', 'not included', 'none detected', 'when exported', 'not set')):
                     font = item.font(); font.setItalic(True); item.setFont(font)
-                    item.setForeground(self.palette().brush(QPalette.Disabled, QPalette.Text))
+                    item.setForeground(self.palette().brush(QPalette.Active, QPalette.Text))
                 self.setItem(row, column, item)
         self.resizeRowsToContents()
 
@@ -235,21 +236,35 @@ class AddFilesWorker(QThread):
         from kim_psd_source import source_session, header as psd_header
         from kim_process import inspection_context
         identities = {os.path.normcase(os.path.abspath(p)) for p in self.current}
+        file_identities = set()
+        for existing in self.current:
+            try:
+                info = os.stat(existing)
+            except OSError:
+                continue
+            file_identities.add((info.st_dev, info.st_ino))
+
         for index,raw in enumerate(self.paths):
             if self.isInterruptionRequested(): break
             self.item_started.emit(index)
             path = os.path.abspath(os.path.normpath(raw)); key = os.path.normcase(path)
             try:
-                if key in identities or any(os.path.exists(path) and os.path.exists(p) and os.path.samefile(path,p) for p in self.current + self.accepted):
+                if key in identities:
                     raise RecipeError('Already in the list')
-                if not Path(path).is_file() or Path(path).is_symlink():
+                info = os.stat(path, follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode):
                     raise RecipeError('Choose an existing local image file, not a directory or symlink')
+                file_identity = (info.st_dev, info.st_ino)
+                if file_identity in file_identities:
+                    raise RecipeError('Already in the list')
                 # Admission checks the PSD header/resource bounds. Recipe
                 # preflight owns composite/ICC validation; decoding here too
                 # doubled large-document work before the user could press Run.
                 if psd_header(path) is None:
                     with inspection_context(cancelled=self.isInterruptionRequested), source_session(), checked_input_headers(self.checked_inputs): inspect(Path(path))
-                self.accepted.append(path); identities.add(key)
+                self.accepted.append(path)
+                identities.add(key)
+                file_identities.add(file_identity)
             except (OSError, ValueError) as exc:
                 self.rejected.append(str(raw) + ': ' + str(exc))
             except Exception as exc:
@@ -391,7 +406,7 @@ class RunRecipeDialog(QDialog):
         self.create_button = QPushButton('Create New Recipe…')
         self.create_button.clicked.connect(self.create_recipe)
         selection.addWidget(self.create_button); layout.addLayout(selection)
-        self.selection_hint=QLabel('Choose a recipe to check these photos and preview the results.')
+        self.selection_hint=QLabel('Choose a recipe to check these images and preview the results.')
         self.selection_hint.setWordWrap(True); self.selection_hint.setVisible(recipe is None); layout.addWidget(self.selection_hint)
         self.search.textChanged.connect(self.refresh_selector)
         self.selector.currentIndexChanged.connect(self.select_recipe)
@@ -424,7 +439,7 @@ class RunRecipeDialog(QDialog):
         self.inputs.currentItemChanged.connect(self.show_selected)
         inp_layout.addWidget(self.inputs)
         actions = QHBoxLayout()
-        self.add_photos = QPushButton('Add Photos…'); self.add_photos.clicked.connect(self.pick_files)
+        self.add_photos = QPushButton('Add Images…'); self.add_photos.clicked.connect(self.pick_files)
         self.remove_selected = QPushButton('Remove Selected'); self.remove_selected.clicked.connect(self.remove_files)
         self.clear_list = QPushButton('Clear List'); self.clear_list.clicked.connect(self.clear_files)
         for button in (self.add_photos, self.remove_selected, self.clear_list): actions.addWidget(button)
@@ -460,7 +475,7 @@ class RunRecipeDialog(QDialog):
         dest.addWidget(self.destination_label, 1); dest.addWidget(self.choose_destination); layout.addLayout(dest)
         self.summary = QLabel(); self.summary.setTextFormat(Qt.PlainText); layout.addWidget(self.summary)
         self.preflight_busy=QProgressBar(); self.preflight_busy.setRange(0,0)
-        self.preflight_busy.setAccessibleName('Inspecting selected photos'); self.preflight_busy.hide()
+        self.preflight_busy.setAccessibleName('Inspecting selected images'); self.preflight_busy.hide()
         layout.addWidget(self.preflight_busy)
         self.diagnostics = QPlainTextEdit(); self.diagnostics.setReadOnly(True); self.diagnostics.setMaximumHeight(100)
         layout.addWidget(self.diagnostics)
@@ -507,16 +522,16 @@ class RunRecipeDialog(QDialog):
             start = str(preferred) if preferred.is_dir() else (QStandardPaths.writableLocation(QStandardPaths.PicturesLocation) or str(Path.home()))
         if not Path(start).is_dir(): start = str(Path.home())
         extensions = set(re.findall(r'\*\.([a-zA-Z0-9]+)', self._input_filters[0]))
-        paths = choose_images(self, start, title='Add Photos',
+        paths = choose_images(self, start, title='Add Images',
                               extensions=extensions or RECIPE_IMAGE_EXTENSIONS,
-                              accept_label='Add Photos')
+                              accept_label='Add Images')
         self.add_files(paths)
         self.update_summary()
 
     def input_filters_finished(self):
         worker,self.filters_worker=self.filters_worker,None
         self._input_filters=worker.filters; worker.deleteLater()
-        self.add_photos.setText('Add Photos…'); self.update_file_actions()
+        self.add_photos.setText('Add Images…'); self.update_file_actions()
         if self._closing: self.finish_close_if_idle(); return
         pending,self._pending_picker=self._pending_picker,False
         if pending and self.worker is None and self.editor_dialog is None: self.pick_files()
@@ -529,10 +544,10 @@ class RunRecipeDialog(QDialog):
         # Paint selected names before any admission delegate completes. These
         # rows are provisional; rejected files never become runnable inputs.
         for path in paths:
-            item=QTreeWidgetItem([Path(path).name,'Checking photo…']); item.setToolTip(0,str(path))
+            item=QTreeWidgetItem([Path(path).name,'Checking image…']); item.setToolTip(0,str(path))
             self.inputs.addTopLevelItem(item); self._addition_items.append(item)
         self.count.setText('Inputs: '+file_count(self.inputs.topLevelItemCount()))
-        self.summary.setText('Checking added photos…')
+        self.summary.setText('Checking added images…')
         self.start_additions()
 
     def start_additions(self):
@@ -699,13 +714,15 @@ class RunRecipeDialog(QDialog):
         if self.editor_dialog is not None:
             self.editor_dialog.raise_(); self.editor_dialog.activateWindow(); return
         self._editor_previous=(copy.deepcopy(self.recipe),copy.deepcopy(self.saved_definition))
-        self.invalidate_preflight()
+        # Opening the editor does not change the selected recipe or inputs.
+        # Retain completed inspection and let an active preflight finish.
         try:
             dialog=make_editor_dialog(self,from_run=True,recipe=self.recipe if repair else None,repair=repair)
         except (OSError,RecipeError) as exc:
             self.saved_definition=None; self.apply_recipe(None)
             self.diagnostics.setPlainText('Cannot open Recipe Editor: '+str(exc)); return
         self.editor_dialog=dialog; self.create_button.setEnabled(False)
+        self.update_summary()
         dialog.finished.connect(self.editor_finished)
         # open() uses Qt's normal completion signal, without another nested
         # exec() loop while retired inspection workers are still cleaning up.
@@ -727,7 +744,18 @@ class RunRecipeDialog(QDialog):
         dialog.deleteLater()
         if self._close_after_editor:
             self._close_after_editor=False; self.reject(); return
-        self.apply_recipe(recipe)
+        if error is None and recipe == previous:
+            # No change to the active recipe: preserve its reviewed plan
+            # and any inspection still running.
+            self.refresh_selector()
+            self.heading.setText(
+                'Recipe: ' + selection_title(recipe, self.library.folders)
+                if recipe else 'Choose a recipe…'
+            )
+            self.update_summary()
+        else:
+            # New or changed recipe: existing validation cannot be reused.
+            self.apply_recipe(recipe)
         if error: self.diagnostics.setPlainText(error)
         (self.fix_recipe_button if self.fix_recipe_button.isVisible() else self.selector).setFocus()
 
@@ -757,7 +785,7 @@ class RunRecipeDialog(QDialog):
             self.summary.setText('Waiting for recipe selection'); return
         self.summary.setText(file_count(len(self.files)) + ' selected; inspecting…')
         if not self.files:
-            self.summary.setText('0 files selected; use Add Photos or drop images here.'); return
+            self.summary.setText('0 files selected; use Add Images or drop images here.'); return
         worker = PreflightWorker(self.execution_recipe, self.files, self.chosen, self.binding_error, self,checked_inputs=self.checked_inputs)
         worker.generation = self.generation
         self.preflight_worker = worker

@@ -213,14 +213,14 @@ class RecipeWidget(QWidget):
         self.example_selector.setMinimumWidth(0)
         self.example_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.example_selector.currentIndexChanged.connect(self.update_preview)
-        self.example_label = QLabel('Example photo (preview only)')
+        self.example_label = QLabel('Example image (preview only)')
         self.example_label.setBuddy(self.example_selector)
         preview_layout.addWidget(self.example_label)
         preview_layout.addWidget(with_help(self.example_selector, 'psd'))
-        self.choose_example_button = QPushButton(QIcon.fromTheme('document-open'), 'Choose Example Photo…')
+        self.choose_example_button = QPushButton(QIcon.fromTheme('document-open'), 'Choose Example Image…')
         self.choose_example_button.clicked.connect(self.choose_examples)
         preview_layout.addWidget(self.choose_example_button)
-        self.reset_examples = QPushButton(QIcon.fromTheme('edit-undo'), 'Reset to Selected Photos')
+        self.reset_examples = QPushButton(QIcon.fromTheme('edit-undo'), 'Reset to Selected Images')
         self.reset_examples.clicked.connect(lambda: self.set_examples(None))
         self.reset_examples.setVisible(False)
         preview_layout.addWidget(self.reset_examples)
@@ -330,6 +330,14 @@ class RecipeWidget(QWidget):
         if self.immutable:
             self.select(self.active_index, force=True)
 
+    def style_step_item(self, item, enabled):
+        # Unchecked steps remain selectable, and must be readable.
+        item.setForeground(self.palette().brush(QPalette.Active, QPalette.Text))
+        font = item.font()
+        font.setItalic(not enabled)
+        item.setFont(font)
+        item.setToolTip('Enabled in recipe' if enabled else 'Disabled: check this step to include it in the recipe')
+
     def reload_steps(self, row=0):
         self.steps.blockSignals(True)
         self.steps.clear()
@@ -337,7 +345,7 @@ class RecipeWidget(QWidget):
             item = QListWidgetItem(self.media_handler.step_label(step))
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if step.get('enabled', True) else Qt.Unchecked)
-            item.setForeground(self.palette().brush(QPalette.Active if step.get('enabled', True) else QPalette.Disabled, QPalette.Text))
+            self.style_step_item(item, step.get('enabled', True))
             self.steps.addItem(item)
         self.steps.blockSignals(False)
         self.steps.setCurrentRow(min(row, len(self.recipe['steps']) - 1))
@@ -349,7 +357,7 @@ class RecipeWidget(QWidget):
         enabled = item.checkState() == Qt.Checked
         self.recipe['steps'][row]['enabled'] = enabled
         self.steps.blockSignals(True)
-        item.setForeground(self.palette().brush(QPalette.Active if enabled else QPalette.Disabled, QPalette.Text))
+        self.style_step_item(item, enabled)
         self.steps.blockSignals(False)
         self.update_modified()
         self.timer.start()
@@ -410,10 +418,10 @@ class RecipeWidget(QWidget):
             elif 'choices' in spec:
                 widget = QComboBox()
                 for choice in spec['choices']:
-                    labels = {'specific':'Enter a specific date/time','embedded':'Use embedded capture date if available' if key == 'mode' else 'Keep embedded timezone (or unknown)',
+                    labels = {'specific':'Enter a specific date/time','embedded':'Use embedded image capture date if available' if key == 'mode' else 'Keep embedded timezone (or unknown)',
                               'file_mtime':'Use source file modification time', 'unknown':'Unknown camera timezone (no offset)',
                               '':'Choose timezone…','UTC':'UTC (+00:00)','custom':'Enter ±HH:MM offset',
-                              'capture':'Capture date only','all':'Capture, creation and modification dates'} if step['op'] == 'metadata.set_capture' or key == 'fields' else {}
+                              'capture':'Image capture date only','all':'Image capture, creation and modification dates'} if step['op'] == 'metadata.set_capture' or key == 'fields' else {}
                     widget.addItem(labels.get(choice,str(choice).replace('_',' ').capitalize()), choice)
                 if key == 'timezone':
                     widget.setEditable(True)
@@ -505,10 +513,10 @@ class RecipeWidget(QWidget):
         for step in self.recipe['steps']:
             if step['op']=='image.convert' and step.get('enabled',True): fmt=step['format']
         if fmt not in FORMATS:
-            self.filename_example.setText('Example output: choose Convert Format for this photo.'); return
+            self.filename_example.setText('Example output: choose Convert Format for this image.'); return
         try:
             value=self.parameter_widgets['pattern'].text()
-            name=format_output_pattern(value,source.stem,'[capture date]',1)
+            name=format_output_pattern(value,source.stem,'[image capture date]',1)
             self.filename_example.setText('Example output: '+name+'.'+FORMATS[fmt])
         except (KeyError,ValueError): self.filename_example.setText('Example output: enter a valid filename pattern.')
 
@@ -695,7 +703,7 @@ class RecipeWidget(QWidget):
         folder = self.choose_folder('Delete Recipe Folder')
         if folder is None: return
         message = QMessageBox(self); message.setWindowTitle('Delete Recipe Folder'); message.setTextFormat(Qt.PlainText)
-        message.setText('Delete folder “' + folder['name'] + '”? Its recipes will move to Unfiled; no recipes or photographs are deleted.')
+        message.setText('Delete folder “' + folder['name'] + '”? Its recipes will move to Unfiled; no recipes or images are deleted.')
         message.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel); message.setDefaultButton(QMessageBox.Cancel)
         if message.exec() == QMessageBox.Yes:
             self.change_folders(lambda library: library.delete_folder(folder['id']))
@@ -799,8 +807,8 @@ class RecipeWidget(QWidget):
         self.update_preview()
 
     def choose_examples(self):
-        files = choose_images(self, title='Choose Example Photos',
-                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Use Example Photos')
+        files = choose_images(self, title='Choose Example Images',
+                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Use Example Images')
         if files:
             self.set_examples(files)
 
@@ -833,13 +841,13 @@ class RecipeWidget(QWidget):
             return
         sample = self.example_selector.currentData()
         self.warning_view.set_rows([])
-        fields = [('Source photograph', str(sample) if sample else 'Choose an example photo')]
+        fields = [('Source image', str(sample) if sample else 'Choose an example image')]
         try:
             if not sample:
                 validate(self.recipe)
                 self.refresh_inherited_parameters()
                 self.media_handler.validate_context(self.recipe['steps'])
-                self.status.setText('Choose an example photo to inspect this recipe.')
+                self.status.setText('Choose an example image to inspect this recipe.')
                 self.show_preview_fields(fields + [('Originals', 'Always unchanged')])
                 return
             index = self.files.index(sample) + 1 if sample in self.files else 1
@@ -878,7 +886,7 @@ class RecipeWidget(QWidget):
     def stop_preview(self):
         self.preview_generation += 1; self.preview_pending = False
         if self.preview_worker is not None: self.preview_worker.requestInterruption()
-        self.status.setText('Preview cancelled. Change a step or example photo to retry.')
+        self.status.setText('Preview cancelled. Change a step or example image to retry.')
 
     def error(self, exc):
         QMessageBox.warning(self, 'Recipes', str(exc))
@@ -896,8 +904,8 @@ class RecipeWidget(QWidget):
             else:
                 self.select(self.active_index, force=True)
         snapshot = copy.deepcopy(self.recipe)
-        files = choose_images(self, title='Load Photos for Recipe Execution',
-                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Load Photos')
+        files = choose_images(self, title='Load Images for Recipe Execution',
+                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Load Images')
         if not files: return
         try:
             self.run_dialog = RunRecipeDialog(snapshot, files, self.folders, self)
@@ -981,7 +989,7 @@ def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repai
     buttons = QHBoxLayout()
     buttons.addStretch(1)
     if not from_run:
-        run = QPushButton('Load Photos && Run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
+        run = QPushButton('Load Images && Run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
     close = QPushButton('Return to Run a Recipe' if from_run else 'Close')
     close.clicked.connect(dialog.accept); buttons.addWidget(close)
     layout.addLayout(buttons)

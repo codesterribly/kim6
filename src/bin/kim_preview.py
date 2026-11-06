@@ -161,7 +161,7 @@ def removal_plan(entry, config):
         entry['rows'].append([Path(entry['source']).name,label,'Present' if present else 'Not recognized / absent',
                               'Remove' if remove else 'Preserve','Requested removal' if remove else 'Unchanged'])
     entry['warnings'].append('Unrecognized provenance and signed Content Credentials may remain. GPS removal covers recognized coordinates, not complete location anonymization.' if mode!='all' else
-                             'Removes descriptive EXIF, IPTC, XMP and comments, including capture dates and rights. Keeps ICC and orientation. Signed Content Credentials may remain.')
+                             'Removes descriptive EXIF, IPTC, XMP and comments, including image capture dates and rights. Keeps ICC and orientation. Signed Content Credentials may remain.')
     if Path(entry['source']).suffix.lower() in ('.png','.apng'):
         inspect_png_removal(entry,mode,do_ai)
     # The native PNG filter intentionally also handles container text/chunks.
@@ -202,8 +202,8 @@ def inspect_png_removal(entry,mode,remove_ai):
                           'Apply native '+mode+' filter','Container filter; image data, ICC and presentation chunks preserved'])
     if mode=='ai':
         for row in entry['rows']:
-            if row[1]=='Other descriptive metadata': row[3]='Preserve recognized photo text; filter unclassified PNG metadata'; row[4]='Native PNG filtering'
-        entry['warnings'].append('PNG AI removal also removes unclassified text and unknown ancillary chunks; recognized ordinary photo text is preserved. Mixed AI/photo text or unknown XML may block safe filtering.')
+            if row[1]=='Other descriptive metadata': row[3]='Preserve recognized image text metadata; filter unclassified PNG metadata'; row[4]='Native PNG filtering'
+        entry['warnings'].append('PNG AI removal also removes unclassified text and unknown ancillary chunks; recognized ordinary image text metadata is preserved. Mixed AI/image text or unknown XML may block safe filtering.')
 
 
 def date_plan(entry, config):
@@ -377,7 +377,7 @@ def build_plan(operation,policy,files,config=None,seeds=None,progress=lambda *_:
                         if not value or not re.fullmatch(r'(?:IMG-)?\d{8}_\d{6}|\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}',value):
                             raise ValueError('No valid embedded date for the filename.')
                         name=value
-                        if used!='DateTimeOriginal': entry['warnings'].append('No capture date; existing rename behavior uses '+used+'.')
+                        if used!='DateTimeOriginal': entry['warnings'].append('No image capture date; existing rename behavior uses '+used+'.')
                     else: name=standalone(stem,method,config.get('value',''),config.get('replacement',''),number[0],number[2])
                     if not name or name in ('.','..') or any(c in name for c in '/\n\r'):
                         raise ValueError('Enter a filename without slashes or line breaks.')
@@ -670,7 +670,7 @@ def qt_classes():
                 'convert': 'Convert Format',
                 'copyright': 'Set Creator and Copyright',
                 'strip': 'Remove Metadata',
-                'date': 'Photo Dates',
+                'date': 'Image Capture Dates',
                 'location': 'Image Location Tools',
             }
 
@@ -682,10 +682,10 @@ def qt_classes():
 
             elif operation == 'date':
                 name = {
-                    'set': 'Set Capture Date',
-                    'shift': 'Adjust Capture Date',
-                    'exif-to-file': 'Set File Date from Capture Date',
-                    'file-to-exif': 'Set Capture Date',
+                    'set': 'Set Image Capture Date',
+                    'shift': 'Adjust Image Capture Date',
+                    'exif-to-file': 'Set File Date from Image Capture Date',
+                    'file-to-exif': 'Set Image Capture Date',
                 }[plan['config']['kind']]
 
             elif operation == 'convert':
@@ -758,7 +758,7 @@ def qt_classes():
                     'Field or category',
                     'Current value',
                     'Proposed change',
-                    'Status / warnings',
+                    'Status' if operation == 'date' else 'Status / warnings',
                 )
 
             self.table.setColumnCount(len(headings))

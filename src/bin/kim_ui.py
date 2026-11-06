@@ -14,7 +14,7 @@ def tr(text):
 
 
 HELP = {
-    'capture': ('Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
+    'capture': ('Image Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
     'timezone': ('Camera Timezone', "The timezone where the image was taken. If you don't know it, choose Unknown. KIM6 won't guess based on your computer's timezone."),
     'dates': ('Date Fields / All Dates', "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."),
     'settings': ('Reset from Settings', 'Use the value from KIM6 Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe.'),
@@ -75,7 +75,7 @@ class EmptyDateInput(QWidget):
         super().__init__(parent)
         layout = QHBoxLayout(self); layout.setContentsMargins(0,0,0,0)
         self.edit = QLineEdit(); self.edit.setPlaceholderText('Choose date… (YYYY-MM-DD)')
-        self.edit.setClearButtonEnabled(True); self.edit.setAccessibleName('Capture Date, YYYY-MM-DD')
+        self.edit.setClearButtonEnabled(True); self.edit.setAccessibleName('Image Capture Date, YYYY-MM-DD')
         layout.addWidget(self.edit)
         self.button = QPushButton('Calendar…'); self.button.clicked.connect(self.open_calendar); layout.addWidget(self.button)
         self.calendar = QCalendarWidget(); self.calendar.setMinimumDate(QDate(1,1,1)); self.calendar.setMaximumDate(QDate(9999,12,31))
@@ -119,7 +119,7 @@ class EmptyDateInput(QWidget):
         self.calendar.setSelectionMode(QCalendarWidget.SingleSelection if chosen.isValid() else QCalendarWidget.NoSelection)
         if chosen.isValid(): self.calendar.setSelectedDate(chosen)
         self.calendar.setCurrentPage(page.year(),page.month())
-        dialog = QDialog(self); dialog.setWindowTitle('Choose Capture Date')
+        dialog = QDialog(self); dialog.setWindowTitle('Choose Image Capture Date')
         layout = QVBoxLayout(dialog); layout.addWidget(self.calendar)
         # Empty navigation must not commit today's internally selected date.
         # Explicit click or keyboard activation is the only calendar commit.
@@ -272,7 +272,7 @@ def choose_capture_time(parent, initial):
     """A normal Qt time editor with a live analog display and Now button."""
 
     dialog = QDialog(parent)
-    dialog.setWindowTitle("Choose Capture Time")
+    dialog.setWindowTitle("Choose Image Capture Time")
     dialog.setMinimumWidth(300)
 
     layout = QVBoxLayout(dialog)
@@ -283,7 +283,7 @@ def choose_capture_time(parent, initial):
     editor = QTimeEdit(initial)
     editor.setDisplayFormat("HH:mm:ss")
     editor.setMinimumHeight(38)
-    editor.setAccessibleName("Capture time, hours minutes seconds")
+    editor.setAccessibleName("Image capture time, hours minutes seconds")
 
     layout.addWidget(editor)
     face.setTime(editor.time())
@@ -322,7 +322,7 @@ class CaptureDateInput(QWidget):
         self.date = EmptyDateInput()
         self.time = QTimeEdit(QTime(0,0,0))
         self.time.setDisplayFormat('HH:mm:ss')
-        self.time.setAccessibleName('Capture Time')
+        self.time.setAccessibleName('Image Capture Time')
 
         time_row = QWidget()
         time_layout = QHBoxLayout(time_row)
@@ -334,7 +334,7 @@ class CaptureDateInput(QWidget):
         self.clock_button.clicked.connect(self.open_clock)
         time_layout.addWidget(self.clock_button)
 
-        layout.addRow('Capture Date',with_help(self.date,'capture'))
+        layout.addRow('Image Capture Date',with_help(self.date,'capture'))
         layout.addRow('Time',time_row)
         if value:
             parts = value.replace('T',' ').split(' ',1)
@@ -377,7 +377,7 @@ class CaptureDateOptions(QWidget):
         if embedded: self.zone.addItem('Keep embedded timezone','embedded')
         self.zone.addItem('UTC (+00:00)','UTC'); self.zone.addItem('Explicit offset','custom')
         self.offset=QLineEdit(); self.offset.setPlaceholderText('±HH:MM')
-        self.fields=QComboBox(); self.fields.addItem('Capture Date only','capture'); self.fields.addItem('All embedded dates','all')
+        self.fields=QComboBox(); self.fields.addItem('Image Capture Date only','capture'); self.fields.addItem('All embedded dates','all')
         self.form.addRow('Camera Timezone',with_help(self.zone,'timezone'))
         self.form.addRow('Explicit offset',self.offset)
         self.form.addRow('Date fields',with_help(self.fields,'dates'))

@@ -331,8 +331,11 @@ class OrderedImages(QWidget):
         status, reason, _ = self.state(path)
         item.setText(f'{self.images.row(item) + 1}. {Path(path).name}\n{status}')
         item.setToolTip(path + '\n' + reason)
-        item.setForeground(QBrush(self.palette().color(
-            QPalette.Disabled if status == 'Blocked' else QPalette.Active, QPalette.Text)))
+        # Blocked rows are informational and selectable, not disabled widgets.
+        item.setForeground(QBrush(self.palette().color(QPalette.Active, QPalette.Text)))
+        font = item.font()
+        font.setItalic(status == 'Blocked')
+        item.setFont(font)
 
     def refresh_items(self, *_):
         for path in self.items:

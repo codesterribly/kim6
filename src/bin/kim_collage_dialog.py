@@ -78,7 +78,7 @@ def main():
     design = choice("Layout:", [
         ("Classic Grid", "grid"),
         ("Mosaic", "mosaic"),
-        ("Hero + Supporting Photos", "hero"),
+        ("Hero + Supporting Images", "hero"),
         ("Scattered / Polaroid", "scattered"),
         ("Filmstrip / Storyboard", "filmstrip"),
     ])
@@ -101,7 +101,7 @@ def main():
     sync_canvas()
 
     placement = choice("Image placement:", [
-        ("Fit entire photograph", "fit"),
+        ("Fit entire image", "fit"),
         ("Fill and crop", "fill"),
     ])
 
@@ -111,7 +111,7 @@ def main():
     spacing.setSuffix(" px")
     form.addRow("Spacing:", spacing)
 
-    borders = choice("Photo borders:", [
+    borders = choice("Image borders:", [
         ("None", "none"),
         ("Thin white border", "thin"),
         ("Polaroid frame", "polaroid"),
@@ -195,7 +195,7 @@ def main():
     shadow.setChecked(True)
     form.addRow("Shadows:", shadow)
 
-    shuffle = QCheckBox("Shuffle selected photographs")
+    shuffle = QCheckBox("Shuffle selected images")
     form.addRow("Order:", shuffle)
 
     output_row = QWidget()

@@ -16,12 +16,12 @@ Exec=kim_all rename interactive -- %F
 
 [Desktop Action 02AdjustCaptureTime]
 Icon=image-x-generic
-_Name=Adjust Capture Date…
+_Name=Adjust Image Capture Date…
 Exec=kim_all timeshift --interactive -- %F
 
 [Desktop Action 03DateSync]
 Icon=view-calendar-day
-_Name=Set File Date from Capture Date…
+_Name=Set File Date from Image Capture Date…
 Exec=kim_all datesync --direction exif-to-file --interactive -- %F
 
 [Desktop Action 04SetCopyright]
@@ -46,7 +46,7 @@ Exec=kim_all stripmeta --interactive -- %F
 
 [Desktop Action 02SetCaptureDate]
 Icon=view-calendar-day
-_Name=Set Capture Date…
+_Name=Set Image Capture Date…
 Exec=kim_all capturedate --interactive -- %F
 
 [Desktop Action 00CheckExtensions]

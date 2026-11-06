@@ -37,7 +37,7 @@ TAGS = ('EXIF:DateTimeOriginal', 'XMP-exif:DateTimeOriginal', 'XMP-photoshop:Dat
 # particular, do not derive a lens name from LensInfo or exposure from APEX.
 CAMERA_FIELDS = [('Camera make', 'make'), ('Camera model', 'model'), ('Lens', 'lens'),
                  ('Focal length', 'focal_length'), ('Aperture', 'aperture'),
-                 ('Shutter speed', 'shutter_speed'), ('ISO', 'iso'), ('Capture date', 'capture_date')]
+                 ('Shutter speed', 'shutter_speed'), ('ISO', 'iso'), ('Image Capture Date', 'capture_date')]
 CAMERA_DEFAULTS = {key: key in ('model', 'lens', 'aperture', 'shutter_speed', 'iso')
                    for _, key in CAMERA_FIELDS}
 CAMERA_TAGS = {

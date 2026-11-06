@@ -52,7 +52,7 @@ PLACE_NAMES = {'City', 'State', 'Province-State', 'ProvinceState', 'Country',
                'WorldRegion', 'LocationCode', 'LocationName-eng', 'ContentLocationCode',
                'ContentLocationName'}
 STRUCTURES = ('LocationCreated', 'LocationShown', 'RatingRegion')
-COORDINATE_CATEGORIES = {'camera': 'Photo GPS location',
+COORDINATE_CATEGORIES = {'camera': 'GPS location',
                          'destination': 'Destination / subject position',
                          'depicted': 'Depicted location',
                          'structured': 'Other structured location',
@@ -883,10 +883,10 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                         direction_ref = refs[0] if refs else 'T'
                 elif kind == 'gpx':
                     stored = metadata_value(raw, 'ExifIFD', 'DateTimeOriginal') or metadata_value(raw, 'XMP-exif', 'DateTimeOriginal')
-                    entry['rows'].append([Path(path).name, 'Original capture time (unchanged)', str(stored or '(absent)'), '', 'Embedded camera clock; never filesystem modification time'])
+                    entry['rows'].append([Path(path).name, 'Original image capture time (unchanged)', str(stored or '(absent)'), '', 'Embedded camera clock; never filesystem modification time'])
                     original, seconds = capture_instant(raw, config.get('timezone', ''))
                     effective, correction = corrected_time(seconds, config)
-                    entry['rows'].append([Path(path).name, 'Effective capture time in UTC', original, utc_text(effective), 'Clock correction: ' + correction])
+                    entry['rows'].append([Path(path).name, 'Effective image capture time in UTC', original, utc_text(effective), 'Clock correction: ' + correction])
                     match = match_gpx(track, effective, config.get('gap', 300)); position = match['position']
                     if config.get('altitude'): altitude = match['altitude']
                     entry['rows'].append([Path(path).name, 'Track segment ' + match['segment'], match['fixes'], match['gap'], 'Matched'])
@@ -901,7 +901,7 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                     entry['warnings'].append('Free-text captions, image content and external information may still reveal location. Narrative text is preserved.')
                 entry['approved_location'] = {'category': 'camera', 'position': position, 'altitude': altitude, 'direction': direction, 'direction_ref': direction_ref, 'altitude_ref': altitude_ref, 'reduce': kind == 'reduce'}
                 entry['args'] = args + assignments(position, altitude, direction, direction_ref, altitude_ref)
-                entry['rows'].append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set photo GPS location; remove other recognized precise coordinate records'])
+                entry['rows'].append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set GPS location; remove other recognized precise coordinate records'])
                 entry['rows'].append([Path(path).name, 'GPS fix details', 'Existing altitude / time / direction / speed', 'Altitude: ' + (str(altitude) + ' m' if altitude is not None else 'absent') + '; direction: ' + (str(direction) + '° ' + direction_ref if direction is not None else 'absent'), 'Remove stale fix metadata; never invent a GPS timestamp'])
                 for key in removed:
                     entry['rows'].append([Path(path).name, key, json.dumps(info['fields'][key], ensure_ascii=False), 'Remove / reconcile', 'Explicit location field'])
@@ -935,7 +935,7 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
 def report_rows(path, info):
     name = Path(path).name
     rows = [[name, 'Location classification', privacy_classification(info), '', '; '.join(info['issues']) or 'No recognized conflicts'],
-            [name, 'Photo GPS location', display_position(info['position']), '', 'Only unambiguous camera GPS is eligible for Copy / Reduce'],
+            [name, 'GPS location', display_position(info['position']), '', 'Only unambiguous camera GPS is eligible for Copy / Reduce'],
             [name, 'Measurement accuracy', info['accuracy'], '', 'Stored decimal resolution is not measurement accuracy']]
     rows.append([name, 'Source format / inspection coverage', str(info['format']), '',
                  'Recognized ExifTool location fields only; editing uses a narrower verified format allowlist'])

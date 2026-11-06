@@ -166,7 +166,7 @@ class ImagePicker(QDialog):
         location = QHBoxLayout()
         self.up_button = QPushButton('Up')
         self.path_label = QLineEdit()
-        self.path_label.setReadOnly(True)
+        self.path_label.setPlaceholderText("Enter folder path and press Enter")
         self.path_label.setAccessibleName('Current image folder')
         self.folder_button = QPushButton('Choose Folder…')
         location.addWidget(self.up_button)
@@ -201,6 +201,7 @@ class ImagePicker(QDialog):
         buttons.rejected.connect(self.reject)
         self.up_button.clicked.connect(self.go_up)
         self.folder_button.clicked.connect(self.choose_directory)
+        self.path_label.returnPressed.connect(self.open_typed_directory)
         self.grid.itemActivated.connect(self.open_item)
         self.grid.itemSelectionChanged.connect(self.update_selection)
         self.filter.currentIndexChanged.connect(self.apply_filter)
@@ -237,6 +238,23 @@ class ImagePicker(QDialog):
     def update_status(self):
         self.add_button.setEnabled(bool(self.selection) and self.finish_result is None)
         self.status.setText(f'{len(self.image_items)} images in folder · {len(self.selection)} selected')
+
+    def open_typed_directory(self):
+        raw = self.path_label.text().strip()
+        if not raw:
+            self.path_label.setText(str(self.current_directory or Path.home()))
+            return
+
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = (self.current_directory or Path.home()) / candidate
+
+        self.open_directory(candidate)
+
+        # Restore the displayed directory if navigation was rejected.
+        if (self.pending_directory is None
+                and self.current_directory != candidate.resolve(strict=False)):
+            self.path_label.setText(str(self.current_directory or Path.home()))
 
     def go_up(self):
         if self.current_directory is not None:
@@ -292,6 +310,7 @@ class ImagePicker(QDialog):
                         (entry.is_file(follow_symlinks=False) and
                          Path(entry.name).suffix.lower().lstrip('.') in self.extensions)]
         except OSError as exc:
+            self.path_label.setText(str(self.current_directory or Path.home()))
             self.grid.setEnabled(True)
             self.update_status()
             QMessageBox.warning(self, 'Cannot Read Folder', str(exc))
@@ -445,7 +464,7 @@ class ImageCanvas(QWidget):
         self.setMinimumSize(0, 110)
         from PySide6.QtWidgets import QSizePolicy
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setAccessibleName('Selected photograph preview')
+        self.setAccessibleName('Selected image preview')
 
     def paintEvent(self, event):
         from PySide6.QtCore import QRectF

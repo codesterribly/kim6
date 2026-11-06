@@ -85,9 +85,9 @@ class WebExportReview(QDialog):
 
         layout.addLayout(destination_row)
 
-        self.table = QTableWidget(len(records), 7)
+        self.table = QTableWidget(len(records), 6)
         self.table.setHorizontalHeaderLabels((
-            "Before: Source image", "Original", "Planned size", "Frames",
+            "Before: Source image", "Original", "Planned size",
             "Output filename", "Destination", "Status"
         ))
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -96,12 +96,14 @@ class WebExportReview(QDialog):
 
         header = self.table.horizontalHeader()
         header.setStretchLastSection(False)
-        for col in range(7):
+        for col in range(6):
             header.setSectionResizeMode(col, QHeaderView.Interactive)
-        for col in (0, 4, 5):
+        for col in (0, 3, 4):
             header.setSectionResizeMode(col, QHeaderView.Stretch)
-        for col in (1, 2, 3, 6):
+        for col in (1, 2):
             header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 64)
 
         for index, record in enumerate(records):
             source, source_fmt, original, planned, frames, target, issue, icc, notice_tags = record
@@ -133,7 +135,6 @@ class WebExportReview(QDialog):
                 Path(source).name,
                 original,
                 planned,
-                frames,
                 Path(target).name if target else "Unavailable",
                 str(Path(target).parent) if target else "",
                 "Blocked" if issue else "Ready",
@@ -144,7 +145,7 @@ class WebExportReview(QDialog):
                 item.setToolTip(
                     issue if issue else
                     source if column == 0 else
-                    target if column in (4, 5) else
+                    target if column in (3, 4) else
                     f"Input: {source_fmt}; ICC: {icc}"
                 )
                 self.table.setItem(index, column, item)
@@ -187,9 +188,7 @@ class WebExportReview(QDialog):
         layout.addWidget(self.status)
 
         note = QLabel(
-            "Dimensions are calculated without enlargement. For animated "
-            "inputs, the displayed dimensions describe the first frame; "
-            "KIM6 validates every produced frame before publication. "
+            "Dimensions are calculated without enlargement. "
             "Output names may be renumbered if a collision occurs."
         )
         note.setWordWrap(True)

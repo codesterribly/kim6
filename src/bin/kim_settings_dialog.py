@@ -30,7 +30,7 @@ AFFIX_ITEMS = (
     ('gps', 'Remove GPS metadata', 'jpg', '_'),
     ('ai', 'Remove AI metadata', 'jpg', '_'),
     ('copyright', 'Copyright information', 'jpg', '_'),
-    ('timeshift', 'Shift capture time', 'jpg', '_'),
+    ('timeshift', 'Shift image capture time', 'jpg', '_'),
     ('datesync', 'Synchronize dates', 'jpg', '_'),
     ('transcoded', 'Video transcode', 'mp4', '-'),
     ('frame', 'Extract video frame', 'png', '_'),
@@ -39,7 +39,7 @@ AFFIX_ITEMS = (
     ('audio', 'Extract audio', 'mp3', '-'),
     ('muted', 'Remove video audio', 'mp4', '-'),
     ('animated', 'GIF from video', 'gif', '_'),
-    ('slideshow', 'Slideshow from photos', 'mp4', '_'),
+    ('slideshow', 'Slideshow from images', 'mp4', '_'),
 )
 AFFIX_DEFAULTS = {
     "KIM_AFFIX_" + tag.upper().replace("-", "_"): tag
@@ -267,8 +267,8 @@ def main():
     names_layout.addWidget(names_intro)
 
     affix = QComboBox()
-    affix.addItem("Suffix (photo_web.jpg)", "suffix")
-    affix.addItem("Prefix (web_photo.jpg)", "prefix")
+    affix.addItem("Suffix (image_web.jpg)", "suffix")
+    affix.addItem("Prefix (web_image.jpg)", "prefix")
     affix.setCurrentIndex(
         max(0, affix.findData(values["KIM_NAME_AFFIX_POSITION"]))
     )
@@ -322,7 +322,7 @@ def main():
             sample = "video" if tag in {
                 "transcoded", "frame", "thumbnail", "contact-sheet",
                 "audio", "muted", "animated",
-            } else "photo"
+            } else "image"
 
             if tag == "frame":
                 value += "-00-01-30"

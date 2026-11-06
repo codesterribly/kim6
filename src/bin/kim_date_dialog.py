@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, 
     QCheckBox, QTableWidgetItem)
 from kim_ui import CaptureDateInput, CaptureAdjustment, CaptureDateOptions
 
-TITLES = {'set':'Set Capture Date', 'shift':'Adjust Capture Date',
-          'exif-to-file':'Set File Date from Capture Date', 'file-to-exif':'Set Capture Date'}
+TITLES = {'set':'Set Image Capture Date', 'shift':'Adjust Image Capture Date',
+          'exif-to-file':'Set File Date from Image Capture Date', 'file-to-exif':'Set Image Capture Date'}
 
 
 class PhotoDateDialog(QDialog):
@@ -31,7 +31,7 @@ class PhotoDateDialog(QDialog):
             self.source_choice.addItem(
                 'Use each image file modification date', 'file-to-exif'
             )
-            form.addRow('Capture date source', self.source_choice)
+            form.addRow('Image Capture Date source', self.source_choice)
 
         self.capture=CaptureDateInput(); form.addRow(self.capture)
         form.setRowVisible(self.capture,kind=='set')
@@ -43,7 +43,7 @@ class PhotoDateDialog(QDialog):
         # assigning an unknown-zone camera clock. Show that required choice.
         if kind in ('file-to-exif','exif-to-file'): self.advanced.toggle.setChecked(True)
         explanation = ('Changes the File Modification Date only; embedded metadata stays unchanged.' if kind=='exif-to-file' else
-                       'Set the capture date you want in image metadata. Original files are preserved; new copies are created.')
+                       'Set the image capture date you want in image metadata. Original files are preserved; new copies are created.')
         self.explanation=QLabel(explanation + (f' The same entered date will apply to all {len(files)} selected files.' if kind=='set' and len(files)>1 else f' {len(files)} selected file(s); each source is calculated separately.'))
         self.explanation.setWordWrap(True); layout.addWidget(self.explanation)
         from kim_preview import qt_classes
@@ -55,7 +55,7 @@ class PhotoDateDialog(QDialog):
         )
         layout.addWidget(self.metadata_toggle)
 
-        self.fix=QPushButton('Set Capture Date…'); self.fix.clicked.connect(self.use_set); layout.addWidget(self.fix); self.fix.setVisible(kind!='set')
+        self.fix=QPushButton('Set Image Capture Date…'); self.fix.clicked.connect(self.use_set); layout.addWidget(self.fix); self.fix.setVisible(kind!='set')
         button_row = QHBoxLayout()
         button_row.addStretch(1)
 
@@ -96,7 +96,7 @@ class PhotoDateDialog(QDialog):
             self.advanced.set_zone('unknown')
             self.advanced.toggle.setChecked(False)
             self.explanation.setText(
-                'The entered capture date applies to every selected image. '
+                'The entered image capture date applies to every selected image. '
                 'File modification dates are preserved.'
             )
         else:
@@ -104,7 +104,7 @@ class PhotoDateDialog(QDialog):
             self.advanced.toggle.setChecked(True)
             self.explanation.setText(
                 'Each image receives its own file modification date '
-                'as its embedded capture date. '
+                'as its embedded image capture date. '
                 'File modification dates are preserved.'
             )
 
@@ -143,9 +143,9 @@ class PhotoDateDialog(QDialog):
             self.details.summary.setText(
                 self.details.summary.text()
                 .replace('Set Photo Capture Date from File Date',
-                         'Set Capture Date')
-                .replace('Set Photo Capture Date', 'Set Capture Date')
-                .replace('Adjust Photo Capture Date', 'Adjust Capture Date')
+                         'Set Image Capture Date')
+                .replace('Set Photo Capture Date', 'Set Image Capture Date')
+                .replace('Adjust Photo Capture Date', 'Adjust Image Capture Date')
             )
             return
 
@@ -157,11 +157,11 @@ class PhotoDateDialog(QDialog):
         summary = (
             summary
             .replace('Set Photo Capture Date from File Date',
-                     'Set Capture Date')
-            .replace('Set Photo Capture Date', 'Set Capture Date')
-            .replace('Adjust Photo Capture Date', 'Adjust Capture Date')
+                     'Set Image Capture Date')
+            .replace('Set Photo Capture Date', 'Set Image Capture Date')
+            .replace('Adjust Photo Capture Date', 'Adjust Image Capture Date')
             .replace('Set File Date from Photo Capture Date',
-                     'Set File Date from Capture Date')
+                     'Set File Date from Image Capture Date')
         )
 
         self.details.summary.setText(summary)
@@ -171,9 +171,9 @@ class PhotoDateDialog(QDialog):
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels([
             'Image',
-            'Current capture date',
-            'Proposed capture date',
-            'Status / warnings',
+            'Current',
+            'Proposed',
+            'Status',
         ])
 
         entries = self.plan.get('entries', [])
@@ -199,14 +199,9 @@ class PhotoDateDialog(QDialog):
             elif status == 'skip':
                 status_label = 'Unchanged'
             else:
-                status_label = (
-                    entry.get('error') or 'Cannot apply'
-                )
+                status_label = 'Blocked'
 
             warnings = entry.get('warnings') or []
-
-            if warnings:
-                status_label += ' | ' + '; '.join(map(str, warnings))
 
             # The detailed metadata rows are retained in the plan.
             # This table is presentation only.
@@ -217,15 +212,28 @@ class PhotoDateDialog(QDialog):
                 status_label,
             ]
 
-            tooltip = '\\n'.join(
-                ' | '.join(map(str, row))
-                for row in entry.get('rows', [])
+            # Show only relevant information on hover. The complete
+            # metadata remains available through Show metadata details.
+            status_details = '\n'.join(
+                str(message) for message in (
+                    entry.get('error'), entry.get('skip_reason'), *warnings
+                ) if message
+            )
+            tooltips = (
+                str(entry['source']),
+                str(values[1]),
+                str(values[2]),
+                status_details or status_label,
             )
 
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
-                item.setToolTip(tooltip or str(value))
+                item.setToolTip(tooltips[column])
                 table.setItem(index, column, item)
+
+        # The compact Status column needs only enough room for
+        # Ready, Unchanged or Blocked, not the old review width.
+        table.resizeColumnToContents(3)
 
     def config(self):
         zone=self.offset.text() if self.zone.currentData()=='custom' else self.zone.currentData()
@@ -238,7 +246,7 @@ class PhotoDateDialog(QDialog):
         self.advanced.set_zone('unknown'); self.fields.setEnabled(True); self.advanced.toggle.setChecked(False)
         embedded=self.zone.findData('embedded')
         if embedded >= 0: self.zone.model().item(embedded).setEnabled(False)
-        self.explanation.setText(f'Changes embedded Capture Date metadata in {len(self.files)} selected file(s). The same entered date applies to all. File Modification Dates are preserved.')
+        self.explanation.setText(f'Changes embedded Image Capture Date metadata in {len(self.files)} selected file(s). The same entered date applies to all. File Modification Dates are preserved.')
         self.refresh()
 
     def refresh(self,*_):
@@ -251,7 +259,7 @@ class PhotoDateDialog(QDialog):
         if self.kind == 'set' and not self.capture.value():
             self.plan = None
             self.details.summary.setText(
-                'Choose a capture date and time to preview the changes.'
+                'Choose an image capture date and time to preview the changes.'
             )
             self.details.table.setRowCount(0)
             self.apply.setEnabled(False)

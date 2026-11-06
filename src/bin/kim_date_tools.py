@@ -30,7 +30,7 @@ def ensure_still_capture_input(path, preview=False):
             if png: length,tag=struct.unpack('>I4s',chunk)
             else: tag,length=struct.unpack('<4sI',chunk)
             if tag in (b'acTL',b'fcTL',b'fdAT',b'ANIM',b'ANMF'):
-                raise RecipeError('Animated images are not supported by Photo Capture Date actions. Select a still PNG/JPEG or use the existing animation menus; no date was changed.')
+                raise RecipeError('Animated images are not supported by Image Capture Date actions. Select a still PNG/JPEG or use the existing animation menus; no date was changed.')
             if png and tag==b'IEND': return
             stream.seek(length+(4 if png else length%2),1)
 
@@ -43,7 +43,7 @@ def source_date(path, ignore_invalid=False, preview=False):
         raw=read_metadata(path,tags)
     else:
         result=run_process(['exiftool','-json','-G1',*tags,'--',str(path)],text=True)
-        if result.returncode: raise RecipeError('Cannot read photo dates: '+result.stderr.strip())
+        if result.returncode: raise RecipeError('Cannot read image capture dates: '+result.stderr.strip())
         raw=json.loads(result.stdout)[0]
     exif = raw.get('ExifIFD:DateTimeOriginal'); xmp = raw.get('XMP-exif:DateTimeOriginal')
     info = {'DateTimeOriginal':exif or xmp, 'FileType':raw.get('File:FileType','')}
@@ -68,7 +68,7 @@ def resolve(path, config):
         capture, fraction = explicit(config.get('datetime',''),zone)
     elif kind == 'file-to-exif':
         tz = timezone(zone)
-        if tz is None: raise RecipeError('Choose a known timezone to express the File Modification Date as a Photo Capture Date.')
+        if tz is None: raise RecipeError('Choose a known timezone to express the File Modification Date as an Image Capture Date.')
         ns = Path(path).stat().st_mtime_ns
         capture = dt.datetime.fromtimestamp(ns//10**9,tz)
         fraction = f'{ns % 10**9:09d}'.rstrip('0')
@@ -82,7 +82,7 @@ def resolve(path, config):
             except OverflowError as exc: raise RecipeError('The adjusted date is outside the supported years.') from exc
     else: raise RecipeError('Unknown date action')
     if fmt not in ('jpeg','png','tiff','webp','avif','heic','heif','jp2','jxl','psd'):
-        raise RecipeError(fmt.upper() + ' cannot safely store the selected photo date fields. Convert to JPEG, PNG or TIFF first.')
+        raise RecipeError(fmt.upper() + ' cannot safely store the selected image capture date fields. Convert to JPEG, PNG or TIFF first.')
     if kind == 'exif-to-file':
         return {'epoch_ns':epoch_ns(capture,fraction),'preview':display(capture,fraction),'args':[]}
     args = assignments(capture,fraction,fields,fmt not in NO_LEGACY_IPTC)

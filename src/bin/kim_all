@@ -420,7 +420,7 @@ choose_output_mode() {
       yes_label="$(gettext 'Yes, replace existing outputs')"
       ;;
     mixed|*)
-      warning="$(gettext 'Overwrite original photographs or existing output files?')"
+      warning="$(gettext 'Overwrite original images or existing output files?')"
       warning+="$(printf '\n\n%s' "$(gettext 'Existing files may be replaced without backup. This cannot be undone by KIM6.')")"
       ;;
   esac
@@ -450,13 +450,13 @@ confirm_inplace_overwrite() {
   fi
 
   choice="$(kdialog --title "$(gettext 'Kim')" --radiolist \
-    "$(gettext 'This action replaces selected original photographs, not copies.')$(printf '\n%s %s\n%s %s' "$(gettext 'Action:')" "$action" "$(gettext 'Selected files:')" "$count")" \
+    "$(gettext 'This action replaces selected original images, not copies.')$(printf '\n%s %s\n%s %s' "$(gettext 'Action:')" "$action" "$(gettext 'Selected files:')" "$count")" \
     cancel "$(gettext 'Keep originals unchanged')" on \
     review "$(gettext 'Overwrite originals (confirmation required)')" off)" || return 1
 
   [ "$choice" = review ] || return 1
 
-  warning="$(gettext 'Overwrite the selected original photographs?')"
+  warning="$(gettext 'Overwrite the selected original images?')"
   warning+="$(printf '\n\n%s %s\n%s %s\n\n%s' \
     "$(gettext 'Action:')" "$action" \
     "$(gettext 'Selected files:')" "$count" \
@@ -1300,7 +1300,7 @@ progress_open() {
     flipflop) action_name="$(gettext 'Flip Images')" ;;
     copyright) action_name="$(gettext 'Set Creator and Copyright')" ;;
     location-gpx|location-copy|location-apply|location-reduce) action_name='Image Location Tools' ;;
-    timeshift|datesync|capturedate) action_name="$(gettext 'Photo Dates')" ;;
+    timeshift|datesync|capturedate) action_name="$(gettext 'Image Capture Dates')" ;;
     stripmeta) action_name="$(gettext 'Remove Metadata')" ;;
     rename) action_name="$(gettext 'Rename Images')" ;;
     webexport|resizeandsend) action_name="$(gettext 'Export Images')" ;;
@@ -1925,7 +1925,7 @@ $(cat -- "$errors")"
       publication_fail "$ref" '' "$(gettext 'Album: an input image could not be inspected:') ${file##*/}"; return 1;
     }
     if [ "$annotated" = true ] && [ "$frame_count" -ne 1 ]; then
-      publication_fail "$ref" '' "$(gettext 'Captions beneath each image require single-frame sources. Set Caption source to None and uncheck Include capture date and Include camera and lens to retain every frame of a multi-frame input.')"; return 1
+      publication_fail "$ref" '' "$(gettext 'Captions beneath each image require single-frame sources. Set Caption source to None and uncheck Include image capture date and Include camera and lens to retain every frame of a multi-frame input.')"; return 1
     fi
     frames=$((frames + frame_count))
     progress_value "$ref" "$index" || return 1
@@ -1956,7 +1956,7 @@ $(cat -- "$errors")"
       progress_begin_item "$ref" "$(gettext 'Rendering album caption') — $index / ${#files[@]}: ${file##*/}" || return 1
       if ! publication_caption_tile "$ref" "$file" "$annotated_tile" "$cell_width" "$cell_height" "$label_height" \
           "$pixels" white fit below "$caption_mode" "$index" "$capture_date" "$camera_lens" "${album_choices[index+5]}"; then
-        publication_fail "$ref" "$tmp" "$(gettext 'Album: annotated photo rendering failed or was interrupted.')"; return 1
+        publication_fail "$ref" "$tmp" "$(gettext 'Album: annotated image rendering failed or was interrupted.')"; return 1
       fi
       album_tiles+=("$annotated_tile")
     done
@@ -7228,17 +7228,17 @@ action_photo_date() {
     esac
   done
   if [ "$interactive" = true ]; then preview_selection "${files[@]}" || return 1; fi
-  datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Select local, unambiguous photo files.')"; return 1; }
+  datesync_collect_files files "${files[@]}" || { progress_error "$(gettext 'Select local, unambiguous image files.')"; return 1; }
   for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Image Capture Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
     # Pass the existing helper's exact affix seed alongside each source.
-    : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Photo Dates preview inputs. No images were changed.'; return 1; }
+    : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
     for source in "${files[@]}"; do
-      target="$(metadata_output_path "$source" dated "$policy")" || { progress_error 'Could not resolve Photo Dates preview destinations. No images were changed.'; return 1; }
-      printf '%s\0' "$target" >> "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Photo Dates preview inputs. No images were changed.'; return 1; }
+      target="$(metadata_output_path "$source" dated "$policy")" || { progress_error 'Could not resolve Image Capture Dates preview destinations. No images were changed.'; return 1; }
+      printf '%s\0' "$target" >> "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
     done
     preview_run python3 "$DISPATCHER_DIR/kim_date_dialog.py" "$kind" "$config" "$policy" "$KIMDIR/date-seeds" "${files[@]}" || return 1
     preview_run mv -- "$config.approved" "$KIMDIR/preview.approved" || return 1
@@ -7258,11 +7258,11 @@ PYDATE
         progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
       fi
     done
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Photo dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Image Capture Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Photo dates')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Image Capture Dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
@@ -7270,7 +7270,7 @@ PYDATE
       if preview_active; then break; fi
       continue
     fi
-    progress_begin_item "$ref" "$(gettext 'Planning photo date:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
+    progress_begin_item "$ref" "$(gettext 'Planning image capture date:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
     if preview_active; then
       if [ "$(preview_value state "$source")" = skip ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
       preview_value date "$source" > "$result" || return 1
@@ -7298,11 +7298,11 @@ PYDATE
       for argument in "${args[@]}"; do expected+=("${argument%%=*}"$'\034'"${argument#*=}"); done
       metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}" || rc=1
     fi
-    if [ "$rc" -eq 0 ]; then report_ok; else report_fail "$source — $(gettext 'Photo date update failed; no incomplete output was published.')"; fi
+    if [ "$rc" -eq 0 ]; then report_ok; else report_fail "$source — $(gettext 'Image capture date update failed; no incomplete output was published.')"; fi
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Photo dates')"
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Image Capture Dates')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 
@@ -7427,7 +7427,7 @@ action_timeshift() {
       --offset|--fields)
         [ "$#" -ge 2 ] || die "timeshift: $1 requires a value"
         if [ "$1" = --offset ]; then
-          [ -n "$2" ] || die "Choose an adjustment in Adjust Photo Capture Date…"
+          [ -n "$2" ] || die "Choose an adjustment in Adjust Image Capture Date…"
           offset="$2"
         else
           fields="$2"
@@ -7450,7 +7450,7 @@ action_timeshift() {
   if [ "$interactive" = true ] || [ -z "$offset" ]; then
     interactive=true
     offset="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Signed camera-time offset (±HH:MM:SS):')" '+00:00:00')" || return 1
-    fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Capture, creation and modification dates')" capture "$(gettext 'Capture time only')")" || return 1
+    fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Image capture, creation and modification dates')" capture "$(gettext 'Image capture time only')")" || return 1
   fi
   [[ "$offset" =~ ^([+-])([0-9]{2,4}):([0-5][0-9]):([0-5][0-9])$ ]] || die "timeshift: offset must be signed HH:MM:SS"
   sign="${BASH_REMATCH[1]}"
@@ -7547,7 +7547,7 @@ datesync_exif_epoch() {
     [[ "$offset" =~ ^([+-])([0-9]{2}):([0-9]{2})$ ]] || return 1
     epoch="$(date -d "$iso ${BASH_REMATCH[1]}${BASH_REMATCH[2]}:${BASH_REMATCH[3]}" +%s 2>/dev/null)" || return 1
   else
-    printf '%s\n' 'The camera timezone is unknown. Use Set File Date from Photo Capture Date… and choose the camera timezone.' >&2
+    printf '%s\n' 'The camera timezone is unknown. Use Set File Date from Image Capture Date… and choose the camera timezone.' >&2
     return 1
   fi
   [[ "$epoch" =~ ^-?[0-9]+$ ]] || return 1
@@ -7628,7 +7628,7 @@ action_datesync() {
       --direction|--fields)
         [ "$#" -ge 2 ] || die "datesync: $1 requires a value"
         if [ "$1" = --direction ]; then
-          [ -n "$2" ] || die "Choose Set File Date from Photo Capture Date… or Set Photo Capture Date from File Date…"
+          [ -n "$2" ] || die "Choose Set File Date from Image Capture Date… or Set Image Capture Date from File Date…"
           direction="$2"
         else
           fields="$2"
@@ -7665,7 +7665,7 @@ action_datesync() {
   if [ "$interactive" = true ] || [ -z "$direction" ]; then
     direction="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose date synchronization direction:')" \
       exif-to-file "$(gettext 'Set file modification time from DateTimeOriginal')" \
-      file-to-exif "$(gettext 'Set EXIF capture time from file modification time')")" || return 1
+      file-to-exif "$(gettext 'Set image capture time from file modification time')")" || return 1
     if [ "$direction" = file-to-exif ]; then
       fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'EXIF fields to update:')" \
         capture "$(gettext 'DateTimeOriginal only')" all "$(gettext 'DateTimeOriginal, CreateDate and ModifyDate')")" || return 1
@@ -7688,7 +7688,7 @@ action_datesync() {
       proposed_date="$(datesync_epoch_to_wall_time "$first_seconds" "$preview_offset" 2>/dev/null)"
     fi
     if [ -z "$proposed_date" ]; then
-      progress_error "$(gettext 'No valid destination date can be calculated. No date was changed. Use Set Photo Capture Date… or choose an explicit camera timezone.')"
+      progress_error "$(gettext 'No valid destination date can be calculated. No date was changed. Use Set Image Capture Date… or choose an explicit camera timezone.')"
       return 1
     fi
     if [ "$direction" = exif-to-file ]; then
@@ -7725,7 +7725,7 @@ action_datesync() {
   policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
-  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Synchronizing photo dates ...')")" || return 1
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Synchronizing image capture dates…')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
 
@@ -7743,7 +7743,7 @@ action_datesync() {
     fi
     if [ "$direction" = exif-to-file ]; then
       epoch="$(datesync_exif_epoch "$source")" || {
-        report_fail "$source — $(gettext 'missing or invalid capture date')"
+        report_fail "$source — $(gettext 'missing or invalid image capture date')"
         progress_value "$ref" "$counter"
         continue
       }
@@ -8878,14 +8878,14 @@ action_collage() {
           canvas="$(kdialog --inputbox "$(gettext 'Canvas dimensions (WIDTHxHEIGHT):')" '3840x2560')" || return 1
         fi
         fit="$(kdialog --radiolist "$(gettext 'Image placement:')" \
-          fit "$(gettext 'Fit entire photograph')" on \
+          fit "$(gettext 'Fit entire image')" on \
           fill "$(gettext 'Fill and crop')" off)" || return 1
-        gap="$(kdialog --radiolist "$(gettext 'Spacing between photos:')" \
+        gap="$(kdialog --radiolist "$(gettext 'Spacing between images:')" \
           0 "$(gettext 'None')" off \
           12 "$(gettext 'Small')" off \
           24 "$(gettext 'Medium')" on \
           48 "$(gettext 'Large')" off)" || return 1
-        frame="$(kdialog --radiolist "$(gettext 'Photo borders:')" \
+        frame="$(kdialog --radiolist "$(gettext 'Image borders:')" \
           none "$(gettext 'No borders')" on \
           thin "$(gettext 'Thin white border')" off \
           polaroid "$(gettext 'Polaroid frame')" off)" || return 1
@@ -8903,9 +8903,9 @@ action_collage() {
           true "$(gettext 'Enabled')" on \
           false "$(gettext 'Disabled')" off)" || return 1
         case "$shadow" in true|false) ;; *) return 1 ;; esac
-        order_choice="$(kdialog --radiolist "$(gettext 'Photo order:')" \
+        order_choice="$(kdialog --radiolist "$(gettext 'Image order:')" \
           selected "$(gettext 'Selection order')" on \
-          shuffled "$(gettext 'Shuffle photos')" off)" || return 1
+          shuffled "$(gettext 'Shuffle images')" off)" || return 1
         case "$order_choice" in
           selected) shuffle=false ;;
           shuffled) shuffle=true ;;
@@ -9560,95 +9560,156 @@ action_video() {
   local review_plan="$KIMDIR/video.review.plan"
   local review_source review_directory review_stem review_target
   local review_ext review_formats review_resolution review_quality
-  local review_number review_input_ext review_rc
-  local -A review_reserved=()
+  local review_number review_input_ext review_rc review_result
+  local review_request="$KIMDIR/video.destination"
+  local KIM_VIDEO_REVIEW_DIRECTORY=''
+  local -A review_reserved=() review_targets=()
 
-  : > "$review_plan" || return 1
+  # Destination changes trigger a new preflight and approval.
+  while :; do
+    : > "$review_plan" || return 1
+    rm -f -- "$review_request" || return 1
+    review_reserved=()
+    review_targets=()
 
-  for review_source in "${files[@]}"; do
-    if ! video_probe "$review_source"; then
-      progress_error "Video review could not inspect: ${review_source##*/}"
-      return 1
-    fi
-
-    review_formats="$VIDEO_FORMATS"
-
-    if video_resolve_container "$review_source" "$container" \
-        "$review_formats" "$codec"; then
-      review_rc=0
-    else
-      review_rc=$?
-    fi
-
-    if [ "$review_rc" -ne 0 ]; then
-      progress_error "Video review rejected an incompatible container: ${review_source##*/}"
-      return 1
-    fi
-
-    review_ext="$VIDEO_EXTENSION"
-
-    if [ "$mode" = overwrite ] && [ "$container" = mp4 ]; then
-      review_input_ext="${review_source##*.}"
-      review_input_ext="${review_input_ext,,}"
-
-      case "$review_input_ext" in
-        mp4|m4v) ;;
-        *)
-          progress_error "MP4 cannot replace this source extension: ${review_source##*/}"
-          return 1
-          ;;
-      esac
-    fi
-
-    review_directory="${review_source%/*}"
-    [ "$review_directory" != "$review_source" ] ||
-      review_directory="$PWD"
-
-    if [ "$mode" = overwrite ]; then
-      review_target="$review_source"
-    else
-      review_stem="${review_source##*/}"
-      if [[ "$review_stem" == *.* ]]; then
-        review_stem="${review_stem%.*}"
+    for review_source in "${files[@]}"; do
+      if ! video_probe "$review_source"; then
+        progress_error "Video review could not inspect: ${review_source##*/}"
+        return 1
       fi
 
-      review_target="$review_directory/$(affixed_filename \
-        "$review_stem" transcoded "$review_ext" "" "_" "-")"
+      review_formats="$VIDEO_FORMATS"
 
-      review_number=1
+      if video_resolve_container "$review_source" "$container" \
+          "$review_formats" "$codec"; then
+        review_rc=0
+      else
+        review_rc=$?
+      fi
 
-      while [ -e "$review_target" ] ||
-            [ -L "$review_target" ] ||
-            [ -n "${review_reserved[$review_target]:-}" ]; do
+      if [ "$review_rc" -ne 0 ]; then
+        progress_error "Video review rejected an incompatible container: ${review_source##*/}"
+        return 1
+      fi
+
+      review_ext="$VIDEO_EXTENSION"
+
+      if [ "$mode" = overwrite ] && [ "$container" = mp4 ]; then
+        review_input_ext="${review_source##*.}"
+        review_input_ext="${review_input_ext,,}"
+
+        case "$review_input_ext" in
+          mp4|m4v) ;;
+          *)
+            progress_error "MP4 cannot replace this source extension: ${review_source##*/}"
+            return 1
+            ;;
+        esac
+      fi
+
+      review_directory="${review_source%/*}"
+      [ "$review_directory" != "$review_source" ] ||
+        review_directory="$PWD"
+
+      if [ "$mode" = overwrite ]; then
+        review_target="$review_source"
+      else
+        if [ -n "$KIM_VIDEO_REVIEW_DIRECTORY" ]; then
+          review_directory="$KIM_VIDEO_REVIEW_DIRECTORY"
+          if [ ! -d "$review_directory" ] || [ -L "$review_directory" ] ||
+             [ ! -w "$review_directory" ] || [ ! -x "$review_directory" ]; then
+            progress_error "Video destination is unavailable or not writable."
+            return 1
+          fi
+        fi
+        review_stem="${review_source##*/}"
+        if [[ "$review_stem" == *.* ]]; then
+          review_stem="${review_stem%.*}"
+        fi
+
         review_target="$review_directory/$(affixed_filename \
-          "$review_stem" transcoded "$review_ext" \
-          "$review_number" "_" "-")"
-        review_number=$((review_number + 1))
-      done
+          "$review_stem" transcoded "$review_ext" "" "_" "-")"
 
-      review_reserved["$review_target"]=1
+        review_number=1
+
+        while [ -e "$review_target" ] ||
+              [ -L "$review_target" ] ||
+              [ -n "${review_reserved[$review_target]:-}" ]; do
+          review_target="$review_directory/$(affixed_filename \
+            "$review_stem" transcoded "$review_ext" \
+            "$review_number" "_" "-")"
+          review_number=$((review_number + 1))
+        done
+
+        review_reserved["$review_target"]=1
+        review_targets["$review_source"]="$review_target"
+      fi
+
+      printf '%s\0' \
+        "$review_source" \
+        "${VIDEO_WIDTH} × ${VIDEO_HEIGHT}" \
+        "$VIDEO_FORMAT_DURATION" \
+        "$VIDEO_AUDIO_COUNT" \
+        "$review_target" \
+        "$VIDEO_MUXER" >> "$review_plan" || return 1
+    done
+
+    review_resolution="${max_width} × ${max_height}"
+
+    if [ "$codec" = av1 ]; then
+      review_quality="CRF $crf, speed $av1_speed"
+    else
+      review_quality="CRF $crf"
     fi
 
-    printf '%s\0' \
-      "$review_source" \
-      "${VIDEO_WIDTH} × ${VIDEO_HEIGHT}" \
-      "$VIDEO_FORMAT_DURATION" \
-      "$VIDEO_AUDIO_COUNT" \
-      "$review_target" \
-      "$VIDEO_MUXER" >> "$review_plan" || return 1
+    if preview_run python3 "$DISPATCHER_DIR/kim_video_review.py" \
+      "$review_plan" "$codec" "$review_resolution" \
+      "$review_quality" "$mode" "$review_request" \
+      "$KIM_VIDEO_REVIEW_DIRECTORY"; then
+      break
+    else
+      review_result=$?
+    fi
+
+    if [ "$review_result" -ne 130 ] || [ ! -s "$review_request" ] ||
+       [ "$mode" != create ]; then
+      return "$review_result"
+    fi
+
+    IFS= read -r -d '' KIM_VIDEO_REVIEW_DIRECTORY < "$review_request" || {
+      progress_error "Invalid video destination request."
+      return 1
+    }
+
+    if [ -n "$KIM_VIDEO_REVIEW_DIRECTORY" ]; then
+      [[ "$KIM_VIDEO_REVIEW_DIRECTORY" = /* ]] || {
+        progress_error "Select an absolute video destination directory."
+        return 1
+      }
+
+      [ -d "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+      [ ! -L "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+      [ -w "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+      [ -x "$KIM_VIDEO_REVIEW_DIRECTORY" ] || {
+        progress_error "Selected video destination is not writable."
+        return 1
+      }
+
+      KIM_VIDEO_REVIEW_DIRECTORY="$(
+        cd -P -- "$KIM_VIDEO_REVIEW_DIRECTORY" && pwd -P
+      )" || return 1
+    fi
   done
 
-  review_resolution="${max_width} × ${max_height}"
-
-  if [ "$codec" = av1 ]; then
-    review_quality="CRF $crf, speed $av1_speed"
-  else
-    review_quality="CRF $crf"
+  if [ -n "$KIM_VIDEO_REVIEW_DIRECTORY" ]; then
+    [ -d "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+    [ ! -L "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+    [ -w "$KIM_VIDEO_REVIEW_DIRECTORY" ] &&
+    [ -x "$KIM_VIDEO_REVIEW_DIRECTORY" ] || {
+      progress_error "Video destination changed after approval."
+      return 1
+    }
   fi
-
-  preview_run python3 "$DISPATCHER_DIR/kim_video_review.py" \
-    "$review_plan" "$codec" "$review_resolution" \
-    "$review_quality" "$mode" reserved || return $?
 
   # The existing dispatcher retains final output validation,
   # collision handling, and ownership of published results.
@@ -9702,11 +9763,29 @@ action_video() {
     if [ "$mode" = overwrite ]; then
       target="$source"
     else
+      if [ -n "$KIM_VIDEO_REVIEW_DIRECTORY" ]; then
+        directory="$KIM_VIDEO_REVIEW_DIRECTORY"
+        [ -d "$directory" ] && [ ! -L "$directory" ] &&
+        [ -w "$directory" ] && [ -x "$directory" ] || {
+          video_item_error "$source" "$(gettext 'destination is no longer available')"
+          progress_value "$ref" "$index" || {
+            report_finish_dialog "$(gettext 'Kim')"
+            return 1
+          }
+          continue
+        }
+      fi
+
       stem="${source##*/}"
       if [[ "$stem" == *.* ]]; then stem="${stem%.*}"; fi
-      target="$directory/$(affixed_filename "$stem" transcoded "$ext" "" "_" "-")"
+
+      # Retain the selected path from the approved preflight.
+      target="${review_targets[$source]}"
       target_number=1
-      while [ -e "$target" ] || [ -L "$target" ]; do
+
+      while [ -e "$target" ] || [ -L "$target" ] ||
+            { [ -n "${review_reserved[$target]:-}" ] &&
+              [ "$target" != "${review_targets[$source]}" ]; }; do
         target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
         target_number=$((target_number + 1))
       done
@@ -9794,7 +9873,11 @@ action_video() {
         while :; do
           target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
           target_number=$((target_number + 1))
-          [ ! -e "$target" ] && [ ! -L "$target" ] && break
+          if [ ! -e "$target" ] && [ ! -L "$target" ] &&
+             { [ -z "${review_reserved[$target]:-}" ] ||
+               [ "$target" = "${review_targets[$source]}" ]; }; then
+            break
+          fi
         done
         continue
       fi
@@ -11079,7 +11162,7 @@ action_slideshow() {
 
     files=("${revalidated_files[@]}")
   fi
-  [[ "$seconds" =~ ^[0-9]{1,2}$ ]] && [ "$seconds" -ge 1 ] && [ "$seconds" -le 30 ] || { progress_error "$(gettext 'Slideshow seconds per photo must be 1-30.')"; return 2; }
+  [[ "$seconds" =~ ^[0-9]{1,2}$ ]] && [ "$seconds" -ge 1 ] && [ "$seconds" -le 30 ] || { progress_error "$(gettext 'Slideshow seconds per image must be 1–30.')"; return 2; }
   [[ "$fps" =~ ^[0-9]{1,2}$ ]] && [ "$fps" -ge 1 ] && [ "$fps" -le 30 ] || { progress_error "$(gettext 'Slideshow frame rate must be 1-30 fps.')"; return 2; }
   [[ "$size" =~ ^([0-9]{2,4})x([0-9]{2,4})$ ]] || { progress_error "$(gettext 'Slideshow size must be WIDTHxHEIGHT.')"; return 2; }
   width="${BASH_REMATCH[1]}"; height="${BASH_REMATCH[2]}"
@@ -11103,9 +11186,9 @@ action_slideshow() {
     progress_error "$(gettext 'ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames.')"; return 1
   fi
   if ! collect_publication_inputs files "${files[@]}" || [ "${#files[@]}" -eq 0 ]; then
-    progress_error "$(gettext 'Select local, unambiguous photograph files for the slideshow.')"; return 1
+    progress_error "$(gettext 'Select local, unambiguous image files for the slideshow.')"; return 1
   fi
-  (( ${#files[@]} <= 200 )) || { progress_error "$(gettext 'A slideshow can contain at most 200 photographs.')"; return 2; }
+  (( ${#files[@]} <= 200 )) || { progress_error "$(gettext 'A slideshow can contain at most 200 images.')"; return 2; }
   total=$((seconds * ${#files[@]}))
   (( total <= 600 && total * fps <= 18000 )) || { progress_error "$(gettext 'Slideshow duration is limited to 600 seconds and 18,000 frames.')"; return 2; }
   for source in "${files[@]}"; do
@@ -11167,7 +11250,7 @@ action_slideshow() {
   stage="$(tmp_for_target "$target")" || { progress_close "$ref" || true; progress_error "$(gettext 'Slideshow staging failed.')"; return 1; }
   for source in "${ordered[@]}"; do
     index=$((index + 1))
-    if ! progress_begin_item "$ref" "$(gettext 'Kim — Preparing photo:') ${source##*/}" || progress_cancelled "$ref"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIM6 — Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
       report_fail "$source — $(gettext 'interrupted before frame preparation')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -11182,7 +11265,7 @@ action_slideshow() {
     source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
     if [[ "${colorspace,,}" == *cmyk* && -z "$source_icc" ]]; then rc=1; fi
     if [ "$rc" -ne 0 ]; then
-      report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame photograph')"
+      report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame image')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1

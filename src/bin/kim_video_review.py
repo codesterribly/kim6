@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only, explicit review for KIM6 video transcode presets."""
+"""Explicit review for KIM6 video transcode presets and output destination."""
 
 import os
 import sys
@@ -10,8 +10,12 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,7 +35,7 @@ def source_identity(path):
 
 
 class VideoReview(QDialog):
-    def __init__(self, plan, codec, limit, quality, mode):
+    def __init__(self, plan, codec, limit, quality, mode, request_path, destination):
         super().__init__()
 
         self.setWindowTitle("KIM6 — Review Video Conversion")
@@ -39,6 +43,7 @@ class VideoReview(QDialog):
         self.setMinimumWidth(850)
 
         self.plan = plan
+        self.request_path = Path(request_path)
         self.identities = {}
         self.errors = {}
 
@@ -80,6 +85,23 @@ class VideoReview(QDialog):
         policy_label = QLabel(policy)
         policy_label.setWordWrap(True)
         outer.addWidget(policy_label)
+
+        destination_row = QHBoxLayout()
+        destination_label = QLabel(
+            "Destination: Replace each original in place" if mode == "overwrite"
+            else "Destination: " + (destination or "Beside each source")
+        )
+        destination_label.setWordWrap(True)
+        destination_row.addWidget(destination_label, 1)
+        if mode != "overwrite":
+            choose_button = QPushButton("Change Destination…")
+            choose_button.clicked.connect(lambda: self.choose_destination(destination))
+            destination_row.addWidget(choose_button)
+            if destination:
+                reset_button = QPushButton("Beside each source")
+                reset_button.clicked.connect(lambda: self.request_destination(""))
+                destination_row.addWidget(reset_button)
+        outer.addLayout(destination_row)
 
         self.table = QTableWidget(len(plan), 6)
         self.table.setHorizontalHeaderLabels((
@@ -197,6 +219,22 @@ class VideoReview(QDialog):
 
         self.refresh_status()
 
+    def request_destination(self, directory):
+        try:
+            self.request_path.write_bytes(os.fsencode(directory) + b"\0")
+        except OSError as exc:
+            QMessageBox.critical(self, "Cannot change destination", str(exc))
+            return
+        self.reject()  # Exit 130 with a request file to trigger a fresh preflight.
+
+    def choose_destination(self, current_directory):
+        start = current_directory or os.path.dirname(self.plan[0][0])
+        selected = QFileDialog.getExistingDirectory(
+            self, "Choose output directory", start
+        )
+        if selected:
+            self.request_destination(selected)
+
     def refresh_status(self):
         blocked = len(self.errors)
         ready = len(self.plan) - blocked
@@ -242,10 +280,10 @@ class VideoReview(QDialog):
 
 
 def main():
-    if len(sys.argv) != 7:
+    if len(sys.argv) != 8:
         return 125
 
-    _, plan_file, codec, limit, quality, mode, _reserved = sys.argv
+    _, plan_file, codec, limit, quality, mode, request_file, destination = sys.argv
 
     if mode not in ("create", "overwrite"):
         return 125
@@ -278,7 +316,7 @@ def main():
     app = QApplication(sys.argv[:1])
 
     review = VideoReview(
-        records, codec, limit, quality, mode
+        records, codec, limit, quality, mode, request_file, destination
     )
 
     return (
