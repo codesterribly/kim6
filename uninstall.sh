@@ -71,6 +71,7 @@ runtime_known=false
 SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=install_inventory.sh
 source "$SOURCE_DIR/install_inventory.sh"
+# shellcheck disable=SC2154
 menu_names+=("${obsolete_menu_names[@]}")
 runtime_files+=(.kim6-owned .kim6-manifest)
 die() { echo "uninstall.sh: $*" >&2; exit 1; }
@@ -118,9 +119,11 @@ if [ -d "$RUNTIME" ]; then
     echo "uninstall.sh: refusing to remove an unrecognized dispatcher file: $RUNTIME/bin/kim_all" >&2
     exit 1
   fi
+# shellcheck disable=SC2154
   for name in "${legacy_names[@]}"; do
     check_file "$RUNTIME/bin/$name"
   done
+# shellcheck disable=SC2154
   for language in "${languages[@]}"; do
     check_dir "$RUNTIME/locale/$language"
     check_dir "$RUNTIME/locale/$language/LC_MESSAGES"

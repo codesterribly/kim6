@@ -69,7 +69,7 @@ kim6_report_dependencies() {
     *ubuntu*|*debian*) manager=apt ;;
     *fedora*|*rhel*|*centos*) manager=dnf ;;
     *arch*|*manjaro*) manager=pacman ;;
-    *suse*|*opensuse*) manager=zypper ;;
+    *suse*) manager=zypper ;;
   esac
 
   kim6_suggest_package() {
@@ -332,6 +332,7 @@ runtime_is_empty() {
 }
 has_kim_menu() {
   local name
+# shellcheck disable=SC2154
   for name in "${menu_names[@]}"; do
     if menu_is_kim6 "$PREFIX/$name"; then return 0; fi
   done
@@ -342,6 +343,7 @@ has_kim_menu() {
 legacy_runtime_is_kim6() {
   local name path
   has_kim_menu || return 1
+# shellcheck disable=SC2154
   for name in "${legacy_names[@]}"; do
     path="$RUNTIME/bin/$name"
     if [ -f "$path" ] && [ ! -L "$path" ] &&
@@ -371,6 +373,7 @@ fi
 for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
   check_dir "$directory"
 done
+# shellcheck disable=SC2154
 for relative in "${runtime_files[@]}" .kim6-owned .kim6-manifest; do
   check_file "$RUNTIME/$relative"
 done
@@ -381,6 +384,7 @@ fi
 for name in "${legacy_names[@]}"; do
   check_file "$RUNTIME/bin/$name"
 done
+# shellcheck disable=SC2154
 for language in "${languages[@]}"; do
   check_dir "$RUNTIME/locale/$language"
   check_dir "$RUNTIME/locale/$language/LC_MESSAGES"
@@ -396,6 +400,7 @@ done
 
 # Preflight the same complete inventory that will be copied. Nothing installed
 # is replaced until every required source and menu template is present.
+# shellcheck disable=SC2154
 for relative in "${runtime_sources[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
@@ -458,6 +463,7 @@ chmod 0644 -- "$temporary"
 mv -f -- "$temporary" "$RUNTIME/.kim6-owned"
 temporary=''
 for index in "${!runtime_files[@]}"; do
+# shellcheck disable=SC2154
   install_file "$SOURCE_DIR/${runtime_sources[$index]}" "$RUNTIME/${runtime_files[$index]}" "${runtime_modes[$index]}"
 done
 
@@ -554,14 +560,14 @@ fi
 for relative in "${runtime_files[@]}"; do
   [[ "$relative" == bin/*.py ]] || continue
   helper="${relative#bin/}"
-  installed="$RUNTIME/bin/$helper"
+  helper_path="$RUNTIME/bin/$helper"
 
-  if [ ! -f "$installed" ] || [ -L "$installed" ]; then
-    echo "install.sh: required GUI helper was not installed: $installed" >&2
+  if [ ! -f "$helper_path" ] || [ -L "$helper_path" ]; then
+    echo "install.sh: required GUI helper was not installed: $helper_path" >&2
     exit 1
   fi
 
-  if ! python3 - "$installed" <<'KIM6_PY_CHECK'
+  if ! python3 - "$helper_path" <<'KIM6_PY_CHECK'
 import pathlib
 import sys
 
@@ -569,7 +575,7 @@ path = pathlib.Path(sys.argv[1])
 compile(path.read_bytes(), str(path), "exec")
 KIM6_PY_CHECK
   then
-    echo "install.sh: invalid installed GUI helper: $installed" >&2
+    echo "install.sh: invalid installed GUI helper: $helper_path" >&2
     exit 1
   fi
 done
@@ -625,9 +631,9 @@ for relative in "${runtime_files[@]}"; do
   [[ "$relative" == bin/*.py ]] || continue
   helper="${relative#bin/}"
 
-  installed="$RUNTIME/bin/$helper"
-  [ -f "$installed" ] && [ ! -L "$installed" ] ||
-    die "required Qt helper is missing: $installed"
+  helper_path="$RUNTIME/bin/$helper"
+  [ -f "$helper_path" ] && [ ! -L "$helper_path" ] ||
+    die "required Qt helper is missing: $helper_path"
 
   printf '  %s\n' "$helper"
 done

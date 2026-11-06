@@ -4947,6 +4947,128 @@ action_resize() {
     return 1
   fi
 
+  # KIM6_RESIZE_OUTPUT_REVIEW
+  # Final output approval happens before progress or image processing.
+  # Approved output names are used unchanged by the resize engine.
+  local resize_plan="$KIMDIR/resize-output.review"
+  local resize_request="$KIMDIR/resize-output.destination"
+  local resize_review_result resize_source resize_dir
+  local resize_stem resize_ext resize_target
+  local resize_status resize_note resize_number resize_newdir
+  local -A resize_reserved=() resize_targets=()
+
+  while :; do
+    : > "$resize_plan" || return 1
+    rm -f -- "$resize_request" || return 1
+    resize_reserved=()
+    resize_targets=()
+
+    for resize_source in "${files[@]}"; do
+      resize_status=Ready
+      resize_note='New derivative; original remains unchanged.'
+      resize_target=''
+
+      {
+        IFS= read -r resize_dir
+        IFS= read -r
+        IFS= read -r resize_stem
+        IFS= read -r resize_ext
+      } < <(split_path "$resize_source")
+
+      if image_has_apng_control_chunk "$resize_source"; then
+        resize_status=Blocked
+        resize_note='Animated PNG cannot be resized safely.'
+      elif [ "$mode" = overwrite ]; then
+        resize_target="$resize_source"
+        resize_note='Overwrite explicitly selected original.'
+      else
+        resize_dir="${outdir:-$resize_dir}"
+
+        if [ ! -d "$resize_dir" ] ||
+           [ -L "$resize_dir" ] ||
+           [ ! -w "$resize_dir" ] ||
+           [ ! -x "$resize_dir" ]; then
+          resize_status=Blocked
+          resize_note='Output directory is unavailable or not writable.'
+        else
+          resize_target="$resize_dir/$(affixed_filename \
+            "$resize_stem" resized "$resize_ext")"
+          resize_number=1
+
+          while [ -e "$resize_target" ] ||
+                [ -L "$resize_target" ] ||
+                [ -n "${resize_reserved[$resize_target]:-}" ]; do
+            resize_target="$resize_dir/$(affixed_filename \
+              "$resize_stem" resized "$resize_ext" \
+              "$resize_number")"
+            resize_number=$((resize_number + 1))
+          done
+
+          resize_reserved["$resize_target"]=1
+        fi
+      fi
+
+      if [ "$resize_status" = Ready ]; then
+        resize_targets["$resize_source"]="$resize_target"
+      fi
+
+      printf '%s\0' \
+        "$resize_source" "$resize_target" \
+        "$resize_status" "$resize_note" \
+        >> "$resize_plan"
+    done
+
+    if preview_run python3 \
+      "$DISPATCHER_DIR/kim_action_dialog.py" \
+      resize-output-review "$resize_plan" "$resize_request" \
+      "$outdir" "$mode" "$SCALE"; then
+      break
+    else
+      resize_review_result=$?
+    fi
+
+    if [ "$resize_review_result" -eq 130 ] &&
+       [ -s "$resize_request" ]; then
+      IFS= read -r -d '' resize_newdir \
+        < "$resize_request" || return 1
+
+      if [ -n "$resize_newdir" ]; then
+        [[ "$resize_newdir" = /* ]] || {
+          progress_error "Choose an absolute destination directory."
+          return 1
+        }
+
+        [ -d "$resize_newdir" ] &&
+        [ ! -L "$resize_newdir" ] &&
+        [ -w "$resize_newdir" ] &&
+        [ -x "$resize_newdir" ] || {
+          progress_error "Resize destination is not writable."
+          return 1
+        }
+
+        resize_newdir="$(
+          cd -P -- "$resize_newdir" && pwd -P
+        )" || return 1
+      fi
+
+      outdir="$resize_newdir"
+      continue
+    fi
+
+    return "$resize_review_result"
+  done
+
+  # Check the selected shared destination once more after approval.
+  if [ "$mode" = create ] && [ -n "$outdir" ]; then
+    [ -d "$outdir" ] &&
+    [ ! -L "$outdir" ] &&
+    [ -w "$outdir" ] &&
+    [ -x "$outdir" ] || {
+      progress_error "Resize destination changed after approval."
+      return 1
+    }
+  fi
+
   report_init
   local dbusRef
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
@@ -5011,17 +5133,22 @@ action_resize() {
       progress_value "$dbusRef" "$counter"
       continue
     fi
-    if [ "$mode" = "overwrite" ]; then
-      OUTFILE="$i"
-    else
-      local dir2
-      dir2="${outdir:-$dir}"
-      OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext")"
-      n=1
-      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="$dir2/$(affixed_filename "$stem" resized "$ext" "$n")"
-        n=$((n + 1))
-      done
+    # Use the exact filename accepted in Review Resize Outputs.
+    OUTFILE="${resize_targets[$i]:-}"
+
+    if [ -z "$OUTFILE" ]; then
+      report_fail "$i — no approved output path"
+      progress_value "$dbusRef" "$counter"
+      continue
+    fi
+
+    # Never silently renumber or replace a newly occupied path.
+    # The existing atomic create helper also protects against races.
+    if [ "$mode" = create ] &&
+       { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then
+      report_fail "$i — approved output path is now occupied"
+      progress_value "$dbusRef" "$counter"
+      continue
     fi
     if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
       report_fail "$i"
@@ -5167,7 +5294,7 @@ action_resize() {
 # ---------------------------------------------------------------------------
 
 action_resizeandsend() {
-  local size='' i base stem output_ext coder input_info input_format input_frames
+  local size='' email_client='' i base stem output_ext coder input_info input_format input_frames
   local output_info record actual_format actual_width actual_height output_frames rc counter=0
   local source_width source_height orientation expected_dimensions source_dimensions
   local interrupted=false persistent_dir client='' handoff=0 attachment_csv uri escaped byte
@@ -5204,23 +5331,45 @@ action_resizeandsend() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -gt 0 ] || return 0
 
-  if [ -z "$size" ]; then
-    local choice
-    choice="$(kdialog --radiolist "$(gettext 'Kim - Send by mail:')" \
-      1 "$(gettext 'Full size')" off \
-      2 "$(gettext '1600x1600 px')" on \
-      3 "$(gettext '1200x1200 px')" off \
-      4 "$(gettext '800x800 px')" off \
-      5 "$(gettext '600x600 px')" off \
-      6 "$(gettext '300x300 px')" off \
-      7 "$(gettext 'Custom size...')" off)" || return 130
-    case "$choice" in
-      1) size=full ;; 2) size=1600x1600 ;; 3) size=1200x1200 ;; 4) size=800x800 ;;
-      5) size=600x600 ;; 6) size=300x300 ;;
-      7) size="$(kdialog --inputbox "$(gettext 'Enter custom size (WIDTHxHEIGHT):')" '1600x1600')" || return 130 ;;
-      *) return 130 ;;
-    esac
-  fi
+  # KIM6_EMAIL_MANDATORY_REVIEW
+  # Review the selected images and resize bounds before processing.
+  local email_settings_file="$KIMDIR/email-options"
+  local -a email_settings=() prepared_sources=()
+
+  rm -f -- "$email_settings_file" || return 1
+
+  preview_run python3     "$DISPATCHER_DIR/kim_action_dialog.py"     email-options "$email_settings_file"     "${size:-1600x1600}" "${files[@]}" || return $?
+
+  mapfile -d '' -t email_settings < "$email_settings_file"
+
+  # KIM6_EMAIL_CLIENT_SELECTION
+  [ "${#email_settings[@]}" -eq 2 ] || {
+    progress_error "Invalid email preparation options."
+    return 1
+  }
+
+  size="${email_settings[0]}"
+  email_client="${email_settings[1]}"
+
+  case "$email_client" in
+    thunderbird|kmail|xdg-email)
+      command -v "$email_client" >/dev/null 2>&1 || {
+        progress_error "Selected mail client is not installed: $email_client"
+        return 1
+      }
+      ;;
+    thunderbird-flatpak)
+      command -v flatpak >/dev/null 2>&1 &&
+      flatpak info org.mozilla.Thunderbird >/dev/null 2>&1 || {
+        progress_error "Thunderbird Flatpak is unavailable."
+        return 1
+      }
+      ;;
+    *)
+      progress_error "No supported mail client was selected."
+      return 1
+      ;;
+  esac
   if [ "$size" != full ] && ! [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: size must be full or positive WIDTHxHEIGHT.')"
     return 1
@@ -5327,6 +5476,7 @@ action_resizeandsend() {
     [ "$output_frames" -eq "$input_frames" ] || rc=1
     if [ "$rc" -eq 0 ] && [ "$interrupted" != true ]; then
       prepared+=("$out")
+      prepared_sources+=("$i")
       report_ok
     else
       rm -f -- "$out" >/dev/null 2>&1 || true
@@ -5338,6 +5488,67 @@ action_resizeandsend() {
       break
     }
   done
+  # Exact attachment sizes are known only after encoding.
+  # Present the measured results before the mail client is opened.
+  if [ "$interrupted" = true ]; then
+    progress_close "$dbusRef"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 130
+  fi
+
+  if [ "${REPORT_FAIL:-0}" -ne 0 ]; then
+    progress_close "$dbusRef"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  fi
+
+  [ "${#prepared[@]}" -gt 0 ] || {
+    progress_close "$dbusRef"
+    report_finish_dialog "$(gettext 'Kim')"
+    return 1
+  }
+
+  local email_review_plan="$KIMDIR/email-prepared.review"
+  : > "$email_review_plan" || return 1
+
+  local email_review_index
+  for ((email_review_index=0;
+        email_review_index<${#prepared[@]};
+        email_review_index++)); do
+    printf '%s\0%s\0'       "${prepared_sources[$email_review_index]}"       "${prepared[$email_review_index]}"       >> "$email_review_plan"
+  done
+
+  # KIM6_EMAIL_BACK_TO_OPTIONS
+  local email_back_request="${email_review_plan}.back"
+  local email_review_rc=0
+
+  rm -f -- "$email_back_request" || return 1
+
+  preview_run python3 \
+    "$DISPATCHER_DIR/kim_action_dialog.py" \
+    email-ready-review "$email_review_plan" "$email_client" \
+    || email_review_rc=$?
+
+  if [ "$email_review_rc" -ne 0 ]; then
+    progress_close "$dbusRef"
+
+    if [ -f "$email_back_request" ]; then
+      rm -f -- "$email_back_request"
+
+      # Remove this attempt's temporary derivatives only.
+      # Original images and persistent attachment folders
+      # are never touched.
+      if [ "${#prepared[@]}" -gt 0 ]; then
+        rm -f -- "${prepared[@]}"
+      fi
+
+      action_resizeandsend --size "$size" -- "${files[@]}"
+      return $?
+    fi
+
+    return "$email_review_rc"
+  fi
+
   local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments"
   if [ "${#prepared[@]}" -eq 0 ]; then
     progress_close "$dbusRef"
@@ -5375,20 +5586,28 @@ action_resizeandsend() {
     return 1
   fi
 
-  if command -v xdg-email >/dev/null 2>&1; then
-    client=xdg-email
-    for out in "${attach_paths[@]}"; do
-      mail_args+=(--attach "$out")
-    done
-    xdg-email "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
-  elif command -v kmail >/dev/null 2>&1; then
-    client=kmail
-    for out in "${attach_paths[@]}"; do
-      mail_args+=(--attach "$out")
-    done
-    kmail "${mail_args[@]}" >/dev/null 2>&1 || handoff=$?
-  elif command -v thunderbird >/dev/null 2>&1; then
-    client=thunderbird
+  # Respect the explicit mail-client selection from the options dialog.
+  : > "$KIMDIR/email-client.log"
+
+  case "$email_client" in
+    xdg-email)
+      client=xdg-email
+      for out in "${attach_paths[@]}"; do
+        mail_args+=(--attach "$out")
+      done
+      xdg-email "${mail_args[@]}"         >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
+      ;;
+
+    kmail)
+      client=kmail
+      for out in "${attach_paths[@]}"; do
+        mail_args+=(--attach "$out")
+      done
+      kmail "${mail_args[@]}"         >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
+      ;;
+
+    thunderbird|thunderbird-flatpak)
+      client="$email_client"
     attachment_csv=''
     local LC_ALL=C char_index char
     for out in "${attach_paths[@]}"; do
@@ -5409,18 +5628,42 @@ action_resizeandsend() {
       [ -z "$attachment_csv" ] || attachment_csv+=,
       attachment_csv+="$uri"
     done
-    thunderbird -compose "attachment='$attachment_csv'" >/dev/null 2>&1 || handoff=$?
-  fi
+
+      if [ "$email_client" = thunderbird-flatpak ]; then
+        flatpak run org.mozilla.Thunderbird           -compose "attachment='$attachment_csv'"           >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
+      else
+        # KIM6_THUNDERBIRD_X11_ENV
+        env XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \
+          MOZ_ENABLE_WAYLAND=0 thunderbird -compose "attachment='$attachment_csv'"           >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
+      fi
+      ;;
+
+    *)
+      client="$email_client"
+      handoff=127
+      printf '%s\n' "Unsupported mail client selection."         > "$KIMDIR/email-client.log"
+      ;;
+  esac
 
   if [ -z "$client" ]; then
     kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:") $persistent_dir"
   elif [ "$handoff" -ne 0 ]; then
     # A mail-client launch failure is not an image-processing failure.
     # Retain the prepared attachments for manual use.
-    kdialog --title "$(gettext 'Kim')" --error       "$(gettext 'The mail client did not accept the attachments. They were kept here:') $persistent_dir"
+    local email_client_detail=''
+    if [ -s "$KIMDIR/email-client.log" ]; then
+      email_client_detail="$(head -c 1600 -- "$KIMDIR/email-client.log")"
+    fi
+
+    kdialog --title "KIM6 — Email Handoff Failed" --error       "Mail client: $client
+Exit status: $handoff
+${email_client_detail:-No diagnostic output from the mail client.}
+
+Prepared attachments were preserved:
+$persistent_dir
+
+You can attach these files manually."
     return 1
-  else
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The mail client was opened. Prepared attachments remain here until you delete them:') $persistent_dir"
   fi
   report_finish_dialog "$(gettext 'Kim')"
   [ "$interrupted" != true ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
@@ -7609,7 +7852,7 @@ resize_fit_dimensions_no_upscale() {
 action_webexport() {
   # Web export creates validated derivatives with explicit ICC handling.
   # Preserve animation only when the chosen output supports its frames.
-  local outdir='' size='' quality='' fmt='' color_mode='' explicit_dir=false custom=false jpeg_scan='' jpeg_optimize=false
+  local outdir='' size='' quality='' fmt='' color_mode='' custom=false jpeg_scan='' jpeg_optimize=false
   local -a files=()
   if [ "${1:-}" = "--" ] || [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -7642,7 +7885,7 @@ action_webexport() {
           [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
           case "$1" in
             --size) size="$2" ;; --quality) quality="$2" ;; --format) fmt="$2" ;;
-            --output-dir) outdir="$2"; explicit_dir=true ;;
+            --output-dir) outdir="$2" ;;
             --color) color_mode="$2" ;;
           esac
           shift 2 ;;
@@ -7734,10 +7977,10 @@ action_webexport() {
   local web_review_plan="$KIMDIR/webexport.review"
   local web_destination_request="$KIMDIR/webexport.destination"
   local web_review_result web_newdir
-  local web_source web_info web_record web_format web_original
+  local web_source web_info web_format web_original
   local web_dimensions web_frames web_colorspace web_orientation
   local web_width web_height web_icc web_issue web_target
-  local web_ext web_coder web_dir web_base web_stem web_input_ext
+  local web_ext web_dir web_stem web_input_ext
   local web_number web_planned web_profile web_notice_tags web_plan_dir
   local -A web_reserved=()
 
@@ -7835,13 +8078,12 @@ ${web_source##*/}"; then
     if [ -z "$web_issue" ]; then
       {
         IFS= read -r web_dir
-        IFS= read -r web_base
+        IFS= read -r
         IFS= read -r web_stem
         IFS= read -r web_input_ext
       } < <(split_path "$web_source")
 
       if [ "$fmt" = keep ]; then
-        web_coder="$web_format"
         web_ext="$(image_format_extension "$web_format")"
         if image_extension_matches_format "$web_input_ext" "$web_format"; then
           web_ext="$web_input_ext"
@@ -7992,7 +8234,7 @@ KIM6_DISCLOSURE_CHECK
   dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Web exporting images ...')")"
 
   local counter=0
-  local i dir2 base stem ext out_ext OUTFILE OUTTMP n rc input_info input_format source_frames
+  local i base stem ext out_ext OUTFILE OUTTMP n rc input_info input_format source_frames
   local output_records record actual_format actual_width actual_height actual_frames output_profiles
   local expected_format coder srgb_profile colorspace has_icc profile_path
   local output_profile_name
@@ -8017,7 +8259,7 @@ KIM6_DISCLOSURE_CHECK
     counter=$((counter + 1))
 
     {
-      read -r dir2
+      IFS= read -r
       read -r base
       read -r stem
       read -r ext

@@ -1970,7 +1970,608 @@ class FlipReviewDialog(QDialog):
             super().accept()
 
 
+def resize_output_review(
+    plan_path, request_path, destination, policy, geometry
+):
+    """Review exact Resize output paths before publication."""
+    import os
+
+    payload = plan_path.read_bytes()
+
+    if not payload.endswith(b"\0"):
+        raise ValueError("Incomplete Resize output plan")
+
+    parts = payload[:-1].split(b"\0")
+    if not parts or len(parts) % 4:
+        raise ValueError("Invalid Resize output plan")
+
+    records = [
+        [os.fsdecode(value) for value in parts[i:i + 4]]
+        for i in range(0, len(parts), 4)
+    ]
+
+    if policy not in ("create", "overwrite"):
+        raise ValueError("Invalid Resize output policy")
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    dialog = QDialog()
+    dialog.setWindowTitle("KIM6 — Review Resize Outputs")
+
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(6)
+
+    layout.addWidget(QLabel(
+        f"{len(records)} selected image(s) | "
+        f"Resize geometry: {geometry}"
+    ))
+
+    destination_row = QHBoxLayout()
+    destination_row.setSpacing(8)
+
+    if policy == "create":
+        destination_text = (
+            destination if destination else "Beside each source"
+        )
+    else:
+        destination_text = "Overwrite selected originals"
+
+    destination_row.addWidget(
+        QLabel("Destination: " + destination_text), 1
+    )
+
+    choose_button = QPushButton("Change Destination…")
+    choose_button.setVisible(policy == "create")
+    destination_row.addWidget(choose_button)
+
+    reset_button = QPushButton("Beside each source")
+    reset_button.setVisible(
+        policy == "create" and bool(destination)
+    )
+    destination_row.addWidget(reset_button)
+
+    layout.addLayout(destination_row)
+
+    table = QTableWidget(len(records), 4)
+    table.setHorizontalHeaderLabels([
+        "Source image",
+        "Output filename",
+        "Destination",
+        "Status",
+    ])
+    table.setSelectionBehavior(
+        QAbstractItemView.SelectRows
+    )
+    table.setSelectionMode(
+        QAbstractItemView.SingleSelection
+    )
+    table.setEditTriggers(
+        QAbstractItemView.NoEditTriggers
+    )
+    table.verticalHeader().setVisible(False)
+
+    widths = (270, 270, 330, 95)
+    for column, width in enumerate(widths):
+        table.setColumnWidth(column, width)
+
+    for row, (source, target, status, note) in enumerate(records):
+        values = (
+            os.path.basename(source),
+            os.path.basename(target) if target else "None",
+            os.path.dirname(target) if target else "None",
+            status,
+        )
+
+        for column, value in enumerate(values):
+            item = QTableWidgetItem(value)
+            item.setToolTip(
+                source if column == 0
+                else target if column in (1, 2)
+                else note
+            )
+            table.setItem(row, column, item)
+
+    visible_rows = min(len(records), 8)
+    table.setFixedHeight(48 + 32 * visible_rows)
+    layout.addWidget(table)
+
+    details = QLabel()
+    details.setWordWrap(True)
+    details.setMinimumHeight(35)
+    layout.addWidget(details)
+
+    def update_details():
+        row = table.currentRow()
+        if row >= 0:
+            source, _, status, note = records[row]
+            details.setText(
+                f"{os.path.basename(source)}: {status}. {note}"
+            )
+
+    table.itemSelectionChanged.connect(update_details)
+    table.selectRow(0)
+    update_details()
+
+    ready = sum(record[2] == "Ready" for record in records)
+    blocked = len(records) - ready
+
+    if policy == "overwrite":
+        summary_text = (
+            f"{ready} ready, {blocked} blocked. "
+            "The selected originals will be replaced. "
+            "This operation cannot be undone."
+        )
+    else:
+        summary_text = (
+            f"{ready} ready, {blocked} blocked. "
+            "Original images are never modified. "
+            "Images requiring no size change may be skipped."
+        )
+
+    summary = QLabel(summary_text)
+    summary.setWordWrap(True)
+    layout.addWidget(summary)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+
+    apply_button = buttons.button(QDialogButtonBox.Ok)
+    apply_button.setText("Apply Changes")
+    apply_button.setEnabled(ready > 0 and blocked == 0)
+
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    def request_destination(directory):
+        try:
+            request_path.write_bytes(
+                os.fsencode(directory) + b"\0"
+            )
+        except OSError as error:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                dialog, "Cannot change destination", str(error)
+            )
+            return
+        dialog.reject()
+
+    def choose_directory():
+        initial = destination or os.path.dirname(records[0][0])
+        selected = QFileDialog.getExistingDirectory(
+            dialog, "Choose Resize destination", initial
+        )
+        if selected:
+            request_destination(selected)
+
+    choose_button.clicked.connect(choose_directory)
+    reset_button.clicked.connect(
+        lambda: request_destination("")
+    )
+
+    dialog.resize(
+        1090,
+        min(750, 245 + 32 * visible_rows)
+    )
+
+    return 0 if dialog.exec() == QDialog.Accepted else 130
+
+
+def email_options_review(output_path, initial_size, sources):
+    """Choose email resizing bounds with a source-size preview."""
+    import os
+    import re
+    import shutil
+    import subprocess
+
+    from PySide6.QtWidgets import (
+        QAbstractItemView, QHBoxLayout, QMessageBox,
+    )
+
+    if not sources:
+        raise ValueError("Email needs selected files")
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    dialog = QDialog()
+    dialog.setWindowTitle("KIM6 — Prepare Email Images")
+
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(7)
+
+    layout.addWidget(QLabel(
+        f"{len(sources)} selected image(s) | Prepare attachments"
+    ))
+
+    options = QComboBox()
+    presets = [
+        ("Standard (1600 × 1600)", "1600x1600"),
+        ("Compact (1200 × 1200)", "1200x1200"),
+        ("Small (800 × 800)", "800x800"),
+        ("Very Small (600 × 600)", "600x600"),
+        ("Full size (no resizing)", "full"),
+        ("Custom dimensions", "custom"),
+    ]
+
+    for label, value in presets:
+        options.addItem(label, value)
+
+    preset_values = [value for _, value in presets]
+    initial_index = (
+        preset_values.index(initial_size)
+        if initial_size in preset_values
+        else 5
+    )
+    options.setCurrentIndex(initial_index)
+
+    layout.addWidget(QLabel("Resize for:"))
+    layout.addWidget(options)
+
+    # Discover supported clients on the machine running the dialog.
+    # Prefer Thunderbird when installed, not the xdg-email wrapper.
+    mail_clients = QComboBox()
+
+    if shutil.which("thunderbird"):
+        mail_clients.addItem("Thunderbird", "thunderbird")
+
+    if shutil.which("flatpak"):
+        probe = subprocess.run(
+            ["flatpak", "info", "org.mozilla.Thunderbird"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+        if probe.returncode == 0:
+            mail_clients.addItem(
+                "Thunderbird (Flatpak)", "thunderbird-flatpak"
+            )
+
+    if shutil.which("kmail"):
+        mail_clients.addItem("KMail", "kmail")
+
+    if shutil.which("xdg-email"):
+        mail_clients.addItem(
+            "System Default (xdg-email)", "xdg-email"
+        )
+
+    if mail_clients.count() == 0:
+        mail_clients.addItem(
+            "No supported mail client detected", ""
+        )
+
+    layout.addWidget(QLabel("Mail client:"))
+    layout.addWidget(mail_clients)
+
+    custom = QHBoxLayout()
+    custom.addWidget(QLabel("Maximum width:"))
+    width = QSpinBox()
+    width.setRange(1, 100000)
+    width.setValue(1600)
+    custom.addWidget(width)
+    custom.addWidget(QLabel("Maximum height:"))
+    height = QSpinBox()
+    height.setRange(1, 100000)
+    height.setValue(1600)
+    custom.addWidget(height)
+
+    match = re.fullmatch(r"([0-9]+)x([0-9]+)", initial_size)
+    if initial_index == 5 and match:
+        width.setValue(min(100000, int(match.group(1))))
+        height.setValue(min(100000, int(match.group(2))))
+
+    layout.addLayout(custom)
+
+    table = QTableWidget(len(sources), 2)
+    table.setHorizontalHeaderLabels([
+        "Source image", "Original size"
+    ])
+    table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    table.setSelectionBehavior(QAbstractItemView.SelectRows)
+    table.verticalHeader().setVisible(False)
+    table.setColumnWidth(0, 370)
+    table.setColumnWidth(1, 160)
+    table.setFixedHeight(48 + 31 * min(len(sources), 8))
+
+    total = 0
+    for row, source in enumerate(sources):
+        size = os.stat(source).st_size
+        total += size
+
+        name = QTableWidgetItem(os.path.basename(source))
+        name.setToolTip(source)
+        table.setItem(row, 0, name)
+        table.setItem(
+            row, 1,
+            QTableWidgetItem(f"{size / (1024 * 1024):.2f} MiB")
+        )
+
+    layout.addWidget(table)
+
+    summary = QLabel()
+    summary.setWordWrap(True)
+    layout.addWidget(summary)
+
+    note = QLabel(
+        "Images are resized to fit, preserving proportions. "
+        "Actual attachment sizes are checked after encoding, "
+        "before opening the mail client."
+    )
+    note.setWordWrap(True)
+    layout.addWidget(note)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+    proceed = buttons.button(QDialogButtonBox.Ok)
+    proceed.setText("Continue to Review")
+
+    def refresh():
+        choice = options.currentData()
+        is_custom = choice == "custom"
+
+        for index in range(custom.count()):
+            widget = custom.itemAt(index).widget()
+            if widget:
+                widget.setVisible(is_custom)
+
+        full = choice == "full"
+        blocked = full and total > 25 * 1024 * 1024
+
+        if full:
+            summary.setText(
+                f"Original total: {total / 1048576:.2f} MiB. "
+                + (
+                    "Over the 25 MiB attachment ceiling. "
+                    "Choose a resizing preset."
+                    if blocked else
+                    "These images will be copied without resizing."
+                )
+            )
+        else:
+            summary.setText(
+                f"Original total: {total / 1048576:.2f} MiB. "
+                "Final encoded attachment sizes are not yet known."
+            )
+
+        proceed.setEnabled(not blocked and bool(mail_clients.currentData()))
+
+    options.currentIndexChanged.connect(refresh)
+    refresh()
+
+    def accept_options():
+        choice = options.currentData()
+
+        if choice == "custom":
+            choice = f"{width.value()}x{height.value()}"
+
+        if (
+            choice != "full"
+            and not re.fullmatch(
+                r"[1-9][0-9]*x[1-9][0-9]*", choice
+            )
+        ):
+            QMessageBox.warning(
+                dialog, "Invalid resize setting",
+                "Select valid maximum dimensions."
+            )
+            return
+
+        selected_client = mail_clients.currentData()
+        if not selected_client:
+            QMessageBox.warning(
+                dialog,
+                "No mail client",
+                "Install or configure a supported mail client."
+            )
+            return
+
+        try:
+            output_path.write_bytes(
+                choice.encode("ascii") + b"\0"
+                + selected_client.encode("ascii") + b"\0"
+            )
+        except OSError as error:
+            QMessageBox.critical(
+                dialog, "Cannot save options", str(error)
+            )
+            return
+
+        dialog.accept()
+
+    buttons.accepted.connect(accept_options)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    dialog.resize(600, min(700, 300 + 31 * min(len(sources), 8)))
+    return 0 if dialog.exec() == QDialog.Accepted else 130
+
+
+def email_ready_review(plan_path, mail_client):
+    """Review actual prepared attachment sizes before mail handoff."""
+    import os
+
+    payload = plan_path.read_bytes()
+    if not payload.endswith(b"\0"):
+        raise ValueError("Incomplete email attachment plan")
+
+    parts = payload[:-1].split(b"\0")
+    if not parts or len(parts) % 2:
+        raise ValueError("Invalid email attachment plan")
+
+    records = [
+        (os.fsdecode(parts[i]), os.fsdecode(parts[i + 1]))
+        for i in range(0, len(parts), 2)
+    ]
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    dialog = QDialog()
+    dialog.setWindowTitle("KIM6 — Review Email Attachments")
+
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(7)
+
+    layout.addWidget(QLabel(
+        f"{len(records)} prepared attachment(s) | Final size review"
+    ))
+
+    client_names = {
+        "thunderbird": "Thunderbird",
+        "thunderbird-flatpak": "Thunderbird (Flatpak)",
+        "kmail": "KMail",
+        "xdg-email": "System Default",
+    }
+    if mail_client not in client_names:
+        raise ValueError("Invalid selected mail client")
+
+    layout.addWidget(QLabel(
+        "Mail client: " + client_names[mail_client]
+    ))
+
+    table = QTableWidget(len(records), 3)
+    table.setHorizontalHeaderLabels([
+        "Source image", "Attachment filename", "Actual size"
+    ])
+    table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    table.setSelectionBehavior(QAbstractItemView.SelectRows)
+    table.verticalHeader().setVisible(False)
+
+    for column, width in enumerate((265, 265, 130)):
+        table.setColumnWidth(column, width)
+
+    table.setFixedHeight(48 + 31 * min(len(records), 8))
+
+    total = 0
+
+    for row, (source, output) in enumerate(records):
+        size = os.stat(output).st_size
+        total += size
+
+        for column, value in enumerate((
+            os.path.basename(source),
+            os.path.basename(output),
+            f"{size / 1048576:.2f} MiB",
+        )):
+            item = QTableWidgetItem(value)
+            item.setToolTip(output if column else source)
+            table.setItem(row, column, item)
+
+    layout.addWidget(table)
+
+    recommended = 18 * 1024 * 1024
+    maximum = 25 * 1024 * 1024
+    blocked = total > maximum
+
+    if blocked:
+        status = (
+            "BLOCKED: The attachments exceed 25 MiB. "
+            "Cancel and choose smaller resize dimensions."
+        )
+    elif total > recommended:
+        status = (
+            "WARNING: Above the recommended 18 MiB target. "
+            "Email encoding and recipient limits may prevent delivery."
+        )
+    else:
+        status = (
+            "Within the recommended 18 MiB attachment target."
+        )
+
+    summary = QLabel(
+        f"Combined attachment size: "
+        f"{total / 1048576:.2f} MiB.\n{status}"
+    )
+    summary.setWordWrap(True)
+    layout.addWidget(summary)
+
+    storage_base = (
+        Path(os.environ.get(
+            "XDG_DATA_HOME",
+            str(Path.home() / ".local/share")
+        ))
+        / "kim6/email-attachments"
+    )
+
+    note = QLabel(
+        "Prepared attachments are retained under:\\n"
+        + str(storage_base)
+        + "\\nDelete them when no longer needed. "
+        "Opening the mail client does not send the message."
+    )
+    note.setWordWrap(True)
+    layout.addWidget(note)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+    handoff = buttons.button(QDialogButtonBox.Ok)
+    handoff.setText(
+        "Open in " + client_names[mail_client]
+    )
+    handoff.setEnabled(not blocked)
+
+    back_button = buttons.addButton(
+        "Back to Options",
+        QDialogButtonBox.ActionRole
+    )
+
+    def back_to_options():
+        try:
+            Path(str(plan_path) + ".back").write_text(
+                "back", encoding="utf-8"
+            )
+        except OSError as error:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                dialog,
+                "Cannot return to options",
+                str(error)
+            )
+            return
+
+        dialog.reject()
+
+    back_button.clicked.connect(back_to_options)
+
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    dialog.resize(710, min(700, 255 + 31 * min(len(records), 8)))
+    return 0 if dialog.exec() == QDialog.Accepted else 130
+
+
 def main():
+    if (
+        len(sys.argv) >= 5
+        and sys.argv[1] == "email-options"
+    ):
+        return email_options_review(
+            Path(sys.argv[2]),
+            sys.argv[3],
+            sys.argv[4:],
+        )
+
+    if (
+        len(sys.argv) == 4
+        and sys.argv[1] == "email-ready-review"
+    ):
+        return email_ready_review(
+            Path(sys.argv[2]), sys.argv[3]
+        )
+    if (
+        len(sys.argv) == 7
+        and sys.argv[1] == "resize-output-review"
+    ):
+        return resize_output_review(
+            Path(sys.argv[2]),
+            Path(sys.argv[3]),
+            sys.argv[4],
+            sys.argv[5],
+            sys.argv[6],
+        )
     if len(sys.argv) >= 4 and sys.argv[1] == 'flipreview':
         _, _, operation, *files = sys.argv
 
