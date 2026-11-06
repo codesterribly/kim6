@@ -12,7 +12,7 @@ import re
 import stat
 from functools import lru_cache
 import sys
-from kim_psd_source import run_process, inspection_context, checkpoint
+from kim_process import run_process, inspection_context, checkpoint
 
 
 def identity(path):
@@ -774,13 +774,40 @@ def qt_classes():
             )
 
             header = self.table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.Stretch)
+            header.setStretchLastSection(False)
+            header.setMinimumSectionSize(72)
+            header.setResizeContentsPrecision(40)
 
-            if operation == 'convert':
+            # Give filenames the remaining space while allowing
+            # users to resize the substantive review columns.
+            for column in range(len(headings)):
                 header.setSectionResizeMode(
-                    3, QHeaderView.Fixed
+                    column, QHeaderView.Interactive
                 )
-                self.table.setColumnWidth(3, 165)
+
+            header.setSectionResizeMode(
+                0, QHeaderView.Stretch
+            )
+
+            if operation == 'rename':
+                self.table.setColumnWidth(1, 230)
+                self.table.setColumnWidth(2, 210)
+            elif operation == 'convert':
+                self.table.setColumnWidth(1, 210)
+                self.table.setColumnWidth(2, 200)
+                self.table.setColumnWidth(3, 190)
+            elif operation == 'strip':
+                self.table.setColumnWidth(1, 210)
+                self.table.setColumnWidth(2, 240)
+            else:
+                self.table.setColumnWidth(1, 150)
+                self.table.setColumnWidth(2, 190)
+                self.table.setColumnWidth(3, 230)
+
+            header.setSectionResizeMode(
+                len(headings) - 1,
+                QHeaderView.ResizeToContents
+            )
 
             row = 0
 

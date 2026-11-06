@@ -160,8 +160,35 @@ def publication_result(directory, action, outputs, status, graphical=None):
     return dialog
 
 
-def show_shell_warnings(directory):
-    rows=shell_warning_rows(directory); groups=grouped_warnings(rows)
+def show_shell_warnings(directory, disclosed=None):
+    rows = shell_warning_rows(directory)
+
+    if disclosed:
+        import json
+        disclosed_pairs = set()
+
+        try:
+            for line in Path(disclosed).read_text().splitlines():
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                disclosed_pairs.add((
+                    os.path.realpath(item["source"]),
+                    item["category"],
+                ))
+        except (OSError, ValueError, KeyError, TypeError):
+            # On corrupt disclosure state, retain every warning.
+            disclosed_pairs.clear()
+
+        rows = [
+            row for row in rows
+            if (
+                os.path.realpath(row.source),
+                warning_category(row.warnings[0])
+            ) not in disclosed_pairs
+        ]
+
+    groups = grouped_warnings(rows)
     if not groups: return
     if not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
         import sys
@@ -232,7 +259,11 @@ def compression_result(path):
 
 if __name__=='__main__':
     import sys
-    if sys.argv[1:2] == ['--compression']:
+    if sys.argv[1:2] == ['--webexport-disclosed']:
+        if len(sys.argv) != 4:
+            raise SystemExit(2)
+        show_shell_warnings(sys.argv[2], sys.argv[3])
+    elif sys.argv[1:2] == ['--compression']:
         compression_result(sys.argv[2])
     elif len(sys.argv)>2 and sys.argv[2]=='--publication':
         directory,_,action,status,manifest=sys.argv[1:]

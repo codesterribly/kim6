@@ -145,6 +145,31 @@ def property_fields(recipe, row):
         fields += [('Publication', row.certainty)]
     return fields + [('Originals', 'Always unchanged')]
 
+def operation_review_fields(recipe, row):
+    """Concise Crop/Overlay review without unrelated metadata."""
+    fields = property_fields(recipe, row)
+
+    names = {
+        'source filename',
+        'output filename',
+        'output folder',
+        'original dimensions',
+        'output dimensions',
+        'final format',
+        'crop geometry',
+        'output plan',
+        'validation problem',
+        'publication',
+        'originals',
+    }
+
+    return [
+        (name, value)
+        for name, value in fields
+        if name.casefold() in names
+        or name.casefold().startswith(('crop ', 'overlay '))
+    ]
+
 
 class RecipeWorker(QThread):
     """The existing serial execution loop, shared by every confirmation launch."""
@@ -162,7 +187,7 @@ class RecipeWorker(QThread):
         with logo_inspections(): self.execute_files()
 
     def execute_files(self):
-        from kim_psd_source import inspection_context
+        from kim_process import inspection_context
         try:
             from kim_image_ops import has_image_operations, preflight_batch
             if has_image_operations(self.recipe):
@@ -189,7 +214,7 @@ class InputFiltersWorker(QThread):
 
     def run(self):
         from kim_recipe_image import input_name_filters
-        from kim_psd_source import inspection_context
+        from kim_process import inspection_context
         try:
             with inspection_context(cancelled=self.isInterruptionRequested): self.filters=input_name_filters()
         except (OSError,ValueError):
@@ -207,7 +232,8 @@ class AddFilesWorker(QThread):
 
     def run(self):
         from kim_recipe_image import inspect, checked_input_headers
-        from kim_psd_source import source_session, inspection_context, header as psd_header
+        from kim_psd_source import source_session, header as psd_header
+        from kim_process import inspection_context
         identities = {os.path.normcase(os.path.abspath(p)) for p in self.current}
         for index,raw in enumerate(self.paths):
             if self.isInterruptionRequested(): break
@@ -255,7 +281,7 @@ class PreflightWorker(QThread):
                 self.cancelled = True; break
             self.file_started.emit(str(source),index,len(self.files))
             try:
-                from kim_psd_source import inspection_context
+                from kim_process import inspection_context
                 from kim_recipe_image import checked_input_headers
                 with inspection_context(self.stage_changed.emit,self.isInterruptionRequested), checked_input_headers(self.checked_inputs):
                     row = preview(self.recipe, [source], self.chosen, start_index=index)[0]
@@ -374,12 +400,21 @@ class RunRecipeDialog(QDialog):
             for control in (label, self.search, self.selector, self.create_button): control.hide()
         self.heading = QLabel(operation_title or ('Recipe: ' + selection_title(recipe, folders) if recipe else 'Choose a recipe…'))
         self.heading.setTextFormat(Qt.PlainText); self.heading.setWordWrap(True)
-        if operation_title: self.heading.setText(operation_title + ' — review all output plans')
+        if operation_title:
+            self.heading.setText(
+                'Review Changes: '
+                + operation_title.split('@', 1)[0].strip()
+            )
         layout.addWidget(self.heading)
         self.count = QLabel('Inputs: ' + file_count(len(self.files))); layout.addWidget(self.count)
         split = QSplitter(Qt.Horizontal); layout.addWidget(split, 1)
         left = QWidget(); left_layout = QVBoxLayout(left); split.addWidget(left)
-        inputs = QGroupBox('Selected files — select one for detailed preview'); inp_layout = QVBoxLayout(inputs)
+        inputs = QGroupBox(
+            'Selected images — choose one to review'
+            if operation_title
+            else 'Selected files — select one for detailed preview'
+        )
+        inp_layout = QVBoxLayout(inputs)
         self.inputs = InputFilesView(); self.inputs.setHeaderLabels(['Filename', 'Preflight'])
         self.inputs.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.inputs.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -398,10 +433,23 @@ class RunRecipeDialog(QDialog):
         self.inputs.itemSelectionChanged.connect(self.update_file_actions)
         operations = QGroupBox('Recipe operations — configured order'); op_layout = QVBoxLayout(operations)
         self.operations = QTreeWidget(); self.operations.setHeaderHidden(True); self.operations.setWordWrap(True)
-        self.fill_operations(); op_layout.addWidget(self.operations); left_layout.addWidget(operations, 3)
-        right = QGroupBox('Output preview'); right_layout = QVBoxLayout(right)
+        self.fill_operations()
+        op_layout.addWidget(self.operations)
+        left_layout.addWidget(operations, 3)
+
+        # Internal Recipe steps remain available to the engine,
+        # but standalone image operations do not show the tree.
+        if operation_title:
+            operations.hide()
+        right = QGroupBox(
+            'Planned output' if operation_title else 'Output preview'
+        )
+        right_layout = QVBoxLayout(right)
         self.properties = PropertyView(); right_layout.addWidget(self.properties)
-        split.addWidget(right); split.setSizes([460, 640])
+        split.addWidget(right)
+        split.setSizes(
+            [390, 730] if operation_title else [460, 640]
+        )
         dest = QHBoxLayout()
         self.destination_label = QLabel(); self.destination_label.setTextFormat(Qt.PlainText)
         self.destination_label.setWordWrap(True)
@@ -422,7 +470,12 @@ class RunRecipeDialog(QDialog):
         safety = QLabel('Originals are never overwritten. KIM6 saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
         safety.setWordWrap(True); layout.addWidget(safety)
         buttons = QHBoxLayout(); buttons.addStretch(1)
-        self.run_button = QPushButton(('Apply to ' if operation_title else 'Run Recipe on ') + file_count(len(self.files)).title()); self.run_button.setEnabled(False)
+        self.run_button = QPushButton(
+            ('Apply Changes to ' if operation_title
+             else 'Run Recipe on ')
+            + file_count(len(self.files)).title()
+        )
+        self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.start_execution)
         self.cancel_button = QPushButton('Cancel'); self.cancel_button.clicked.connect(self.reject)
         buttons.addWidget(self.run_button); buttons.addWidget(self.cancel_button); layout.addLayout(buttons)
@@ -532,7 +585,11 @@ class RunRecipeDialog(QDialog):
             item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Waiting for recipe'])
             item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.count.setText('Inputs: ' + file_count(len(self.files)))
-        self.run_button.setText(('Apply to ' if self.operation_title else 'Run Recipe on ') + file_count(len(self.files)).title())
+        self.run_button.setText(
+            ('Apply Changes to ' if self.operation_title
+             else 'Run Recipe on ')
+            + file_count(len(self.files)).title()
+        )
         self.update_file_actions()
         if preflight: self.start_preflight()
         if self.files: self.inputs.setCurrentItem(self.inputs.topLevelItem(0))
@@ -792,7 +849,17 @@ class RunRecipeDialog(QDialog):
         previous = self._selected_presentation
         if previous is not None and previous[0] == (self.generation, index) and previous[1] is row and previous[2] is self.execution_recipe: return
         self._selected_presentation = ((self.generation, index), row, self.execution_recipe)
-        self.properties.set_fields(property_fields(self.execution_recipe, row) if row else [])
+        self.properties.set_fields(
+            (
+                operation_review_fields(
+                    self.execution_recipe, row
+                )
+                if self.operation_title
+                else property_fields(
+                    self.execution_recipe, row
+                )
+            ) if row else []
+        )
 
     def select_destination(self):
         directory = QFileDialog.getExistingDirectory(self, 'Choose output directory')

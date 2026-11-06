@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
     QVBoxLayout, QWidget)
 from kim_preview import identity, inspection_path
 from kim_location import descriptor_identity
-from kim_psd_source import inspection_context
+from kim_process import inspection_context
 
 # These formats remain selectable even if Qt lacks their thumbnail plugin:
 # ExifTool may still read them. Selecting one never broadens the write allowlist.

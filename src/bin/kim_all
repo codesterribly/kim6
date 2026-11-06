@@ -62,6 +62,25 @@ fi
 # Adapters keep existing Bash actions and their policy/publication boundaries.
 # Before a job starts, tools retain their normal noninteractive behavior.
 job_show_warnings() {
+  # KIM6_WEBEXPORT_NONMODAL_WARNINGS
+  # Source notices for Web Export belong in pre-approval review.
+  # Any remaining diagnostics go to stderr, never another modal.
+  if [ "${cmd:-}" = webexport ]; then
+    if [ -n "${KIM_PSD_CACHE:-}" ] &&
+       [ -f "$KIM_PSD_CACHE/warnings.jsonl" ]; then
+      if [ -s "$KIMDIR/webexport.disclosed.jsonl" ]; then
+        env -u DISPLAY -u WAYLAND_DISPLAY \
+          python3 "$DISPATCHER_DIR/kim_job.py" \
+          --webexport-disclosed "$KIM_PSD_CACHE" \
+          "$KIMDIR/webexport.disclosed.jsonl" || true
+      else
+        env -u DISPLAY -u WAYLAND_DISPLAY \
+          python3 "$DISPATCHER_DIR/kim_job.py" \
+          "$KIM_PSD_CACHE" || true
+      fi
+    fi
+    return 0
+  fi
   local status="${1:-0}" label=''
   case "${cmd:-}" in
     album) label='PDF Album' ;; contactsheet) label='Contact Sheet' ;; collage) label='Collage' ;;
@@ -75,7 +94,12 @@ job_show_warnings() {
     elif [ "$status" -ne 0 ] || [ "${REPORT_FAIL:-0}" -gt 0 ]; then result=failed; fi
     python3 "$DISPATCHER_DIR/kim_job.py" "${KIM_PSD_CACHE:-$KIMDIR/psd}" --publication "$label" "$result" "$KIMDIR/published.outputs" || true
   elif [ -n "${KIM_PSD_CACHE:-}" ] && [ -f "$KIM_PSD_CACHE/warnings.jsonl" ]; then
-    python3 "$DISPATCHER_DIR/kim_job.py" "$KIM_PSD_CACHE" || true
+    if [ "${cmd:-}" = webexport ] &&
+       [ -s "$KIMDIR/webexport.disclosed.jsonl" ]; then
+      python3 "$DISPATCHER_DIR/kim_job.py"         --webexport-disclosed "$KIM_PSD_CACHE"         "$KIMDIR/webexport.disclosed.jsonl" || true
+    else
+      python3 "$DISPATCHER_DIR/kim_job.py" "$KIM_PSD_CACHE" || true
+    fi
   fi
 }
 
@@ -2966,6 +2990,10 @@ action_flipflop() {
       die "flipflop: expected flip or flop"
       ;;
   esac
+  # No flip operation may proceed without an approved preview.
+  preview_run python3 "$DISPATCHER_DIR/kim_action_dialog.py" \
+    flipreview "$operation" "$@" || return $?
+
   action_transform_in_place fresh "-$operation" "$@"
 }
 
@@ -4852,11 +4880,26 @@ action_resize() {
       local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
       SCALE="${choices[0]}"
     fi
+    if [ "$custom" != true ] && [ -n "$SCALE" ] && [ -z "$percent" ] && [ "$custom_percent" != true ]; then
+      action_options_dialog resize --preset "$SCALE" "${raw_files[@]}" || return 1
+      local -a reviewed_choices=()
+      mapfile -d '' -t reviewed_choices < "$KIMDIR/options"
+      [ "${#reviewed_choices[@]}" -eq 1 ] || {
+        progress_error 'Resize review did not return exactly one geometry.'
+        return 1
+      }
+      SCALE="${reviewed_choices[0]}"
+    fi
     if [ "$custom_percent" = true ]; then
       [ -z "$SCALE" ] && [ -z "$percent" ] || die "resize: choose only one size option"
-      action_options_dialog percent "${raw_files[@]}" || return 1
-      local -a percent_choices=(); mapfile -d '' -t percent_choices < "$KIMDIR/options"
-      percent="${percent_choices[0]%%%}"
+      action_options_dialog resize --preset-percent 50 "${raw_files[@]}" || return 1
+      local -a percent_choices=()
+      mapfile -d '' -t percent_choices < "$KIMDIR/options"
+      [ "${#percent_choices[@]}" -eq 1 ] || {
+        progress_error 'Resize review did not return exactly one geometry.'
+        return 1
+      }
+      SCALE="${percent_choices[0]}"
     fi
     if [ -n "$percent" ]; then
       [ -z "$SCALE" ] || die "resize: use either --size or --percent"
@@ -4864,7 +4907,14 @@ action_resize() {
         progress_error "$(gettext 'Resize percentage must be an integer from 1 to 1000.')"
         return 2
       }
-      SCALE="${percent}%"
+      action_options_dialog resize --preset-percent "$percent" "${raw_files[@]}" || return 1
+      local -a approved_percent=()
+      mapfile -d '' -t approved_percent < "$KIMDIR/options"
+      [ "${#approved_percent[@]}" -eq 1 ] || {
+        progress_error 'Resize review did not return exactly one geometry.'
+        return 1
+      }
+      SCALE="${approved_percent[0]}"
     fi
   else
     SCALE="${1:-}"
@@ -7669,20 +7719,272 @@ action_webexport() {
     *) die "webexport: invalid KIM_WEB_FORMAT: $fmt" ;;
   esac
 
-  # Web export always creates derivatives in the chosen output directory.
-  if [ -z "$outdir" ]; then
-    outdir="$(kdialog --title "KIM6 — Web Export Destination" --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
-    [ -n "$outdir" ] || return 1
-  elif [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; then
-    if [ "$explicit_dir" = true ]; then
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: output directory is not accessible.')"
+  # Default: place derivatives beside their source images.
+  # A nonempty outdir specifies one shared destination.
+  if [ -n "$outdir" ]; then
+    [ -d "$outdir" ] && [ ! -L "$outdir" ] &&
+      [ -w "$outdir" ] && [ -x "$outdir" ] || {
+      progress_error "Web Export destination is not accessible."
       return 1
-    fi
-    outdir="$(kdialog --title "KIM6 — Web Export Destination" --getexistingdirectory "$(dirname -- "${files[0]}")")" || return 1
-    [ -n "$outdir" ] || return 1
+    }
+    outdir="$(cd -P -- "$outdir" && pwd -P)" || return 1
   fi
 
-  outdir="$(cd -P -- "$outdir" && pwd -P)" || return 1
+  # Build a read-only plan before any Web Export processing.
+  local web_review_plan="$KIMDIR/webexport.review"
+  local web_destination_request="$KIMDIR/webexport.destination"
+  local web_review_result web_newdir
+  local web_source web_info web_record web_format web_original
+  local web_dimensions web_frames web_colorspace web_orientation
+  local web_width web_height web_icc web_issue web_target
+  local web_ext web_coder web_dir web_base web_stem web_input_ext
+  local web_number web_planned web_profile web_notice_tags web_plan_dir
+  local -A web_reserved=()
+
+  local web_scan_ref web_scan_index
+
+  while :; do
+    : > "$web_review_plan" || return 1
+    rm -f -- "$web_destination_request" || return 1
+    web_reserved=()
+
+    web_scan_ref="$(progress_open "$nbfiles"       "Inspecting selected images…")" || return 1
+    web_scan_index=0
+
+  for web_source in "${files[@]}"; do
+    web_scan_index=$((web_scan_index + 1))
+
+    if progress_cancelled "$web_scan_ref"; then
+      progress_close "$web_scan_ref" || true
+      return 130
+    fi
+
+    if ! progress_label "$web_scan_ref"       "Inspecting image $web_scan_index of $nbfiles:
+${web_source##*/}"; then
+      progress_close "$web_scan_ref" || true
+      return 1
+    fi
+    web_issue=''
+    web_format=''
+    web_original=''
+    web_dimensions=''
+    web_frames=0
+    web_colorspace=''
+    web_icc=absent
+    web_target=''
+
+    web_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%[colorspace]\n' - \
+      < "$web_source" 2>/dev/null)" || web_issue='Cannot inspect image'
+
+    if [ -z "$web_issue" ]; then
+      while IFS='|' read -r web_format_entry web_width web_height web_orientation web_color_entry; do
+        [[ "$web_width" =~ ^[1-9][0-9]*$ &&
+           "$web_height" =~ ^[1-9][0-9]*$ ]] || {
+          web_issue='Invalid image dimensions'
+          break
+        }
+
+        [ -n "$web_format" ] || web_format="$web_format_entry"
+        [ "$web_format" = "$web_format_entry" ] || {
+          web_issue='Mixed frame formats'
+          break
+        }
+
+        [ -n "$web_colorspace" ] || web_colorspace="$web_color_entry"
+
+        web_dimensions="$(oriented_image_dimensions \
+          "$web_width" "$web_height" "$web_orientation")" || {
+          web_issue='Invalid orientation'
+          break
+        }
+
+        if [ "$web_frames" -eq 0 ]; then
+          web_original="$web_dimensions"
+        fi
+
+        web_frames=$((web_frames + 1))
+      done <<< "$web_info"
+
+      [ "$web_frames" -gt 0 ] || web_issue='No decodable image frames'
+    fi
+
+    if [ -z "$web_issue" ] && image_has_apng_control_chunk "$web_source"; then
+      web_issue='Animated PNG export is unsupported'
+    fi
+
+    web_profile="$KIMDIR/web-review-source.icc"
+    if exiftool -b -ICC_Profile -- "$web_source" \
+        > "$web_profile" 2>/dev/null && [ -s "$web_profile" ]; then
+      web_icc=present
+    fi
+
+    if [ -z "$web_issue" ] && [ "$color_mode" = srgb ] &&
+       [ "$web_icc" = absent ] &&
+       [[ "${web_colorspace,,}" == *cmyk* ]]; then
+      web_issue='Untagged CMYK cannot safely convert to sRGB'
+    fi
+
+    if [ -z "$web_issue" ]; then
+      web_planned="$(resize_fit_dimensions_no_upscale \
+        "$web_original" "$max_width" "$max_height")" ||
+        web_issue='Cannot calculate output dimensions'
+    else
+      web_planned=''
+    fi
+
+    if [ -z "$web_issue" ]; then
+      {
+        IFS= read -r web_dir
+        IFS= read -r web_base
+        IFS= read -r web_stem
+        IFS= read -r web_input_ext
+      } < <(split_path "$web_source")
+
+      if [ "$fmt" = keep ]; then
+        web_coder="$web_format"
+        web_ext="$(image_format_extension "$web_format")"
+        if image_extension_matches_format "$web_input_ext" "$web_format"; then
+          web_ext="$web_input_ext"
+        fi
+      else
+        web_ext="$fmt"
+      fi
+
+      if [ -z "$web_ext" ]; then
+        web_issue='Unsupported output extension'
+      else
+        web_plan_dir="$web_dir"
+        [ -z "$outdir" ] || web_plan_dir="$outdir"
+
+        if [ -z "$web_plan_dir" ] ||
+           [ ! -d "$web_plan_dir" ] ||
+           [ -L "$web_plan_dir" ] ||
+           [ ! -w "$web_plan_dir" ] ||
+           [ ! -x "$web_plan_dir" ]; then
+          web_issue="Destination directory is unavailable"
+        else
+          web_target="$web_plan_dir/$(affixed_filename "$web_stem" web "$web_ext")"
+          web_number=1
+
+          while [ -e "$web_target" ] ||
+                [ -L "$web_target" ] ||
+                [ -n "${web_reserved[$web_target]:-}" ]; do
+            web_target="$web_plan_dir/$(affixed_filename \
+              "$web_stem" web "$web_ext" "$web_number")"
+            web_number=$((web_number + 1))
+          done
+
+          web_reserved["$web_target"]=1
+        fi
+      fi
+    fi
+
+    # Known Photoshop composite limitations are determined from
+    # the source signature, before approval or image conversion.
+    web_notice_tags=''
+
+    if is_psd_source "$web_source"; then
+      web_notice_tags=psd
+    fi
+
+    # The PSD-aware decoder is enabled for the entire selected batch
+    # when any input is a PSD. It can therefore report this warning
+    # for unprofiled JPEG, PNG and other RGB/grayscale sources too.
+    if [ -n "${KIM_PSD_CACHE:-}" ] &&
+       [ "$web_icc" = absent ]; then
+      case "${web_colorspace,,}" in
+        rgb|srgb|gray|grayscale)
+          if [ -n "$web_notice_tags" ]; then
+            web_notice_tags+=,unprofiled
+          else
+            web_notice_tags=unprofiled
+          fi
+          ;;
+      esac
+    fi
+
+    printf '%s\0' \
+      "$web_source" "$web_format" "$web_original" \
+      "$web_planned" "$web_frames" "$web_target" \
+      "$web_issue" "$web_icc" "$web_notice_tags" \
+      >> "$web_review_plan" || return 1
+
+    if ! progress_value "$web_scan_ref" "$web_scan_index"; then
+      progress_close "$web_scan_ref" || true
+      return 1
+    fi
+  done
+
+    progress_close "$web_scan_ref" || return 1
+
+    if preview_run python3 "$DISPATCHER_DIR/kim_webexport_review.py" \
+        "$web_review_plan" "$fmt" "$size" "$quality" \
+        "$color_mode" "$web_destination_request" "$outdir"         "$KIMDIR/webexport.disclosed.jsonl"; then
+      break
+    else
+      web_review_result=$?
+    fi
+
+    if [ "$web_review_result" -ne 130 ] ||
+       [ ! -s "$web_destination_request" ]; then
+      return "$web_review_result"
+    fi
+
+    web_newdir=''
+    IFS= read -r -d '' web_newdir < "$web_destination_request" || {
+      progress_error "Invalid Web Export destination request."
+      return 1
+    }
+
+    [ -d "$web_newdir" ] && [ ! -L "$web_newdir" ] &&
+      [ -w "$web_newdir" ] && [ -x "$web_newdir" ] || {
+      progress_error "Selected Web Export destination is not accessible."
+      return 1
+    }
+
+    outdir="$(cd -P -- "$web_newdir" && pwd -P)" || return 1
+  done
+
+  # Approval must produce a readable disclosure manifest.
+  # Do not process when warning-disclosure state is corrupt.
+  if ! python3 -B - "$KIMDIR/webexport.disclosed.jsonl" <<'KIM6_DISCLOSURE_CHECK'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+
+if not path.is_file():
+    raise SystemExit("Missing approved disclosure manifest")
+
+for line in path.read_text().splitlines():
+    if not line.strip():
+        continue
+    entry = json.loads(line)
+    if not isinstance(entry, dict):
+        raise SystemExit("Invalid disclosure entry")
+    if not isinstance(entry.get("source"), str):
+        raise SystemExit("Invalid disclosure source")
+    if entry.get("category") not in ("psd", "unprofiled"):
+        raise SystemExit("Invalid disclosure category")
+KIM6_DISCLOSURE_CHECK
+  then
+    progress_error "Web Export warning disclosure failed validation. No images were changed."
+    return 1
+  fi
+
+  # Revalidate an explicitly selected shared destination.
+  # Without one, each source's directory is used.
+  if [ -n "$outdir" ]; then
+    [ -d "$outdir" ] && [ ! -L "$outdir" ] &&
+      [ -w "$outdir" ] && [ -x "$outdir" ] || {
+      progress_error "Web Export destination changed after review."
+      return 1
+    }
+  fi
+
+  # The existing Web Export engine retains all final validation,
+  # staging, collision handling and publication responsibilities.
 
   report_init
 
@@ -7795,12 +8097,30 @@ action_webexport() {
       report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
     fi
 
+    # The publication destination must match preflight.
+    local web_output_dir
+    web_output_dir="$(dirname -- "$i")"
+    [ -z "$outdir" ] || web_output_dir="$outdir"
+
+    if [ ! -d "$web_output_dir" ] ||
+       [ -L "$web_output_dir" ] ||
+       [ ! -w "$web_output_dir" ] ||
+       [ ! -x "$web_output_dir" ]; then
+      report_fail "$i"
+      failures=$((failures + 1))
+      progress_value "$dbusRef" "$counter" || {
+        interrupted=true
+        break
+      }
+      continue
+    fi
+
     OUTTMP=''
-    OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext")"
+    OUTFILE="$web_output_dir/$(affixed_filename "$stem" web "$out_ext")"
 
     n=1
     while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-      OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
+      OUTFILE="$web_output_dir/$(affixed_filename "$stem" web "$out_ext" "$n")"
       n=$((n + 1))
     done
 
@@ -7904,10 +8224,10 @@ action_webexport() {
       # preflight loop. Keep collision numbering safe and retry only when that
       # exact entry is now occupied; other publication errors fail closed.
       if ! { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then break; fi
-      OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
+      OUTFILE="$web_output_dir/$(affixed_filename "$stem" web "$out_ext" "$n")"
       n=$((n + 1))
       while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="$outdir/$(affixed_filename "$stem" web "$out_ext" "$n")"
+        OUTFILE="$web_output_dir/$(affixed_filename "$stem" web "$out_ext" "$n")"
         n=$((n + 1))
       done
     done
@@ -8925,6 +9245,104 @@ action_video() {
   fi
   mode="$(choose_output_mode "$(gettext 'Kim — Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
   [ "$mode" != cancel ] || return 1
+  # Preflight every selected video before starting FFmpeg.
+  # Use the same probe, container, and naming rules as execution.
+  local review_plan="$KIMDIR/video.review.plan"
+  local review_source review_directory review_stem review_target
+  local review_ext review_formats review_resolution review_quality
+  local review_number review_input_ext review_rc
+  local -A review_reserved=()
+
+  : > "$review_plan" || return 1
+
+  for review_source in "${files[@]}"; do
+    if ! video_probe "$review_source"; then
+      progress_error "Video review could not inspect: ${review_source##*/}"
+      return 1
+    fi
+
+    review_formats="$VIDEO_FORMATS"
+
+    if video_resolve_container "$review_source" "$container" \
+        "$review_formats" "$codec"; then
+      review_rc=0
+    else
+      review_rc=$?
+    fi
+
+    if [ "$review_rc" -ne 0 ]; then
+      progress_error "Video review rejected an incompatible container: ${review_source##*/}"
+      return 1
+    fi
+
+    review_ext="$VIDEO_EXTENSION"
+
+    if [ "$mode" = overwrite ] && [ "$container" = mp4 ]; then
+      review_input_ext="${review_source##*.}"
+      review_input_ext="${review_input_ext,,}"
+
+      case "$review_input_ext" in
+        mp4|m4v) ;;
+        *)
+          progress_error "MP4 cannot replace this source extension: ${review_source##*/}"
+          return 1
+          ;;
+      esac
+    fi
+
+    review_directory="${review_source%/*}"
+    [ "$review_directory" != "$review_source" ] ||
+      review_directory="$PWD"
+
+    if [ "$mode" = overwrite ]; then
+      review_target="$review_source"
+    else
+      review_stem="${review_source##*/}"
+      if [[ "$review_stem" == *.* ]]; then
+        review_stem="${review_stem%.*}"
+      fi
+
+      review_target="$review_directory/$(affixed_filename \
+        "$review_stem" transcoded "$review_ext" "" "_" "-")"
+
+      review_number=1
+
+      while [ -e "$review_target" ] ||
+            [ -L "$review_target" ] ||
+            [ -n "${review_reserved[$review_target]:-}" ]; do
+        review_target="$review_directory/$(affixed_filename \
+          "$review_stem" transcoded "$review_ext" \
+          "$review_number" "_" "-")"
+        review_number=$((review_number + 1))
+      done
+
+      review_reserved["$review_target"]=1
+    fi
+
+    printf '%s\0' \
+      "$review_source" \
+      "${VIDEO_WIDTH} × ${VIDEO_HEIGHT}" \
+      "$VIDEO_FORMAT_DURATION" \
+      "$VIDEO_AUDIO_COUNT" \
+      "$review_target" \
+      "$VIDEO_MUXER" >> "$review_plan" || return 1
+  done
+
+  review_resolution="${max_width} × ${max_height}"
+
+  if [ "$codec" = av1 ]; then
+    review_quality="CRF $crf, speed $av1_speed"
+  else
+    review_quality="CRF $crf"
+  fi
+
+  preview_run python3 "$DISPATCHER_DIR/kim_video_review.py" \
+    "$review_plan" "$codec" "$review_resolution" \
+    "$review_quality" "$mode" reserved || return $?
+
+  # The existing dispatcher retains final output validation,
+  # collision handling, and ownership of published results.
+
   report_init
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Initialising video transcode…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
@@ -9137,6 +9555,15 @@ video_utility_target() {
   local source="$1" tag="$2" extension="$3" joiner="${4:-_}" number=1 directory base stem target
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
+  # KIM6_MUTE_DESTINATION_OVERRIDE
+  # Nonempty only for an approved Remove Audio shared destination.
+  if [ -n "${KIM_MUTE_REVIEW_DIRECTORY:-}" ]; then
+    directory="$KIM_MUTE_REVIEW_DIRECTORY"
+  fi
+  # KIM6_FRAME_DESTINATION_OVERRIDE
+  if [ -n "${KIM_VIDEO_FRAME_REVIEW_DIRECTORY:-}" ]; then
+    directory="$KIM_VIDEO_FRAME_REVIEW_DIRECTORY"
+  fi
   base="${source##*/}"
   if [[ "$base" == *.* && ! ( "$base" == .* && "$base" != *.*.* ) ]]; then
     stem="${base%.*}"
@@ -9158,6 +9585,15 @@ video_utility_publish() {
   local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" target="$6" number="$7" joiner="${8:-_}" directory base stem
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
+  # KIM6_MUTE_DESTINATION_OVERRIDE
+  # Nonempty only for an approved Remove Audio shared destination.
+  if [ -n "${KIM_MUTE_REVIEW_DIRECTORY:-}" ]; then
+    directory="$KIM_MUTE_REVIEW_DIRECTORY"
+  fi
+  # KIM6_FRAME_DESTINATION_OVERRIDE
+  if [ -n "${KIM_VIDEO_FRAME_REVIEW_DIRECTORY:-}" ]; then
+    directory="$KIM_VIDEO_FRAME_REVIEW_DIRECTORY"
+  fi
   base="${source##*/}"
   if [[ "$base" == *.* && ! ( "$base" == .* && "$base" != *.*.* ) ]]; then
     stem="${base%.*}"
@@ -9230,6 +9666,8 @@ action_videoframes() {
   local mode='' at='' format=png grid=3x3 interactive=false option source duration sample
   local index=0 tag ext stage ref rc=0
   local -a raw=() files=() args=()
+  # KIM6_PER_VIDEO_FRAME_TIMES
+  local -A frame_at=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --mode|--at|--format|--grid)
@@ -9291,8 +9729,38 @@ action_videoframes() {
       grid="${settings[0]}"
       format="${settings[1]}"
     else
-      [ "$mode" != single ] || at="$(kdialog --inputbox "$(gettext 'Timestamp (HH:MM:SS[.sss]):')" '00:00:01')" || return 1
-      format="$(kdialog --combobox "$(gettext 'Frame image format:')" png jpg)" || return 1
+      # KIM6_FRAME_OPTIONS_DIALOG
+      # Configure frame extraction in one compact dialog.
+      dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_video_dialog.py"
+      settings_file="$KIMDIR/video-frame-options"
+
+      rm -f -- "$settings_file" || return 1
+
+      python3 "$dialog_script" frame-options \
+        "$settings_file" "$mode" "${at:-00:00:01}" "$format" \
+        -- "${files[@]}" || return 1
+
+      mapfile -d '' -t settings < "$settings_file"
+
+      if [ "$mode" = single ]; then
+        [ "${#settings[@]}" -eq "$((2 + ${#files[@]}))" ] || {
+          progress_error "$(gettext 'Invalid per-video timestamps.')"
+          return 1
+        }
+
+        local frame_index
+        for ((frame_index=0; frame_index<${#files[@]}; frame_index++)); do
+          frame_at["${files[$frame_index]}"]="${settings[$((frame_index + 2))]}"
+        done
+      else
+        [ "${#settings[@]}" -eq 2 ] || {
+          progress_error "$(gettext 'Invalid frame extraction options.')"
+          return 1
+        }
+      fi
+
+      at="${settings[0]}"
+      format="${settings[1]}"
     fi
   fi
   case "$mode" in
@@ -9326,6 +9794,153 @@ action_videoframes() {
       ;;
   esac
   video_utility_init || return 1
+
+  # KIM6_FRAME_MANDATORY_REVIEW
+  local KIM_VIDEO_FRAME_REVIEW_DIRECTORY=''
+  local frame_plan="$KIMDIR/video-frames.review"
+  local frame_request="$KIMDIR/video-frames.destination"
+  local frame_result frame_source frame_status frame_detail
+  local frame_time frame_size frame_target frame_tag
+  local frame_duration frame_dir frame_base frame_stem frame_number
+  local -A frame_reserved=()
+
+  while :; do
+    : > "$frame_plan" || return 1
+    rm -f -- "$frame_request" || return 1
+    frame_reserved=()
+
+    for frame_source in "${files[@]}"; do
+      frame_status=Ready
+      frame_detail=''
+      frame_target=''
+      frame_time=''
+      frame_size=''
+      frame_tag=''
+
+      if ! video_utility_probe "$frame_source"; then
+        frame_status=Blocked
+        frame_detail='Unable to inspect this video.'
+      elif [ "$VU_VIDEO_COUNT" -eq 0 ]; then
+        frame_status=Blocked
+        frame_detail='No video stream found.'
+      else
+        frame_duration="$VU_DURATION"
+        frame_size="${VU_WIDTH:-?}x${VU_HEIGHT:-?}"
+
+        case "$mode" in
+          single)
+            frame_time="${frame_at[$frame_source]:-$at}"
+            frame_tag="frame-${frame_time//:/-}"
+
+            if ! awk -v t="$frame_time" -v d="$frame_duration" \
+              'BEGIN {
+                split(t,a,":");
+                x=a[1]*3600+a[2]*60+a[3];
+                exit !(x < d)
+              }'; then
+              frame_status=Blocked
+              frame_detail='Requested timestamp is outside this video.'
+            else
+              frame_detail='One source-resolution frame; no resizing.'
+            fi
+            ;;
+          thumbnail)
+            frame_time="$(awk -v d="$frame_duration" \
+              'BEGIN { printf "%.3f", d/2 }')"
+            frame_tag=thumbnail
+            frame_detail='Automatic midpoint frame; no resizing.'
+            ;;
+          contact)
+            frame_time='Across timeline'
+            frame_tag=contact-sheet
+            frame_size="$(( ${grid%x*} * 320 ))x$(( ${grid#*x} * 180 + 40 ))"
+            frame_detail="Contact sheet: $grid grid, evenly sampled."
+            ;;
+        esac
+
+        if [ "$frame_status" = Ready ]; then
+          video_utility_target \
+            "$frame_source" "$frame_tag" "$ext"
+
+          frame_target="$VIDEO_UTILITY_TARGET"
+          frame_dir="${frame_target%/*}"
+          frame_base="${frame_source##*/}"
+
+          if [[ "$frame_base" == *.* &&
+                ! ( "$frame_base" == .* && "$frame_base" != *.*.* ) ]]; then
+            frame_stem="${frame_base%.*}"
+          else
+            frame_stem="$frame_base"
+          fi
+
+          frame_number="$VIDEO_UTILITY_NEXT_NUMBER"
+
+          while [ -n "${frame_reserved[$frame_target]:-}" ]; do
+            frame_target="$frame_dir/$(affixed_filename \
+              "$frame_stem" "$frame_tag" "$ext" \
+              "$frame_number" "_" "_")"
+            frame_number=$((frame_number + 1))
+          done
+
+          frame_reserved["$frame_target"]=1
+        fi
+      fi
+
+      printf '%s\0' \
+        "$frame_source" "$frame_time" "$frame_size" \
+        "$ext" "$frame_target" "$frame_status" \
+        "$frame_detail" "$mode" >> "$frame_plan"
+    done
+
+    if preview_run python3 \
+      "$DISPATCHER_DIR/kim_video_dialog.py" \
+      frame-review "$frame_plan" "$frame_request" \
+      "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY"; then
+      break
+    else
+      frame_result=$?
+    fi
+
+    if [ "$frame_result" -eq 130 ] &&
+       [ -s "$frame_request" ]; then
+      IFS= read -r -d '' KIM_VIDEO_FRAME_REVIEW_DIRECTORY \
+        < "$frame_request" || return 1
+
+      if [ -n "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ]; then
+        [[ "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" = /* ]] || {
+          progress_error "Select an absolute destination directory."
+          return 1
+        }
+
+        [ -d "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+        [ ! -L "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+        [ -w "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+        [ -x "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] || {
+          progress_error "Selected destination is not writable."
+          return 1
+        }
+
+        KIM_VIDEO_FRAME_REVIEW_DIRECTORY="$(
+          cd -P -- "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" && pwd -P
+        )" || return 1
+      fi
+
+      continue
+    fi
+
+    return "$frame_result"
+  done
+
+  if [ -n "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ]; then
+    [ -d "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+    [ ! -L "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+    [ -w "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] &&
+    [ -x "$KIM_VIDEO_FRAME_REVIEW_DIRECTORY" ] || {
+      progress_error "Destination changed after approval."
+      return 1
+    }
+  fi
+
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Extracting video frames…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   report_init
@@ -9353,15 +9968,15 @@ action_videoframes() {
       return 1
     fi
     duration="$VU_DURATION"
-    sample="$at"
+    sample="${frame_at[$source]:-$at}"
     case "$mode" in
       single)
-        awk -v t="$at" -v d="$duration" 'BEGIN { split(t,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < d) }' || {
+        awk -v t="$sample" -v d="$duration" 'BEGIN { split(t,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < d) }' || {
           report_fail "$source — $(gettext 'timestamp is outside the video')"
           progress_value "$ref" "$index"
           continue
         }
-        tag="frame-${at//:/-}"
+        tag="frame-${sample//:/-}"
         ;;
       thumbnail)
         sample="$(awk -v d="$duration" 'BEGIN { printf "%.3f", d/2 }')"
@@ -9490,6 +10105,148 @@ action_videoaudio() {
       ;;
   esac
   video_utility_init || return 1
+
+  # KIM6_MUTE_MANDATORY_REVIEW
+  # Bash dynamic scope makes this available to the two filename
+  # helpers. No other video utility receives a selected directory.
+  local KIM_MUTE_REVIEW_DIRECTORY=''
+  local mute_plan="$KIMDIR/videoaudio-mute.review"
+  local mute_request="$KIMDIR/videoaudio-mute.destination"
+  local mute_result mute_source mute_codec mute_count
+  local mute_status mute_detail mute_extension mute_target
+  local mute_directory mute_base mute_stem mute_number
+  local -A mute_reserved=()
+
+  if [ "$mode" = mute ]; then
+    while :; do
+      : > "$mute_plan" || return 1
+      rm -f -- "$mute_request" || return 1
+      mute_reserved=()
+
+      for mute_source in "${files[@]}"; do
+        mute_codec=''
+        mute_count=0
+        mute_target=''
+        mute_status=Ready
+        mute_detail='All audio streams will be removed. Video streams are copied without re-encoding.'
+
+        if ! video_utility_probe "$mute_source"; then
+          mute_status=Blocked
+          mute_detail='Unable to inspect the video.'
+        elif [ "$VU_VIDEO_COUNT" -eq 0 ]; then
+          mute_status=Blocked
+          mute_detail='No video stream found.'
+        else
+          mute_count="$VU_AUDIO_COUNT"
+          mute_codec="$(ffprobe -v error -select_streams v:0 \
+            -show_entries stream=codec_name \
+            -of default=noprint_wrappers=1:nokey=1 \
+            -i "$mute_source" 2>/dev/null)" || mute_codec=''
+
+          if [ "$mute_count" -eq 0 ]; then
+            mute_status=Skip
+            mute_detail='No audio streams. No output will be created.'
+          else
+            mute_extension="${mute_source##*.}"
+
+            case "${mute_extension,,}" in
+              mp4|m4v|mov|mkv|webm|avi|flv|wmv|asf|ts|mts|m2ts|mpg|mpeg|vob|3gp|3g2|ogg|ogv)
+                ;;
+              *)
+                case "$VU_FORMAT" in
+                  *mp4*) mute_extension=mp4 ;;
+                  *matroska*) mute_extension=mkv ;;
+                  *quicktime*) mute_extension=mov ;;
+                  *webm*) mute_extension=webm ;;
+                  *avi*) mute_extension=avi ;;
+                  *mpegts*) mute_extension=ts ;;
+                  *mpeg*) mute_extension=mpeg ;;
+                  *)
+                    mute_status=Blocked
+                    mute_detail='No supported output container was identified.'
+                    ;;
+                esac
+                ;;
+            esac
+
+            if [ "$mute_status" = Ready ]; then
+              video_utility_target \
+                "$mute_source" muted "$mute_extension" "-"
+
+              mute_target="$VIDEO_UTILITY_TARGET"
+              mute_directory="${mute_target%/*}"
+              mute_base="${mute_source##*/}"
+              mute_stem="${mute_base%.*}"
+              mute_number=1
+
+              while [ -n "${mute_reserved[$mute_target]:-}" ]; do
+                mute_target="$mute_directory/$(affixed_filename \
+                  "$mute_stem" muted "$mute_extension" \
+                  "$mute_number" "_" "-")"
+                mute_number=$((mute_number + 1))
+              done
+
+              mute_reserved["$mute_target"]=1
+            fi
+          fi
+        fi
+
+        printf '%s\0' \
+          "$mute_source" "$mute_codec" "$mute_count" \
+          "$mute_target" "$mute_status" "$mute_detail" \
+          >> "$mute_plan"
+      done
+
+      if preview_run python3 \
+        "$DISPATCHER_DIR/kim_video_dialog.py" \
+        mute-review "$mute_plan" "$mute_request" \
+        "$KIM_MUTE_REVIEW_DIRECTORY"; then
+        break
+      else
+        mute_result=$?
+      fi
+
+      if [ "$mute_result" -eq 130 ] &&
+         [ -s "$mute_request" ]; then
+        IFS= read -r -d '' KIM_MUTE_REVIEW_DIRECTORY \
+          < "$mute_request" || return 1
+
+        if [ -n "$KIM_MUTE_REVIEW_DIRECTORY" ]; then
+          [[ "$KIM_MUTE_REVIEW_DIRECTORY" = /* ]] || {
+            progress_error "Choose an absolute destination directory."
+            return 1
+          }
+
+          [ -d "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+          [ ! -L "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+          [ -w "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+          [ -x "$KIM_MUTE_REVIEW_DIRECTORY" ] || {
+            progress_error "Selected destination is not writable."
+            return 1
+          }
+
+          KIM_MUTE_REVIEW_DIRECTORY="$(
+            cd -P -- "$KIM_MUTE_REVIEW_DIRECTORY" && pwd -P
+          )" || return 1
+        fi
+
+        continue
+      fi
+
+      return "$mute_result"
+    done
+
+    # Destination could have changed after the review.
+    if [ -n "$KIM_MUTE_REVIEW_DIRECTORY" ]; then
+      [ -d "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+      [ ! -L "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+      [ -w "$KIM_MUTE_REVIEW_DIRECTORY" ] &&
+      [ -x "$KIM_MUTE_REVIEW_DIRECTORY" ] || {
+        progress_error "Destination changed after approval."
+        return 1
+      }
+    fi
+  fi
   ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Processing video audio…')")" || return 1
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
@@ -9722,7 +10479,7 @@ action_videogif() {
 
     python3 "$dialog_script" gif "$settings_file" \
       "${start:-00:00:00}" "${duration:-3}" \
-      "${fps:-10}" "${width:-480}" "${loop:-infinite}" || return 1
+      "${fps:-10}" "${width:-480}" "${loop:-infinite}" "${files[@]}" || return 1
 
     mapfile -d '' -t settings < "$settings_file"
 

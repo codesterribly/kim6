@@ -306,53 +306,8 @@ mkdir -p -- "$PREFIX"
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 RUNTIME="$PREFIX/kim6"
 
-menu_names=(
-  kim_compressandresize.desktop
-  kim_compressandresizevideo.desktop
-  kim_video_h264.desktop
-  kim_video_av1.desktop
-  kim_convertandrotate.desktop
-  kim_information.desktop
-  kim_metadata.desktop
-  kim_location.desktop
-  kim_publication.desktop
-  kim_recipes.desktop
-  kim_videoutilities.desktop
-  kim_webemail.desktop
-)
-languages=(de es fr hu it nl zh_TW)
-legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
-  kim_other kim_collage kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
-  kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
-manual_files=(
-  docs/reference/ABOUT.html
-  docs/reference/ACTIONS.html
-  docs/reference/commandconfig.html
-  docs/reference/DEVELOPMENT.html
-  docs/reference/FORMATS.html
-  docs/reference/INSTALL.html
-  docs/reference/LICENSE.html
-  docs/reference/README.html
-  docs/images/kim6-photo-actions.png
-  docs/images/kim6-video-conversion.png
-  docs/images/kim6-video-utilities.png
-  docs/images/kim6-settings-dialog.png
-  docs/images/kim6-collage-dialog.png
-  docs/images/kim6-animated-gif-dialog.png
-  docs/reference/RECIPES.html
-  docs/images/kim6-recipes-menu.png
-  docs/images/kim6-recipe-editor.png
-  docs/images/kim6-convert-menu.png
-  docs/images/kim6-metadata-menu.png
-  docs/images/kim6-settings-general.png
-)
-runtime_files=(bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_desktop_exec.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json bin/kim_all bin/kim_collage_dialog.py bin/kim_contactsheet_dialog.py bin/kim_video_dialog.py bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
-  docs/index.html docs/work.css "${manual_files[@]}" bin/kim_settings_dialog.py bin/kim_album_dialog.py bin/kim_create_dialog.py bin/kim_manual_viewer.py
-  README.md
-  docs/ACTIONS.md
-  docs/FORMATS.md
-  docs/DEVELOPMENT.md
-  docs/commandconfig.md)
+# shellcheck source=install_inventory.sh
+source "$SOURCE_DIR/install_inventory.sh"
 temporary=''
 die() { echo "install.sh: $*" >&2; exit 1; }
 check_dir() { [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] || die "refusing unsafe directory: $1"; }
@@ -439,32 +394,13 @@ for name in "${menu_names[@]}"; do
   fi
 done
 
-# Check the source checkout before creating or replacing runtime files.
-for relative in src/bin/kim_image_ops.py src/bin/kim_image_ops_dialog.py src/bin/kim_annotations.py src/bin/kim_extensions_dialog.py src/bin/kim_preview.py src/bin/kim_filename.py src/bin/kim_ui.py src/bin/kim_date_tools.py src/bin/kim_date_dialog.py src/bin/kim_location.py src/bin/kim_location_dialog.py src/bin/kim_location_ui.py src/bin/kim_photo_selection.py src/bin/kim_location_map.py src/bin/kim_job.py src/bin/kim_job_process.py src/bin/kim_action_dialog.py src/bin/kim_recipe_menu.py src/bin/kim_desktop_exec.py src/bin/kim_recipe_run.py src/bin/kim_recipe_core.py src/bin/kim_recipe_image.py src/bin/kim_recipe_dates.py src/bin/kim_psd_source.py src/bin/kim_source_advisories.py src/bin/kim_recipe_dialog.py src/recipes/builtins.json src/bin/kim_all src/bin/kim_png_metadata.py src/bin/kim_jpeg_webp_metadata.py src/bin/kim_gif_metadata.py src/bin/kim_tiff_verify.py src/bin/kim_isobmff_verify.py src/gallery/index.part1 src/gallery/index.part2 ABOUT LICENSE.md \
-    INSTALL.md docs/index.html docs/work.css "${manual_files[@]}"; do
+# Preflight the same complete inventory that will be copied. Nothing installed
+# is replaced until every required source and menu template is present.
+for relative in "${runtime_sources[@]}"; do
   [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] || die "required file is missing: $SOURCE_DIR/$relative"
 done
 for name in "${menu_names[@]}"; do
   [[ -f "$SOURCE_DIR/src/$name.in" && ! -L "$SOURCE_DIR/src/$name.in" ]] || die "menu template is missing: $SOURCE_DIR/src/$name.in"
-done
-
-# Verify every additional application helper and document before
-# installation starts. An incomplete checkout must not partially update KIM6.
-for relative in \
-    ABOUT README.md \
-    docs/ACTIONS.md \
-    docs/FORMATS.md \
-    docs/DEVELOPMENT.md \
-    docs/commandconfig.md \
-    src/bin/kim_collage_dialog.py \
-    src/bin/kim_contactsheet_dialog.py \
-    src/bin/kim_video_dialog.py \
-    src/bin/kim_album_dialog.py \
-    src/bin/kim_create_dialog.py \
-    src/bin/kim_settings_dialog.py \
-    src/bin/kim_manual_viewer.py; do
-  [[ -f "$SOURCE_DIR/$relative" && ! -L "$SOURCE_DIR/$relative" ]] ||
-    die "required file is missing: $SOURCE_DIR/$relative"
 done
 
 # Keep the offline HTML User Guide synchronized with its Markdown sources.
@@ -521,64 +457,8 @@ printf 'KIM6 runtime\n' > "$temporary"
 chmod 0644 -- "$temporary"
 mv -f -- "$temporary" "$RUNTIME/.kim6-owned"
 temporary=''
-install_file "$SOURCE_DIR/src/bin/kim_all" "$RUNTIME/bin/kim_all" 0755
-install_file "$SOURCE_DIR/src/bin/kim_image_ops.py" "$RUNTIME/bin/kim_image_ops.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_image_ops_dialog.py" "$RUNTIME/bin/kim_image_ops_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_annotations.py" "$RUNTIME/bin/kim_annotations.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_extensions_dialog.py" "$RUNTIME/bin/kim_extensions_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_preview.py" "$RUNTIME/bin/kim_preview.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_filename.py" "$RUNTIME/bin/kim_filename.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_ui.py" "$RUNTIME/bin/kim_ui.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_date_tools.py" "$RUNTIME/bin/kim_date_tools.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_date_dialog.py" "$RUNTIME/bin/kim_date_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_location.py" "$RUNTIME/bin/kim_location.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_location_dialog.py" "$RUNTIME/bin/kim_location_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_location_ui.py" "$RUNTIME/bin/kim_location_ui.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_photo_selection.py" "$RUNTIME/bin/kim_photo_selection.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_location_map.py" "$RUNTIME/bin/kim_location_map.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_job.py" "$RUNTIME/bin/kim_job.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_job_process.py" "$RUNTIME/bin/kim_job_process.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_action_dialog.py" "$RUNTIME/bin/kim_action_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_menu.py" "$RUNTIME/bin/kim_recipe_menu.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_desktop_exec.py" "$RUNTIME/bin/kim_desktop_exec.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_run.py" "$RUNTIME/bin/kim_recipe_run.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_core.py" "$RUNTIME/bin/kim_recipe_core.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_image.py" "$RUNTIME/bin/kim_recipe_image.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_dates.py" "$RUNTIME/bin/kim_recipe_dates.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_psd_source.py" "$RUNTIME/bin/kim_psd_source.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_source_advisories.py" "$RUNTIME/bin/kim_source_advisories.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_recipe_dialog.py" "$RUNTIME/bin/kim_recipe_dialog.py" 0644
-install_file "$SOURCE_DIR/src/recipes/builtins.json" "$RUNTIME/recipes/builtins.json" 0644
-install_file "$SOURCE_DIR/src/bin/kim_png_metadata.py" "$RUNTIME/bin/kim_png_metadata.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_jpeg_webp_metadata.py" "$RUNTIME/bin/kim_jpeg_webp_metadata.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_gif_metadata.py" "$RUNTIME/bin/kim_gif_metadata.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_tiff_verify.py" "$RUNTIME/bin/kim_tiff_verify.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_isobmff_verify.py" "$RUNTIME/bin/kim_isobmff_verify.py" 0644
-install_file "$SOURCE_DIR/src/gallery/index.part1" "$RUNTIME/gallery/index.part1" 0644
-install_file "$SOURCE_DIR/src/gallery/index.part2" "$RUNTIME/gallery/index.part2" 0644
-install_file "$SOURCE_DIR/ABOUT" "$RUNTIME/ABOUT" 0644
-install_file "$SOURCE_DIR/LICENSE.md" "$RUNTIME/LICENSE.md" 0644
-
-# Install Qt 6 configuration dialogs used by Collage and Contact Sheet.
-# These must be deployed, not merely listed in the runtime inventory.
-install_file "$SOURCE_DIR/src/bin/kim_collage_dialog.py" "$RUNTIME/bin/kim_collage_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_contactsheet_dialog.py" "$RUNTIME/bin/kim_contactsheet_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_video_dialog.py" "$RUNTIME/bin/kim_video_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_album_dialog.py" "$RUNTIME/bin/kim_album_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_settings_dialog.py" "$RUNTIME/bin/kim_settings_dialog.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_manual_viewer.py" "$RUNTIME/bin/kim_manual_viewer.py" 0644
-install_file "$SOURCE_DIR/src/bin/kim_create_dialog.py" "$RUNTIME/bin/kim_create_dialog.py" 0644
-
-install_file "$SOURCE_DIR/INSTALL.md" "$RUNTIME/INSTALL.md" 0644
-install_file "$SOURCE_DIR/README.md" "$RUNTIME/README.md" 0644
-install_file "$SOURCE_DIR/docs/ACTIONS.md" "$RUNTIME/docs/ACTIONS.md" 0644
-install_file "$SOURCE_DIR/docs/FORMATS.md" "$RUNTIME/docs/FORMATS.md" 0644
-install_file "$SOURCE_DIR/docs/DEVELOPMENT.md" "$RUNTIME/docs/DEVELOPMENT.md" 0644
-install_file "$SOURCE_DIR/docs/commandconfig.md" "$RUNTIME/docs/commandconfig.md" 0644
-install_file "$SOURCE_DIR/docs/index.html" "$RUNTIME/docs/index.html" 0644
-install_file "$SOURCE_DIR/docs/work.css" "$RUNTIME/docs/work.css" 0644
-for relative in "${manual_files[@]}"; do
-  install_file "$SOURCE_DIR/$relative" "$RUNTIME/$relative" 0644
+for index in "${!runtime_files[@]}"; do
+  install_file "$SOURCE_DIR/${runtime_sources[$index]}" "$RUNTIME/${runtime_files[$index]}" "${runtime_modes[$index]}"
 done
 
 if command -v msgfmt >/dev/null 2>&1; then
@@ -671,28 +551,9 @@ if command -v kbuildsycoca6 >/dev/null 2>&1; then
 fi
 
 # Installation is incomplete if any required Qt helper is absent.
-for helper in \
-  kim_image_ops.py \
-  kim_image_ops_dialog.py \
-  kim_annotations.py \
-  kim_extensions_dialog.py \
-  kim_collage_dialog.py \
-  kim_contactsheet_dialog.py \
-  kim_video_dialog.py \
-  kim_album_dialog.py \
-  kim_create_dialog.py \
-  kim_settings_dialog.py \
-  kim_ui.py \
-  kim_date_dialog.py \
-  kim_location.py \
-  kim_location_dialog.py \
-  kim_location_ui.py \
-  kim_photo_selection.py \
-  kim_location_map.py \
-  kim_action_dialog.py \
-  kim_preview.py \
-  kim_recipe_dialog.py \
-  kim_manual_viewer.py; do
+for relative in "${runtime_files[@]}"; do
+  [[ "$relative" == bin/*.py ]] || continue
+  helper="${relative#bin/}"
   installed="$RUNTIME/bin/$helper"
 
   if [ ! -f "$installed" ] || [ -L "$installed" ]; then
@@ -760,28 +621,9 @@ echo
 echo "VERIFIED QT HELPERS"
 echo "-------------------"
 
-for helper in \
-  kim_image_ops.py \
-  kim_image_ops_dialog.py \
-  kim_annotations.py \
-  kim_extensions_dialog.py \
-  kim_collage_dialog.py \
-  kim_contactsheet_dialog.py \
-  kim_video_dialog.py \
-  kim_album_dialog.py \
-  kim_create_dialog.py \
-  kim_settings_dialog.py \
-  kim_ui.py \
-  kim_date_dialog.py \
-  kim_location.py \
-  kim_location_dialog.py \
-  kim_location_ui.py \
-  kim_photo_selection.py \
-  kim_location_map.py \
-  kim_action_dialog.py \
-  kim_preview.py \
-  kim_recipe_dialog.py \
-  kim_manual_viewer.py; do
+for relative in "${runtime_files[@]}"; do
+  [[ "$relative" == bin/*.py ]] || continue
+  helper="${relative#bin/}"
 
   installed="$RUNTIME/bin/$helper"
   [ -f "$installed" ] && [ ! -L "$installed" ] ||

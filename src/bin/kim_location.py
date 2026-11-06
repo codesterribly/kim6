@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from kim_preview import (absolute, identity, inspection_path, base_entry, allocate,
                          finish_entry, verify_entry)
-from kim_psd_source import checkpoint, inspection_context
+from kim_process import checkpoint, inspection_context
 
 TITLES = {'gpx': 'GPX Geotagging', 'copy': 'Copy GPS from Image…',
           'apply': 'Modify GPS on Images…', 'report': 'Inspect Location Metadata',
@@ -1121,7 +1121,7 @@ def main():
     if command in ('write', 'stage'):
         entry = approved_entry(plan, source)
         result = location_process(['exiftool', *entry['args'], '-o', rest[0], '--', source], limit=1024*1024, timeout=150)
-        from kim_psd_source import metadata_diagnostics
+        from kim_process import metadata_diagnostics
         diagnostic = metadata_diagnostics(['exiftool'], result.returncode, result.stderr)
         if result.returncode or diagnostic: raise ValueError('ExifTool GPS staging failed: ' + diagnostic.strip())
         if command == 'stage': verify_output(plan, source, rest[0], entry=entry)

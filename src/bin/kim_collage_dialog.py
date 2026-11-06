@@ -7,11 +7,13 @@ import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog,
+    QApplication, QCheckBox, QComboBox, QColorDialog, QDialog,
     QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
+
+from PySide6.QtGui import QColor
 
 from kim_create_dialog import SourceAdvisoryNotice
 
@@ -108,13 +110,71 @@ def main():
         ("Custom color", "custom"),
     ])
 
+    custom_color_row = QWidget()
+    color_layout = QHBoxLayout(custom_color_row)
+    color_layout.setContentsMargins(0, 0, 0, 0)
+
     custom_color = QLineEdit("#808080")
-    form.addRow("Custom color:", custom_color)
+    custom_color.setPlaceholderText("#RRGGBB")
+    custom_color.setToolTip(
+        "Enter a hexadecimal color or choose a color."
+    )
+
+    color_swatch = QLabel()
+    color_swatch.setFixedSize(26, 22)
+    color_swatch.setAccessibleName(
+        "Selected background color preview"
+    )
+
+    choose_color = QPushButton("Choose Color…")
+
+    color_layout.addWidget(custom_color, 1)
+    color_layout.addWidget(color_swatch)
+    color_layout.addWidget(choose_color)
+
+    form.addRow("Custom color:", custom_color_row)
+
+    def update_color_swatch(text):
+        color = QColor(text.strip())
+        fill = (
+            color.name()
+            if color.isValid()
+            else "transparent"
+        )
+        color_swatch.setStyleSheet(
+            "QLabel { background-color: " + fill + "; "
+            "border: 1px solid palette(mid); }"
+        )
+        color_swatch.setToolTip(
+            color.name()
+            if color.isValid()
+            else "Invalid color"
+        )
+
+    def choose_background_color():
+        initial = QColor(custom_color.text().strip())
+        if not initial.isValid():
+            initial = QColor("#808080")
+
+        selected = QColorDialog.getColor(
+            initial,
+            dialog,
+            "Choose Collage Background Color"
+        )
+
+        if selected.isValid():
+            custom_color.setText(selected.name())
 
     def sync_color():
-        custom_color.setEnabled(background.currentData() == "custom")
+        custom_color_row.setEnabled(
+            background.currentData() == "custom"
+        )
 
+    custom_color.textChanged.connect(update_color_swatch)
+    choose_color.clicked.connect(choose_background_color)
     background.currentIndexChanged.connect(sync_color)
+
+    update_color_swatch(custom_color.text())
     sync_color()
 
     shadow = QCheckBox("Enable drop shadows")

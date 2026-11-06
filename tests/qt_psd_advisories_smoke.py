@@ -29,7 +29,8 @@ import kim_create_dialog as ui
 from kim_contactsheet_dialog import ContactSheetDialog
 import kim_job as job
 from kim_photo_selection import ImagePicker
-from kim_psd_source import WARNING, DIGEST_WARNING, record_warnings
+from kim_psd_source import WARNING
+from kim_process import DIGEST_WARNING, record_warnings
 import kim_source_advisories as advisory
 
 

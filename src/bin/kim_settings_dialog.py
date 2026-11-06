@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+from kim_settings_file import read_settings
 
 from PySide6.QtCore import QLocale, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -96,13 +97,7 @@ def config_path():
 def load_settings(path):
     settings = DEFAULTS.copy()
 
-    if not path.exists():
-        return settings
-
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
+    for key, value in read_settings(path):
         if key not in settings:
             continue
 

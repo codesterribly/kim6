@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit, QCalendarWid
 import kim_recipe_core as core
 import kim_recipe_image as image
 import kim_recipe_run as run
-from kim_psd_source import inspection_context, stage, run_process
+from kim_process import inspection_context, stage, run_process
 from kim_ui import CaptureDateInput, CaptureDateOptions
 from kim_date_dialog import PhotoDateDialog
 from kim_date_tools import resolve, source_date

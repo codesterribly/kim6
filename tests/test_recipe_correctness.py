@@ -318,10 +318,10 @@ class CorrectnessTests(unittest.TestCase):
         for status,stderr,success in [(0,warning,True),(1,warning,False),(0,warning+b'Warning: Bad ICC_Profile - /tmp/stage.tiff\n',False),(0,b'Warning: Unknown metadata problem\n',False)]:
             with self.subTest(status=status,stderr=stderr):
                 result = subprocess.CompletedProcess(['exiftool'],status,b'profile',stderr)
-                with patch.object(psd,'run_process',return_value=result),psd.source_session():
+                with patch('kim_process.run_process',return_value=result),psd.source_session():
                     if success:
                         self.assertEqual(psd.command(['exiftool','-b','-ICC_Profile','/tmp/stage.tiff']),b'profile')
-                        self.assertIn(psd.DIGEST_WARNING,psd.session_warnings())
+                        self.assertIn(psd.process.DIGEST_WARNING,psd.process.session_warnings())
                     else:
                         with self.assertRaises(psd.PSDError): psd.command(['exiftool','-b','-ICC_Profile','/tmp/stage.tiff'])
 

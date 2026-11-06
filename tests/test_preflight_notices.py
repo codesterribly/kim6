@@ -25,7 +25,8 @@ import kim_recipe_image as image
 import kim_recipe_run as run
 import kim_recipe_dialog as editor
 import kim_job as job
-from kim_psd_source import stage, run_process, WARNING, DIGEST_WARNING
+from kim_psd_source import WARNING
+from kim_process import stage, run_process, DIGEST_WARNING
 from test_recipe_correctness import step
 from test_recipes import recipe
 

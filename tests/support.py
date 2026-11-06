@@ -104,7 +104,7 @@ class Workspace:
             )
         psd_companion = self.production.with_name('kim_psd_source.py')
         shutil.copyfile(psd_companion, self.control / psd_companion.name)
-        for companion in ('kim_filename.py','kim_ui.py','kim_date_tools.py','kim_date_dialog.py','kim_job.py','kim_job_process.py','kim_action_dialog.py','kim_recipe_core.py','kim_recipe_image.py','kim_recipe_dates.py'):
+        for companion in ('kim_process.py','kim_settings_file.py','kim_filename.py','kim_ui.py','kim_date_tools.py','kim_date_dialog.py','kim_job.py','kim_job_process.py','kim_action_dialog.py','kim_recipe_core.py','kim_recipe_image.py','kim_recipe_dates.py'):
             path=self.production.with_name(companion)
             if path.exists(): shutil.copyfile(path,self.control/companion)
         self.plan = self.control / "plan.json"

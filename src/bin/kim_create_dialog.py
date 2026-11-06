@@ -34,6 +34,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QDoubleSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
     QListWidget,
@@ -66,7 +68,7 @@ class ImageSourceInspector(QThread):
         self.mode = mode
 
     def run(self):
-        from kim_psd_source import inspection_context, run_process, checkpoint
+        from kim_process import inspection_context, run_process, checkpoint
 
         with inspection_context(cancelled=self.isInterruptionRequested):
             for path in self.paths:
@@ -920,8 +922,47 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.delay = QSpinBox()
         self.delay.setRange(0, 65535)
         self.delay.setValue(int(delay))
-        self.delay.setToolTip('Centiseconds (1/100 second). Preview uses a minimum of 20 ms; export keeps the chosen delay.')
-        form.addRow('Frame delay (centiseconds):', self.delay)
+        self.delay.setToolTip(
+            'Exact encoded frame delay in 1/100-second units.'
+        )
+        self.timing_units = QComboBox()
+        self.timing_units.addItem(
+            'Seconds per frame', 'seconds'
+        )
+        self.timing_units.addItem(
+            'Centiseconds per frame', 'centiseconds'
+        )
+        self.timing_units.addItem(
+            'Frames per second (FPS)', 'fps'
+        )
+        form.addRow('Timing units:', self.timing_units)
+
+        self.timing_inputs = QStackedWidget()
+
+        self.seconds_per_frame = QDoubleSpinBox()
+        self.seconds_per_frame.setRange(0, 655.35)
+        self.seconds_per_frame.setDecimals(2)
+        self.seconds_per_frame.setSingleStep(0.1)
+        self.seconds_per_frame.setSuffix(' s')
+
+        self.frames_per_second = QDoubleSpinBox()
+        self.frames_per_second.setRange(0, 100)
+        self.frames_per_second.setDecimals(2)
+        self.frames_per_second.setSingleStep(1)
+        self.frames_per_second.setSuffix(' FPS')
+
+        for field in (
+            self.seconds_per_frame,
+            self.delay,
+            self.frames_per_second,
+        ):
+            self.timing_inputs.addWidget(field)
+
+        form.addRow('Frame timing:', self.timing_inputs)
+
+        self.timing_summary = QLabel()
+        self.timing_summary.setWordWrap(True)
+        form.addRow(self.timing_summary)
         self.loops = QSpinBox()
         self.loops.setRange(0, 65535)
         self.loops.setValue(int(loops))
@@ -972,6 +1013,22 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.preview_timer = QTimer(self)
         self.preview_timer.timeout.connect(self.advance_preview)
         self.delay.valueChanged.connect(self.update_interval)
+        self.delay.valueChanged.connect(self.sync_timing)
+
+        self.seconds_per_frame.valueChanged.connect(
+            lambda seconds: self.delay.setValue(
+                round(seconds * 100)
+            )
+        )
+        self.frames_per_second.valueChanged.connect(
+            lambda fps: self.delay.setValue(
+                round(100 / fps) if fps else 0
+            )
+        )
+        self.timing_units.currentIndexChanged.connect(
+            self.change_timing_units
+        )
+
         self.loops.valueChanged.connect(self.reset_cycles)
         self.play.clicked.connect(self.play_preview)
         self.pause.clicked.connect(self.pause_preview)
@@ -986,6 +1043,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self.ordered.animation_format = self.format.currentData()
+        self.change_timing_units()
         self.update_interval()
         self.ordered.add_paths(paths)
         self.sequence_changed()
@@ -993,6 +1051,39 @@ class AnimatedImageDialog(OrderedImageDialog):
 
     def ordered_paths(self):
         return self.ordered.ordered_paths()
+
+    def change_timing_units(self, *_):
+        self.timing_inputs.setCurrentIndex(
+            self.timing_units.currentIndex()
+        )
+        self.sync_timing()
+
+    def sync_timing(self, *_):
+        delay = self.delay.value()
+
+        for widget, value in (
+            (self.seconds_per_frame, delay / 100),
+            (
+                self.frames_per_second,
+                100 / delay if delay else 0
+            ),
+        ):
+            blocked = widget.blockSignals(True)
+            widget.setValue(value)
+            widget.blockSignals(blocked)
+
+        if delay:
+            self.timing_summary.setText(
+                f'Actual frame delay: {delay / 100:.2f} s '
+                f'({delay} centiseconds, '
+                f'{100 / delay:.2f} FPS). '
+                'GIF timing is quantized to centiseconds.'
+            )
+        else:
+            self.timing_summary.setText(
+                'Zero-delay frames have no specified playback '
+                'rate. Players may apply their own minimum delay.'
+            )
 
     def update_interval(self, *_):
         # A zero-delay GIF is legal. Limit preview to 50 FPS to avoid a busy loop.
@@ -1176,8 +1267,13 @@ class AnimatedImageDialog(OrderedImageDialog):
                 elif canvas.width() * canvas.height() * count > 200000000:
                     problem = 'APNG exceeds the 200-million pixel-frame limit.'
         self.create.setEnabled(not problem and ready == count and self.finish_result is None)
-        self.summary.setText(f'{count} selected · {ready} ready · {blocked} blocked · {pending} inspecting'
-                             + ('\n' + problem if problem else ''))
+        duration = count * self.delay.value() / 100
+        self.summary.setText(
+            f'{count} frames · {duration:.2f} s per loop · '
+            f'{ready} ready · {blocked} blocked · '
+            f'{pending} inspecting'
+            + ('\n' + problem if problem else '')
+        )
         playing = self.preview_timer.isActive()
         self.play.setEnabled(bool(count) and not playing)
         self.pause.setEnabled(playing)

@@ -17,4 +17,4 @@ Exec=kim_all recipe --choose -- %F
 [Desktop Action KIMRecipe1Editor]
 Icon=document-edit
 _Name=Recipe Editor…
-Exec=kim_all recipe --editor
+Exec=kim_all recipe --editor -- %F

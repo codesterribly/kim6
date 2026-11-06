@@ -11,15 +11,15 @@ import contextlib
 import contextvars
 import hashlib
 import os
-import re
-import signal
-import time
 from pathlib import Path
 import stat
 import struct
 import subprocess
 import sys
 import tempfile
+
+import kim_process as process
+from kim_process import ProcessError as PSDError
 
 WARNING = ('PSD compatibility: KIM6 uses the saved composite or ImageMagick’s best-effort '
            'reconstruction. Masks, blend modes, adjustment layers, text and effects may look different. '
@@ -28,105 +28,12 @@ LIMITS = ['-limit', 'memory', '256MiB', '-limit', 'map', '512MiB',
           '-limit', 'disk', '1GiB', '-limit', 'thread', '2', '-limit', 'time', '120']
 
 
-class PSDError(ValueError):
-    pass
-
-
-_PROGRESS = contextvars.ContextVar('kim_image_progress', default=None)
-_CANCELLED = contextvars.ContextVar('kim_image_cancelled', default=None)
-_WARNINGS = contextvars.ContextVar('kim_image_warnings', default=None)
-_SHELL_GROUP = contextvars.ContextVar('kim_shell_process_group', default=False)
-DIGEST_WARNING = ('Photoshop staging reported a stale IPTC digest; this does not establish conflicting IPTC/XMP values. '
-                  'KIM6 has not synchronized or repaired these fields. Metadata is kept unless a removal step is selected.')
-
-
-@contextlib.contextmanager
-def inspection_context(progress=None, cancelled=None):
-    tokens = (_PROGRESS.set(progress), _CANCELLED.set(cancelled))
-    try:
-        yield
-    finally:
-        _CANCELLED.reset(tokens[1]); _PROGRESS.reset(tokens[0])
-
-
-def cancelled():
-    callback = _CANCELLED.get()
-    return bool(callback and callback())
-
-
-def checkpoint():
-    if cancelled(): raise PSDError('Image processing cancelled')
-
-
-def stage(message):
-    checkpoint()
-    callback = _PROGRESS.get()
-    if callback: callback(message)
-    elif os.environ.get('KIM_JOB_STAGE'): Path(os.environ['KIM_JOB_STAGE']).write_text(message)
-
-
-def run_process(args, timeout=150, **kwargs):
-    """Own delegates too; cancellation reaps the group before workspace cleanup."""
-    own_group = not _SHELL_GROUP.get()
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               start_new_session=own_group, **kwargs)
-    started = time.monotonic()
-    try:
-        while True:
-            callback = _CANCELLED.get()
-            if callback and callback(): raise PSDError('Image processing cancelled')
-            if time.monotonic() - started > timeout: raise subprocess.TimeoutExpired(args, timeout)
-            try:
-                stdout, stderr = process.communicate(timeout=.1)
-                return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
-            except subprocess.TimeoutExpired:
-                continue
-    except BaseException:
-        try:
-            if own_group: os.killpg(process.pid, signal.SIGTERM)
-            else: process.terminate()
-        except ProcessLookupError: pass
-        try: process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            try:
-                if own_group: os.killpg(process.pid, signal.SIGKILL)
-                else: process.kill()
-            except ProcessLookupError: pass
-            process.communicate()
-        raise
-
-
-def metadata_diagnostics(args, status, diagnostics):
-    """Whitelist one successful ExifTool advisory, never a failed write or ICC warning.
-
-    A stale Photoshop digest is not evidence that either metadata block is wrong.
-    In particular, do not use -m or write a new digest to conceal that uncertainty.
-    """
-    if args[0] != 'exiftool' or status:
-        return diagnostics
-    remaining = []
-    for line in diagnostics.splitlines():
-        if re.fullmatch(r'Warning: IPTCDigest is not current\. XMP may be out of sync - .+', line):
-            warnings = _WARNINGS.get()
-            if warnings is not None:
-                if DIGEST_WARNING not in warnings: warnings.append(DIGEST_WARNING)
-                exact='IPTCDigest staging diagnostic: '+line
-                if exact not in warnings: warnings.append(exact)
-        else:
-            remaining.append(line)
-    return '\n'.join(remaining)
-
-
-def session_warnings():
-    return list(_WARNINGS.get() or [])
-
-
 def command(args, **kwargs):
     try:
-        result = run_process(args, timeout=150, **kwargs)
+        result = process.run_process(args, timeout=150, **kwargs)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise PSDError('PSD processing failed: ' + str(exc)) from exc
-    diagnostics = metadata_diagnostics(args, result.returncode, result.stderr.decode(errors='replace'))
+    diagnostics = process.metadata_diagnostics(args, result.returncode, result.stderr.decode(errors='replace'))
     if result.returncode or diagnostics:
         raise PSDError('PSD processing failed: ' + result.stderr.decode(errors='replace').strip())
     return result.stdout
@@ -161,18 +68,6 @@ def srgb():
     raise PSDError('An installed sRGB ICC profile is required for PSD color interpretation')
 
 
-def record_warnings(directory, source, identity, warnings):
-    """Append source-attributed diagnostics; presentation groups categories later."""
-    if not os.environ.get('KIM_PSD_CACHE'): return
-    import json
-    source=os.path.realpath(source)
-    # stdin snapshots resolve back to the selected file on Linux. Never use the
-    # derived TIFF/JPEG name as an additional affected source.
-    with (Path(directory)/'warnings.jsonl').open('a') as log:
-        for warning in warnings:
-            log.write(json.dumps({'source':source,'identity':list(identity),'warning':warning})+'\n')
-
-
 def normalize(path, directory, rgb=False):
     """Return one verified TIFF, or the original path for non-PSD inputs."""
     document = header(path)
@@ -189,16 +84,16 @@ def normalize(path, directory, rgb=False):
         return str(target)
     if sum(p.stat().st_size for p in directory.glob('*.tiff')) > 2 * 1024**3:
         raise PSDError('PSD staging exceeds the 2 GiB batch limit; use a smaller batch')
-    stage('Reading Photoshop document')
+    process.stage('Reading Photoshop document')
     fd, temporary = tempfile.mkstemp(suffix='.tiff', dir=directory)
     os.close(fd)
     try:
         # Inspect the document profile too: a decoder may discard a damaged
         # resource, which must not turn a malformed ICC into an sRGB assumption.
-        stage('Inspecting Photoshop color profile')
+        process.stage('Inspecting Photoshop color profile')
         command(['exiftool', '-s3', '-ICC_Profile:ProfileFileSignature', str(path)])
         # Decode real pixels, not a ping: a plausible header is insufficient.
-        stage('Preparing Photoshop composite')
+        process.stage('Preparing Photoshop composite')
         with open(path, 'rb') as source:
             command(['magick', *LIMITS, '-regard-warnings', 'psd:-[0]',
                      '+repage', '-compress', 'Zip', 'TIFF:' + temporary], stdin=source)
@@ -208,7 +103,7 @@ def normalize(path, directory, rgb=False):
         w, h, bits, colorspace = record[0].split('|')
         if (int(w), int(h)) != (width, height):
             raise PSDError('PSD composite does not match the document canvas')
-        stage('Inspecting composite color profile')
+        process.stage('Inspecting composite color profile')
         has_icc = bool(command(['exiftool', '-b', '-ICC_Profile', temporary]))
         if mode == 4 and not has_icc:
             raise PSDError('Unprofiled CMYK PSD has unknown source colors; assign a valid source ICC profile before exporting')
@@ -216,13 +111,12 @@ def normalize(path, directory, rgb=False):
         if has_icc and (rgb or mode in (1, 4) or colorspace.lower() not in ('srgb', 'rgb')):
             color_args = ['-profile', srgb()]
         elif not has_icc:
-            warnings = _WARNINGS.get()
             warning = 'Unprofiled RGB/grayscale source: KIM6 assumed sRGB for color interpretation.'
-            if warnings is not None and warning not in warnings: warnings.append(warning)
+            process.add_warning(warning)
             if mode == 1: color_args += ['-colorspace', 'sRGB']
             color_args += ['-profile', srgb()]
         if color_args:
-            stage('Converting composite color profile')
+            process.stage('Converting composite color profile')
             converted = temporary + '.color.tiff'
             try:
                 command(['magick', *LIMITS, '-regard-warnings', temporary, *color_args,
@@ -234,7 +128,7 @@ def normalize(path, directory, rgb=False):
         # Photoshop digest. Restore the source blocks verbatim, not individual
         # tags, without copying the source CMYK ICC onto transformed RGB pixels.
         # A digest already stale in the original remains stale: never repair it.
-        stage('Preserving Photoshop metadata')
+        process.stage('Preserving Photoshop metadata')
         blocks = {}
         for tag in ('IPTC','XMP'):
             blocks[tag] = command(['exiftool','-b','-' + tag,str(path)])
@@ -247,7 +141,7 @@ def normalize(path, directory, rgb=False):
                 padded = payload + b'\0' * (-len(payload) % 4) if tag == 'IPTC' else payload
                 if actual not in (payload,padded):
                     raise PSDError('PSD ' + tag + ' block could not be preserved verbatim; no output was published')
-        stage('Validating Photoshop composite')
+        process.stage('Validating Photoshop composite')
         validation = ['-profile', srgb()] if has_icc and not color_args else []
         command(['magick', *LIMITS, '-regard-warnings', temporary, *validation, 'null:'])
         current = os.stat(path)
@@ -256,7 +150,7 @@ def normalize(path, directory, rgb=False):
         if sum(p.stat().st_size for p in directory.glob('*.tiff') if str(p) != temporary) + os.path.getsize(temporary) > 2 * 1024**3:
             raise PSDError('PSD staging exceeds the 2 GiB batch limit; use a smaller batch')
         os.replace(temporary, target)
-        record_warnings(directory,path,identity,[WARNING]+session_warnings())
+        process.record_warnings(directory,path,identity,[WARNING]+process.session_warnings())
         return str(target)
     finally:
         if os.path.exists(temporary): os.unlink(temporary)
@@ -277,11 +171,10 @@ def source_session():
         return
     with tempfile.TemporaryDirectory(prefix='kim-psd-') as directory:
         token = _SESSION.set(directory)
-        warning_token = _WARNINGS.set([])
         try:
-            yield
+            with process.warning_context():
+                yield
         finally:
-            _WARNINGS.reset(warning_token)
             _SESSION.reset(token)
 
 
@@ -320,11 +213,11 @@ def opaque_background(args):
 def main():
     args = sys.argv[1:]
     directory = os.environ.get('KIM_PSD_CACHE')
-    _WARNINGS.set([])
+    process._WARNINGS.set([])
     # Shell publication monitors already own this entire group. Decoder
     # children must remain in it so cancelling the wrapper stops staging too.
     # Qt/library callers instead own a private group for each tool invocation.
-    _SHELL_GROUP.set(True)
+    process._SHELL_GROUP.set(True)
     if not directory:
         raise PSDError('PSD staging workspace is unavailable')
     # Shell consumers sometimes read from stdin, including the monitored
@@ -343,7 +236,7 @@ def main():
         if replacement:
             stream = open(replacement, 'rb')
             os.dup2(stream.fileno(), 0)
-        stage('Reading metadata' if resolved[0]=='exiftool' else 'Inspecting image' if resolved[0]=='identify' or resolved[1:2]==['identify'] else 'Processing image')
+        process.stage('Reading metadata' if resolved[0]=='exiftool' else 'Inspecting image' if resolved[0]=='identify' or resolved[1:2]==['identify'] else 'Processing image')
         os.execvp(resolved[0], resolved)
 
 

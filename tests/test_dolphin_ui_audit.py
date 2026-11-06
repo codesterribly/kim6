@@ -71,5 +71,37 @@ class DolphinUIAuditTests(unittest.TestCase):
         )
 
 
+    def test_file_independent_actions_handle_multiselection(self):
+        """One informational invocation for a multi-image selection."""
+        import configparser
+        import shlex
+
+        menu = (
+            Path(__file__).resolve().parents[1]
+            / "src/kim_information.desktop.in"
+        )
+
+        parser = configparser.RawConfigParser()
+        parser.optionxform = str
+        self.assertTrue(parser.read(menu, encoding="utf-8"))
+
+        routes = {
+            "01Settings": "settings",
+            "02About": "about",
+            "03License": "license",
+            "04Manual": "manual",
+        }
+
+        for action_id, route in routes.items():
+            with self.subTest(action=action_id):
+                command = parser.get(
+                    f"Desktop Action {action_id}", "Exec"
+                )
+                self.assertEqual(
+                    shlex.split(command),
+                    ["kim_all", route, "--", "%F"],
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

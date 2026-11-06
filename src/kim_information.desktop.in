@@ -12,19 +12,19 @@ X-KIM6-Managed=true
 [Desktop Action 02About]
 Icon=help-about
 _Name=About KIM6
-Exec=kim_all about
+Exec=kim_all about -- %F
 
 [Desktop Action 03License]
 Icon=text-x-generic
 _Name=License
-Exec=kim_all license
+Exec=kim_all license -- %F
 
 [Desktop Action 04Manual]
 Icon=help-contents
 _Name=KIM6 User Guide
-Exec=kim_all manual
+Exec=kim_all manual -- %F
 
 [Desktop Action 01Settings]
 Icon=configure
 _Name=Settings…
-Exec=kim_all settings
+Exec=kim_all settings -- %F

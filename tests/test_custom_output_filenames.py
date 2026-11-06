@@ -43,29 +43,25 @@ def run(command, **env):
 
 
 def settings():
-    tree = ast.parse(UI.read_text())
-    selected = []
+    """Exercise the real Settings module and its shared file reader."""
+    import importlib.util
+    import sys
 
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id in {
-                "AFFIX_ITEMS", "AFFIX_DEFAULTS", "AFFIX_PATTERN",
-                "DEFAULTS", "VALID_POLICIES", "VALID_AFFIXES"
-            }
-            for t in node.targets
-        ):
-            selected.append(node)
+    source_directory = str(UI.parent)
+    spec = importlib.util.spec_from_file_location(
+        "kim6_filename_settings_test", UI
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Cannot load real Settings module")
 
-        if isinstance(node, ast.FunctionDef) and node.name in {
-            "load_settings", "save_settings"
-        }:
-            selected.append(node)
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, source_directory)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(source_directory)
 
-    scope = {"re": re, "os": os, "tempfile": tempfile}
-    module = ast.Module(body=selected, type_ignores=[])
-    exec(compile(module, str(UI), "exec"), scope)
-    return scope
-
+    return vars(module)
 
 class OutputFilenameTests(unittest.TestCase):
 

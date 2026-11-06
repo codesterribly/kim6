@@ -48,7 +48,7 @@ def render(library, dispatcher):
     lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Choose Saved Recipe…',
               'Icon=view-list-details', 'Exec=' + command + '--choose -- %F',
               '', '[Desktop Action KIMRecipe1Editor]', 'Name=Recipe Editor…',
-              'Icon=document-edit', 'Exec=' + command + '--editor', '']
+              'Icon=document-edit', 'Exec=' + command + '--editor -- %F', '']
     result = '\n'.join(lines)
     parser = configparser.ConfigParser(interpolation=None, strict=True)
     parser.read_string(result)
@@ -67,7 +67,10 @@ def sync_menu():
     # Lock the directory inode: no persistent lock file, no symlink-following lock.
     fd = os.open(menu.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RecipeError('Shortcut synchronization is pending: the menu directory is busy') from exc
         info = menu.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid():
             raise RecipeError('Recipes menu is not a user-owned regular file')

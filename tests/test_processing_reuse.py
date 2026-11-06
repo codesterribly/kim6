@@ -25,7 +25,8 @@ import kim_recipe_image as image
 import kim_image_ops as ops
 import kim_location as location
 import kim_preview as approval
-from kim_psd_source import inspection_context, srgb, PSDError
+from kim_psd_source import srgb, PSDError
+from kim_process import inspection_context
 
 
 class GeneratedImages(unittest.TestCase):

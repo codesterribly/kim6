@@ -13,9 +13,10 @@ import subprocess
 import struct
 import string
 import tempfile
+from kim_settings_file import read_settings
 from kim_image_ops import CROP_DEFAULTS, OVERLAY_DEFAULTS
-from kim_psd_source import (prepared, PSDError, WARNING as PSD_WARNING, header as psd_header,
-                            run_process, metadata_diagnostics, session_warnings, stage)
+from kim_psd_source import prepared, PSDError, WARNING as PSD_WARNING, header as psd_header
+from kim_process import run_process, metadata_diagnostics, session_warnings, stage
 from kim_recipe_core import RecipeError, OutputFormatRequired, keys, text, enabled_steps, config_path, format_output_pattern, display_output_pattern
 
 FORMATS = {'jpeg': 'jpg', 'png': 'png', 'webp': 'webp', 'avif': 'avif',
@@ -87,24 +88,13 @@ def literal_settings(defaults):
     """Read literal Settings values; never interpret shell syntax."""
     values = dict(defaults)
     path = config_path().with_name('settings.conf')
-    if os.path.lexists(path):
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(fd, encoding='utf-8') as stream:
-            import stat
-            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                raise RecipeError('KIM6 Settings must be a regular file')
-            try:
-                payload = stream.read(1024 * 1024 + 1)
-            except UnicodeError as exc:
-                raise RecipeError('KIM6 Settings must be UTF-8 text') from exc
-        if len(payload) > 1024 * 1024:
-            raise RecipeError('KIM6 Settings file exceeds size limit')
-        for line in payload.splitlines():
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, value = line.split('=', 1)
-            if key in values:
-                values[key] = text(value)
+    try:
+        stored = read_settings(path)
+    except ValueError as exc:
+        raise RecipeError(str(exc)) from exc
+    for key, value in stored:
+        if key in values:
+            values[key] = text(value)
     for key in values:
         if key in os.environ:
             values[key] = text(os.environ[key])
@@ -216,7 +206,7 @@ def inspection_identity(info):
 
 
 def inspect(path, output=False, pdf_scale=1):
-    from kim_psd_source import checkpoint
+    from kim_process import checkpoint
     checkpoint()
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -333,7 +323,7 @@ def _input_name_filters():
     try:
         listing = run(['magick','-list','format'])
     except (OSError,RecipeError):
-        from kim_psd_source import checkpoint
+        from kim_process import checkpoint
         checkpoint()  # A cancelled probe must not cache an empty capability list.
         listing = ''
     readable = {p[0].rstrip('*') for line in listing.splitlines()

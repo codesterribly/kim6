@@ -5,7 +5,7 @@ import stat
 import sys
 
 from kim_annotations import identity, read_tags
-from kim_psd_source import inspection_context
+from kim_process import inspection_context
 from kim_ui import tr
 
 # Deliberately distinguish JPEG 2000 containers from raw codestreams. Generic
@@ -87,7 +87,7 @@ def verify_copy(source, stage, expected):
             raise ValueError(tr('Unsafe staged copy'))
         if (before.st_dev, before.st_ino) == (output.st_dev, output.st_ino): raise ValueError(tr('Copy aliases source'))
         while True:
-            from kim_psd_source import checkpoint
+            from kim_process import checkpoint
             checkpoint()
             block = os.read(source_fd, 1024 * 1024)
             if block != os.read(stage_fd, 1024 * 1024): raise ValueError(tr('Copied bytes differ'))
@@ -158,7 +158,19 @@ def run_dialog(result_file, inputs):
             self.table.setHorizontalHeaderLabels([tr('Filename'), tr('Detected Format'), tr('Current Extension'),
                                                   tr('Suggested Extension'), tr('Status')])
             self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            header = self.table.horizontalHeader()
+            header.setStretchLastSection(False)
+            header.setResizeContentsPrecision(40)
+
+            header.setSectionResizeMode(
+                0, QHeaderView.Stretch
+            )
+
+            for column in range(1, 5):
+                header.setSectionResizeMode(
+                    column, QHeaderView.ResizeToContents
+                )
+
             layout.addWidget(self.table)
             actions = QHBoxLayout(); layout.addLayout(actions)
             self.folder = QPushButton(tr('Choose Folder…')); self.folder.clicked.connect(self.choose_folder)

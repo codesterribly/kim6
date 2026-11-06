@@ -20,7 +20,7 @@ import stat
 import subprocess
 import sys
 
-from kim_psd_source import run_process
+from kim_process import run_process
 
 CAPTURE = ('ExifIFD:DateTimeOriginal', 'XMP-exif:DateTimeOriginal',
            'XMP-photoshop:DateCreated', 'ExifIFD:CreateDate', 'XMP-xmp:CreateDate')
@@ -318,7 +318,7 @@ def write_contactsheet_plan(arguments):
 def main():
     # All text travels as data arguments; output and dimensions are job-owned.
     # The shell publication monitor owns this process group and all delegates.
-    from kim_psd_source import _SHELL_GROUP
+    from kim_process import _SHELL_GROUP
     _SHELL_GROUP.set(True)
     source, output, width, height, pixels, background, mode, index, date, camera, custom = sys.argv[1:]
     width, height, pixels = int(width), int(height), int(pixels)

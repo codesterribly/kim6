@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>STEP2_IMPLEMENTATION · KIM6 Reference</title>
+  <link rel="stylesheet" href="../work.css">
+</head>
+<body class="reference-page">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <div class="topbar-inner page-width">
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
+    </div>
+  </header>
+  <div class="reference-layout page-width">
+    <aside class="reference-sidebar" aria-label="Documentation sections">
+      <p class="nav-heading">REFERENCE</p>
+      <nav aria-label="Reference pages"><a href="README.html">Overview</a>
+<a href="INSTALL.html">Installation</a>
+<a href="ACTIONS.html">All actions</a>
+<a href="RECIPES.html">Recipes</a>
+<a href="commandconfig.html">Commands &amp; settings</a>
+<a href="FORMATS.html">Formats</a>
+<a href="DEVELOPMENT.html">Development</a></nav>
+      <a class="back-link" href="../index.html">← Back to User Guide</a>
+    </aside>
+    <main id="main" class="reference-content">
+      <div class="reference-source">KIM6 DOCUMENTATION · docs/STEP2_IMPLEMENTATION.md</div>
+      <article class="markdown-body">
+<h1 id="november-3-2026-audit--step-2-implementation">November 3, 2026 audit — Step 2 implementation</h1>
+<p>Implemented against <code>recovery/kim-all</code>, starting at <code>42477c8292581d616e5a4eadc69fe87f40e34147</code>. The working tree was clean before editing. All work remains uncommitted. Only ARCH-005 through ARCH-009 are in scope.</p>
+<h2 id="results-and-work-counts">Results and work counts</h2>
+<p>These are work counts, not elapsed-time speedup claims. Generated disposable fixtures were used throughout; no personal images were inspected. None of the five findings was already completely resolved.</p>
+<table>
+<thead>
+<tr>
+<th>Finding / controlled operation</th>
+<th style="text-align: right;">Before</th>
+<th style="text-align: right;">After</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ARCH-005: helper Python processes per successful GPS image</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">4</td>
+<td>Actual CLI subprocess replay of the dispatcher's per-image sequence</td>
+</tr>
+<tr>
+<td>ARCH-005: full plan reads/decodes</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">4</td>
+<td>Instrumented helper entry points on the same generated-image scenario</td>
+</tr>
+<tr>
+<td>ARCH-005: approval digests</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">4</td>
+<td>Instrumented <code>approval_digest</code> during that sequence</td>
+</tr>
+<tr>
+<td>ARCH-005: entry searches</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">4</td>
+<td>Static call-path count; the combined stage reuses its selected entry</td>
+</tr>
+<tr>
+<td>ARCH-005: canonicalizations selecting row 500</td>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">1</td>
+<td>Instrumented <code>absolute</code> in old/new <code>approved_entry</code> against a 500-entry lookup fixture</td>
+</tr>
+<tr>
+<td>ARCH-007: staged GPS-removal verification ExifTool requests</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">1</td>
+<td>Real ExifTool wrapper log, identical 15 selections and fixtures</td>
+</tr>
+<tr>
+<td>ARCH-007: whole selective-GPS operation ExifTool requests</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">5</td>
+<td>Actual dispatcher adapter logs with Python enabled, native encoded-data verification retained</td>
+</tr>
+<tr>
+<td>ARCH-008: cold ordinary Recipe plan ExifTool requests</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">3</td>
+<td>Counted real <code>run</code> calls; ImageMagick stays at 2</td>
+</tr>
+<tr>
+<td>ARCH-009: intrinsic inspections for ten placements of one logo</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1</td>
+<td>Real tool-request count in one inspection scope</td>
+</tr>
+<tr>
+<td>ARCH-009: ExifTool / ImageMagick requests for those placements</td>
+<td style="text-align: right;">20 / 30</td>
+<td style="text-align: right;">2 / 3</td>
+<td>Same generated logo and per-image geometry sequence</td>
+</tr>
+</tbody>
+</table>
+<p>The GPS counts exclude the unchanged initial whole-plan approval verification. The CLI replay isolates the helper sequence; it does not count unrelated shell, process-monitor, or image-validation processes. Plan read/digest instrumentation runs those same entry points in process. Searches are explicitly a static count. The 500-row canonicalization probe isolates lookup work and does not claim to represent 500 real GPS publications.</p>
+<p>Recipe presentation measurements used real offscreen Qt widgets, one warning per result, a fixed selected row, and one final summary refresh. A counting results dictionary recorded every <code>values()</code> / <code>items()</code> iterator visit; <code>os.stat</code> and property-field generation were instrumented.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Rows</th>
+<th style="text-align: right;">Full-result iterator visits before → after</th>
+<th style="text-align: right;">Warning identity stats before → after</th>
+<th style="text-align: right;">Selected-property rebuilds before → after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">325 → 0</td>
+<td style="text-align: right;">65 → 10</td>
+<td style="text-align: right;">10 → 1</td>
+</tr>
+<tr>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">25,750 → 0</td>
+<td style="text-align: right;">5,150 → 100</td>
+<td style="text-align: right;">100 → 1</td>
+</tr>
+<tr>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">628,750 → 0</td>
+<td style="text-align: right;">125,750 → 500</td>
+<td style="text-align: right;">500 → 1</td>
+</tr>
+</tbody>
+</table>
+<p>These warning-stat fixtures deliberately lack a captured identity, exercising the fallback path on both versions. Successful real Recipe rows now carry the already-inspected source identity, eliminating these additional grouping stats entirely. Per-result updates still occur once per input. Filesystem work needed for source inspection, filename collision checks and publication is retained. The measurements cover collapsed warning details. No event-loop latency or interactive responsiveness improvement is claimed.</p>
+<h2 id="implementation">Implementation</h2>
+<p><strong>ARCH-005 — completed with bounded reductions.</strong> <code>kim_preview entry</code> combines state, exact target selection, dependency validation and the live pre-item guard. The shell consumes its NUL-delimited response only to select the work. A combined location <code>stage</code> command writes and verifies within one parsed-plan lifetime, reusing the selected immutable entry and one integrity digest. It rechecks live source, destination and dependency identities after writing. Canonicalization was moved outside the entry-search generator. Both final publication guards still independently reload and validate the approval plan. The existing <code>write</code>, <code>verify</code>, and preview query interfaces remain available.</p>
+<p><strong>ARCH-006 — completed for normal result delivery.</strong> Ready, problem and repair counts update from the affected row, including replacement results. Execution job counts also update on completion rather than rescanning on every stage. Diagnostics append for ordered results and rebuild only for replacements or out-of-order problems. Warning groups accumulate once, preserving original source identities and existing captions/details; hidden technical text is materialized on disclosure. Selected properties rebuild only when the selected row, generation or recipe changes. The Run predicate additionally requires <code>ready == len(files)</code>, so cancelled rows cannot authorize execution.</p>
+<p>Generation rejection, pending-worker gating, recipe/destination invalidation, validated execution snapshots, cancellation and existing diagnostic text remain. Replacing a warning-bearing row genuinely rebuilds warning groups. Expanded warning details must reflect new data and can still regenerate the detailed text; this batch does not introduce a new presentation framework.</p>
+<p><strong>ARCH-007 — completed for compatible selective-removal verification.</strong> A single ExifTool JSON query verifies the union of known empty GPS/AI removal selections. Family 0/1/4 groups, duplicate instances and structured values are retained. Only absent fields or empty strings satisfy removal; arrays, objects, numeric zero, unexpected nonempty values and malformed/duplicate JSON fail closed. Retained structured location text is not accidentally included in removed leaf selections. The allowlist prevents unrelated queries from entering this path. Scalar/copyright/date comparisons keep their exact existing <code>-s3</code> print conversion. Without Python on PATH, verification retains the complete original per-tag path. Further scalar/date batching is deferred because it requires careful ExifTool print-conversion equivalence and gives less benefit here.</p>
+<p><strong>ARCH-008 — completed for selected planning observations.</strong> Copyright, GPS, AI, ICC description and ICC information share one deliberate text-valued query for ordinary inputs. Numeric header/date inspection remains separate, as does the existing descriptive-metadata preservation query. Family 0/1 matching preserves EXIF/IPTC/XMP distinctions. PSD original-document metadata and normalized composite ICC observations remain separate because they describe different objects. Private execution-source snapshots are still inspected freshly. No broad metadata cache or new PSD parser was introduced.</p>
+<p><strong>ARCH-009 — completed.</strong> Intrinsic logo identity, oriented dimensions, opacity, profile/color checks and decode validation are reused within an explicit batch/generation context, bounded to 64 paths and discarded on exit. Every lookup checks current regular-file identity and the current sRGB policy profile identity. Replacement, metadata changes, symlinks, policy changes and cancellation cannot silently reuse old facts. Placement/scaling stays per image. GUI workers and direct Recipe preview/execution share the scope only within their batch; private execution-logo copying, identity checks, color inspection and rendering remain fresh.</p>
+<h2 id="safety-checks-deliberately-retained">Safety checks deliberately retained</h2>
+<p>Independent decoded-pixel, binary ICC, JPEG/WebP encoded-data, TIFF encoded-data, ISOBMFF container and PNG presentation checks remain in place. Staging and atomic create/explicit-overwrite publication are unchanged. Both final GPS publication guards reload the plan. Original-source metadata digests, reference/GPX identity, destination identity, hardlink/symlink rejection, exact approved names, external create/prompt policy and cancellation gates remain mandatory.</p>
+<p>No persistent service, global approval cache, new dependency, image-processing concurrency, format support, output naming or user workflow was introduced.</p>
+<h2 id="verification">Verification</h2>
+<ul>
+<li>Added <code>tests/test_processing_reuse.py</code>: eleven focused checks covering actual work counts, distinct namespaces/dates, structured GPS removal selections, malformed/duplicate/structured response refusal and empty/missing handling, staged publication, pixels/ICC/source/collision preservation, changed GPS approvals/sources/dependencies/destinations, authorized overwrite staging, mid-stage destination changes and missing-plan rejection, logo replacement/policy/cancellation, generation invalidation and Run gating for 10/100/500 rows.</li>
+<li>New focused checks: 11/11 passed (a ten-test module run plus the added response-refusal check). The staged-publication count assertion was also rechecked independently after its addition.</li>
+<li><code>test_recipe_correctness.py</code>: 20/20 passed, including capture fractions and offsets, independent EXIF/XMP clocks, PSD raw metadata and source preservation.</li>
+<li>Differential old/new handler comparison: all 16 outcomes matched across generated JPEG, PNG, TIFF and PSD files, each with rename, GPS stripping, conversion and date-shift plans. Both successful states and refusal decisions were compared, not merely process exit codes.</li>
+<li><code>test_recipe_workflow.py</code>: 15 passed; one failure and one timeout reproduced against the starting implementation: the existing menu-caption expectation (<code>KIM6 Recipes</code> versus <code>KIM6 — Recipes</code>) and the editor-to-run test timeout.</li>
+<li><code>test_metadata_actions.py</code>: 20 initially passed; nine new missing-Python failures were corrected by retaining the legacy verification fallback and all nine passed on focused rerun. Two unrelated failures reproduce at the starting implementation: missing copied <code>kim_preview.py</code> in the interactive copyright fixture and the timeshift adapter's rename-only publication rejection.</li>
+<li>Three existing job tests passed: result counts/source warning grouping, warning disclosure/copy, and cancellation retaining the first publication.</li>
+<li>Python syntax validation, Bash syntax validation and <code>git diff --check</code> pass. ShellCheck reports the same 17 pre-existing diagnostics, with no new diagnostic code/message combinations.</li>
+<li>Two-axis code review: Standards — no findings; Spec — no confirmed correctness findings. The Spec reviewer requested confirmation of separate before/after, PSD and fallback evidence, supplied above.</li>
+</ul>
+<p>The repository-wide regression suite, installer and Dolphin menu installation were not run. Existing tests/fixtures were not changed to suppress failures. Synthetic PSD tests do not establish rendering fidelity for personal Photoshop files. No wall-clock speedup or responsiveness claim is made.</p>
+<h2 id="guidance-skills-and-changed-files">Guidance, skills and changed files</h2>
+<p>Read <code>docs/DEVELOPMENT.md</code>; no applicable AGENTS.md, CLAUDE.md, glossary or ADR was present. Inventoried the installed Matt Pocock engineering skill directories. Read <code>improve-codebase-architecture</code>, <code>codebase-design</code>, <code>diagnosing-bugs</code>, <code>implement</code>, <code>code-review</code> and <code>tdd</code>.</p>
+<p>Applied <code>codebase-design</code> for small interfaces and controlled observation lifetimes, <code>diagnosing-bugs</code>' performance-measurement loop, <code>implement</code> for the scoped implementation and focused checks, and <code>code-review</code> with separate Standards and Spec agents. The architecture skill's scope/YAGNI guidance informed the limited scope; its audit/report/grilling workflow was not run. TDD was read but a full pre-agreed-seam red/green skill workflow was not claimed. Explicit user requirements overrode the implement skill's full-suite and commit steps.</p>
+<p>Modified runtime files: <code>src/bin/kim_all</code>, <code>kim_preview.py</code>, <code>kim_location.py</code>, <code>kim_recipe_run.py</code>, <code>kim_job.py</code>, <code>kim_recipe_image.py</code>, <code>kim_image_ops.py</code>, and <code>kim_recipe_core.py</code>. Added this report and <code>tests/test_processing_reuse.py</code>. All changes remain uncommitted; no push or release was made.</p>
+<p>Final status: eight modified runtime files and two untracked additions (this report and the focused test module). The tracked runtime diff is 279 insertions and 74 deletions. Final diff inspection found no unrelated modifications.</p>
+
+      </article>
+    </main>
+  </div>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
+</body>
+</html>

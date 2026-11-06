@@ -21,7 +21,7 @@ import kim_recipe_image as image
 import kim_recipe_core as core
 import kim_recipe_dialog as editor
 from kim_job import completion_dialog
-from kim_psd_source import inspection_context, run_process
+from kim_process import inspection_context, run_process
 
 
 def wait(app,predicate,timeout=15):

@@ -22,7 +22,8 @@ import kim_recipe_image as image
 from kim_recipe_dates import epoch_ns
 from kim_date_tools import resolve
 from kim_job import JobStatus,grouped_warnings
-from kim_psd_source import WARNING,DIGEST_WARNING,inspection_context
+from kim_psd_source import WARNING
+from kim_process import DIGEST_WARNING, inspection_context
 from support import Workspace
 import test_recipes as base
 from test_recipe_correctness import step

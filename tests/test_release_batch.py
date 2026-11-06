@@ -42,6 +42,38 @@ class PackagingTests(unittest.TestCase):
 
     def test_required_runtime_files(self):
         installer = (ROOT / "install.sh").read_text()
+        self.assertIn(
+            'source "$SOURCE_DIR/install_inventory.sh"',
+            installer,
+        )
+        self.assertIn(
+            'for index in "${!runtime_files[@]}"',
+            installer,
+        )
+
+        inventory_command = (
+            'set -euo pipefail; source "$1"; '
+            'for index in "${!runtime_files[@]}"; do '
+            'printf "%s\0%s\0" '
+            '"${runtime_files[$index]}" '
+            '"${runtime_sources[$index]}"; '
+            'done'
+        )
+        inventory_result = run(
+            "bash", "-c", inventory_command, "bash",
+            ROOT / "install_inventory.sh",
+        )
+        self.assertEqual(
+            inventory_result.returncode,
+            0,
+            inventory_result.stderr,
+        )
+        records = inventory_result.stdout.split("\0")
+        self.assertEqual(records.pop(), "")
+        self.assertEqual(len(records) % 2, 0)
+        installed_pairs = set(
+            zip(records[0::2], records[1::2])
+        )
 
         required = (
             "kim_all",
@@ -67,9 +99,9 @@ class PackagingTests(unittest.TestCase):
                 )
 
                 self.assertIn(
-                    "bin/" + name,
-                    installer,
-                    f"Installer does not reference {name}",
+                    ("bin/" + name, "src/bin/" + name),
+                    installed_pairs,
+                    f"Installer inventory does not map {name}",
                 )
 
                 if name.endswith(".py"):

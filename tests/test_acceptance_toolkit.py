@@ -296,7 +296,11 @@ Name=Separator
         self.assertTrue(any(name.endswith(".jpg") for name in image["fixtures"]))
         self.assertTrue(any("video" in name for name in video["fixtures"]))
         self.assertTrue(manual["fixtures"], "a context-menu file is needed to reveal this menu entry")
-        self.assertNotIn("%F", manual["exec"], "informational action must not receive the context file")
+        self.assertEqual(
+            manual["dispatcher"],
+            ["manual", "--", "%F"],
+            "Dolphin must invoke the User Guide once for a multi-file selection",
+        )
         audio = next(case for case in cases if case["action_id"] == "A01ExtractVideoAudio")
         self.assertIn("video-multiaudio.mkv", audio["fixtures"])
         plan = acceptance.render_plan(cases)

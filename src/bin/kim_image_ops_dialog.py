@@ -65,7 +65,7 @@ class WatermarkPreviewWorker(QThread):
         self.cancelled = True; self.requestInterruption()
 
     def run(self):
-        from kim_psd_source import inspection_context, run_process
+        from kim_process import inspection_context, run_process
         try:
             with tempfile.TemporaryDirectory(prefix='kim6-picker-') as workspace:
                 env = dict(os.environ, TMPDIR=workspace, MAGICK_TEMPORARY_PATH=workspace,
@@ -455,7 +455,8 @@ class VisualWorker(QThread):
         self.rows = []; self.image = QImage(); self.dimensions = None; self.error = None; self.rendered_overlay = False
 
     def run(self):
-        from kim_psd_source import source_session, inspection_context, checkpoint
+        from kim_psd_source import source_session
+        from kim_process import inspection_context, checkpoint
         from kim_recipe_core import preview
         from kim_recipe_image import ImageHandler, run, srgb_profile
         from kim_image_ops import overlay_arguments
@@ -535,9 +536,29 @@ class ImageOperationDialog(QDialog):
         else: self.overlay_controls()
         if self.standalone: self.output_controls()
         self.geometry = QLabel(); self.geometry.setTextFormat(Qt.PlainText); self.geometry.setWordWrap(True); layout.addWidget(self.geometry)
-        self.table = QTableWidget(0, 4); self.table.setHorizontalHeaderLabels(['Image', 'Original dimensions', 'Crop / overlay plan', 'Result / problem'])
+        self.table = QTableWidget(0, 4); self.table.setHorizontalHeaderLabels(['Image', 'Original dimensions', 'Crop / overlay plan', 'Planned output / issues'])
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers); self.table.setWordWrap(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch); self.table.setMinimumHeight(145); layout.addWidget(self.table)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setResizeContentsPrecision(40)
+
+        header.setSectionResizeMode(
+            0, QHeaderView.Stretch
+        )
+        header.setSectionResizeMode(
+            1, QHeaderView.ResizeToContents
+        )
+        header.setSectionResizeMode(
+            2, QHeaderView.Interactive
+        )
+        header.setSectionResizeMode(
+            3, QHeaderView.Interactive
+        )
+
+        self.table.setColumnWidth(2, 220)
+        self.table.setColumnWidth(3, 260)
+        self.table.setMinimumHeight(145)
+        layout.addWidget(self.table)
         self.status = QLabel(); self.status.setWordWrap(True); self.status.setTextFormat(Qt.PlainText); layout.addWidget(self.status)
         safety = QLabel('Original images stay unchanged. Outputs use the existing verified, create-only publication path; occupied filenames receive a number.')
         safety.setWordWrap(True); layout.addWidget(safety)
@@ -824,8 +845,14 @@ class ImageOperationDialog(QDialog):
             original = f"{p.get('original_display_width', '?')} × {p.get('original_display_height', '?')}"
             plan = '\n'.join(p.get('crops' if self.crop else 'overlays', []))
             result = '; '.join(row.problems) if row.problems else f"{p.get('display_width', '?')} × {p.get('display_height', '?')} → {row.output}"
-            for column, value in enumerate((row.source, original, plan, result)):
-                item = QTableWidgetItem(value); item.setToolTip(value); self.table.setItem(index, column, item)
+            for column, value in enumerate(
+                (Path(row.source).name, original, plan, result)
+            ):
+                item = QTableWidgetItem(value)
+                item.setToolTip(
+                    row.source if column == 0 else value
+                )
+                self.table.setItem(index, column, item)
             problems += [row.source + ': ' + p for p in row.problems]; warnings += [row.source + ': ' + w for w in row.warnings]
         self.table.resizeRowsToContents()
         if not worker.image.isNull():

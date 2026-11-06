@@ -31,7 +31,7 @@ class ExamplePreviewWorker(QThread):
         self.generation, self.row = generation, None
 
     def run(self):
-        from kim_psd_source import inspection_context
+        from kim_process import inspection_context
         from kim_recipe_core import PreviewRow
         try:
             with inspection_context(self.stage_changed.emit,self.isInterruptionRequested):
@@ -979,6 +979,7 @@ def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repai
             widget.users[index-len(widget.shipped)]=copy.deepcopy(recipe)
             widget.refresh(index); widget.baseline=baseline; widget.update_modified()
     buttons = QHBoxLayout()
+    buttons.addStretch(1)
     if not from_run:
         run = QPushButton('Load Photos && Run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
     close = QPushButton('Return to Run a Recipe' if from_run else 'Close')

@@ -208,7 +208,7 @@ def inspect_logo(path):
     signature = (before, profile_path, policy.st_dev, policy.st_ino, policy.st_size,
                  policy.st_mtime_ns, policy.st_ctime_ns)
     if cache is not None and key in cache and cache[key][0] == signature:
-        from kim_psd_source import checkpoint
+        from kim_process import checkpoint
         checkpoint()
         return cache[key][1]
     try:
@@ -334,7 +334,7 @@ def ensure_gui():
 def text_layer(text, width, height, step, output):
     """Rasterize literal Unicode with Qt, including wrapping, never IM text syntax."""
     ensure_gui()
-    from kim_psd_source import checkpoint
+    from kim_process import checkpoint
     from PySide6.QtCore import QPointF, Qt
     from PySide6.QtGui import QColor, QFont, QImage, QPainter, QTextLayout, QTextOption
     short = min(width, height); margin = round(short * step['margin'] / 100)
@@ -400,7 +400,8 @@ def anchor_position(width, height, lw, lh, step):
 def overlay_arguments(source, state, workspace):
     """Build fixed composite arguments with private, color-managed raster layers."""
     from kim_recipe_image import run, srgb_profile
-    from kim_psd_source import run_process, prepared, checkpoint
+    from kim_psd_source import prepared
+    from kim_process import run_process, checkpoint
     args = []
     overlays = state.get('overlays', [])
     if not overlays: return args
@@ -486,7 +487,7 @@ def has_image_operations(recipe):
 def preflight_batch(recipe, sources, chosen=None, start_index=1):
     """Fail before the first publication if any selected image has no safe plan."""
     from kim_recipe_core import preview
-    from kim_psd_source import checkpoint
+    from kim_process import checkpoint
     problems = []
     for row in preview(recipe, sources, chosen, start_index):
         checkpoint()
@@ -501,7 +502,8 @@ def picker_preview(path, edge, workspace):
     Keep decoder/delegate children in that group, including PSD staging tools.
     This preview never decides whether the file may be selected.
     """
-    from kim_psd_source import _SHELL_GROUP, source_session
+    from kim_psd_source import source_session
+    from kim_process import _SHELL_GROUP
     from kim_recipe_image import inspect, run, srgb_profile
     _SHELL_GROUP.set(True)
     before = reference_identity(path)

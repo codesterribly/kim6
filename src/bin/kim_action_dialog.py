@@ -39,10 +39,7 @@ class SourceHeaders(QThread):
         import json
         import stat
 
-        from kim_psd_source import (
-            run_process,
-            inspection_context,
-        )
+        from kim_process import run_process, inspection_context
         from kim_recipe_image import (
             capture_date,
             canonical_file_type,
@@ -185,10 +182,7 @@ class SourceHeaders(QThread):
         import json
         import stat
 
-        from kim_psd_source import (
-            run_process,
-            inspection_context,
-        )
+        from kim_process import run_process, inspection_context
         from kim_recipe_image import canonical_file_type
 
         self.headers = {}
@@ -312,10 +306,10 @@ class SourceHeaders(QThread):
 
 class GeometryPlan(QThread):
     def __init__(self,files,headers,geometry,parent):
-        super().__init__(parent); self.files,self.headers,self.geometry=files,headers,geometry; self.lines=[]; self.error=None
+        super().__init__(parent); self.files,self.headers,self.geometry=files,headers,geometry; self.lines=[]; self.rows=[]; self.error=None
 
     def run(self):
-        from kim_psd_source import run_process,inspection_context
+        from kim_process import run_process, inspection_context
         try:
             with inspection_context(cancelled=self.isInterruptionRequested):
                 cache={}
@@ -326,8 +320,10 @@ class GeometryPlan(QThread):
                     if (w,h) not in cache:
                         from kim_recipe_image import planned_geometry
                         width,height=planned_geometry(w,h,self.geometry)
-                        cache[w,h]=f'{width} × {height}'
-                    self.lines.append(f'{Path(path).name}: {w} × {h} → {cache[w,h]}')
+                        cache[w,h]=(width,height)
+                    width,height=cache[w,h]
+                    self.rows.append((str(path), int(w), int(h), int(width), int(height)))
+                    self.lines.append(f'{Path(path).name}: {w} × {h} → {width} × {height}')
         except Exception as exc: self.error=str(exc)
 
 
@@ -360,6 +356,46 @@ class ActionDialog(QDialog):
         else:
             self.preview=QPlainTextEdit(); self.preview.setReadOnly(True)
         self.layout.addWidget(self.preview)
+        if kind == 'resize':
+            self.resize_rows = []
+            self.resize_heading = QLabel('Preview Changes')
+            self.layout.addWidget(self.resize_heading)
+            self.resize_table = QTableWidget(0, 3, self)
+            self.resize_table.setHorizontalHeaderLabels(
+                ['Image', 'Original Dimensions', 'Planned Dimensions']
+            )
+            self.resize_table.setEditTriggers(
+                QAbstractItemView.NoEditTriggers
+            )
+            self.resize_table.setSelectionBehavior(
+                QAbstractItemView.SelectRows
+            )
+            self.resize_table.setAlternatingRowColors(True)
+            self.resize_table.verticalHeader().hide()
+
+            header = self.resize_table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.Interactive)
+            header.setSectionResizeMode(2, QHeaderView.Interactive)
+            self.resize_table.setColumnWidth(1, 170)
+            self.resize_table.setColumnWidth(2, 195)
+
+            visible_rows = min(len(self.files), 10)
+            table_height = min(
+                340, max(145, 38 + visible_rows * 29)
+            )
+            self.resize_table.setFixedHeight(table_height)
+            self.layout.addWidget(self.resize_table)
+
+            self.resize_summary = QLabel()
+            self.resize_summary.setWordWrap(True)
+            self.layout.addWidget(self.resize_summary)
+            self.preview.setMaximumHeight(100)
+            self.resize_table.hide()
+            self.resize(
+                850,
+                min(600, max(350, 220 + len(self.files) * 30))
+            )
         self.buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
         self.apply=self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Apply')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); self.layout.addWidget(self.buttons)
@@ -427,18 +463,38 @@ class ActionDialog(QDialog):
             self.rotation.degrees.valueChanged.connect(
                 self.update_rotation_preview
             )
-        elif kind in ('resize','percent'):
-            if kind=='percent': self.spin('percent','Percentage',1,1000,50)
-            else:
-                sizes=[300,600,800,1024,1280,1400,1600,1920,2048,2560,3440,3840]
-                presets=self.choice('preset','Common sizes',[('Custom bounds','')]+[(f'{s} × {s}',str(s)) for s in sizes])
-                self.spin('width','Width (pixels)',1,100000,1600); self.spin('height','Height (pixels)',1,100000,1600)
-                self.choice('method','Sizing',[('Resize to Fit','fit'),('Exact Dimensions','exact'),('Custom Geometry','geometry')])
-                self.fields['geometry']=QLineEdit('1600x1600>'); self.form.addRow('Custom geometry',self.fields['geometry'])
-                self.fields['upscale']=QCheckBox('Allow enlargement'); self.form.addRow(self.fields['upscale'])
-                presets.currentIndexChanged.connect(self.size_preset)
-                self.form.addRow('Proportions and dimensions',with_help(QLabel('Fit keeps proportions; exact dimensions may stretch.'),'resize'))
-                self.message.setText('Custom geometry examples: 1600x1200> (fit without enlargement), 1600x, x1200, 1600x1200! (exact).')
+        elif kind == 'resize':
+            self.setWindowTitle('KIM6 — Resize Images')
+            self.choice('method', 'Sizing', [
+                ('Resize to Fit', 'fit'),
+                ('Exact Dimensions', 'exact'),
+                ('Percentage', 'percent'),
+            ])
+            sizes = [
+                300, 600, 800, 1024, 1280, 1400,
+                1600, 1920, 2048, 2560, 3440, 3840
+            ]
+            presets = self.choice(
+                'preset', 'Common sizes',
+                [('Custom dimensions', '')]
+                + [(f'{s} × {s}', str(s)) for s in sizes]
+            )
+            self.spin('width', 'Width (pixels)', 1, 100000, 1600)
+            self.spin('height', 'Height (pixels)', 1, 100000, 1600)
+            self.spin('percent', 'Percentage (%)', 1, 1000, 50)
+
+            self.fields['upscale'] = QCheckBox('Allow enlargement')
+            self.form.addRow(self.fields['upscale'])
+            self.resize_help_label = QLabel()
+            self.resize_help_label.setWordWrap(True)
+            self.form.addRow(self.resize_help_label)
+
+            presets.currentIndexChanged.connect(self.size_preset)
+            self.fields['method'].currentIndexChanged.connect(
+                self.update_resize_controls
+            )
+            self.apply.setText('Apply Changes')
+            self.update_resize_controls()
         elif kind=='convert':
             self.apply.setText('Preview Changes…')
             self.choice('format','Output format',[(f.upper(),f) for f in ('jpeg','png','webp','avif','heic','bmp','gif','pdf','tiff','jp2','jxl')])
@@ -904,7 +960,7 @@ class ActionDialog(QDialog):
 
     def geometry_finished(self):
         worker,self.worker=self.worker,None
-        self.geometry_cache[worker.geometry]=(worker.lines,worker.error); worker.deleteLater()
+        self.geometry_cache[worker.geometry]=(worker.lines,worker.error,worker.rows); worker.deleteLater()
         if self.closing: super().reject()
         else: self.refresh()
 
@@ -953,12 +1009,93 @@ class ActionDialog(QDialog):
         directory=QFileDialog.getExistingDirectory(self,'Rename destination')
         if directory: self.fields['directory'].setText(directory)
 
+    def update_resize_controls(self, *_):
+        """Show only controls used by the selected sizing method."""
+        method = self.fields['method'].currentData()
+        dimensions = method in ('fit', 'exact')
+
+        for key in ('preset', 'width', 'height'):
+            self.form.setRowVisible(
+                self.fields[key], dimensions
+            )
+
+        self.form.setRowVisible(
+            self.fields['upscale'], method == 'fit'
+        )
+        self.form.setRowVisible(
+            self.fields['percent'], method == 'percent'
+        )
+
+        descriptions = {
+            'fit': (
+                'Fits images within the specified dimensions '
+                'without changing their proportions.'
+            ),
+            'exact': (
+                'Forces the specified width and height. '
+                'Images may appear stretched.'
+            ),
+            'percent': (
+                '50% halves both dimensions. '
+                '100% keeps them unchanged. '
+                '200% doubles them.'
+            ),
+        }
+
+        self.resize_help_label.setText(
+            descriptions[method]
+        )
+
+        # This label is used elsewhere for inspection feedback.
+        # Do not remove it from the dialog.
+        if not self.header_error:
+            self.message.clear()
+
     def size_preset(self):
         value=self.fields['preset'].currentData()
         if value:
             for key in ('width','height'): self.fields[key].setValue(int(value))
 
+    def show_resize_table(self):
+        rows = self.resize_rows
+        self.resize_table.setRowCount(len(rows))
+        unchanged = 0
+
+        for index, (filename, w, h, new_w, new_h) in enumerate(rows):
+            same = (w, h) == (new_w, new_h)
+            unchanged += int(same)
+
+            values = (
+                Path(filename).name,
+                f'{w} × {h}',
+                f'{new_w} × {new_h}'
+                + (' (unchanged)' if same else '')
+            )
+
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column == 0:
+                    item.setToolTip(filename)
+                self.resize_table.setItem(index, column, item)
+
+        self.resize_heading.setText(
+            f'Preview Changes — {len(rows)} selected images'
+        )
+        self.resize_summary.setText(
+            f'{unchanged} unchanged, '
+            f'{len(rows) - unchanged} resized. '
+            'No changes applied yet.'
+        )
+
+        self.preview.hide()
+        self.resize_table.show()
+
     def set_preview_text(self, text):
+        if self.kind == 'resize':
+            self.resize_table.hide()
+            self.resize_table.setRowCount(0)
+            self.resize_summary.clear()
+            self.preview.show()
         if self.kind == 'compress':
             self.preview.setText(text)
             self.preview.setVisible(bool(text))
@@ -984,6 +1121,8 @@ class ActionDialog(QDialog):
 
 
     def refresh(self):
+        if self.kind == 'resize':
+            self.resize_rows = []
         if self.kind=='rename':
             self.start_rename_plan(); return
         if self.worker:
@@ -1005,23 +1144,55 @@ class ActionDialog(QDialog):
                     )
 
                 lines = []
-            elif self.kind in ('resize','percent'):
-                if self.kind=='percent': geometry=str(self.fields['percent'].value())+'%'
+            elif self.kind == 'resize':
+                method = self.fields['method'].currentData()
+
+                if method == 'percent':
+                    geometry = str(
+                        self.fields['percent'].value()
+                    ) + '%'
                 else:
-                    method=self.fields['method'].currentData()
-                    geometry=(self.fields['geometry'].text() if method=='geometry' else
-                              f"{self.fields['width'].value()}x{self.fields['height'].value()}"+('!' if method=='exact' else ''))
-                    if method!='geometry' and not self.fields['upscale'].isChecked(): geometry+='>'
+                    geometry = (
+                        f"{self.fields['width'].value()}x"
+                        f"{self.fields['height'].value()}"
+                        + ('!' if method == 'exact' else '')
+                    )
+                    if (
+                        method == 'fit'
+                        and not self.fields['upscale'].isChecked()
+                    ):
+                        geometry += '>'
+
                 from kim_recipe_image import ImageHandler
-                if not geometry.endswith('%'): ImageHandler().validate_step({'op':'image.resize_geometry','geometry':geometry})
-                self.values=[geometry]; lines=['Planned geometry: '+geometry,'Original proportions are retained unless ! (Exact Dimensions) is used.']
+                if not geometry.endswith('%'):
+                    ImageHandler().validate_step({
+                        'op': 'image.resize_geometry',
+                        'geometry': geometry
+                    })
+
+                self.values = [geometry]
+                lines = ['Planned geometry: ' + geometry]
+
                 if self.files and geometry not in self.geometry_cache:
-                    self.worker=GeometryPlan(self.files,self.headers,geometry,self)
-                    self.worker.finished.connect(self.geometry_finished); self.worker.start()
-                    self.set_preview_text('Planning dimensions…'); self.apply.setEnabled(False); return
-                planned,error=self.geometry_cache.get(geometry,([],None))
-                if error: raise ValueError(error)
-                lines+=planned
+                    self.worker = GeometryPlan(
+                        self.files, self.headers, geometry, self
+                    )
+                    self.worker.finished.connect(
+                        self.geometry_finished
+                    )
+                    self.worker.start()
+                    self.set_preview_text('Planning dimensions…')
+                    self.apply.setEnabled(False)
+                    return
+
+                planned, error, rows = self.geometry_cache.get(
+                    geometry, ([], None, [])
+                )
+                if error:
+                    raise ValueError(error)
+
+                self.resize_rows = rows
+                lines += planned
             elif self.kind=='convert':
                 fmt=self.fields['format'].currentData()
                 self.form.setRowVisible(self.fields['jp2_mode'],fmt=='jp2'); self.form.setRowVisible(self.fields['jp2_quality'],fmt=='jp2' and self.fields['jp2_mode'].currentData()=='lossy')
@@ -1140,7 +1311,15 @@ class ActionDialog(QDialog):
                 lines=[{'all':'Removes descriptive EXIF, IPTC, XMP and comments. Keeps ICC color profiles and orientation. File Modification Dates and encoded image data are preserved.',
                         'gps':'Removes recognized GPS and location coordinates. Keeps other metadata, ICC, orientation and file dates.',
                         'ai':'Removes recognized AI-generation fields. Unrecognized provenance and signed Content Credentials may remain. Keeps ICC, orientation and file dates.'}[value]]
-            self.set_preview_text('\n'.join(lines)); self.apply.setEnabled(True)
+            if (
+                self.kind == 'resize'
+                and self.files
+                and len(self.resize_rows) == len(self.files)
+            ):
+                self.show_resize_table()
+            else:
+                self.set_preview_text('\n'.join(lines))
+            self.apply.setEnabled(True)
         except Exception as exc:
             self.set_preview_text(str(exc)); self.apply.setEnabled(False)
             if self.kind=='rename': self.rename_table.setRowCount(0)
@@ -1581,7 +1760,228 @@ class RotateBatchDialog(QDialog):
             super().accept()
 
 
+
+class FlipReviewDialog(QDialog):
+    """Review a batch flip using bounded, read-only thumbnails."""
+
+    def __init__(self, files, operation):
+        super().__init__()
+
+        if operation not in ('flip', 'flop') or not files:
+            raise ValueError('Invalid Flip review selection')
+
+        self.operation = operation
+        self.rows = []
+        self.pending = []
+
+        self.setWindowTitle('KIM6 — Flip Images')
+        # Match the initial height to the batch rather than
+        # reserving a large, mostly empty scroll area.
+        # Four or more images use a bounded scrolling window.
+        visible_rows = min(len(files), 4)
+        self.resize(
+            830,
+            min(740, 195 + 165 * visible_rows)
+        )
+
+        outer = QVBoxLayout(self)
+
+        description = (
+            'Flip Vertically (top to bottom)'
+            if operation == 'flip'
+            else 'Flip Horizontally (left to right)'
+        )
+
+        heading = QLabel(
+            f'{len(files)} selected image(s). '
+            f'Planned operation: {description}. '
+            'Image dimensions remain unchanged.'
+        )
+        heading.setWordWrap(True)
+        outer.addWidget(heading)
+
+        note = QLabel(
+            'Review the original and resulting images below. '
+            'After approval, KIM6 applies its configured output policy.'
+        )
+        note.setWordWrap(True)
+        outer.addWidget(note)
+
+        headings = QHBoxLayout()
+        headings.addWidget(QLabel('Image'), 2)
+        headings.addWidget(QLabel('Original'), 3, Qt.AlignCenter)
+        headings.addWidget(QLabel('Planned result'), 3, Qt.AlignCenter)
+        outer.addLayout(headings)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        container = QWidget()
+        listing = QVBoxLayout(container)
+        listing.setContentsMargins(5, 5, 5, 5)
+
+        for path in files:
+            panel = QFrame()
+            panel.setFrameShape(QFrame.StyledPanel)
+
+            line = QHBoxLayout(panel)
+
+            name = QLabel(Path(path).name)
+            name.setToolTip(path)
+            name.setWordWrap(True)
+            name.setMinimumWidth(175)
+            name.setMaximumWidth(240)
+
+            original = QLabel('Inspecting…')
+            result = QLabel('Inspecting…')
+
+            for widget in (original, result):
+                widget.setFixedSize(180, 130)
+                widget.setAlignment(Qt.AlignCenter)
+
+            line.addWidget(name, 2)
+            line.addWidget(original, 3)
+            line.addWidget(result, 3)
+
+            listing.addWidget(panel)
+
+            self.rows.append({
+                'path': path,
+                'original': original,
+                'result': result,
+                'stamp': None,
+                'ready': False,
+                'error': None,
+            })
+
+        # Keep rows at the top. The scroll area itself manages
+        # any remaining space when the dialog is resized.
+        listing.setAlignment(Qt.AlignTop)
+        scroll.setWidget(container)
+        outer.addWidget(scroll, 1)
+
+        self.status = QLabel('Inspecting selected images…')
+        outer.addWidget(self.status)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+
+        self.apply = buttons.button(QDialogButtonBox.Ok)
+        self.apply.setText('Apply Changes')
+        self.apply.setEnabled(False)
+
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        outer.addWidget(buttons)
+
+        self.pending = list(self.rows)
+        QTimer.singleShot(0, self.load_next)
+
+    def load_next(self):
+        if not self.pending:
+            self.update_state()
+            return
+
+        row = self.pending.pop(0)
+
+        try:
+            from kim_photo_selection import read_thumbnail
+
+            image, stamp = read_thumbnail(
+                row['path'],
+                QSize(180, 130),
+                auto_orient=False
+            )
+
+            if image.isNull():
+                raise ValueError(
+                    'No supported source thumbnail decoder'
+                )
+
+            result = image.mirrored(
+                self.operation == 'flop',
+                self.operation == 'flip'
+            )
+
+            for label, value in (
+                (row['original'], image),
+                (row['result'], result),
+            ):
+                pixmap = QPixmap.fromImage(value)
+                label.setPixmap(
+                    pixmap.scaled(
+                        label.size(),
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                )
+
+            row['stamp'] = stamp
+            row['ready'] = True
+
+        except Exception as exc:
+            row['error'] = str(exc)
+            row['original'].setText('Preview unavailable')
+            row['result'].setText('Blocked')
+            row['result'].setToolTip(str(exc))
+
+        self.update_state()
+
+        if self.pending:
+            QTimer.singleShot(0, self.load_next)
+
+    def update_state(self):
+        ready = sum(row['ready'] for row in self.rows)
+        blocked = sum(bool(row['error']) for row in self.rows)
+
+        self.apply.setEnabled(
+            bool(self.rows)
+            and ready == len(self.rows)
+            and not blocked
+            and not self.pending
+        )
+
+        self.status.setText(
+            f'{ready} ready, {blocked} blocked, '
+            f'{len(self.pending)} awaiting inspection. '
+            'No files have been modified.'
+        )
+
+    def accept(self):
+        # Reject approval if a source changed after its preview.
+        from kim_preview import identity
+
+        for row in self.rows:
+            if row['ready'] and not row['error']:
+                try:
+                    if identity(row['path']) != row['stamp']:
+                        raise ValueError(
+                            'Image changed since preview'
+                        )
+                except Exception as exc:
+                    row['error'] = str(exc)
+                    row['result'].setToolTip(str(exc))
+
+        self.update_state()
+
+        if self.apply.isEnabled():
+            super().accept()
+
+
 def main():
+    if len(sys.argv) >= 4 and sys.argv[1] == 'flipreview':
+        _, _, operation, *files = sys.argv
+
+        if operation not in ('flip', 'flop') or not files:
+            raise ValueError('Invalid Flip review arguments')
+
+        app = QApplication(sys.argv[:1])
+        dialog = FlipReviewDialog(files, operation)
+
+        return 0 if dialog.exec() == QDialog.Accepted else 130
+
     if len(sys.argv) >= 4 and sys.argv[1] == 'rotatebatch':
         _, _, output, *arguments = sys.argv
 
@@ -1610,6 +2010,23 @@ def main():
 
         return 0
     kind,result,*files=sys.argv[1:]; initial=None; policy='create'; preset='custom'
+
+    if kind == 'percent':
+        kind = 'resize'
+        files = ['--preset-percent', '50', *files]
+
+    resize_percent = None
+    if kind == 'resize' and files[:1] == ['--preset-percent']:
+        if len(files) < 3:
+            raise ValueError('Percentage resize needs selected images')
+        resize_percent = files[1]
+        files = files[2:]
+    resize_preset = None
+    if kind == 'resize' and files[:1] == ['--preset']:
+        if len(files) < 3:
+            raise ValueError('Resize preset needs a value and selected images')
+        resize_preset = files[1]
+        files = files[2:]
     if kind=='compress' and files[:1]==['--preset']:
         _,preset,*files=files
         if preset not in ('recommended','maximum','custom'): raise ValueError('Invalid compression preset')
@@ -1620,6 +2037,41 @@ def main():
         if preset not in ('90','270','180','custom','EXIF'):
             raise ValueError('Invalid rotation preset')
     app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy,preset=preset)
+    if resize_preset is not None:
+        import re
+        dimensions = re.fullmatch(
+            r'([1-9][0-9]*)x([1-9][0-9]*)', resize_preset
+        )
+        if not dimensions:
+            raise ValueError('Resize preset must be WIDTHxHEIGHT')
+        width, height = map(int, dimensions.groups())
+        if not (1 <= width <= 100000 and 1 <= height <= 100000):
+            raise ValueError('Resize preset dimensions are out of range')
+        dialog.fields['width'].setValue(width)
+        dialog.fields['height'].setValue(height)
+        if width == height:
+            index = dialog.fields['preset'].findData(str(width))
+            if index >= 0:
+                dialog.fields['preset'].setCurrentIndex(index)
+        dialog.refresh()
+    if resize_percent is not None:
+        import re
+
+        if not re.fullmatch(r'[0-9]{1,4}', resize_percent):
+            raise ValueError('Invalid percentage value')
+
+        value = int(resize_percent)
+        if not 1 <= value <= 1000:
+            raise ValueError(
+                'Percentage must be between 1 and 1000'
+            )
+
+        dialog.fields['method'].setCurrentIndex(
+            dialog.fields['method'].findData('percent')
+        )
+        dialog.fields['percent'].setValue(value)
+        dialog.refresh()
+
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
     if dialog.exec()!=QDialog.Accepted: return 130 if kind in ('convert','copyright','strip','rename','rotate') else 1
     if kind=='compress':

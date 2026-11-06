@@ -416,7 +416,7 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     after = source.stat()
     if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):
         raise RecipeError('Source changed during inspection; try again')
-    from kim_psd_source import stage as job_stage
+    from kim_process import stage as job_stage
     job_stage('Planning output filename')
     name = component(state['name']) + '.' + state['extension']
     proposed = str(directory / name) if directory is not None else '<choose directory at run>/' + name
@@ -451,7 +451,7 @@ def preview(recipe, sources, chosen=None, start_index=1):
             except (OSError, RecipeError, UnicodeError) as exc:
                 row = PreviewRow(str(source), problems=[str(exc)])
                 try:
-                    from kim_psd_source import cancelled
+                    from kim_process import cancelled
                     if not cancelled() and Path(source).is_file() and not Path(source).is_symlink():
                         row.properties = handler(recipe['media']).source_properties(Path(source))
                 except (OSError, RecipeError, KeyError):
@@ -482,11 +482,11 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1):
         try:
             preflight_batch(recipe, sources, chosen, start_index)
         except (OSError, RecipeError, PSDError) as exc:
-            from kim_psd_source import cancelled
+            from kim_process import cancelled
             return [{'source': str(source), 'ok': False, 'error': str(exc), 'cancelled': cancelled()} for source in sources]
     results = []
     for index, source in enumerate(sources, start_index):
-        from kim_psd_source import cancelled, checkpoint, stage as job_stage
+        from kim_process import cancelled, checkpoint, stage as job_stage
         if cancelled(): break
         with source_session():
             try:

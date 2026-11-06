@@ -7,7 +7,7 @@ import sys
 from kim_recipe_core import RecipeError
 from kim_recipe_dates import specific, explicit, timezone, assignments, display, epoch_ns
 from kim_recipe_image import capture_date, NO_LEGACY_IPTC, canonical_file_type
-from kim_psd_source import run_process
+from kim_process import run_process
 
 
 def ensure_still_capture_input(path, preview=False):

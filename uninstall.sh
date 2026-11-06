@@ -68,66 +68,11 @@ PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
 RUNTIME="$PREFIX/kim6"
 runtime_known=false
 
-legacy_consolidated_menu_names=(kim_compress.desktop kim_organize.desktop)
-menu_names=(
-  kim_compress.desktop
-  kim_organize.desktop
-  kim_compressandresize.desktop
-  kim_compressandresizevideo.desktop
-  kim_video_h264.desktop
-  kim_video_av1.desktop
-  kim_convertandrotate.desktop
-  kim_information.desktop
-  kim_metadata.desktop
-  kim_location.desktop
-  kim_publication.desktop
-  kim_recipes.desktop
-  kim_videoutilities.desktop
-  kim_webemail.desktop
-)
-languages=(de es fr hu it nl zh_TW)
-legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
-  kim_other kim_collage kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
-  kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
-manual_files=(
-  docs/reference/ABOUT.html
-  docs/reference/ACTIONS.html
-  docs/reference/commandconfig.html
-  docs/reference/DEVELOPMENT.html
-  docs/reference/FORMATS.html
-  docs/reference/INSTALL.html
-  docs/reference/LICENSE.html
-  docs/reference/README.html
-  docs/images/kim6-photo-actions.png
-  docs/images/kim6-video-conversion.png
-  docs/images/kim6-video-utilities.png
-  docs/images/kim6-settings-dialog.png
-  docs/images/kim6-collage-dialog.png
-  docs/images/kim6-animated-gif-dialog.png
-  docs/reference/RECIPES.html
-  docs/images/kim6-recipes-menu.png
-  docs/images/kim6-recipe-editor.png
-  docs/images/kim6-convert-menu.png
-  docs/images/kim6-metadata-menu.png
-  docs/images/kim6-settings-general.png
-)
-runtime_files=(
-  bin/kim_image_ops.py bin/kim_image_ops_dialog.py bin/kim_annotations.py bin/kim_extensions_dialog.py bin/kim_preview.py bin/kim_filename.py bin/kim_ui.py bin/kim_date_tools.py bin/kim_date_dialog.py bin/kim_location.py bin/kim_location_dialog.py bin/kim_location_ui.py bin/kim_photo_selection.py bin/kim_location_map.py bin/kim_job.py bin/kim_job_process.py bin/kim_action_dialog.py bin/kim_recipe_menu.py bin/kim_desktop_exec.py bin/kim_recipe_run.py bin/kim_recipe_core.py bin/kim_recipe_image.py bin/kim_recipe_dates.py bin/kim_psd_source.py bin/kim_source_advisories.py bin/kim_recipe_dialog.py recipes/builtins.json
-  bin/kim_collage_dialog.py
-  bin/kim_contactsheet_dialog.py
-  bin/kim_video_dialog.py
-  bin/kim_album_dialog.py
-  bin/kim_create_dialog.py
-  bin/kim_settings_dialog.py
-  bin/kim_manual_viewer.py
-bin/kim_all bin/kim_png_metadata.py bin/kim_jpeg_webp_metadata.py bin/kim_gif_metadata.py bin/kim_tiff_verify.py bin/kim_isobmff_verify.py gallery/index.part1 gallery/index.part2 ABOUT LICENSE.md INSTALL.md
-  docs/index.html docs/work.css "${manual_files[@]}"
-  README.md
-  docs/ACTIONS.md
-  docs/FORMATS.md
-  docs/DEVELOPMENT.md
-  docs/commandconfig.md
-  .kim6-owned .kim6-manifest)
+SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=install_inventory.sh
+source "$SOURCE_DIR/install_inventory.sh"
+menu_names+=("${obsolete_menu_names[@]}")
+runtime_files+=(.kim6-owned .kim6-manifest)
 die() { echo "uninstall.sh: $*" >&2; exit 1; }
 check_dir() {
   [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] || die "refusing unsafe directory: $1"

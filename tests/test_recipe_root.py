@@ -2,6 +2,13 @@
 import os
 from pathlib import Path
 import tempfile
+import fcntl
+import contextlib
+import json
+import shutil
+import subprocess
+import sys
+import time
 import unittest
 from unittest.mock import patch
 import test_recipes as base
@@ -10,6 +17,49 @@ import kim_recipe_menu as menu
 
 
 class RootTests(unittest.TestCase):
+    def test_locked_menu_save_is_pending_and_retry_reads_current_library(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / 'kim6'
+            shutil.copytree(base.ROOT / 'src', runtime)
+            dispatcher = runtime / 'bin/kim_all'
+            target = root / 'kim_recipes.desktop'
+            target.write_text(menu.render(core.RecipeLibrary(), dispatcher))
+            target.chmod(0o755)
+            tools = root / 'tools'; tools.mkdir()
+            cache = tools / 'kbuildsycoca6'
+            cache.write_text('#!/bin/sh\nexit 0\n'); cache.chmod(0o755)
+            env = {**os.environ, 'XDG_CONFIG_HOME': str(root / 'config'),
+                   'PATH': str(tools) + os.pathsep + os.environ['PATH'],
+                   'PYTHONPATH': str(runtime / 'bin')}
+            recipe = base.recipe(); recipe['folder'] = core.ROOT_FOLDER
+            code = ('import json,sys; from kim_recipe_core import *; '
+                    'print(save_library(RecipeLibrary([json.loads(sys.argv[1])]))); '
+                    'assert load_users()[0]["id"] == "test"')
+            with contextlib.ExitStack() as stack:
+                lock = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+                stack.callback(os.close, lock)
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                started = time.monotonic()
+                result = subprocess.run([sys.executable, '-B', '-c', code, json.dumps(recipe)],
+                                        cwd=root, env=env, capture_output=True, text=True, timeout=3)
+                self.assertLess(time.monotonic() - started, 2)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('Recipe saved', result.stdout)
+                self.assertIn('--sync-menu', result.stdout)
+                self.assertNotIn('KIMRoot-test', target.read_text())
+            # A pending sync must render the latest saved names/IDs, not an old snapshot.
+            recipe['name'] = 'Changed while pending'
+            result = subprocess.run([sys.executable, '-B', '-c', code, json.dumps(recipe)],
+                                    cwd=root, env=env, capture_output=True, text=True, timeout=3)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Changed\\swhile\\spending', target.read_text())
+            target.write_text('foreign installation')
+            result = subprocess.run([sys.executable, '-B', str(runtime / 'bin/kim_recipe_core.py'), '--sync-menu'],
+                                    cwd=root, env=env, capture_output=True, text=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(target.read_text(), 'foreign installation')
+
     def test_virtual_assignment_and_reserved_categories(self):
         r = base.recipe(); library = core.RecipeLibrary([r])
         library.move_recipe(r['id'], core.ROOT_FOLDER)
