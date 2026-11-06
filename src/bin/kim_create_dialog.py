@@ -1778,6 +1778,23 @@ class PrintLayoutDialog(OrderedImageDialog):
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
+
+        if not self.tiff:
+            # KIM6_PRINT_LAYOUT_PREVIEW_V1
+            self.preview = QLabel()
+            self.preview.setAlignment(Qt.AlignCenter)
+            self.preview.setFixedHeight(165)
+            self.preview.setAccessibleName(
+                'Approximate print-layout first-page preview'
+            )
+            layout.addWidget(self.preview)
+            self.preset.currentIndexChanged.connect(
+                self.update_preview
+            )
+            self.ordered.thumbnail_changed.connect(
+                self.update_preview
+            )
+            self.ordered.changed.connect(self.update_preview)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create')
@@ -1791,7 +1808,100 @@ class PrintLayoutDialog(OrderedImageDialog):
         self.ordered.resized.connect(self.fit_images)
         self.ordered.add_paths(paths)
         self.update_controls()
+        if not self.tiff:
+            self.update_preview()
         self.fit_images()
+
+
+    def update_preview(self, *_):
+        """Approximate first page using existing cached thumbnails."""
+        if self.tiff:
+            return
+
+        # Match the seven existing kim_all print presets.
+        specs = {
+            '1': (2, 2, 842, 595),
+            '2': (1, 2, 842, 1191),
+            '3': (1, 2, 842, 1191),
+            '4': (1, 2, 842, 1191),
+            '5': (1, 1, 842, 595),
+            '6': (3, 2, 595, 842),
+            '7': (4, 5, 595, 842),
+        }
+
+        columns, rows, pw, ph = specs[self.preset.currentData()]
+        paths = self.ordered.ordered_paths()
+
+        image = QImage(
+            520, 158, QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(QColor('#e2e2e2'))
+
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+        scale = min(500 / pw, 150 / ph)
+        width, height = pw * scale, ph * scale
+
+        page = QRectF(
+            (520 - width) / 2,
+            (158 - height) / 2,
+            width, height,
+        )
+
+        painter.fillRect(page, QColor('white'))
+        painter.setPen(QColor('#999999'))
+        painter.drawRect(page)
+
+        margin = max(4.0, min(width, height) * 0.045)
+        gap = max(2.0, min(width, height) * 0.018)
+
+        cell_width = (
+            width - 2 * margin - (columns - 1) * gap
+        ) / columns
+        cell_height = (
+            height - 2 * margin - (rows - 1) * gap
+        ) / rows
+
+        for index, path in enumerate(paths[:columns * rows]):
+            column = index % columns
+            row = index // columns
+
+            cell = QRectF(
+                page.x() + margin + column * (cell_width + gap),
+                page.y() + margin + row * (cell_height + gap),
+                max(1, cell_width),
+                max(1, cell_height),
+            )
+
+            painter.fillRect(cell, QColor('#cccccc'))
+            thumb = self.ordered.thumbnails.get(path)
+
+            if thumb is not None and not thumb.isNull():
+                factor = min(
+                    cell.width() / thumb.width(),
+                    cell.height() / thumb.height(),
+                )
+
+                target_width = thumb.width() * factor
+                target_height = thumb.height() * factor
+
+                target = QRectF(
+                    cell.center().x() - target_width / 2,
+                    cell.center().y() - target_height / 2,
+                    target_width,
+                    target_height,
+                )
+
+                painter.drawImage(target, thumb)
+
+        painter.end()
+
+        self.preview.setPixmap(QPixmap.fromImage(image))
+        self.preview.setToolTip(
+            'Approximate first page. '
+            'Final print geometry is determined by the PDF renderer.'
+        )
 
     def choose_output(self):
         filename, _ = QFileDialog.getSaveFileName(
