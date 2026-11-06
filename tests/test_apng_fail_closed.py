@@ -1,6 +1,7 @@
 """Animated APNG must not be silently flattened by resize or web export."""
 
 import shutil
+import sys
 import subprocess
 import unittest
 
@@ -39,6 +40,61 @@ class APNGFailClosedTests(unittest.TestCase):
 
         self.before = self.w.observe(self.source)
 
+        # Simulate only the Qt review boundaries exercised by this suite.
+        # Real processing helpers still run through the test adapters.
+        python_shim = self.w.bin / "python3"
+        python_shim.write_text(
+            f"#!{sys.executable}\n" + """
+import os
+from pathlib import Path
+import sys
+
+helper = Path(sys.argv[1]).name if len(sys.argv) > 1 else ""
+kind = sys.argv[2] if len(sys.argv) > 2 else ""
+control = Path(os.environ["KIM_TEST_ROOT"]) / ".control"
+nul = bytes([0])
+
+if helper == "kim_action_dialog.py":
+    if kind == "resize":
+        if sys.argv[4:6] != ["--preset", "8x8"]:
+            sys.exit(97)
+        Path(sys.argv[3]).write_bytes(b"8x8" + nul)
+        sys.exit(0)
+
+    if kind == "resize-output-review":
+        fields = Path(sys.argv[3]).read_bytes().split(nul)
+        if (b"Blocked" not in fields
+                or b"Animated PNG cannot be resized safely." not in fields):
+            sys.exit(97)
+        (control / "apng-resize-blocked").write_text("blocked")
+        # Bypass the UI to verify the processing engine also refuses APNG.
+        sys.exit(0)
+
+    if kind == "email-options":
+        if sys.argv[4] not in ("8x8", "full"):
+            sys.exit(97)
+        Path(sys.argv[3]).write_bytes(
+            sys.argv[4].encode("ascii") + nul + b"xdg-email" + nul
+        )
+        sys.exit(0)
+
+    if kind == "email-ready-review":
+        if not Path(sys.argv[3]).is_file() or sys.argv[4] != "xdg-email":
+            sys.exit(97)
+        sys.exit(0)
+
+if helper == "kim_webexport_review.py":
+    fields = Path(sys.argv[2]).read_bytes().split(nul)
+    if b"Animated PNG export is unsupported" not in fields:
+        sys.exit(97)
+    (control / "apng-webexport-blocked").write_text("blocked")
+    sys.exit(130)
+
+os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
+"""
+        )
+        python_shim.chmod(0o700)
+
     def assert_refused(self, command, *args):
         result = self.w.dispatch(command, *args)
 
@@ -53,11 +109,21 @@ class APNGFailClosedTests(unittest.TestCase):
             self.w.root.rglob(".kim6-stage.*")
         ))
 
-        self.assertTrue(any(
-            "Animated PNG" in " ".join(call["argv"])
-            for call in result.calls
-            if call["tool"] == "kdialog"
-        ), result.events)
+        if command == "webexport":
+            self.assertTrue(
+                (self.w.control / "apng-webexport-blocked").is_file(),
+                result.events,
+            )
+        else:
+            self.assertTrue(
+                (self.w.control / "apng-resize-blocked").is_file(),
+                result.events,
+            )
+            self.assertTrue(any(
+                "Animated PNG" in " ".join(call["argv"])
+                for call in result.calls
+                if call["tool"] == "kdialog"
+            ), result.events)
 
     def test_resize_refuses_real_animated_png(self):
         self.assert_refused(

@@ -13,9 +13,10 @@ from PySide6.QtWidgets import (
     QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QPen
+from PySide6.QtCore import Qt, QRectF
 
-from kim_create_dialog import SourceAdvisoryNotice
+from kim_create_dialog import CreationImages, OrderedImageDialog
 
 
 def collision_message(filename):
@@ -42,14 +43,27 @@ def main():
     pictures = sys.argv[2:]
 
     app = QApplication.instance() or QApplication(sys.argv)
-    dialog = QDialog()
+    # KIM6_COLLAGE_ORDERED_SELECTION_V1
+    dialog = OrderedImageDialog()
     dialog.setWindowTitle("KIM6 — Create Collage")
-    dialog.setMinimumWidth(460)
+    dialog.setMinimumWidth(680)
+    dialog.resize(780, 760)
 
     layout = QVBoxLayout(dialog)
-    layout.addWidget(QLabel(
-        f"{len(pictures)} selected image(s) will be included."
-    ))
+
+    instruction = QLabel(
+        "Images appear in composition order. "
+        "Drag rows or use Move Up / Move Down to reorder."
+    )
+    instruction.setWordWrap(True)
+    layout.addWidget(instruction)
+
+    dialog.ordered = CreationImages(dialog, "Collage")
+    layout.addWidget(dialog.ordered)
+
+    selection_status = QLabel()
+    selection_status.setWordWrap(True)
+    layout.addWidget(selection_status)
 
     form = QFormLayout()
     layout.addLayout(form)
@@ -218,16 +232,376 @@ def main():
 
     browse.clicked.connect(browse_output)
 
+
+    # KIM6_COLLAGE_LAYOUT_PREVIEW_V1
+    preview_heading = QLabel("Layout preview")
+    preview_heading.setAccessibleName("Collage layout preview heading")
+    layout.addWidget(preview_heading)
+
+    preview_image = QLabel()
+    preview_image.setAlignment(Qt.AlignCenter)
+    preview_image.setFixedHeight(184)
+    preview_image.setAccessibleName("Approximate collage composition")
+    layout.addWidget(preview_image)
+
+    preview_note = QLabel(
+        "Approximate layout using available thumbnails. "
+        "Final rendering may differ."
+    )
+    preview_note.setWordWrap(True)
+    layout.addWidget(preview_note)
+
+    def refresh_preview(*_):
+        paths = dialog.ordered.ordered_paths()
+        count = len(paths)
+
+        image = QImage(
+            560, 180, QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(QColor("#e5e5e5"))
+
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+        dimensions = (
+            custom_canvas.text().strip()
+            if canvas.currentData() == "custom"
+            else canvas.currentData()
+        )
+
+        match = re.fullmatch(
+            r"([1-9][0-9]{0,5})x([1-9][0-9]{0,5})",
+            dimensions,
+        )
+
+        if match:
+            cw, ch = map(int, match.groups())
+        else:
+            cw, ch = 3840, 2560
+
+        ratio = cw / ch
+        if ratio > 0:
+            display_width = min(540.0, 170.0 * ratio)
+            display_height = display_width / ratio
+            if display_height > 170.0:
+                display_height = 170.0
+                display_width = display_height * ratio
+        else:
+            display_width, display_height = 260.0, 170.0
+
+        area = QRectF(
+            (560.0 - display_width) / 2,
+            (180.0 - display_height) / 2,
+            display_width,
+            display_height,
+        )
+
+        background_value = (
+            custom_color.text().strip()
+            if background.currentData() == "custom"
+            else background.currentData()
+        )
+
+        if background_value == "none":
+            painter.fillRect(area, QColor("#f3f3f3"))
+            step = 12
+            for yy in range(int(area.top()), int(area.bottom()), step):
+                for xx in range(int(area.left()), int(area.right()), step):
+                    if ((xx // step) + (yy // step)) % 2 == 0:
+                        square = QRectF(xx, yy, step, step)
+                        painter.fillRect(
+                            square.intersected(area),
+                            QColor("#d0d0d0"),
+                        )
+        else:
+            backdrop = QColor(background_value)
+            painter.fillRect(
+                area,
+                backdrop if backdrop.isValid() else QColor("white"),
+            )
+
+        if not count:
+            painter.setPen(QColor("#444444"))
+            painter.drawText(
+                area, Qt.AlignCenter, "Add images to preview"
+            )
+            painter.end()
+            preview_image.setPixmap(QPixmap.fromImage(image))
+            return
+
+        selected_layout = design.currentData()
+        gap = max(
+            1.5,
+            min(12.0, spacing.value() / 20.0),
+        )
+
+        # Slots are relative coordinates on the preview canvas.
+        # The actual composition is still owned by kim_all.
+        slots = []
+
+        if selected_layout in ("grid", "filmstrip"):
+            if selected_layout == "filmstrip":
+                cols = min(4, count)
+            else:
+                cols = 1
+                while cols * cols * 2 < count * 3:
+                    cols += 1
+                cols = min(cols, count)
+
+            rows = (count + cols - 1) // cols
+
+            for index in range(count):
+                col = index % cols
+                row = index // cols
+                slots.append((
+                    col / cols,
+                    row / rows,
+                    1 / cols,
+                    1 / rows,
+                ))
+
+        elif selected_layout == "hero":
+            if count == 1:
+                slots = [(0, 0, 1, 1)]
+            else:
+                slots.append((0, 0, 0.56, 1))
+                remaining = count - 1
+                cols = 1 if remaining <= 2 else 2
+                rows = (remaining + cols - 1) // cols
+
+                for index in range(remaining):
+                    col = index % cols
+                    row = index // cols
+                    slots.append((
+                        0.56 + col * 0.44 / cols,
+                        row / rows,
+                        0.44 / cols,
+                        1 / rows,
+                    ))
+
+        elif selected_layout == "mosaic":
+            rows = (count + 2) // 3
+
+            for index in range(count):
+                group = index // 3
+                within = index % 3
+
+                if within == 0:
+                    slots.append((
+                        0,
+                        group / rows,
+                        0.66,
+                        1 / rows,
+                    ))
+                else:
+                    slots.append((
+                        0.66,
+                        group / rows
+                        + (within - 1) / (2 * rows),
+                        0.34,
+                        1 / (2 * rows),
+                    ))
+
+        else:
+            # Scattered placement uses random geometry in the
+            # renderer. This preview is deliberately schematic.
+            columns = max(1, min(4, count))
+            rows = (count + columns - 1) // columns
+
+            for index in range(count):
+                col = index % columns
+                row = index // columns
+
+                slots.append((
+                    0.04 + col * 0.87 / columns,
+                    0.05 + row * 0.87 / rows,
+                    0.94 / columns,
+                    0.94 / rows,
+                ))
+
+        def draw_tile(index, slot):
+            sx, sy, sw, sh = slot
+
+            tile = QRectF(
+                area.x() + sx * area.width() + gap / 2,
+                area.y() + sy * area.height() + gap / 2,
+                max(1.0, sw * area.width() - gap),
+                max(1.0, sh * area.height() - gap),
+            )
+
+            if shadow.isChecked():
+                painter.fillRect(
+                    tile.translated(2, 3),
+                    QColor(0, 0, 0, 70),
+                )
+
+            frame_style = borders.currentData()
+
+            if frame_style == "polaroid":
+                painter.fillRect(tile, QColor("white"))
+                content = tile.adjusted(
+                    3, 3, -3, -max(6.0, tile.height() * 0.16)
+                )
+            elif frame_style == "thin":
+                painter.fillRect(tile, QColor("white"))
+                content = tile.adjusted(2, 2, -2, -2)
+            else:
+                content = tile
+
+            painter.fillRect(content, QColor("#999999"))
+
+            thumbnail = dialog.ordered.thumbnails.get(paths[index])
+
+            if thumbnail is not None and not thumbnail.isNull():
+                iw = thumbnail.width()
+                ih = thumbnail.height()
+
+                if iw > 0 and ih > 0:
+                    source_rect = QRectF(0, 0, iw, ih)
+
+                    if placement.currentData() == "fill":
+                        scale = max(
+                            content.width() / iw,
+                            content.height() / ih,
+                        )
+                        crop_width = content.width() / scale
+                        crop_height = content.height() / scale
+
+                        source_rect = QRectF(
+                            (iw - crop_width) / 2,
+                            (ih - crop_height) / 2,
+                            crop_width,
+                            crop_height,
+                        )
+                        target = content
+                    else:
+                        scale = min(
+                            content.width() / iw,
+                            content.height() / ih,
+                        )
+                        target_width = iw * scale
+                        target_height = ih * scale
+
+                        target = QRectF(
+                            content.center().x() - target_width / 2,
+                            content.center().y() - target_height / 2,
+                            target_width,
+                            target_height,
+                        )
+
+                    painter.drawImage(
+                        target, thumbnail, source_rect
+                    )
+            else:
+                painter.setPen(QColor("#ffffff"))
+                painter.drawText(
+                    content, Qt.AlignCenter,
+                    str(index + 1),
+                )
+
+            painter.setPen(QPen(QColor("#555555"), 0.6))
+            painter.drawRect(tile)
+
+        for index, slot in enumerate(slots):
+            draw_tile(index, slot)
+
+        painter.end()
+        preview_image.setPixmap(QPixmap.fromImage(image))
+
+        if selected_layout == "scattered":
+            note = (
+                "Illustrative preview. Scattered/Polaroid uses "
+                "randomized positions during final rendering."
+            )
+        else:
+            note = (
+                "Approximate composition using cached thumbnails. "
+                "Final rendering may differ."
+            )
+
+        if shuffle.isChecked():
+            note += (
+                " Shuffle is enabled, so final image order "
+                "will be randomized."
+            )
+
+        preview_note.setText(note)
+
+    # All updates are GUI-thread-only and use existing cached
+    # thumbnails. No additional decoding or rendering workers.
+    for widget in (
+        design, canvas, placement, borders, background,
+    ):
+        widget.currentIndexChanged.connect(refresh_preview)
+
+    for widget in (spacing,):
+        widget.valueChanged.connect(refresh_preview)
+
+    for widget in (custom_canvas, custom_color):
+        widget.textChanged.connect(refresh_preview)
+
+    for widget in (shadow, shuffle):
+        widget.toggled.connect(refresh_preview)
+
+    dialog.ordered.changed.connect(refresh_preview)
+    dialog.ordered.thumbnail_changed.connect(refresh_preview)
+
+    refresh_preview()
+
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
-    buttons.button(QDialogButtonBox.Ok).setText("Create")
-    source_notice = SourceAdvisoryNotice(dialog)
-    source_notice.set_sources(pictures)
-    layout.addWidget(source_notice)
+
+    dialog.create = buttons.button(QDialogButtonBox.Ok)
+    dialog.create.setText("Create")
+
+    dialog.add_source_notice(layout)
     layout.addWidget(buttons)
 
+    def update_selection(*_):
+        paths = dialog.ordered.ordered_paths()
+        ready, blocked, pending = dialog.ordered.counts()
+        count = len(paths)
+
+        selection_status.setText(
+            f"{count} selected images · "
+            f"{ready} ready · "
+            f"{blocked} blocked · "
+            f"{pending} inspecting"
+            + (
+                "\nRemove or replace blocked images."
+                if blocked else ""
+            )
+        )
+
+        dialog.create.setEnabled(
+            count > 0
+            and ready == count
+            and blocked == 0
+            and pending == 0
+            and dialog.ordered.worker is None
+            and dialog.finish_result is None
+        )
+
+    dialog.ordered.changed.connect(update_selection)
+    dialog.ordered.add_paths(pictures)
+    update_selection()
+
     def accept():
+        update_selection()
+
+        if not dialog.create.isEnabled():
+            return
+
+        if not dialog.ordered.validate_sources():
+            update_selection()
+            return
+
+        selected_images = dialog.ordered.ordered_paths()
+
+        if not selected_images:
+            return
         dimensions = (
             custom_canvas.text().strip()
             if canvas.currentData() == "custom"
@@ -282,20 +656,32 @@ def main():
             "true" if shadow.isChecked() else "false",
             os.path.abspath(name),
             "true" if shuffle.isChecked() else "false",
+            *selected_images,
         ]
 
-        # NUL-delimited output preserves spaces and filenames safely.
-        destination.write_bytes(
-            b"".join(value.encode("utf-8") + b"\0" for value in values)
-        )
+        # Final source advisories and identities are checked before
+        # returning approved, ordered paths to the renderer.
         try:
-            if not source_notice.approve(pictures):
+            if not dialog.source_notice.approve(selected_images):
                 return
+
+            destination.write_bytes(
+                b"".join(
+                    os.fsencode(value) + b"\0"
+                    for value in values
+                )
+            )
+
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(dialog, 'Cannot approve source advisories', str(exc))
+            QMessageBox.warning(
+                dialog,
+                "Cannot approve collage settings",
+                str(exc),
+            )
             return
 
-        dialog.accept()
+        # OrderedImageDialog owns worker shutdown and cancellation.
+        dialog.done(QDialog.Accepted)
 
     buttons.accepted.connect(accept)
     buttons.rejected.connect(dialog.reject)

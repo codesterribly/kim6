@@ -14,7 +14,7 @@ import struct
 from collections import OrderedDict
 
 from PySide6.QtCore import Qt, QSize, QRectF, QThread, Signal, QTimer
-from PySide6.QtGui import QIcon, QPixmap, QPalette, QBrush, QImage, QPainter
+from PySide6.QtGui import QIcon, QPixmap, QPalette, QBrush, QImage, QPainter, QColor
 from kim_photo_selection import (
     choose_images, CREATE_IMAGE_EXTENSIONS, ThumbnailWorker, ImageCanvas,
 )
@@ -40,6 +40,11 @@ from PySide6.QtWidgets import (
     QWidget,
     QListWidget,
     QListWidgetItem,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QPlainTextEdit,
+    QHeaderView,
     QAbstractItemView,
 )
 
@@ -1441,10 +1446,21 @@ def write_creation_settings(dialog, destination, values):
 class GalleryDialog(OrderedImageDialog):
     def __init__(self, destination, starting_dir, paths):
         super().__init__()
+        # KIM6_GALLERY_CAPTIONS_PREVIEW_V1
+        self.captions_by_path = {}
         self.destination = destination
         self.setWindowTitle('KIM6 — Create an HTML Gallery')
         self.setMinimumWidth(600)
-        layout = QVBoxLayout(self)
+        self.resize(760, 820)
+        self.setMaximumHeight(900)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        outer.addWidget(scroll)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        scroll.setWidget(content)
         self.ordered = CreationImages(self, 'HTML Gallery')
         layout.addWidget(self.ordered)
         self.count = QLabel()
@@ -1483,6 +1499,26 @@ class GalleryDialog(OrderedImageDialog):
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
+
+        layout.addWidget(QLabel('Image captions'))
+        self.caption_table = QTableWidget(0, 2)
+        self.caption_table.setHorizontalHeaderLabels(
+            ['Image', 'Caption']
+        )
+        self.caption_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        self.caption_table.setFixedHeight(150)
+        layout.addWidget(self.caption_table)
+
+        layout.addWidget(QLabel('Gallery preview'))
+        self.preview = QLabel()
+        self.preview.setAlignment(Qt.AlignCenter)
+        self.preview.setFixedHeight(145)
+        self.preview.setAccessibleName(
+            'Approximate HTML gallery theme and layout preview'
+        )
+        layout.addWidget(self.preview)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create')
@@ -1496,11 +1532,117 @@ class GalleryDialog(OrderedImageDialog):
         browse.clicked.connect(self.choose_parent)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        self.ordered.changed.connect(self.update_controls)
-        self.ordered.resized.connect(self.fit_images)
+        self.ordered.changed.connect(self.selection_changed)
+        self.ordered.thumbnail_changed.connect(self.update_preview)
+        self.theme.currentIndexChanged.connect(self.update_preview)
+        self.columns.valueChanged.connect(self.update_preview)
+        self.title.textChanged.connect(self.update_preview)
         self.ordered.add_paths(paths)
+        self.selection_changed()
+
+
+    def selection_changed(self, *_):
+        paths = self.ordered.ordered_paths()
+        for path in tuple(self.captions_by_path):
+            if path not in paths:
+                del self.captions_by_path[path]
+
+        self.caption_table.setRowCount(len(paths))
+        for row, path in enumerate(paths):
+            entry = QTableWidgetItem(Path(path).name)
+            entry.setFlags(entry.flags() & ~Qt.ItemIsEditable)
+            entry.setToolTip(path)
+            self.caption_table.setItem(row, 0, entry)
+            editor = QPlainTextEdit()
+            editor.setPlaceholderText('Caption shown below image')
+            editor.setPlainText(
+                self.captions_by_path.get(path, Path(path).name)
+            )
+            editor.textChanged.connect(
+                lambda p=path, e=editor:
+                    self.caption_changed(p, e.toPlainText())
+            )
+            self.caption_table.setCellWidget(row, 1, editor)
+            self.caption_table.setRowHeight(row, 65)
+
         self.update_controls()
-        self.fit_images()
+        self.update_preview()
+
+    def caption_changed(self, path, text):
+        if path in self.ordered.ordered_paths():
+            self.captions_by_path[path] = text
+            self.update_preview()
+
+    def update_preview(self, *_):
+        """Approximate layout using existing, bounded thumbnail cache."""
+        paths = self.ordered.ordered_paths()
+        dark = self.theme.currentData() == 'dark'
+        background = QColor('#121417' if dark else '#f6f7f8')
+        foreground = QColor('#f0f2f3' if dark else '#242932')
+
+        image = QImage(
+            540, 138, QImage.Format_ARGB32_Premultiplied
+        )
+        image.fill(background)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        painter.setPen(foreground)
+
+        title_font = painter.font()
+        title_font.setBold(True)
+        title_font.setPixelSize(12)
+        painter.setFont(title_font)
+        painter.drawText(
+            QRectF(10, 4, 520, 22),
+            Qt.AlignLeft | Qt.AlignVCenter,
+            painter.fontMetrics().elidedText(
+                self.title.text(), Qt.ElideRight, 520
+            ),
+        )
+
+        visible = min(len(paths), self.columns.value(), 8)
+        if visible:
+            gap = 6.0
+            width = (520.0 - gap * (visible - 1)) / visible
+            for index, path in enumerate(paths[:visible]):
+                x = 10 + index * (width + gap)
+                cell = QRectF(x, 30, width, 78)
+                painter.fillRect(
+                    cell, QColor('#40454b' if dark else '#d2d6da')
+                )
+                thumb = self.ordered.thumbnails.get(path)
+                if thumb is not None and not thumb.isNull():
+                    scale = min(
+                        cell.width() / thumb.width(),
+                        cell.height() / thumb.height()
+                    )
+                    w = thumb.width() * scale
+                    h = thumb.height() * scale
+                    target = QRectF(
+                        cell.center().x() - w / 2,
+                        cell.center().y() - h / 2, w, h
+                    )
+                    painter.drawImage(target, thumb)
+
+                painter.setPen(foreground)
+                font = painter.font()
+                font.setBold(False)
+                font.setPixelSize(8)
+                painter.setFont(font)
+                caption = self.captions_by_path.get(
+                    path, Path(path).name
+                )
+                caption = ' '.join(caption.splitlines())
+                painter.drawText(
+                    QRectF(x, 110, width, 20),
+                    Qt.AlignLeft | Qt.AlignVCenter,
+                    painter.fontMetrics().elidedText(
+                        caption, Qt.ElideRight, max(1, int(width))
+                    ),
+                )
+
+        painter.end()
+        self.preview.setPixmap(QPixmap.fromImage(image))
 
     @staticmethod
     def safe_folder_name(title):
@@ -1575,9 +1717,18 @@ class GalleryDialog(OrderedImageDialog):
             return
         # Freeze the displayed approval; Bash rejects a name taken afterward.
         target = Path(self.target_label.text())
-        values = [self.title.text(), self.author.text(), str(self.columns.value()),
-                  self.theme.currentData(), self.resolution.currentData(),
-                  str(target.parent), target.name, *self.ordered.ordered_paths()]
+        paths = self.ordered.ordered_paths()
+        values = [
+            self.title.text(), self.author.text(),
+            str(self.columns.value()), self.theme.currentData(),
+            self.resolution.currentData(), str(target.parent),
+            target.name, str(len(paths)),
+        ]
+        values.extend(
+            self.captions_by_path.get(path, Path(path).name)
+            for path in paths
+        )
+        values.extend(paths)
         if write_creation_settings(self, self.destination, values):
             self.done(QDialog.Accepted)
 

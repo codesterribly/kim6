@@ -20,6 +20,21 @@ class InPlaceAuthorizationTests(unittest.TestCase):
             self.assertIsNotNone(shutil.which(tool), tool)
         self.w.use_real_transform()
 
+        # This suite tests publication authorization, not Qt rendering.
+        # Approve only the required preliminary flip review.
+        # Unexpected Python helpers must fail closed.
+        preview = self.w.bin / 'python3'
+        import shlex
+        import sys
+        preview.write_text(
+            "#!/bin/sh\n"
+            'if [ "$2" = "flipreview" ]; then\n'
+            "  exit 0\n"
+            "fi\n"
+            f'exec {shlex.quote(sys.executable)} "$@"\n'
+        )
+        preview.chmod(0o700)
+
     def dispatch(self, command, *options):
         result = self.w.dispatch(
             command, *options, "--", self.source
@@ -245,6 +260,7 @@ class InPlaceAuthorizationTests(unittest.TestCase):
         alias = self.w.path("input/alias.ppm")
         for kind in ("symlink", "hardlink"):
             with self.subTest(kind=kind):
+                alias.unlink(missing_ok=True)
                 if kind == "symlink":
                     alias.symlink_to(self.source.name)
                 else:

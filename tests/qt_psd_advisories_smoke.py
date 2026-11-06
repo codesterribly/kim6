@@ -248,7 +248,13 @@ def ordered_dialogs(root, jpg, png, first, second):
                  and not dialog.isVisible())
             records = json.loads((cache / advisory.ACKNOWLEDGMENTS).read_text())
             assert records == advisory.source_advisories([second])
-            assert values(settings)[offset:] == approved
+            if name == 'Gallery':
+                fields = values(settings)
+                count = int(fields[7])
+                assert count == len(approved)
+                assert fields[8 + count:] == approved
+            else:
+                assert values(settings)[offset:] == approved
             shell_staging(root, values(settings)[offset:])
         print('PASS H/I/P/Q:', name, 'notice, real picker, final order/approval, staging, compact geometry')
     # Slideshow retains its existing source eligibility; the shared notice still works.
@@ -279,7 +285,11 @@ def fixed_dialogs(root, jpg, first, app):
                     if cancel:
                         dialog.reject()
                     else:
-                        buttons.button(QDialogButtonBox.Ok).click()
+                        create = buttons.button(QDialogButtonBox.Ok)
+                        if module is album and not create.isEnabled():
+                            QTimer.singleShot(20, click)
+                            return
+                        create.click()
                 except BaseException as exc:
                     errors.append(exc)
                     QApplication.activeModalWidget().reject()

@@ -1804,19 +1804,7 @@ action_album() {
   esac
   [ -d "$dir" ] || dir="${files[0]%/*}"
 
-  # Preserve all Dolphin-selected images. When exactly one is selected,
-  # offer the choice to use it alone or add more images to the album.
-  if [ "${#files[@]}" -eq 1 ]; then
-    local -a selected_images=("${files[@]}")
-
-    kim6_create_select_more selected_images "PDF Album" || return 1
-
-    if ! collect_publication_inputs files "${selected_images[@]}"; then
-      kdialog --title "$(gettext 'Kim')" --error \
-        "$(gettext 'Album: select valid, distinct image files.')"
-      return 1
-    fi
-  fi
+  # The Qt album editor owns adding and ordering images.
 
   # Collect layout and output filename in a single Qt dialog.
   local album_dialog settings_file
@@ -1838,10 +1826,47 @@ action_album() {
   mapfile -d '' -t album_choices < "$settings_file"
   rm -f -- "$settings_file"
 
-  if [ "${#album_choices[@]}" -ne "$((5 + ${#files[@]}))" ]; then
-    kdialog --title "KIM6" --error       "The PDF Album settings are incomplete."
+  # KIM6_ALBUM_ORDERED_HANDOFF_V1
+  # Five legacy settings, count, N captions, N ordered paths.
+  local approved_count approved_offset
+  local -a approved_files=()
+
+  [ "${#album_choices[@]}" -ge 8 ] || {
+    progress_error 'Album: incomplete approval.'
+    return 1
+  }
+
+  approved_count="${album_choices[5]}"
+
+  [[ "$approved_count" =~ ^[1-9][0-9]{0,3}$ ]] || {
+    progress_error 'Album: invalid approved image count.'
+    return 1
+  }
+
+  (( approved_count <= 200 )) || {
+    progress_error 'Album: too many approved images.'
+    return 1
+  }
+
+  [ "${#album_choices[@]}" -eq "$((6 + 2 * approved_count))" ] || {
+    progress_error 'Album: incomplete caption or image list.'
+    return 1
+  }
+
+  approved_offset=$((6 + approved_count))
+
+  if ! collect_publication_inputs approved_files \
+      "${album_choices[@]:approved_offset}"; then
+    progress_error 'Album: approved image selection is invalid.'
     return 1
   fi
+
+  [ "${#approved_files[@]}" -eq "$approved_count" ] || {
+    progress_error 'Album: approved image count changed.'
+    return 1
+  }
+
+  files=("${approved_files[@]}")
 
   nb="${album_choices[0]}"
   outpdf="${album_choices[1]}"
@@ -1930,7 +1955,7 @@ $(cat -- "$errors")"
       index=$((index+1)); annotated_tile="${tmp%/*}/captions/$index.png"
       progress_begin_item "$ref" "$(gettext 'Rendering album caption') — $index / ${#files[@]}: ${file##*/}" || return 1
       if ! publication_caption_tile "$ref" "$file" "$annotated_tile" "$cell_width" "$cell_height" "$label_height" \
-          "$pixels" white fit below "$caption_mode" "$index" "$capture_date" "$camera_lens" "${album_choices[index+4]}"; then
+          "$pixels" white fit below "$caption_mode" "$index" "$capture_date" "$camera_lens" "${album_choices[index+5]}"; then
         publication_fail "$ref" "$tmp" "$(gettext 'Album: annotated photo rendering failed or was interrupted.')"; return 1
       fi
       album_tiles+=("$annotated_tile")
@@ -3032,7 +3057,8 @@ action_gallery() {
   local nbfiles="${#files[@]}" TITLE AUTHOR COLUMNS
   local gallery_theme gallery_max
   local dialog_script settings_file
-  local -a selections=()
+  local -a selections=() gallery_captions=()
+  local caption_count caption_offset caption_text
 
   # The Qt dialog replaces all individual configuration prompts.
   dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
@@ -3067,10 +3093,26 @@ action_gallery() {
   gallery_max="${selections[4]}"
   base_dir="${selections[5]}"
   base_name="${selections[6]}"
-  if ! collect_publication_inputs files "${selections[@]:7}"; then
-    progress_error 'Gallery: approved images are no longer valid.'; return 1
+  # KIM6_GALLERY_CAPTION_HANDOFF_V1
+  # Seven settings, source count, N captions and N ordered paths.
+  caption_count="${selections[7]}"
+  [[ "$caption_count" =~ ^[1-9][0-9]{0,3}$ ]] &&
+    (( caption_count <= 200 )) &&
+    [ "${#selections[@]}" -eq "$((8 + 2 * caption_count))" ] || {
+    progress_error 'Gallery: invalid caption or source handoff.'
+    return 1
+  }
+  gallery_captions=("${selections[@]:8:caption_count}")
+  caption_offset=$((8 + caption_count))
+  if ! collect_publication_inputs files "${selections[@]:caption_offset}"; then
+    progress_error 'Gallery: approved images are no longer valid.'
+    return 1
   fi
   nbfiles="${#files[@]}"
+  [ "$nbfiles" -eq "$caption_count" ] || {
+    progress_error 'Gallery: approved image count changed.'
+    return 1
+  }
 
   case "$gallery_theme" in
     dark|light) ;;
@@ -3264,10 +3306,13 @@ EOF
     image_assets+=("$gallery_dir/$image_url")
     thumb_assets+=("$gallery_dir/$thumb_url")
     escaped_name="$(html_escape "$base")"
+    caption_text="${gallery_captions[n-1]}"
+    # Escape user captions as text, never as HTML markup.
+    caption_text="$(html_escape "$caption_text")"
     if ! {
       printf '<figure class="gallery-item"><a href="%s"><img src="%s" width="%s" height="%s" alt="%s" loading="lazy" decoding="async"></a><figcaption>%s</figcaption></figure>\n' \
         "$(html_escape "$image_url")" "$(html_escape "$thumb_url")" "$thumb_width" "$thumb_height" \
-        "$escaped_name" "$escaped_name"
+        "$escaped_name" "$caption_text"
     } >> "$index_file"; then
       report_fail "$file"
       report_finish_dialog "$(gettext 'Kim')"
@@ -8756,7 +8801,14 @@ action_collage() {
       *) files+=("$@"); break ;;
     esac
   done
-  kim6_create_select_more files "Collage" || return 1
+  # The interactive Qt dialog owns image selection.
+  # Preserve the existing CLI selection behavior for explicit
+  # noninteractive rendering options.
+  if [ -n "$layout" ] ||
+     [ -n "$size$tile$overlap_percent$rotation$seed$border_ratio" ]; then
+    kim6_create_select_more files "Collage" || return 1
+  fi
+
   if ! collect_publication_inputs files "${files[@]}"; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
@@ -8775,8 +8827,20 @@ action_collage() {
 
     local -a settings=()
     mapfile -d '' -t settings < "$settings_file"
-    [ "${#settings[@]}" -eq 9 ] || {
-      progress_error "$(gettext 'Collage: invalid dialog settings.')"
+    [ "${#settings[@]}" -ge 10 ] || {
+      progress_error "$(gettext 'Collage: invalid settings or empty image selection.')"
+      return 1
+    }
+
+    local -a approved_files=()
+
+    if ! collect_publication_inputs approved_files "${settings[@]:9}"; then
+      progress_error "$(gettext 'Collage: approved image selection is invalid.')"
+      return 1
+    fi
+
+    [ "${#approved_files[@]}" -gt 0 ] || {
+      progress_error "$(gettext 'Collage: no approved images remain.')"
       return 1
     }
 
@@ -8794,6 +8858,10 @@ action_collage() {
     else
       shuffle=false
     fi
+
+    # Use the exact approved image list and displayed ordering.
+    # Do not fall back to the original Dolphin selection.
+    files=("${approved_files[@]}")
   fi
 
   case "$layout" in
