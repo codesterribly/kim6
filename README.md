@@ -91,9 +91,9 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 ### Create and share
 
 - **Email photographs:** Send original images or create smaller copies suitable for email attachments.
-- **Build photo galleries:** Generate browsable HTML galleries, including the Dark Portfolio presentation.
-- **Create collages:** Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.
-- **Create PDF albums and print layouts:** Prepare photographs for viewing or printing, including printable contact-sheet layouts.
+- **Build image galleries:** Generate browsable HTML galleries with ordered images, editable per-image captions, and a compact theme/layout preview.
+- **Create collages:** Arrange ordered images using grid, mosaic, hero, filmstrip, or scattered layouts, with a live composition preview and controls for canvas, background, spacing, frames, and shadows where supported.
+- **Create PDF albums and print layouts:** Build ordered PDF albums with image-bound captions and first-page previews; prepare PDF contact sheets with page previews; inspect the seven print-layout presets before exporting.
 - **Work with TIFF and GIF:** Combine images into multipage TIFF files or create animated GIF/APNG derivatives.
 
 ### Video tools

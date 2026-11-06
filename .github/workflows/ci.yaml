@@ -29,6 +29,36 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends shellcheck ffmpeg
 
+      - name: Install ImageMagick 7 for publication safety checks
+        run: |
+          set -euo pipefail
+          # Pin the upstream release and verify its published SHA-256.
+          version='7.1.2-35'
+          image="ImageMagick-${version}-gcc-x86_64.AppImage"
+          curl --fail --location --retry 3 \
+            --output "$RUNNER_TEMP/$image" \
+            "https://github.com/ImageMagick/ImageMagick/releases/download/${version}/${image}"
+          printf '%s  %s\n' \
+            'f111044ed06b68cfb478df724c5a32d35145afa21073242f888d234a2f8cc002' \
+            "$RUNNER_TEMP/$image" | sha256sum --check -
+          chmod +x "$RUNNER_TEMP/$image"
+          # Extract once, avoiding a FUSE dependency and repeated extraction.
+          mkdir -p "$RUNNER_TEMP/im7"
+          cd "$RUNNER_TEMP/im7"
+          "$RUNNER_TEMP/$image" --appimage-extract >/dev/null
+          mkdir -p "$RUNNER_TEMP/kim6-tools"
+          cat > "$RUNNER_TEMP/kim6-tools/magick" <<EOF
+          #!/usr/bin/env bash
+          exec "$RUNNER_TEMP/im7/squashfs-root/AppRun" "\$@"
+          EOF
+          cat > "$RUNNER_TEMP/kim6-tools/identify" <<'EOF'
+          #!/usr/bin/env bash
+          exec "$(dirname "$0")/magick" identify "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/kim6-tools/magick" "$RUNNER_TEMP/kim6-tools/identify"
+          "$RUNNER_TEMP/kim6-tools/magick" -version
+          echo "$RUNNER_TEMP/kim6-tools" >> "$GITHUB_PATH"
+
       - name: Bash syntax and ShellCheck
         run: |
           bash -n src/bin/kim_all install.sh uninstall.sh
