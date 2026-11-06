@@ -11166,7 +11166,7 @@ action_slideshow() {
   filter_chain=''
   for ((index=0; index<${#frames_out[@]}; index++)); do
     ffargs+=(-loop 1 -framerate "$fps" -t "$seconds" -f image2 -pattern_type none -i "${frames_out[$index]}")
-    filter_chain+="[$index:v]setpts=PTS-STARTPTS[v$index];"
+    filter_chain+="[$index:v]setsar=1,setpts=PTS-STARTPTS[v$index];"
   done
   for ((index=0; index<${#frames_out[@]}; index++)); do
     filter_chain+="[v$index]"
@@ -11187,7 +11187,24 @@ action_slideshow() {
     return 1
   fi
   if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
-    report_fail "$(gettext 'Slideshow encoder failed or produced no output.')"
+    # KIM6_SLIDESHOW_ENCODER_DIAGNOSTICS
+    # Preserve actionable FFmpeg errors in the existing failure report.
+    # Do not alter encoding, staging, cancellation or publication.
+    local encoder_details=''
+    if [ -s "$error_file" ]; then
+      encoder_details="$(tail -n 12 -- "$error_file" 2>/dev/null || true)"
+      encoder_details="${encoder_details:0:1800}"
+    fi
+    if [ -n "$encoder_details" ]; then
+      report_fail "$(gettext 'Slideshow encoder failed or produced no output.')
+FFmpeg exit status: $rc
+$encoder_details"
+    else
+      report_fail "$(gettext 'Slideshow encoder failed or produced no output.')
+FFmpeg exit status: $rc
+No FFmpeg error details were captured.
+Staged output: $stage"
+    fi
     progress_close "$ref" || true
     report_finish_dialog "$(gettext 'Kim')"
     return 1
