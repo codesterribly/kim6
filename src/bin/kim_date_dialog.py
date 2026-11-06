@@ -3,8 +3,9 @@
 import json
 import sys
 from pathlib import Path
-from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QFormLayout,
-    QLabel, QComboBox, QLineEdit, QPushButton, QDialogButtonBox,
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QLabel, QComboBox, QLineEdit, QPushButton, QStyle,
     QCheckBox, QTableWidgetItem)
 from kim_ui import CaptureDateInput, CaptureAdjustment, CaptureDateOptions
 
@@ -55,9 +56,25 @@ class PhotoDateDialog(QDialog):
         layout.addWidget(self.metadata_toggle)
 
         self.fix=QPushButton('Set Capture Date…'); self.fix.clicked.connect(self.use_set); layout.addWidget(self.fix); self.fix.setVisible(kind!='set')
-        self.buttons=QDialogButtonBox(QDialogButtonBox.Apply | QDialogButtonBox.Cancel)
-        self.apply=self.buttons.button(QDialogButtonBox.Apply); self.apply.setText('Apply Changes'); self.apply.setEnabled(False); self.apply.clicked.connect(self.accept)
-        self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+
+        self.apply = QPushButton(
+            QIcon.fromTheme('dialog-ok-apply', self.style().standardIcon(QStyle.SP_DialogApplyButton)),
+            'Apply Changes'
+        )
+        self.apply.setEnabled(False)
+        self.apply.clicked.connect(self.accept)
+        button_row.addWidget(self.apply)
+
+        self.cancel_button = QPushButton(
+            QIcon.fromTheme('dialog-cancel', self.style().standardIcon(QStyle.SP_DialogCancelButton)),
+            'Cancel'
+        )
+        self.cancel_button.clicked.connect(self.reject)
+        button_row.addWidget(self.cancel_button)
+
+        layout.addLayout(button_row)
         if self.source_choice is not None:
             self.source_choice.currentIndexChanged.connect(
                 self.capture_source_changed

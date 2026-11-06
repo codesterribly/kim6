@@ -9,7 +9,7 @@ from PySide6.QtCore import QThread, Signal, QTimer, Qt, QSize, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
     QFormLayout, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
-    QDialogButtonBox, QFileDialog, QWidget, QScrollArea,
+    QDialogButtonBox, QStyle, QFileDialog, QWidget, QScrollArea,
     QSplitter,
     QStackedWidget, QGroupBox, QMessageBox, QSizePolicy, QToolButton, QTabWidget)
 
@@ -192,15 +192,29 @@ class LocationDialog(QDialog):
         self.refresh_button = QPushButton(QIcon.fromTheme('view-refresh'), '&Refresh'); self.refresh_button.clicked.connect(self.schedule_plan)
         buttons_row.addWidget(self.refresh_button); buttons_row.addStretch()
         if kind == 'report':
-            self.buttons = QDialogButtonBox(QDialogButtonBox.Close); self.buttons.rejected.connect(self.reject)
+            self.buttons = QDialogButtonBox(QDialogButtonBox.Close)
+            self.buttons.rejected.connect(self.reject)
+            buttons_row.addWidget(self.buttons)
         else:
             policy_text = 'Choose output policy after source selection.' if self.selection_only else 'Create new images; originals unchanged.' if self.policy == 'create' else 'Replace reviewed originals — explicitly approved.'
             policy_label = self.label(policy_text); layout.addWidget(policy_label)
-            self.buttons = QDialogButtonBox(QDialogButtonBox.Apply | QDialogButtonBox.Cancel)
-            self.apply_button = self.buttons.button(QDialogButtonBox.Apply)
-            self.apply_button.setText('Preview Changes…' if self.selection_only else 'Apply Changes'); self.apply_button.setEnabled(False)
-            self.apply_button.clicked.connect(self.accept); self.buttons.rejected.connect(self.reject)
-        buttons_row.addWidget(self.buttons); layout.addLayout(buttons_row)
+
+            self.apply_button = QPushButton(
+                QIcon.fromTheme('dialog-ok-apply', self.style().standardIcon(QStyle.SP_DialogApplyButton)),
+                'Preview Changes…' if self.selection_only else 'Apply Changes'
+            )
+            self.apply_button.setEnabled(False)
+            self.apply_button.clicked.connect(self.accept)
+            buttons_row.addWidget(self.apply_button)
+
+            self.cancel_button = QPushButton(
+                QIcon.fromTheme('dialog-cancel', self.style().standardIcon(QStyle.SP_DialogCancelButton)),
+                'Cancel'
+            )
+            self.cancel_button.clicked.connect(self.reject)
+            buttons_row.addWidget(self.cancel_button)
+
+        layout.addLayout(buttons_row)
         for button in self.findChildren(QPushButton): button.setAutoDefault(False)
         if kind == 'report': self.buttons.button(QDialogButtonBox.Close).setDefault(True)
         self.setTabOrder(self.image_list.search, self.image_list.sort); self.setTabOrder(self.image_list.sort, self.image_list.list)

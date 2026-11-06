@@ -585,8 +585,8 @@ def format_plan_row(entry, mode):
 
 def qt_classes():
     from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
-    from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
-                                  QDialog,QDialogButtonBox,QApplication,QComboBox)
+    from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
+                                  QDialog,QApplication,QComboBox,QPushButton)
 
     from PySide6.QtGui import QPixmap, QIcon
 
@@ -948,8 +948,6 @@ def qt_classes():
             self.mode_select = None
 
             if spec['operation'] == 'strip':
-                from PySide6.QtWidgets import QHBoxLayout
-
                 controls = QHBoxLayout()
                 controls.addWidget(QLabel('Remove'))
 
@@ -991,20 +989,21 @@ def qt_classes():
             self.view = PreviewView()
             layout.addWidget(self.view)
 
-            self.buttons = QDialogButtonBox(
-                QDialogButtonBox.Apply
-                | QDialogButtonBox.Cancel
-            )
-            layout.addWidget(self.buttons)
+            # Explicit order while keeping both buttons right-aligned.
+            # Do not reverse the dialog's layout direction.
+            button_row = QHBoxLayout()
+            button_row.addStretch(1)
 
-            self.apply = self.buttons.button(
-                QDialogButtonBox.Apply
-            )
-            self.apply.setText('Apply Changes')
+            self.apply = QPushButton('Apply Changes')
             self.apply.setEnabled(False)
-
             self.apply.clicked.connect(self.accept)
-            self.buttons.rejected.connect(self.reject)
+            button_row.addWidget(self.apply)
+
+            cancel_button = QPushButton('Cancel')
+            cancel_button.clicked.connect(self.reject)
+            button_row.addWidget(cancel_button)
+
+            layout.addLayout(button_row)
 
             if self.mode_select is not None:
                 self.mode_select.currentIndexChanged.connect(
