@@ -221,7 +221,7 @@ class JobTests(unittest.TestCase):
     def test_owned_process_cancel_and_dialog_disappearance(self):
         for vanished in (False,True):
             with self.subTest(vanished=vanished),tempfile.TemporaryDirectory() as tmp:
-                root=Path(tmp);(root/'job.ref').write_text('org.kde.test /ProgressDialog');(root/'job.label').write_text('Convert — file 1 of 2: photo.psd')
+                root=Path(tmp);(root/'job.ref').write_text('org.kde.test /ProgressDialog');(root/'job.label').write_text('Convert: file 1 of 2: photo.psd')
                 bus=root/'qdbus';bus.write_text('#!'+sys.executable+'\nimport sys\nfrom pathlib import Path\np=Path(__file__).parent\nif "wasCancelled" in sys.argv:\n if (p/"cancel").exists():\n  '+('sys.exit(1)' if vanished else 'print("true")')+'\n else: print("false")\n') ;bus.chmod(0o700)
                 command=[sys.executable,'-c','import os,time;from pathlib import Path;Path('+repr(str(root/'pid'))+').write_text(str(os.getpid()));time.sleep(30)']
                 env=dict(os.environ,PATH=str(root)+os.pathsep+os.defpath)

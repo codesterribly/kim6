@@ -35,7 +35,7 @@ class WebExportReview(QDialog):
         self.errors = {}
         self.source_notices = {}
 
-        self.setWindowTitle("KIM6 — Review Web Export")
+        self.setWindowTitle("KIM6 - Review Web Export")
         visible_rows = min(len(records), 8)
         self.resize(
             1050,
@@ -79,7 +79,7 @@ class WebExportReview(QDialog):
         destination_label.setWordWrap(True)
         destination_row.addWidget(destination_label, 1)
 
-        change_button = QPushButton("Change Destination…")
+        change_button = QPushButton("Change destination…")
         change_button.clicked.connect(self.change_destination)
         destination_row.addWidget(change_button)
 
@@ -198,7 +198,7 @@ class WebExportReview(QDialog):
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
         self.apply = buttons.button(QDialogButtonBox.Ok)
-        self.apply.setText("Apply Changes")
+        self.apply.setText("Apply changes")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

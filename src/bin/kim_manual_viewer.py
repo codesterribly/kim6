@@ -35,7 +35,7 @@ def main():
     app = QApplication(sys.argv)
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — User Guide")
+    dialog.setWindowTitle("KIM6 - User Guide")
     dialog.resize(1000, 760)
 
     layout = QVBoxLayout(dialog)

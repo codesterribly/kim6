@@ -51,7 +51,7 @@ def mute_review(plan_path, request_path, destination):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Review Remove Audio")
+    dialog.setWindowTitle("KIM6 - Review remove audio")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -71,7 +71,7 @@ def mute_review(plan_path, request_path, destination):
         )
     ), 1)
 
-    choose_button = QPushButton("Change Destination…")
+    choose_button = QPushButton("Change destination…")
     destination_row.addWidget(choose_button)
 
     reset_button = QPushButton("Beside each source")
@@ -160,7 +160,7 @@ def mute_review(plan_path, request_path, destination):
     )
 
     apply_button = buttons.button(QDialogButtonBox.Ok)
-    apply_button.setText("Apply Changes")
+    apply_button.setText("Apply changes")
     apply_button.setEnabled(ready > 0 and blocked == 0)
 
     buttons.accepted.connect(dialog.accept)
@@ -232,7 +232,7 @@ def frame_review(plan_path, request_path, destination):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Review Video Frames")
+    dialog.setWindowTitle("KIM6 - Review video frames")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -259,7 +259,7 @@ def frame_review(plan_path, request_path, destination):
         )
     ), 1)
 
-    choose_button = QPushButton("Change Destination…")
+    choose_button = QPushButton("Change destination…")
     destination_row.addWidget(choose_button)
 
     reset_button = QPushButton("Beside each source")
@@ -361,7 +361,7 @@ def frame_review(plan_path, request_path, destination):
     )
 
     apply_button = buttons.button(QDialogButtonBox.Ok)
-    apply_button.setText("Apply Changes")
+    apply_button.setText("Apply changes")
     apply_button.setEnabled(ready > 0 and blocked == 0)
 
     buttons.accepted.connect(dialog.accept)
@@ -426,9 +426,9 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
     dialog.setWindowTitle(
-        "KIM6 — Extract Frame Options"
+        "KIM6 - Extract frame options"
         if mode == "single"
-        else "KIM6 — Thumbnail Options"
+        else "KIM6 - Thumbnail options"
     )
 
     layout = QVBoxLayout(dialog)
@@ -459,7 +459,7 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
         bulk_time.setPlaceholderText("HH:MM:SS[.sss]")
         bulk_row.addWidget(bulk_time, 1)
 
-        apply_all = QPushButton("Apply to All")
+        apply_all = QPushButton("Apply to all")
         bulk_row.addWidget(apply_all)
 
         layout.addLayout(bulk_row)
@@ -530,7 +530,7 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
     )
     buttons.button(
         QDialogButtonBox.Ok
-    ).setText("Continue to Review")
+    ).setText("Continue to review")
 
     pattern = (
         r"[0-9]{2,}:[0-5][0-9]:"
@@ -660,7 +660,7 @@ def main():
         return widget
 
     if mode == "contact":
-        dialog.setWindowTitle("KIM6 — Video Contact Sheet")
+        dialog.setWindowTitle("KIM6 - Video contact sheet")
 
         grid = choice("Grid:", [
             ("3 × 3 (9 frames)", "3x3"),
@@ -678,7 +678,7 @@ def main():
         ))
 
     else:
-        dialog.setWindowTitle("KIM6 — Animated GIF")
+        dialog.setWindowTitle("KIM6 - Animated GIF")
 
         start = QLineEdit(defaults[0])
         start.setPlaceholderText("00:00:00")

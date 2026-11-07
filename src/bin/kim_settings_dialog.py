@@ -167,7 +167,7 @@ def main():
     values = load_settings(path)
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Settings / About")
+    dialog.setWindowTitle("KIM6 - Settings and about")
     dialog.setMinimumWidth(510)
 
     outer = QVBoxLayout(dialog)

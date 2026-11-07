@@ -466,7 +466,7 @@ def step_details(step):
         fields = watermark_fields(step)
         text_details = [(label, 'Inherited from Settings' if fields[key]['value'] is None else fields[key]['value'])
                         for label, key in TEXT_FIELDS if fields[key]['selected']]
-        if not text_details: text_details = [('Selected text fields', 'None — select a field and enter text')]
+        if not text_details: text_details = [('Selected text fields', 'None. Select a field and enter text')]
     elif step['kind'] == 'camera':
         selected = camera_fields(step)
         text_details = [('Camera & EXIF fields', ', '.join(label for label, key in CAMERA_FIELDS if selected[key]) or 'None selected')]

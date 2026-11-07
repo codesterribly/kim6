@@ -195,7 +195,7 @@ class SetDatesDialog(QDialog):
         self.cache = {}
         self._zones = {}
 
-        self.setWindowTitle('KIM6 — Set Dates')
+        self.setWindowTitle('KIM6 - Set dates')
         self.resize(1040, 650)
         self.setMinimumWidth(790)
 
@@ -404,7 +404,7 @@ class SetDatesDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch()
 
-        self.apply = QPushButton('Review Changes…')
+        self.apply = QPushButton('Review changes…')
         self.apply.setEnabled(False)
         self.apply.clicked.connect(self.review_changes)
 
@@ -1311,7 +1311,7 @@ class SetDatesDialog(QDialog):
 
         review = QDialog(self)
         review.setWindowTitle(
-            'KIM6 — Review Date Changes'
+            'KIM6 - Review date changes'
         )
         review.resize(1120, 570)
         review.setMinimumWidth(850)
@@ -1480,7 +1480,7 @@ class SetDatesDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
 
-        confirm = QPushButton('Apply Changes')
+        confirm = QPushButton('Apply changes')
         confirm.setEnabled(
             (created + replaced) > 0
             and not excluded

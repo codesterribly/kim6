@@ -144,7 +144,7 @@ class ImageSourceInspector(QThread):
                                    animated_png=animated_png)
                     note = 'Ready for rendering validation'
                     if len(records) > 1 or animated_png:
-                        note += '; multi-frame source — preview unavailable'
+                        note += '; multi-frame source: preview unavailable'
                     if not self.isInterruptionRequested():
                         self.inspected.emit(path, 'Ready', note, details)
                 except Exception as exc:
@@ -224,10 +224,10 @@ class OrderedImages(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         controls = QHBoxLayout()
-        self.add_button = QPushButton('Add Images…')
-        self.remove_button = QPushButton('Remove Selected')
-        self.up_button = QPushButton('Move Up')
-        self.down_button = QPushButton('Move Down')
+        self.add_button = QPushButton('Add images…')
+        self.remove_button = QPushButton('Remove selected')
+        self.up_button = QPushButton('Move up')
+        self.down_button = QPushButton('Move down')
         for button in (self.add_button, self.remove_button, self.up_button, self.down_button):
             controls.addWidget(button)
         controls.addStretch(1)
@@ -282,7 +282,7 @@ class OrderedImages(QWidget):
         initial = str(Path(paths[0]).parent) if paths else str(Path.home())
         paths = choose_images(
             self, initial,
-            title='Add Images for ' + ('Video Slideshow' if self.mode == 'slideshow' else 'Animated Image'),
+            title='Add images for ' + ('video slideshow' if self.mode == 'slideshow' else 'animated image'),
             extensions=SLIDESHOW_EXTENSIONS if self.mode == 'slideshow' else CREATE_IMAGE_EXTENSIONS,
         )
         if paths:
@@ -529,7 +529,7 @@ class SlideshowDialog(OrderedImageDialog):
         self.destination = Path(destination)
         self.max_images = 200
 
-        self.setWindowTitle('KIM6 — Create Video Slideshow')
+        self.setWindowTitle('KIM6 - Create video slideshow')
         self.resize(760, 400)
         self.setMinimumWidth(640)
 
@@ -656,7 +656,7 @@ class SlideshowDialog(OrderedImageDialog):
         self.create = buttons.button(
             QDialogButtonBox.Ok
         )
-        self.create.setText('Create Slideshow')
+        self.create.setText('Create slideshow')
         self.create.setEnabled(False)
 
         self.add_source_notice(layout)
@@ -901,7 +901,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.frame_index = 0
         self.completed_cycles = 0
         self.sequence = ()
-        self.setWindowTitle('KIM6 — Create Animated Image')
+        self.setWindowTitle('KIM6 - Create animated image')
         self.setMinimumWidth(640)
         self.resize(720, 400)
         layout = QVBoxLayout(self)
@@ -1014,7 +1014,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         layout.addLayout(preview_row)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.create = buttons.button(QDialogButtonBox.Ok)
-        self.create.setText('Create Animated Image')
+        self.create.setText('Create animated image')
         self.add_source_notice(layout)
         layout.addWidget(buttons)
 
@@ -1386,7 +1386,7 @@ class CreationImages(OrderedImages):
         paths = self.ordered_paths()
         additions = choose_images(
             self, str(Path(paths[0]).parent) if paths else str(Path.home()),
-            title='Add Images for ' + self.action_title,
+            title='Add images for ' + self.action_title,
             extensions=CREATE_IMAGE_EXTENSIONS,
         )
         if additions:
@@ -1452,7 +1452,7 @@ class GalleryDialog(OrderedImageDialog):
         # KIM6_GALLERY_CAPTIONS_PREVIEW_V1
         self.captions_by_path = {}
         self.destination = destination
-        self.setWindowTitle('KIM6 — Create an HTML Gallery')
+        self.setWindowTitle('KIM6 - Create an HTML gallery')
         self.setMinimumWidth(600)
         self.resize(760, 820)
         self.setMaximumHeight(900)
@@ -1756,7 +1756,7 @@ class PrintLayoutDialog(OrderedImageDialog):
         self.tiff = tiff
         self.extensions = ('tiff', 'tif') if tiff else ('pdf',)
         title = 'Multi-page TIFF' if tiff else 'Print Layout PDF'
-        self.setWindowTitle('KIM6 — Create ' + title)
+        self.setWindowTitle('KIM6 - Create ' + title)
         self.setMinimumWidth(600)
         layout = QVBoxLayout(self)
         self.ordered = CreationImages(self, title)

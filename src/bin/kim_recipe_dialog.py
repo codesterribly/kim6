@@ -227,7 +227,7 @@ class RecipeWidget(QWidget):
         self.status = QLabel(); self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         preview_layout.addWidget(self.status)
-        self.cancel_preview = QPushButton('Cancel Preview'); self.cancel_preview.setVisible(False)
+        self.cancel_preview = QPushButton('Cancel preview'); self.cancel_preview.setVisible(False)
         self.cancel_preview.clicked.connect(self.stop_preview); preview_layout.addWidget(self.cancel_preview)
         self.table = PropertyView()
         preview_layout.addWidget(self.table, 1)
@@ -385,10 +385,10 @@ class RecipeWidget(QWidget):
             for title, value in step_details(step):
                 label = QLabel(value); label.setTextFormat(Qt.PlainText); label.setWordWrap(True)
                 self.form.addRow(title, label)
-            configure = QPushButton('Configure with Image Preview…')
+            configure = QPushButton('Configure with image preview…')
             configure.clicked.connect(lambda checked=False, r=row: self.configure_image_operation(r))
             self.form.addRow(configure)
-            reset = QPushButton('Reset Step Defaults'); reset.clicked.connect(self.reset_step_defaults)
+            reset = QPushButton('Reset step defaults'); reset.clicked.connect(self.reset_step_defaults)
             self.form.addRow(reset)
             return
         if step['op'] == 'image.resize':
@@ -480,7 +480,7 @@ class RecipeWidget(QWidget):
             from kim_ui import HELP
             self.form.addRow(HELP[topic][0], HelpButton(topic))
         if definitions:
-            self.step_defaults_button = QPushButton(QIcon.fromTheme('edit-undo'), 'Reset Step Defaults')
+            self.step_defaults_button = QPushButton(QIcon.fromTheme('edit-undo'), 'Reset step defaults')
             self.step_defaults_button.clicked.connect(self.reset_step_defaults)
             self.form.addRow(self.step_defaults_button)
         self.update_parameter_modes(row)
@@ -562,10 +562,10 @@ class RecipeWidget(QWidget):
                 source = ''
                 if step['op'] == 'image.convert':
                     from kim_recipe_image import quality_setting
-                    source = ' — ' + (quality_setting(step['format']) or 'quality not inherited for this format')
+                    source = ': ' + (quality_setting(step['format']) or 'quality not inherited for this format')
                 label.setText('Inherited from KIM6 Settings' + source + (': not set' if not value else ''))
             else:
-                label.setText('Custom override' if step[key] and key != 'quality' else '' if step[key] else 'Blank override — leave this field unchanged')
+                label.setText('Custom override' if step[key] and key != 'quality' else '' if step[key] else 'Blank override: leave this field unchanged')
             label.setWordWrap(True)
             label.setVisible(bool(label.text()))
 
@@ -700,9 +700,9 @@ class RecipeWidget(QWidget):
         if ok: self.change_folders(lambda library: library.rename_folder(folder['id'], name))
 
     def delete_folder(self):
-        folder = self.choose_folder('Delete Recipe Folder')
+        folder = self.choose_folder('Delete recipe folder')
         if folder is None: return
-        message = QMessageBox(self); message.setWindowTitle('Delete Recipe Folder'); message.setTextFormat(Qt.PlainText)
+        message = QMessageBox(self); message.setWindowTitle('Delete recipe folder'); message.setTextFormat(Qt.PlainText)
         message.setText('Delete folder “' + folder['name'] + '”? Its recipes will move to Unfiled; no recipes or images are deleted.')
         message.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel); message.setDefaultButton(QMessageBox.Cancel)
         if message.exec() == QMessageBox.Yes:
@@ -920,7 +920,7 @@ class RecipeWidget(QWidget):
             self.repair_explanation=QLabel('Photoshop files need Convert Format. Add it and choose an output format. '
                 'For a built-in recipe, choose Duplicate to Edit first.')
             self.repair_explanation.setWordWrap(True)
-            self.repair_return=QPushButton('Return to Run a Recipe')
+            self.repair_return=QPushButton('Return to recipe runner')
             self.repair_return.clicked.connect(self.resume_recipe_repair)
             self.layout().insertWidget(0,self.repair_return); self.layout().insertWidget(0,self.repair_explanation)
         self.repair_return.show(); self.repair_explanation.show()
@@ -989,8 +989,8 @@ def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repai
     buttons = QHBoxLayout()
     buttons.addStretch(1)
     if not from_run:
-        run = QPushButton('Load Images && Run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
-    close = QPushButton('Return to Run a Recipe' if from_run else 'Close')
+        run = QPushButton('Load images && run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
+    close = QPushButton('Return to recipe runner' if from_run else 'Close')
     close.clicked.connect(dialog.accept); buttons.addWidget(close)
     layout.addLayout(buttons)
     return dialog

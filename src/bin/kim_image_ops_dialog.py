@@ -563,7 +563,7 @@ class ImageOperationDialog(QDialog):
         safety = QLabel('Original images stay unchanged. Outputs use the existing verified, create-only publication path; occupied filenames receive a number.')
         safety.setWordWrap(True); layout.addWidget(safety)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.apply = self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Review Outputs…' if self.standalone else 'Use Settings')
+        self.apply = self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Review outputs…' if self.standalone else 'Use settings')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(250); self.timer.timeout.connect(self.refresh)
         self.loading = False; self.sync_visibility(); self.schedule()
@@ -676,7 +676,7 @@ class ImageOperationDialog(QDialog):
             from kim_recipe_image import copyright_settings
             try:
                 value = copyright_settings()[key]
-                message = 'Inherited from KIM6 Settings' + ('' if value.strip() else ' — not set')
+                message = 'Inherited from KIM6 Settings' + ('' if value.strip() else ': not set')
             except (OSError, RecipeError) as exc:
                 value = ''; message = 'Settings unavailable: ' + str(exc)
         editor.blockSignals(True); editor.setPlainText(value); editor.blockSignals(False)
@@ -858,7 +858,7 @@ class ImageOperationDialog(QDialog):
         if not worker.image.isNull():
             self.canvas.image = worker.image; self.dimensions = worker.dimensions; self.canvas.update()
             if self.crop: self.update_crop_boundary()
-            else: self.geometry.setText(f"Final overlay geometry: {worker.dimensions[0]} × {worker.dimensions[1]} pixels. Preview uses the production overlay renderer." if worker.rendered_overlay else 'Source image only — resolve the overlay problem below to see the visible result.')
+            else: self.geometry.setText(f"Final overlay geometry: {worker.dimensions[0]} × {worker.dimensions[1]} pixels. Preview uses the production overlay renderer." if worker.rendered_overlay else 'Source image only: resolve the overlay problem below to see the visible result.')
         elif worker.error:
             self.canvas.image = QImage(); self.canvas.update()
         if worker.error: problems.append(worker.error)

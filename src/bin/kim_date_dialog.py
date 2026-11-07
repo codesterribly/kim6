@@ -18,7 +18,7 @@ class PhotoDateDialog(QDialog):
         super().__init__(parent); self.kind, self.files = kind,list(files); self.worker=None; self.pending=False; self.closing=False
         self.policy,self.seeds,self.plan=policy,seeds,None
         self.form=None
-        self.setWindowTitle('KIM6 — ' + TITLES[kind]); self.resize(1050,620)
+        self.setWindowTitle('KIM6 - ' + TITLES[kind]); self.resize(1050,620)
         layout=QVBoxLayout(self); form=QFormLayout(); self.form=form; layout.addLayout(form)
         # Both capture-date sources use the same preview and publisher.
         self.source_choice = None
@@ -47,7 +47,7 @@ class PhotoDateDialog(QDialog):
         self.explanation=QLabel(explanation + (f' The same entered date will apply to all {len(files)} selected files.' if kind=='set' and len(files)>1 else f' {len(files)} selected file(s); each source is calculated separately.'))
         self.explanation.setWordWrap(True); layout.addWidget(self.explanation)
         from kim_preview import qt_classes
-        self.details=qt_classes()[0](self); layout.addWidget(QLabel('Preview Changes')); layout.addWidget(self.details)
+        self.details=qt_classes()[0](self); layout.addWidget(QLabel('Preview changes')); layout.addWidget(self.details)
         self.metadata_toggle = QCheckBox('Show metadata details')
         self.metadata_toggle.setChecked(False)
         self.metadata_toggle.toggled.connect(
@@ -242,7 +242,7 @@ class PhotoDateDialog(QDialog):
     def use_set(self):
         if self.source_choice is not None:
             self.source_choice.setCurrentIndex(0)
-        self.kind='set'; self.setWindowTitle('KIM6 — '+TITLES['set']); self.form.setRowVisible(self.capture,True); self.form.setRowVisible(self.adjust,False); self.fix.hide()
+        self.kind='set'; self.setWindowTitle('KIM6 - '+TITLES['set']); self.form.setRowVisible(self.capture,True); self.form.setRowVisible(self.adjust,False); self.fix.hide()
         self.advanced.set_zone('unknown'); self.fields.setEnabled(True); self.advanced.toggle.setChecked(False)
         embedded=self.zone.findData('embedded')
         if embedded >= 0: self.zone.model().item(embedded).setEnabled(False)

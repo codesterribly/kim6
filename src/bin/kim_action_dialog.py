@@ -336,11 +336,11 @@ class ActionDialog(QDialog):
                 'Compress received no selected files from Dolphin'
             )
         self.worker=None; self.headers={}; self.header_stamps={}; self.compress_eligible=[]; self.header_error=None; self.closing=False; self.geometry_cache={}
-        self.setWindowTitle('KIM6 — '+{'rotate':'Rotate','resize':'Resize Images','percent':'Resize by Percentage',
+        self.setWindowTitle('KIM6 - '+{'rotate':'Rotate','resize':'Resize Images','percent':'Resize by Percentage',
             'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
         self.layout=QVBoxLayout(self)
         if kind=='compress':
-            self.setWindowTitle('KIM6 — Compress '+preset.title())
+            self.setWindowTitle('KIM6 - Compress '+preset.title())
             if preset!='custom':
                 notice=QLabel({'recommended':'Starting with Recommended settings. You can adjust the settings before applying.',
                               'maximum':'Starting with Maximum compression settings. You can adjust the settings before applying.'}[preset])
@@ -358,7 +358,7 @@ class ActionDialog(QDialog):
         self.layout.addWidget(self.preview)
         if kind == 'resize':
             self.resize_rows = []
-            self.resize_heading = QLabel('Preview Changes')
+            self.resize_heading = QLabel('Preview changes')
             self.layout.addWidget(self.resize_heading)
             self.resize_table = QTableWidget(0, 3, self)
             self.resize_table.setHorizontalHeaderLabels(
@@ -464,7 +464,7 @@ class ActionDialog(QDialog):
                 self.update_rotation_preview
             )
         elif kind == 'resize':
-            self.setWindowTitle('KIM6 — Resize Images')
+            self.setWindowTitle('KIM6 - Resize images')
             self.choice('method', 'Sizing', [
                 ('Resize to Fit', 'fit'),
                 ('Exact Dimensions', 'exact'),
@@ -493,10 +493,10 @@ class ActionDialog(QDialog):
             self.fields['method'].currentIndexChanged.connect(
                 self.update_resize_controls
             )
-            self.apply.setText('Review Changes…')
+            self.apply.setText('Review changes…')
             self.update_resize_controls()
         elif kind=='convert':
-            self.apply.setText('Preview Changes…')
+            self.apply.setText('Review changes…')
             self.choice('format','Output format',[(f.upper(),f) for f in ('jpeg','png','webp','avif','heic','bmp','gif','pdf','tiff','jp2','jxl')])
             self.choice('jp2_mode','JPEG 2000',[('Lossless','lossless'),('Lossy','lossy')]); self.spin('jp2_quality','JPEG 2000 lossy quality',1,100,75)
             self.fields['progressive']=QCheckBox('Progressive JPEG'); self.form.addRow(self.fields['progressive'])
@@ -591,13 +591,13 @@ class ActionDialog(QDialog):
             self.compress_pending=[]
             self.resize(640,380)
         elif kind=='copyright':
-            self.apply.setText('Preview Changes…')
+            self.apply.setText('Review changes…')
             self.inherited=copyright_settings()
             for field,label in [('creator','Creator / Artist'),('notice','Copyright Notice'),('rights','Usage Rights')]:
                 self.fields[field]=QLineEdit(self.inherited[field]); self.form.addRow(label,self.fields[field])
                 button=QPushButton('Reset from Settings'); button.clicked.connect(lambda checked=False,k=field:self.reset_setting(k))
                 self.form.addRow('',with_help(button,'settings',context='batch'))
-            self.message.setText('Blank fields stay unchanged. Effective Settings values are shown; edit to override for this batch. Preview Changes shows existing values and resolved assignments for every image before you apply them.')
+            self.message.setText('Blank fields stay unchanged. Effective Settings values are shown; edit to override for this batch. Preview changes shows existing values and resolved assignments for every image before you apply them.')
         elif kind=='strip':
             self.choice('mode','Remove',[('Descriptive Metadata (keep color and orientation)','all'),('GPS Location','gps'),('Recognized AI Metadata','ai')])
             self.form.addRow('Full removal in Recipes',with_help(QLabel('Recipes also offers Remove All Metadata, including ICC.'),'strip'))
@@ -610,12 +610,12 @@ class ActionDialog(QDialog):
             self.rename_method='sequential'; self.rename_states={}
             self.fields['method'].currentIndexChanged.connect(self.rename_method_changed)
             from kim_preview import qt_classes
-            self.layout.insertWidget(self.layout.indexOf(self.preview),QLabel('Preview Changes'))
+            self.layout.insertWidget(self.layout.indexOf(self.preview),QLabel('Preview changes'))
             self.rename_view=qt_classes()[0](self)
             self.rename_table=self.rename_view.table
             self.layout.insertWidget(self.layout.indexOf(self.preview),self.rename_view,1)
             self.resize(1050,650)
-            self.apply.setText('Apply Changes')
+            self.apply.setText('Apply changes')
             self.rename_approved=None; self.rename_pending=False
             self.preview.setMaximumHeight(75)
             self.preview.hide()
@@ -1079,7 +1079,7 @@ class ActionDialog(QDialog):
                 self.resize_table.setItem(index, column, item)
 
         self.resize_heading.setText(
-            f'Preview Changes — {len(rows)} selected images'
+            f'Preview changes: {len(rows)} selected images'
         )
         self.resize_summary.setText(
             f'{unchanged} unchanged, '
@@ -1105,10 +1105,10 @@ class ActionDialog(QDialog):
             if self.kind == 'rename':
                 normal = (
                     text.startswith(
-                        'Preview Changes — planning'
+                        'Preparing changes'
                     )
                     or text.startswith(
-                        'Preview Changes — final'
+                        'Preview changes: final'
                     )
                 )
 
@@ -1305,7 +1305,7 @@ class ActionDialog(QDialog):
             elif self.kind=='copyright':
                 self.values=[self.fields[k].text() for k in ('creator','notice','rights')]
                 if not any(self.values): raise ValueError('Enter at least one creator, copyright or usage-rights value, or reset from Settings.')
-                lines=['Values are resolved for each selected image in Preview Changes. {YEAR} in Copyright Notice uses its capture year, or the current year when missing. Blank fields preserve existing values.']
+                lines=['Values are resolved for each selected image in Preview changes. {YEAR} in Copyright Notice uses its capture year, or the current year when missing. Blank fields preserve existing values.']
             elif self.kind=='strip':
                 value=self.fields['mode'].currentData(); self.values=[value]
                 lines=[{'all':'Removes descriptive EXIF, IPTC, XMP and comments. Keeps ICC color profiles and orientation. File Modification Dates and encoded image data are preserved.',
@@ -1337,9 +1337,9 @@ class ActionDialog(QDialog):
         if config['directory']: self.values+=['--output-dir',config['directory']]
         from kim_preview import qt_classes
         self.worker=qt_classes()[1]('rename',self.policy,self.files,config,None,self)
-        self.worker.progress.connect(lambda i,n,p:self.rename_view.summary.setText(f'Preview Changes — inspecting image {i+1} of {n}: {Path(p).name}'))
+        self.worker.progress.connect(lambda i,n,p:self.rename_view.summary.setText(f'Preview changes: inspecting image {i+1} of {n}: {Path(p).name}'))
         self.worker.finished.connect(self.rename_finished); self.worker.start()
-        self.set_preview_text('Preview Changes — planning filenames…')
+        self.set_preview_text('Preparing output filenames…')
 
     def rename_finished(self):
         worker,self.worker=self.worker,None
@@ -1350,7 +1350,7 @@ class ActionDialog(QDialog):
             self.rename_approved=worker.plan
             self.apply.setEnabled(self.rename_view.show_plan(worker.plan))
             self.resize(1050,min(790,max(370,self.rename_table.height()+265)))
-            self.set_preview_text('Preview Changes — final paths are available in each row’s tooltip. Changed sources or destinations require a fresh review.')
+            self.set_preview_text('Preview changes: final paths are available in each row’s tooltip. Changed sources or destinations require a fresh review.')
         worker.deleteLater()
 
     def accept(self):
@@ -1381,7 +1381,7 @@ class RotateBatchDialog(QDialog):
     def __init__(self, files, preset):
         super().__init__()
 
-        self.setWindowTitle('KIM6 — Rotate Images')
+        self.setWindowTitle('KIM6 - Rotate images')
         self.resize(970, 630)
         self.setMinimumWidth(790)
 
@@ -1454,7 +1454,7 @@ class RotateBatchDialog(QDialog):
         )
 
         self.apply = controls.button(QDialogButtonBox.Ok)
-        self.apply.setText('Apply Changes')
+        self.apply.setText('Apply changes')
         self.apply.setEnabled(False)
 
         controls.accepted.connect(self.accept)
@@ -1774,7 +1774,7 @@ class FlipReviewDialog(QDialog):
         self.rows = []
         self.pending = []
 
-        self.setWindowTitle('KIM6 — Flip Images')
+        self.setWindowTitle('KIM6 - Flip images')
         # Match the initial height to the batch rather than
         # reserving a large, mostly empty scroll area.
         # Four or more images use a bounded scrolling window.
@@ -1868,7 +1868,7 @@ class FlipReviewDialog(QDialog):
         )
 
         self.apply = buttons.button(QDialogButtonBox.Ok)
-        self.apply.setText('Apply Changes')
+        self.apply.setText('Apply changes')
         self.apply.setEnabled(False)
 
         buttons.accepted.connect(self.accept)
@@ -1995,7 +1995,7 @@ def resize_output_review(
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Review Resize Outputs")
+    dialog.setWindowTitle("KIM6 - Review resize outputs")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2042,7 +2042,7 @@ def resize_output_review(
     )
 
     browse_button = QPushButton("Browse…")
-    update_button = QPushButton("Update Preview")
+    update_button = QPushButton("Update preview")
 
     directory_row = QHBoxLayout()
     directory_row.addWidget(directory_field, 1)
@@ -2145,7 +2145,7 @@ def resize_output_review(
     buttons = QHBoxLayout()
     buttons.addStretch(1)
 
-    apply_button = QPushButton("Apply Changes")
+    apply_button = QPushButton("Apply changes")
     apply_button.setEnabled(
         ready > 0 and blocked == 0
     )
@@ -2280,7 +2280,7 @@ def email_options_review(output_path, initial_size, sources):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Prepare Email Images")
+    dialog.setWindowTitle("KIM6 - Prepare email images")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2411,7 +2411,7 @@ def email_options_review(output_path, initial_size, sources):
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
     proceed = buttons.button(QDialogButtonBox.Ok)
-    proceed.setText("Continue to Review")
+    proceed.setText("Continue to review")
 
     def refresh():
         choice = options.currentData()
@@ -2513,7 +2513,7 @@ def email_ready_review(plan_path, mail_client):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 — Review Email Attachments")
+    dialog.setWindowTitle("KIM6 - Review email attachments")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)

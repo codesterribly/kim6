@@ -494,12 +494,12 @@ class ImageHandler:
         op = step['op']
         label = LABELS.get(op, op)
         if op == 'image.crop':
-            return label + ' — ' + step['aspect'] + ', ' + step['area'] + ('; target ' + str(step['target_width']) + ' × ' + str(step['target_height']) if step['resize'] else '')
+            return label + ': ' + step['aspect'] + ', ' + step['area'] + ('; target ' + str(step['target_width']) + ' × ' + str(step['target_height']) if step['resize'] else '')
         if op == 'image.overlay':
             from kim_image_ops import KINDS
-            return label + ' — ' + dict((value, title) for title, value in KINDS)[step['kind']] + ', ' + step['anchor'].replace('_', ' ') + ', ' + str(step['opacity']) + '%'
+            return label + ': ' + dict((value, title) for title, value in KINDS)[step['kind']] + ', ' + step['anchor'].replace('_', ' ') + ', ' + str(step['opacity']) + '%'
         if op == 'image.resize':
-            return f"{label} — {step['max_width']} × {step['max_height']}"
+            return f"{label}: {step['max_width']} × {step['max_height']}"
         if op == 'image.convert':
             fmt = step['format']
             try: quality_label = str(self.parameter_value(step,'quality')) + ' (Settings)' if step['quality'] is None else str(step['quality'])
@@ -509,14 +509,14 @@ class ImageHandler:
                       'single page, 8-bit' if fmt == 'pdf' else '8-bit' if fmt == 'bmp' else
                       'single frame, palette' if fmt == 'gif' else 'lossless' if fmt == 'png' else
                       'quality ' + quality_label)
-            return label + ' — ' + fmt.upper() + ', ' + detail
-        if op == 'image.compress': return label + ' — ' + step['preset'].capitalize()
-        if op == 'metadata.set_capture': return label + ' — ' + {'specific':step.get('datetime') or 'choose date and time', 'embedded':'embedded date', 'file_mtime':'source file modification time'}.get(step['mode'],'choose source')
-        if op == 'metadata.shift_capture': return label + ' — ' + str(dt.timedelta(seconds=step['seconds']))
+            return label + ': ' + fmt.upper() + ', ' + detail
+        if op == 'image.compress': return label + ': ' + step['preset'].capitalize()
+        if op == 'metadata.set_capture': return label + ': ' + {'specific':step.get('datetime') or 'choose date and time', 'embedded':'embedded date', 'file_mtime':'source file modification time'}.get(step['mode'],'choose source')
+        if op == 'metadata.shift_capture': return label + ': ' + str(dt.timedelta(seconds=step['seconds']))
         if op == 'image.color':
-            return label + ' — ' + ('sRGB' if step['mode'] == 'srgb' else 'Preserve')
+            return label + ': ' + ('sRGB' if step['mode'] == 'srgb' else 'Preserve')
         if op == 'image.resize_percent':
-            return f"{label} — {step['percent']}%"
+            return f"{label}: {step['percent']}%"
         return label
 
     def parameter_value(self, step, key, settings=None):
@@ -567,7 +567,7 @@ class ImageHandler:
                 if spec['type'] == 'boolean':
                     value = 'Yes' if value else 'No'
                 elif value is None or value == '':
-                    value = 'Not included — enter a value in Recipe Editor'
+                    value = 'Not included: enter a value in Recipe Editor'
                 if spec.get('settings_key'):
                     value = str(value) + (' (inherited from Settings)' if step.get(key) is None else ' (recipe override)')
             except (OSError, RecipeError) as exc:
@@ -603,7 +603,7 @@ class ImageHandler:
                 value = ('Removed (recognized fields)' if p.get('strip_ai') or p.get('strip_all') else 'None detected (recognized fields)') + '; other provenance may remain'
             elif key == 'ICC':
                 if value == 'absent in input':
-                    value = 'Not included — no input profile detected'
+                    value = 'Not included: no input profile detected'
                 elif value == 'absent (ICC stripped)':
                     value = 'Removed'
                 else:
@@ -1081,7 +1081,7 @@ class ImageHandler:
                           'GPS: ' + gps_state, 'AI fields: ' + ai_state,
                           'ICC: ' + color_state, 'Output timestamp: ' + timestamp_state]
         if conversion and conversion['quality'] is None and quality_setting(fmt) and not compression:
-            final_metadata.append('Quality source: KIM6 Settings — ' + quality_setting(fmt))
+            final_metadata.append('Quality source: KIM6 Settings - ' + quality_setting(fmt))
         if capture and capture.tzinfo is None and any(s['op'] in ('metadata.set_capture','metadata.shift_capture') for s in steps):
             final_metadata.append('Image capture timezone: Unknown; EXIF/XMP have no offset. IPTC time is omitted to avoid an invented timezone.')
         output_depth = (conversion or {}).get('depth','preserve')

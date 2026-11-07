@@ -24,7 +24,7 @@ class ContactSheetDialog(OrderedImageDialog):
     def __init__(self, settings_file, images):
         super().__init__()
         self.settings_file = settings_file
-        self.setWindowTitle('KIM6 — Contact Sheet')
+        self.setWindowTitle('KIM6 - Contact sheet')
         self.setMinimumWidth(600)
         # KIM6_CONTACTSHEET_SCROLL_LAYOUT_V1
         # Bound the window height without shrinking its controls.
@@ -67,9 +67,9 @@ class ContactSheetDialog(OrderedImageDialog):
         ])
         self.grid = select("Layout:", [
             ("Automatic (recommended)", "auto"),
-            ("4 × 5 — Compact", "4x5"),
-            ("3 × 4 — Spacious", "3x4"),
-            ("5 × 7 — Dense", "5x7"),
+            ("4 × 5 - Compact", "4x5"),
+            ("3 × 4 - Spacious", "3x4"),
+            ("5 × 7 - Dense", "5x7"),
         ])
         self.labels = select("Captions:", [
             ("Number and filename", "both"),
@@ -95,8 +95,8 @@ class ContactSheetDialog(OrderedImageDialog):
             ("White", "white"), ("Black", "black")
         ])
         self.dpi = select("Resolution:", [
-            ("300 DPI — Print", "300"),
-            ("150 DPI — Draft", "150"),
+            ("300 DPI - Print", "300"),
+            ("150 DPI - Draft", "150"),
         ])
 
         self.heading = QLineEdit("Contact Sheet")

@@ -22,7 +22,7 @@ class JobProgressDialog(QDialog):
 
     def __init__(self, text, cancel_text, minimum, maximum, parent=None):
         super().__init__(parent); self.finished_job=False; self.resize(640,200)
-        self.setWindowTitle('KIM6 — Job Progress')
+        self.setWindowTitle('KIM6 - Job progress')
         layout=QVBoxLayout(self); self.label=QLabel(text); self.label.setWordWrap(True); self.label.setTextFormat(Qt.PlainText)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard); layout.addWidget(self.label)
         self.bar=QProgressBar(); self.bar.setRange(minimum,maximum); layout.addWidget(self.bar)
@@ -55,7 +55,7 @@ class WarningView(QWidget):
         self.summary=QLabel(); self.summary.setWordWrap(True); layout.addWidget(self.summary)
         self.expand=QPushButton('Show affected files and technical details'); self.expand.setCheckable(True); layout.addWidget(self.expand)
         self.details=QPlainTextEdit(); self.details.setReadOnly(True); self.details.hide(); layout.addWidget(self.details)
-        self.copy=QPushButton('Copy Details'); self.copy.hide(); layout.addWidget(self.copy)
+        self.copy=QPushButton('Copy details'); self.copy.hide(); layout.addWidget(self.copy)
         self.expand.toggled.connect(self.refresh_details); self.expand.toggled.connect(self.details.setVisible); self.expand.toggled.connect(self.copy.setVisible)
         self.copy.clicked.connect(lambda: QApplication.clipboard().setText(self.details.toPlainText()))
 
@@ -139,7 +139,7 @@ def property_fields(recipe, row):
         fields += [('Output filename', Path(row.output).name), ('Output folder', str(Path(row.output).parent))]
     fields += handler(recipe['media']).preview_fields(row)
     if row.problems:
-        fields.append(('Output plan', 'Unavailable — resolve validation problems'))
+        fields.append(('Output plan', 'Unavailable: resolve validation problems'))
     fields += [('Validation problem', problem) for problem in row.problems]
     # Category notices belong to the batch disclosure, not every property row.
     if not row.problems:
@@ -403,7 +403,7 @@ class RunRecipeDialog(QDialog):
         self.selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         label.setBuddy(self.selector)
         selection.addWidget(label); selection.addWidget(self.search, 1); selection.addWidget(self.selector, 2)
-        self.create_button = QPushButton('Create New Recipe…')
+        self.create_button = QPushButton('Create new recipe…')
         self.create_button.clicked.connect(self.create_recipe)
         selection.addWidget(self.create_button); layout.addLayout(selection)
         self.selection_hint=QLabel('Choose a recipe to check these images and preview the results.')
@@ -425,9 +425,9 @@ class RunRecipeDialog(QDialog):
         split = QSplitter(Qt.Horizontal); layout.addWidget(split, 1)
         left = QWidget(); left_layout = QVBoxLayout(left); split.addWidget(left)
         inputs = QGroupBox(
-            'Selected images — choose one to review'
+            'Selected images: choose one to review'
             if operation_title
-            else 'Selected files — select one for detailed preview'
+            else 'Selected files: select one for detailed preview'
         )
         inp_layout = QVBoxLayout(inputs)
         self.inputs = InputFilesView(); self.inputs.setHeaderLabels(['Filename', 'Preflight'])
@@ -439,14 +439,14 @@ class RunRecipeDialog(QDialog):
         self.inputs.currentItemChanged.connect(self.show_selected)
         inp_layout.addWidget(self.inputs)
         actions = QHBoxLayout()
-        self.add_photos = QPushButton('Add Images…'); self.add_photos.clicked.connect(self.pick_files)
-        self.remove_selected = QPushButton('Remove Selected'); self.remove_selected.clicked.connect(self.remove_files)
-        self.clear_list = QPushButton('Clear List'); self.clear_list.clicked.connect(self.clear_files)
+        self.add_photos = QPushButton('Add images…'); self.add_photos.clicked.connect(self.pick_files)
+        self.remove_selected = QPushButton('Remove selected'); self.remove_selected.clicked.connect(self.remove_files)
+        self.clear_list = QPushButton('Clear list'); self.clear_list.clicked.connect(self.clear_files)
         for button in (self.add_photos, self.remove_selected, self.clear_list): actions.addWidget(button)
         inp_layout.addLayout(actions); left_layout.addWidget(inputs, 2)
         self.inputs.files_dropped.connect(self.add_files)
         self.inputs.itemSelectionChanged.connect(self.update_file_actions)
-        operations = QGroupBox('Recipe operations — configured order'); op_layout = QVBoxLayout(operations)
+        operations = QGroupBox('Recipe operations in execution order'); op_layout = QVBoxLayout(operations)
         self.operations = QTreeWidget(); self.operations.setHeaderHidden(True); self.operations.setWordWrap(True)
         self.fill_operations()
         op_layout.addWidget(self.operations)
@@ -468,7 +468,7 @@ class RunRecipeDialog(QDialog):
         dest = QHBoxLayout()
         self.destination_label = QLabel(); self.destination_label.setTextFormat(Qt.PlainText)
         self.destination_label.setWordWrap(True)
-        self.choose_destination = QPushButton(QIcon.fromTheme('folder-open'), 'Choose Output Directory…')
+        self.choose_destination = QPushButton(QIcon.fromTheme('folder-open'), 'Choose output directory…')
         self.choose_destination.clicked.connect(self.select_destination)
         self.choose_destination.setVisible(bool(recipe and recipe['destination'].get('ask')))
         self.destination_label.setText('Destination: ' + self.destination_description() if recipe else 'Choose a recipe to inspect its destination.')
@@ -479,7 +479,7 @@ class RunRecipeDialog(QDialog):
         layout.addWidget(self.preflight_busy)
         self.diagnostics = QPlainTextEdit(); self.diagnostics.setReadOnly(True); self.diagnostics.setMaximumHeight(100)
         layout.addWidget(self.diagnostics)
-        self.fix_recipe_button=QPushButton('Fix Recipe…'); self.fix_recipe_button.setAccessibleName('Fix recipe: choose a Photoshop output format')
+        self.fix_recipe_button=QPushButton('Fix recipe…'); self.fix_recipe_button.setAccessibleName('Fix recipe: choose a Photoshop output format')
         self.fix_recipe_button.clicked.connect(self.fix_recipe); self.fix_recipe_button.hide(); layout.addWidget(self.fix_recipe_button)
         self.warning_view = WarningView(); layout.addWidget(self.warning_view)
         safety = QLabel('Originals are never overwritten. KIM6 saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
@@ -522,16 +522,16 @@ class RunRecipeDialog(QDialog):
             start = str(preferred) if preferred.is_dir() else (QStandardPaths.writableLocation(QStandardPaths.PicturesLocation) or str(Path.home()))
         if not Path(start).is_dir(): start = str(Path.home())
         extensions = set(re.findall(r'\*\.([a-zA-Z0-9]+)', self._input_filters[0]))
-        paths = choose_images(self, start, title='Add Images',
+        paths = choose_images(self, start, title='Add images',
                               extensions=extensions or RECIPE_IMAGE_EXTENSIONS,
-                              accept_label='Add Images')
+                              accept_label='Add images')
         self.add_files(paths)
         self.update_summary()
 
     def input_filters_finished(self):
         worker,self.filters_worker=self.filters_worker,None
         self._input_filters=worker.filters; worker.deleteLater()
-        self.add_photos.setText('Add Images…'); self.update_file_actions()
+        self.add_photos.setText('Add images…'); self.update_file_actions()
         if self._closing: self.finish_close_if_idle(); return
         pending,self._pending_picker=self._pending_picker,False
         if pending and self.worker is None and self.editor_dialog is None: self.pick_files()
@@ -616,7 +616,7 @@ class RunRecipeDialog(QDialog):
 
     def clear_files(self):
         if self.worker is not None or (not self.files and self.add_worker is None): return
-        if QMessageBox.question(self, 'Clear List', 'Remove all pending files from this job?',
+        if QMessageBox.question(self, 'Clear list', 'Remove all pending files from this job?',
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self.replace_files([])
 
@@ -633,7 +633,7 @@ class RunRecipeDialog(QDialog):
         for index, (original, effective) in enumerate(zip(self.recipe['steps'], self.execution_recipe['steps']), 1):
             label, details = media.operation_details(effective)
             enabled = original.get('enabled', True)
-            item = QTreeWidgetItem([f'{index}. {label} — ' + ('Enabled' if enabled else 'Disabled')])
+            item = QTreeWidgetItem([f'{index}. {label}: ' + ('Enabled' if enabled else 'Disabled')])
             definitions = media.operation_definitions()[original['op']]['parameters']
             for (key, spec), (name, value) in zip(definitions.items(), details):
                 if spec.get('settings_key'):
@@ -785,7 +785,7 @@ class RunRecipeDialog(QDialog):
             self.summary.setText('Waiting for recipe selection'); return
         self.summary.setText(file_count(len(self.files)) + ' selected; inspecting…')
         if not self.files:
-            self.summary.setText('0 files selected; use Add Images or drop images here.'); return
+            self.summary.setText('0 files selected; use Add images or drop images here.'); return
         worker = PreflightWorker(self.execution_recipe, self.files, self.chosen, self.binding_error, self,checked_inputs=self.checked_inputs)
         worker.generation = self.generation
         self.preflight_worker = worker
@@ -793,7 +793,7 @@ class RunRecipeDialog(QDialog):
         worker.inspected.connect(self.inspected)
         worker.stage_changed.connect(self.preflight_stage)
         worker.finished.connect(self.preflight_finished)
-        self.preflight_busy.show(); self.preflight_clock.start(); self.cancel_button.setText('Cancel All')
+        self.preflight_busy.show(); self.preflight_clock.start(); self.cancel_button.setText('Cancel all')
         worker.start()
 
     @Slot(str,int,int)
@@ -807,7 +807,7 @@ class RunRecipeDialog(QDialog):
         if self.sender().generation != self.generation or self._closing or not self.preflight_active: return
         source,index,total,_,started=self.preflight_active
         self.preflight_active=(source,index,total,message,started)
-        self.inputs.topLevelItem(index-1).setText(1,'Inspecting — '+message)
+        self.inputs.topLevelItem(index-1).setText(1,'Inspecting: '+message)
         self.refresh_preflight_status()
 
     def refresh_preflight_status(self):
@@ -909,8 +909,8 @@ class RunRecipeDialog(QDialog):
         self.run_button.setEnabled(False); self.choose_destination.setEnabled(False)
         self.selector.setEnabled(False); self.search.setEnabled(False); self.create_button.setEnabled(False)
         self.add_photos.setEnabled(False); self.remove_selected.setEnabled(False); self.clear_list.setEnabled(False); self.inputs.setEnabled(False)
-        self.job_status = JobStatus(self.operation_title or 'Run Recipe',len(self.files))
-        self.progress = JobProgressDialog(('Applying ' + self.operation_title + '…') if self.operation_title else 'Running recipe…', 'Cancel All', 0, len(self.files), self)
+        self.job_status = JobStatus(self.operation_title or 'Run recipe',len(self.files))
+        self.progress = JobProgressDialog(('Applying ' + self.operation_title + '…') if self.operation_title else 'Running recipe…', 'Cancel all', 0, len(self.files), self)
         self.progress.setWindowModality(Qt.WindowModal); self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False); self.progress.setAutoReset(False)
         recipe, files, chosen = self.validated_snapshot
@@ -921,7 +921,7 @@ class RunRecipeDialog(QDialog):
         self.worker.item_finished.connect(self.execution_item)
         self.worker.stage_changed.connect(self.execution_stage)
         self.worker.finished.connect(self.execution_finished)
-        self.cancel_button.setText('Cancel All')
+        self.cancel_button.setText('Cancel all')
         self.worker.start()
 
     @Slot(str, int)
@@ -1007,5 +1007,5 @@ def launch_run(recipe_id, files):
         dialog.exec()
         return 0
     except (OSError, RecipeError, UnicodeError) as exc:
-        QMessageBox.critical(None, 'Run Recipe', str(exc))
+        QMessageBox.critical(None, 'Run recipe', str(exc))
         return 1

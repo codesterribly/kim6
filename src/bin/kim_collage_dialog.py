@@ -45,7 +45,7 @@ def main():
     app = QApplication.instance() or QApplication(sys.argv)
     # KIM6_COLLAGE_ORDERED_SELECTION_V1
     dialog = OrderedImageDialog()
-    dialog.setWindowTitle("KIM6 — Create Collage")
+    dialog.setWindowTitle("KIM6 - Create collage")
     dialog.setMinimumWidth(680)
     dialog.resize(780, 760)
 

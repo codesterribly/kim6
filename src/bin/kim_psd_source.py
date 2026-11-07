@@ -252,7 +252,7 @@ if __name__ == '__main__':
                 log.write(str(exc) + '\n')
             if os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'):
                 try:
-                    subprocess.run(['kdialog', '--title', 'KIM6 — PSD source', '--passivepopup', str(exc), '12'],
+                    subprocess.run(['kdialog', '--title', 'KIM6 - PSD source', '--passivepopup', str(exc), '12'],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
                 except (OSError, subprocess.TimeoutExpired):
                     pass

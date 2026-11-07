@@ -307,7 +307,7 @@ def main():
         def close_collage():
             dialog = QApplication.activeModalWidget()
             try:
-                assert dialog.windowTitle() == 'KIM6 — Create Collage'
+                assert dialog.windowTitle() == 'KIM6 - Create collage'
             except BaseException as exc:
                 errors.append(exc)
             dialog.reject()

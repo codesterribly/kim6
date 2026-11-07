@@ -22,7 +22,7 @@ def identity(path):
     elif not stat.S_ISREG(info.st_mode): reason = 'is not a regular file'
     elif info.st_nlink != 1: reason = 'has ' + str(info.st_nlink) + ' hard links'
     else: reason = None
-    if reason: raise ValueError(str(path) + ' — ' + reason + '. Select an independent regular file.')
+    if reason: raise ValueError(str(path) + ': ' + reason + '. Select an independent regular file.')
     return [info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns,info.st_mode,info.st_uid,info.st_gid]
 
 
@@ -764,10 +764,10 @@ def qt_classes():
                 }[plan['config']['kind']]
 
             elif operation == 'convert':
-                name += ' — ' + plan['config']['format'].upper()
+                name += ' - ' + plan['config']['format'].upper()
 
             elif operation == 'strip':
-                name += ' — ' + {
+                name += ' - ' + {
                     'gps': 'Remove GPS Coordinates',
                     'ai': 'Remove AI Metadata',
                     'all': 'Remove Descriptive Metadata',
@@ -787,7 +787,7 @@ def qt_classes():
                 )
 
             summary = (
-                f'{name} — {policy}\n'
+                f'{name}: {policy}\n'
                 f'Selected: {plan["total"]}   '
                 f'Ready: {ready}   '
                 f'Skipped: {skipped}   '
@@ -1014,9 +1014,9 @@ def qt_classes():
             self.pending = False
 
             self.setWindowTitle(
-                'KIM6 — Remove Metadata'
+                'KIM6 - Remove Metadata'
                 if spec['operation'] == 'strip'
-                else 'Preview Changes'
+                else 'Preview changes'
             )
 
             layout = QVBoxLayout(self)
@@ -1069,7 +1069,7 @@ def qt_classes():
             button_row = QHBoxLayout()
             button_row.addStretch(1)
 
-            self.apply = QPushButton('Apply Changes')
+            self.apply = QPushButton('Apply changes')
             self.apply.setEnabled(False)
             self.apply.clicked.connect(self.accept)
             button_row.addWidget(self.apply)

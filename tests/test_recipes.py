@@ -161,16 +161,35 @@ class RecipeContracts(unittest.TestCase):
             self.assertEqual((base/'out_3.jpg').read_bytes(), b'new')
 
     def test_install_registration(self):
-        for filename in ('install.sh', 'uninstall.sh'):
-            data = (ROOT/filename).read_text()
-            for relative in ('bin/kim_recipe_core.py', 'bin/kim_recipe_image.py',
-                             'bin/kim_recipe_dialog.py', 'recipes/builtins.json', 'kim_recipes.desktop'):
-                self.assertIn(relative, data)
-            self.assertIn('"$RUNTIME/recipes"', data)
-        self.assertIn('Exec=kim_all recipe --choose -- %F', (ROOT/'src/kim_recipes.desktop.in').read_text())
-        self.assertIn('kim_recipe_core.py', (ROOT/'src/bin/kim_all').read_text())
-        for r in core.builtins(): core.validate(r)
+        inventory = (ROOT / 'install_inventory.sh').read_text()
 
+        for filename in ('install.sh', 'uninstall.sh'):
+            data = (ROOT / filename).read_text()
+            self.assertIn(
+                'source "$SOURCE_DIR/install_inventory.sh"', data
+            )
+            self.assertIn('runtime_files', data)
+            self.assertIn('"$RUNTIME/recipes"', data)
+
+        for relative in (
+            'bin/kim_recipe_core.py',
+            'bin/kim_recipe_image.py',
+            'bin/kim_recipe_dialog.py',
+            'recipes/builtins.json',
+            'kim_recipes.desktop',
+        ):
+            self.assertIn(relative, inventory)
+
+        self.assertIn(
+            'Exec=kim_all recipe --choose -- %F',
+            (ROOT / 'src/kim_recipes.desktop.in').read_text()
+        )
+        self.assertIn(
+            'kim_recipe_core.py',
+            (ROOT / 'src/bin/kim_all').read_text()
+        )
+        for recipe in core.builtins():
+            core.validate(recipe)
 
 @unittest.skipUnless(shutil.which('magick') and shutil.which('exiftool'), 'ImageMagick and ExifTool required')
 class RealRecipeTests(unittest.TestCase):
@@ -423,7 +442,7 @@ class RealRecipeTests(unittest.TestCase):
         self.assertNotIn('Must disappear', summary)
         self.assertNotIn('Copyright 2020', summary)
         self.assertIn('Final creator', summary)
-        self.assertIn('Capture time: absent', summary)
+        self.assertIn('Image capture time: absent', summary)
         self.assertIn('Output timestamp: 2020-01-03', summary)
         self.assertEqual(row.properties['compressed_size'], 'unknown')
         result = core.execute(r, [self.source])
@@ -471,13 +490,13 @@ class RealRecipeTests(unittest.TestCase):
         row = core.preview(r, [self.source])[0]
         self.assertEqual((row.format, row.properties['width'], row.properties['height']), ('jpeg', 40, 20))
         self.assertTrue(row.output.endswith('source_recipe.jpg'))
-        self.assertIn('Capture time: 2020-', '; '.join(row.metadata))
+        self.assertIn('Image capture time: 2020-', '; '.join(row.metadata))
         result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
         self.assertEqual(Path(result[0]['output']).read_bytes(), self.before)
         for step in steps: step['enabled'] = True
         row = core.preview(r, [self.source])[0]
         self.assertEqual((row.format, row.properties['width'], row.properties['height']), ('png', 20, 10))
-        self.assertIn('Capture time: absent', row.metadata)
+        self.assertIn('Image capture time: absent', row.metadata)
         occupied = self.base/'source_custom.png'; occupied.write_bytes(b'occupied')
         result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
         self.assertTrue(result[0]['output'].endswith('source_custom_1.png'))
@@ -531,7 +550,7 @@ class RealRecipeTests(unittest.TestCase):
             row = core.preview(r, [self.source])[0]
             self.assertFalse(row.problems, row.problems)
             self.assertIn('Copyright 2019 Example', '; '.join(row.metadata))
-            self.assertIn('Capture time: absent', row.metadata)
+            self.assertIn('Image capture time: absent', row.metadata)
             result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
             actual = selected_metadata(Path(result[0]['output']), tags + private)
             self.assertEqual(actual['EXIF:Copyright'], 'Copyright 2019 Example')
@@ -558,7 +577,7 @@ class RealRecipeTests(unittest.TestCase):
             subprocess.run(['magick', '-size', '4x2', 'xc:red', str(missing_date)], check=True)
             with patch.dict(os.environ, {'KIM_COPYRIGHT_NOTICE': 'Copyright {YEAR}'}):
                 row = core.preview(recipe([{'op': 'metadata.strip_all'}, {'op': 'metadata.copyright_notice'}]), [missing_date])[0]
-                self.assertIn('needs a capture date', row.problems[0])
+                self.assertIn('needs an image capture date', row.problems[0])
         self.assert_original()
 
     def test_disabled_auto_orient_keeps_strip_guard(self):
@@ -673,9 +692,9 @@ class RecipePackagingTests(unittest.TestCase):
                 menu = helper.prefix/'kim_recipes.desktop'
                 self.assertIn('recipe --choose -- %F', menu.read_text())
                 self.assertIn('Actions=KIMRecipe0Run;KIMRecipe1Editor;', menu.read_text())
-                self.assertIn('X-KDE-Submenu=KIM6 Recipes', menu.read_text())
+                self.assertIn('X-KDE-Submenu=KIM6 - Recipes', menu.read_text())
                 self.assertNotIn('X-KDE-Priority', menu.read_text())
-                self.assertNotIn('Choose Saved Recipe', menu.read_text())
+                self.assertIn('Name=Choose Saved Recipe…', menu.read_text())
                 command = ['bash', str(helper.runtime/'bin/kim_all'), 'recipe', '--list']
                 result = subprocess.run(command, capture_output=True, text=True, env=helper.env)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -906,7 +925,7 @@ app = QApplication([])
 def planned(recipe, files, **kwargs):
     return [PreviewRow(files[0], '/photos/Web/' + files[0].split('/')[-1], 'image', 'jpeg',
         {'width': 1600, 'height': 800, 'original_width': 2000, 'original_height': 1000, 'quality': 95},
-        ['Capture time: absent', 'GPS: absent', 'ICC: sRGB pixels; ICC profile stripped'])]
+        ['Image capture time: absent', 'GPS: absent', 'ICC: sRGB pixels; ICC profile stripped'])]
 with patch('kim_recipe_dialog.preview', side_effect=planned) as preview:
     w = RecipeWidget(files=['/photos/first.jpg', '/photos/second.jpg'])
     w.resize(1150, 820); w.show(); app.processEvents(); _wait_for_preview(w)
@@ -969,7 +988,7 @@ assert values()['Output dimensions'].startswith('2000 × 1000')
 w.steps.item(4).setCheckState(Qt.Unchecked); w.update_preview()
 assert values()['ICC'] == 'sRGB ICC'
 w.steps.item(2).setCheckState(Qt.Unchecked); w.update_preview()
-assert values()['ICC'] == 'Not included — no input profile detected'
+assert values()['ICC'] == 'Not included: no input profile detected'
 w.steps.item(1).setCheckState(Qt.Checked); w.update_preview()
 assert values()['Output dimensions'].startswith('1600 × 800')
 assert sample.read_bytes() == before
@@ -1143,7 +1162,7 @@ app = QApplication([])
 with patch('kim_recipe_dialog.preview', return_value=[]):
     w = RecipeWidget(files=['/photos/Photo One.jpg', '/photos/Photo Two.jpg'])
     w.resize(1180, 850); w.show(); app.processEvents()
-    assert w.example_label.text() == 'Example photo (preview only)'
+    assert w.example_label.text() == 'Example image (preview only)'
     assert w.example_selector.currentText() == 'Photo One.jpg'
     assert isinstance(w.move_up, QToolButton) and isinstance(w.move_down, QToolButton)
     assert w.move_up.text() == '' and w.move_down.text() == ''

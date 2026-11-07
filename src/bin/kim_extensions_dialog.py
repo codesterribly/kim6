@@ -150,7 +150,7 @@ def run_dialog(result_file, inputs):
     class Inspector(QDialog):
         def __init__(self):
             super().__init__(); self.worker = None; self.rows = []; self.closing = False
-            self.setWindowTitle(tr('KIM6 — Check & Correct Extensions')); self.resize(960, 540)
+            self.setWindowTitle(tr('KIM6 - Check and correct extensions')); self.resize(960, 540)
             layout = QVBoxLayout(self)
             self.note = QLabel(tr('Read-only inspection. Unknown format does not mean corrupt. Folder scans are nonrecursive.'))
             self.note.setWordWrap(True); layout.addWidget(self.note)
@@ -173,10 +173,10 @@ def run_dialog(result_file, inputs):
 
             layout.addWidget(self.table)
             actions = QHBoxLayout(); layout.addLayout(actions)
-            self.folder = QPushButton(tr('Choose Folder…')); self.folder.clicked.connect(self.choose_folder)
-            self.stop = QPushButton(tr('Cancel Scan')); self.stop.setEnabled(False)
+            self.folder = QPushButton(tr('Choose folder…')); self.folder.clicked.connect(self.choose_folder)
+            self.stop = QPushButton(tr('Cancel scan')); self.stop.setEnabled(False)
             self.stop.clicked.connect(self.cancel_scan)
-            self.copy = QPushButton(tr('Create Correctly Named Copies')); self.copy.setEnabled(False)
+            self.copy = QPushButton(tr('Create correctly named copies')); self.copy.setEnabled(False)
             self.copy.clicked.connect(self.create)
             close = QPushButton(tr('Close')); close.clicked.connect(self.reject)
             for button in (self.folder, self.stop, self.copy, close): actions.addWidget(button)
@@ -184,7 +184,7 @@ def run_dialog(result_file, inputs):
             else: self.note.setText(tr('Select a folder to inspect. No originals will be changed.'))
 
         def choose_folder(self):
-            path = QFileDialog.getExistingDirectory(self, tr('Choose Folder'), options=
+            path = QFileDialog.getExistingDirectory(self, tr('Choose folder'), options=
                                                     QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
             if path: self.start([path])
 
@@ -244,7 +244,7 @@ def confirm_plan(path):
         QTableWidget, QTableWidgetItem, QHeaderView, QDialogButtonBox, QAbstractItemView)
     fields = [os.fsdecode(field) for field in Path(path).read_bytes().split(b'\0')[:-1]]
     app = QApplication(sys.argv[:1]); dialog = QDialog(); dialog.resize(900, 440)
-    dialog.setWindowTitle(tr('Create Correctly Named Copies'))
+    dialog.setWindowTitle(tr('Create correctly named copies'))
     layout = QVBoxLayout(dialog)
     note = QLabel(tr('Review every destination. Originals will be kept. Existing destinations will never be replaced; a changed or occupied destination will fail safely.'))
     note.setWordWrap(True); layout.addWidget(note)
@@ -256,7 +256,7 @@ def confirm_plan(path):
         for column in range(2): table.setItem(row, column, QTableWidgetItem(fields[row*3+column]))
     layout.addWidget(table)
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-    buttons.button(QDialogButtonBox.Ok).setText(tr('Create Copies'))
+    buttons.button(QDialogButtonBox.Ok).setText(tr('Create copies'))
     buttons.accepted.connect(dialog.accept); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
     return 0 if dialog.exec() == QDialog.Accepted else 1
 

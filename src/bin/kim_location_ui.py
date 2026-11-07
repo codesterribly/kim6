@@ -91,7 +91,7 @@ def open_camera_map(parent, info):
         if not QDesktopServices.openUrl(url):
             raise ValueError('The default browser could not be opened. Check your desktop’s default browser setting, or use Copy Coordinates to open the location yourself.')
     except (ValueError, RuntimeError) as exc:
-        QMessageBox.warning(parent, 'View on Map', str(exc))
+        QMessageBox.warning(parent, 'View on map', str(exc))
 
 
 def is_reference(entry, config):
@@ -256,7 +256,7 @@ def reference_caption(path, data, units):
     if data.get('error'): return name + '\nGPS information could not be read'
     try:
         raw = data['raw']; info = summarize(raw)
-        lines = [name, 'Camera GPS present — ' + position_text(info['position']) if info['position'] else ('Camera coordinates need review' if info['categories']['camera']['issues'] else 'No camera coordinates recorded')]
+        lines = [name, 'Camera GPS present: ' + position_text(info['position']) if info['position'] else ('Camera coordinates need review' if info['categories']['camera']['issues'] else 'No camera coordinates recorded')]
         try:
             altitude = optional_gps(raw, 'GPSAltitude', -12000, 100000)
             lines.append('Altitude: ' + (height(altitude, units) if altitude is not None else 'not recorded'))
@@ -298,7 +298,7 @@ def location_sections(entry, units, technical=False):
     for r in info['records']:
         group = 'GPS location' if r['category'] == 'camera' else 'Other locations depicted or described'
         rendered = position_text(r['position'])
-        if r['issues']: rendered += ' — ' + '; '.join(r['issues'])
+        if r['issues']: rendered += ': ' + '; '.join(r['issues'])
         if r['category'] != 'camera': rendered = COORDINATE_CATEGORIES[r['category']] + ': ' + rendered
         if rendered not in groups[group]: groups[group].append(rendered)
         if r['stored_digits']:
@@ -309,7 +309,7 @@ def location_sections(entry, units, technical=False):
     # semantic context. The complete unchanged source fields are available below.
     flat = dict(leaves(info['fields']))
     for key, value in flat.items():
-        label = COORDINATE_CATEGORIES[coordinate_category(key)] + ' — ' + friendly_field(key)
+        label = COORDINATE_CATEGORIES[coordinate_category(key)] + ' - ' + friendly_field(key)
         if 'Altitude' in key or 'Direction' in key or any(t in key for t in ('GPSSpeed', 'GPSDestDistance', 'GPSTrack')):
             rendered = value_text(value)
             if key.endswith('Altitude'):
@@ -391,7 +391,7 @@ def recorded_location_rows(info, units):
                 text = f'{value:g}° from ' + ('true north' if ref == 'T' else 'magnetic north')
             rows.append((label, text))
         except ValueError:
-            rows.append((label, 'Recorded, but needs review — see Technical Metadata'))
+            rows.append((label, 'Recorded, but needs review: see Technical Metadata'))
     if info['places']: rows.append(('Place names in file', places_text(info)))
     others = [COORDINATE_CATEGORIES[r['category']] + ': ' + position_text(r['position'])
               for r in info['records'] if r['category'] != 'camera' and r['position'] is not None and not r['issues']]
@@ -407,7 +407,7 @@ def recorded_location_rows(info, units):
         additional.append('Position measurement information recorded')
     coordinate_fields = {'GPSLatitude', 'GPSLatitudeRef', 'GPSLongitude', 'GPSLongitudeRef', 'GPSVersionID', 'GPSMapDatum'}
     if not rows and not additional and any(key.split(':')[-1] not in coordinate_fields for key in flat):
-        additional.append('Other location information recorded — see Technical Metadata')
+        additional.append('Other location information recorded: see Technical Metadata')
     if additional: rows.append(('Additional information', '\n'.join(additional)))
     return rows
 
@@ -420,10 +420,10 @@ def inspection_warning(entry):
         for category, data in info['categories'].items():
             if data['issues']:
                 warnings.append((camera_status(info) if category == 'camera' else
-                                 COORDINATE_CATEGORIES[category] + ' needs review') + ' — see Technical Metadata')
+                                 COORDINATE_CATEGORIES[category] + ' needs review') + ': see Technical Metadata')
             if data['optional_issues']:
                 warnings.append(COORDINATE_CATEGORIES[category] + ': additional location information needs review')
-        if info['duplicate_records']: warnings.append('Duplicate location records — see Technical Metadata')
+        if info['duplicate_records']: warnings.append('Duplicate location records: see Technical Metadata')
     warnings.extend(w for w in entry.get('warnings', []) if not info or w not in info['issues'])
     return '\n'.join(dict.fromkeys(warnings))
 
@@ -534,7 +534,7 @@ def metadata_display_rows(values):
     for value in values:
         label, separator, text = value.partition(': ')
         if not separator: label, text = 'Information', value
-        label = label.removeprefix(COORDINATE_CATEGORIES['camera'] + ' — ')
+        label = label.removeprefix(COORDINATE_CATEGORIES['camera'] + ' - ')
         label = {'Date Stamp': 'GPS date', 'Time Stamp': 'GPS time',
                  'Recorded image direction': 'Image direction (degrees)'}.get(label, label)
         rows.append((label, text))
@@ -566,12 +566,12 @@ def metadata_summary_sections(entry, sections):
     changes = []
     for label, value in metadata_display_rows(evidence.get('Altitude, direction and movement', [])):
         if label == 'New altitude': changes.append((label, value))
-        elif ' — ' in label: other.append((label, value))
+        elif ' - ' in label: other.append((label, value))
         else: camera.append((label, value))
     result.append(('GPS location', camera))
     if other: result.append(('Other location information', other))
     quality = [('Coordinate interpretation', camera_status(info))] if info['position'] is not None else []
-    warning = inspection_warning(entry).replace(' — see Technical Metadata', '')
+    warning = inspection_warning(entry).replace(': see Technical Metadata', '')
     if info['duplicate_records']:
         warning = '\n'.join(line for line in warning.splitlines() if line != 'Duplicate location records')
     if warning: quality.append(('Review', warning))

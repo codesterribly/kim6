@@ -36,7 +36,7 @@ class JobStatus:
     def label(self):
         ok,failed,cancelled,skipped,remaining=self.counts()
         stage='Cancelling current operation…' if self.cancelling else self.stage
-        return (f'{self.action} — file {self.index} of {self.total}: {Path(self.source).name}\n'
+        return (f'{self.action}: file {self.index} of {self.total}: {Path(self.source).name}\n'
                 f'{self.source}\n{stage}\nSucceeded: {ok}; failed: {failed}; cancelled: {cancelled}; skipped: {skipped}; remaining: {remaining}')
 
 
@@ -99,7 +99,7 @@ def completion_dialog(action, outputs, groups):
     from PySide6.QtCore import QUrl, Qt
     from PySide6.QtGui import QDesktopServices
     from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QPlainTextEdit,QLayout,QSizePolicy)
-    dialog=QDialog(); dialog.setWindowTitle('KIM6 — '+action)
+    dialog=QDialog(); dialog.setWindowTitle('KIM6 - '+action)
     dialog.setModal(False); layout=QVBoxLayout(dialog)
     # Hidden diagnostics must contribute no initial size. Qt's intrinsic layout
     # then gives the same compact geometry before and after every expansion.
@@ -196,7 +196,7 @@ def show_shell_warnings(directory, disclosed=None):
         return
     from PySide6.QtWidgets import QApplication,QDialog,QVBoxLayout,QDialogButtonBox
     from kim_recipe_run import WarningView
-    app=QApplication.instance() or QApplication([]); dialog=QDialog(); dialog.setWindowTitle('KIM6 — Source notices')
+    app=QApplication.instance() or QApplication([]); dialog=QDialog(); dialog.setWindowTitle('KIM6 - Source notices')
     layout=QVBoxLayout(dialog); view=WarningView(); view.set_rows(rows); layout.addWidget(view)
     buttons=QDialogButtonBox(QDialogButtonBox.Close); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
     dialog.resize(660,220); dialog.exec()
@@ -212,7 +212,7 @@ def compression_result(path):
     ok, failed, cancelled, skipped, original, output, measured = map(int, fields[:7])
     settings, stopped = fields[7:9]
     if stopped == 'true' or cancelled:
-        heading = tr('Compression cancelled — successfully saved results were kept')
+        heading = tr('Compression cancelled. Successfully saved results were kept')
     elif failed and not ok:
         heading = tr('Compression failed')
     elif failed or skipped:
@@ -250,7 +250,7 @@ def compression_result(path):
     from PySide6.QtWidgets import QApplication, QMessageBox
     app = QApplication.instance() or QApplication([])
     dialog = QMessageBox()
-    dialog.setWindowTitle(tr('KIM6 — Compression results'))
+    dialog.setWindowTitle(tr('KIM6 - Compression results'))
     dialog.setTextFormat(Qt.PlainText)
     dialog.setText(message)
     if details: dialog.setDetailedText(details)

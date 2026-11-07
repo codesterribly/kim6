@@ -52,14 +52,14 @@ class LocationDialog(QDialog):
         self.apply_button = None; self.candidate_items = {}; self.thumbnail_stamps = {}; self.thumbnail_icons = {}
         self.visual_source = ''; self.usable_reference_paths = []
         self.pending_reference_choice = ''
-        self.setWindowTitle('KIM6 — ' + TITLES[kind].rstrip('…'))
+        self.setWindowTitle('KIM6 - ' + TITLES[kind].rstrip('…'))
         available = self.screen().availableGeometry()
         self.resize(min(1120, available.width()*9//10), min(760, available.height()*9//10))
         layout = QVBoxLayout(self)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(350)
         self.timer.timeout.connect(self.start_plan)
         top = QHBoxLayout()
-        title = QLabel('Inspect Location Metadata — read only' if kind == 'report' else TITLES[kind].rstrip('…'))
+        title = QLabel('Inspect location metadata - Read only' if kind == 'report' else TITLES[kind].rstrip('…'))
         font = title.font(); font.setBold(True); title.setFont(font); top.addWidget(title, 1)
         measurement_label = QLabel('&Units:'); top.addWidget(measurement_label)
         self.unit_choice = QComboBox()
@@ -89,7 +89,7 @@ class LocationDialog(QDialog):
         if kind == 'apply': self.source_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         if kind != 'report': visual_layout.insertWidget(0, self.controls, 0, Qt.AlignTop)
         destination_actions = QHBoxLayout()
-        self.add_images = QPushButton(QIcon.fromTheme('list-add'), 'Add Images…')
+        self.add_images = QPushButton(QIcon.fromTheme('list-add'), 'Add images…')
         self.add_images.clicked.connect(self.add_destinations); self.add_images.setVisible(self.selection_only)
         destination_actions.addWidget(self.add_images)
         self.remove_image = QPushButton(QIcon.fromTheme('list-remove'), 'Remove')
@@ -171,7 +171,7 @@ class LocationDialog(QDialog):
         self.detail_source = ''
         detail_actions = QHBoxLayout()
         self.details_copy = QToolButton(); self.details_copy.setIcon(QIcon.fromTheme('edit-copy'))
-        self.details_copy.setText('Copy Coordinates'); self.details_copy.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.details_copy.setText('Copy coordinates'); self.details_copy.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.details_copy.setToolTip('Copy camera coordinates from the image named in Technical Metadata')
         self.details_copy.setEnabled(False); self.details_copy.clicked.connect(self.copy_detail_coordinates)
         detail_actions.addWidget(self.details_copy); self.details_copy.setVisible(kind != 'report')
@@ -196,12 +196,12 @@ class LocationDialog(QDialog):
             self.buttons.rejected.connect(self.reject)
             buttons_row.addWidget(self.buttons)
         else:
-            policy_text = 'Choose output policy after source selection.' if self.selection_only else 'Create new images; originals unchanged.' if self.policy == 'create' else 'Replace reviewed originals — explicitly approved.'
+            policy_text = 'Choose output policy after source selection.' if self.selection_only else 'Create new images; originals unchanged.' if self.policy == 'create' else 'Replace reviewed originals: explicitly approved.'
             policy_label = self.label(policy_text); layout.addWidget(policy_label)
 
             self.apply_button = QPushButton(
                 QIcon.fromTheme('dialog-ok-apply', self.style().standardIcon(QStyle.SP_DialogApplyButton)),
-                'Preview Changes…' if self.selection_only else 'Apply Changes'
+                'Review changes…' if self.selection_only else 'Apply changes'
             )
             self.apply_button.setEnabled(False)
             self.apply_button.clicked.connect(self.accept)
@@ -289,7 +289,7 @@ class LocationDialog(QDialog):
         self.fit_method_page()
 
     def add_candidate(self, path):
-        self.candidates.addItem(self.placeholder_icon, Path(path).name + ' — Reading GPS…', path)
+        self.candidates.addItem(self.placeholder_icon, Path(path).name + ': Reading GPS coordinates…', path)
         item = self.candidates.model().item(self.candidates.count() - 1)
         item.setToolTip(path); self.candidate_items[path] = item
         return item
@@ -565,7 +565,7 @@ class LocationDialog(QDialog):
 
     def reference_instruction(self):
         if self.reference:
-            if not self.destination_count(): return 'No destination images. Add Images, or select destination images in Dolphin.'
+            if not self.destination_count(): return 'No destination images. Add images, or select destination images in Dolphin.'
             return 'The GPS source supplies coordinates; no output is created for it.'
         usable = self.usable_reference_paths
         if len(usable) > 1: return 'Several images have camera GPS. Choose which image supplies the location.'
@@ -584,7 +584,7 @@ class LocationDialog(QDialog):
                 if path not in self.files and path not in added: added.append(path)
             if len(self.files) + len(added) > MAX_FILES: raise ValueError(f'Select at most {MAX_FILES} images.')
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, 'Could Not Add Images', str(exc)); return
+            QMessageBox.warning(self, 'Could not add images', str(exc)); return
         for path in added:
             self.files.append(path); self.add_candidate(path); self.thumbnail_queue.append(path)
         if not self.reference: self.initial_reference_checked = False
@@ -595,7 +595,7 @@ class LocationDialog(QDialog):
         path = self.image_list.current_path()
         if not path or path == self.reference and self.uses_reference(): return
         if len(self.files) == 1:
-            QMessageBox.information(self, 'Keep an Image Selected', 'Add another destination before removing this image.'); return
+            QMessageBox.information(self, 'Keep an image selected', 'Add another destination before removing this image.'); return
         self.files.remove(path)
         if path in self.candidate_items:
             item = self.candidate_items.pop(path); self.candidates.removeItem(item.row())
@@ -624,7 +624,7 @@ class LocationDialog(QDialog):
         self.worker.finished.connect(self.on_location_plan_ready); self.worker.start()
 
     def on_location_progress(self, index, total, path):
-        self.summary.setText(f'Reading image locations… {min(index + 1, total)} of {total}' + (' — ' + Path(path).name if Path(path).is_absolute() else ''))
+        self.summary.setText(f'Reading image locations… {min(index + 1, total)} of {total}' + (': ' + Path(path).name if Path(path).is_absolute() else ''))
 
     def on_location_plan_ready(self):
         worker, self.worker = self.worker, None
@@ -739,7 +739,7 @@ class LocationDialog(QDialog):
             if not info or info['position'] is None: raise ValueError('Camera coordinates are unavailable or have changed. Refresh and select an image with unambiguous camera coordinates.')
             QApplication.clipboard().setText(', '.join(repr(value) for value in info['position']))
         except (ValueError, OSError) as exc:
-            QMessageBox.information(self, 'Copy Coordinates', str(exc)); return
+            QMessageBox.information(self, 'Copy coordinates', str(exc)); return
 
     def copy_selected_coordinates(self):
         if self.visual_source: self.copy_camera_coordinates(self.visual_source)
@@ -986,7 +986,7 @@ def show_location_result(result_path, plan_path):
     message, incomplete = location_result_message(plan, ok, failed, cancelled, skipped,
                                                  interrupted, fields[6:6 + count])
     dialog = QMessageBox()
-    dialog.setWindowTitle('KIM6 — Location Results'); dialog.setTextFormat(Qt.PlainText)
+    dialog.setWindowTitle('KIM6 - Location results'); dialog.setTextFormat(Qt.PlainText)
     dialog.setStandardButtons(QMessageBox.Close); dialog.setDefaultButton(QMessageBox.Close)
     dialog.setText(message)
     dialog.setIcon(QMessageBox.Warning if incomplete else QMessageBox.Information)
@@ -997,12 +997,12 @@ def show_location_result(result_path, plan_path):
     folders = {str(Path(path).parent) for path in saved}
     if plan['policy'] == 'create' and len(folders) == 1:
         folder = folders.pop()
-        open_folder = dialog.addButton('Open Output Folder', QMessageBox.ActionRole)
+        open_folder = dialog.addButton('Open output folder', QMessageBox.ActionRole)
         open_folder.setIcon(QIcon.fromTheme('folder-open'))
         open_folder.setToolTip(folder)
         def reveal_output():
             if not QDesktopServices.openUrl(QUrl.fromLocalFile(folder)):
-                QMessageBox.warning(None, 'Open Output Folder', 'The file manager could not be opened. Open this folder manually:\n' + folder)
+                QMessageBox.warning(None, 'Open output folder', 'The file manager could not be opened. Open this folder manually:\n' + folder)
         open_folder.clicked.connect(reveal_output)
     dialog.exec()
 

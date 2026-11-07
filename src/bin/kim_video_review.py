@@ -38,7 +38,7 @@ class VideoReview(QDialog):
     def __init__(self, plan, codec, limit, quality, mode, request_path, destination):
         super().__init__()
 
-        self.setWindowTitle("KIM6 — Review Video Conversion")
+        self.setWindowTitle("KIM6 - Review video conversion")
         self.resize(1060, min(760, 300 + 52 * len(plan)))
         self.setMinimumWidth(850)
 
@@ -94,7 +94,7 @@ class VideoReview(QDialog):
         destination_label.setWordWrap(True)
         destination_row.addWidget(destination_label, 1)
         if mode != "overwrite":
-            choose_button = QPushButton("Change Destination…")
+            choose_button = QPushButton("Change destination…")
             choose_button.clicked.connect(lambda: self.choose_destination(destination))
             destination_row.addWidget(choose_button)
             if destination:
@@ -210,7 +210,7 @@ class VideoReview(QDialog):
         )
 
         self.apply = buttons.button(QDialogButtonBox.Ok)
-        self.apply.setText("Apply Changes")
+        self.apply.setText("Apply changes")
 
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

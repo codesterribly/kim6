@@ -571,7 +571,7 @@ def choose_location(parent, initial=None, units='metric'):
         readout = QLabel(); readout.setWordWrap(True); readout.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(readout)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        use = buttons.button(QDialogButtonBox.Ok); use.setText('Use This Location'); use.setAutoDefault(False)
+        use = buttons.button(QDialogButtonBox.Ok); use.setText('Use this location'); use.setAutoDefault(False)
         buttons.button(QDialogButtonBox.Cancel).setAutoDefault(False)
         def update_selection(position):
             use.setEnabled(position is not None)

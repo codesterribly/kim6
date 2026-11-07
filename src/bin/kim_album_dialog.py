@@ -42,7 +42,7 @@ class AlbumDialog(OrderedImageDialog):
         self.captions_by_path = {}
         self.displayed_target = None
 
-        self.setWindowTitle("KIM6 — Create a PDF Album")
+        self.setWindowTitle("KIM6 - Create a PDF album")
         self.setMinimumWidth(680)
         self.resize(780, 780)
 

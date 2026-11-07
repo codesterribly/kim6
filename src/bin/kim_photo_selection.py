@@ -139,7 +139,7 @@ class ImagePicker(QDialog):
     One owned ThumbnailWorker loads visible tiles through read_thumbnail().
     """
 
-    def __init__(self, parent=None, directory='', *, title='Add Images',
+    def __init__(self, parent=None, directory='', *, title='Add images',
                  multiple=True, extensions=None, accept_label='Add Selected Images'):
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -168,7 +168,7 @@ class ImagePicker(QDialog):
         self.path_label = QLineEdit()
         self.path_label.setPlaceholderText("Enter folder path and press Enter")
         self.path_label.setAccessibleName('Current image folder')
-        self.folder_button = QPushButton('Choose Folder…')
+        self.folder_button = QPushButton('Choose folder…')
         location.addWidget(self.up_button)
         location.addWidget(self.path_label, 1)
         location.addWidget(self.folder_button)
@@ -291,7 +291,7 @@ class ImagePicker(QDialog):
             if not folder.is_dir():
                 raise ValueError('Not a folder')
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, 'Cannot Open Folder', str(exc))
+            QMessageBox.warning(self, 'Cannot open folder', str(exc))
             return
         self.timer.stop()
         if self.worker is not None:
@@ -313,7 +313,7 @@ class ImagePicker(QDialog):
             self.path_label.setText(str(self.current_directory or Path.home()))
             self.grid.setEnabled(True)
             self.update_status()
-            QMessageBox.warning(self, 'Cannot Read Folder', str(exc))
+            QMessageBox.warning(self, 'Cannot read folder', str(exc))
             return
         self.current_directory = folder
         self.path_label.setText(str(folder))
@@ -445,7 +445,7 @@ class ImagePicker(QDialog):
             event.accept()
 
 
-def choose_images(parent=None, directory='', *, title='Add Images', multiple=True,
+def choose_images(parent=None, directory='', *, title='Add images', multiple=True,
                   extensions=None, accept_label='Add Selected Images'):
     """Return approved local paths; [] is a normal cancellation."""
     picker = ImagePicker(parent, directory, title=title, multiple=multiple,
@@ -628,7 +628,7 @@ def main():
     from PySide6.QtWidgets import QApplication
 
     parser = argparse.ArgumentParser(description='KIM6 thumbnail image picker')
-    parser.add_argument('--title', default='Add Images')
+    parser.add_argument('--title', default='Add images')
     parser.add_argument('--directory', default='')
     args = parser.parse_args()
     app = QApplication(sys.argv[:1])

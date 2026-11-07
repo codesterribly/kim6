@@ -149,7 +149,7 @@ def metadata(path):
         return dict(capture='', camera='', caption='')
     def first(keys):
         return next((text for key in keys if (text := clean_text(row.get(key)))), '')
-    return dict(capture=first(CAPTURE), camera=' — '.join(filter(None, (first(CAMERA), first(LENS)))),
+    return dict(capture=first(CAPTURE), camera=' - '.join(filter(None, (first(CAMERA), first(LENS)))),
                 caption=first(DESCRIPTION))
 
 
