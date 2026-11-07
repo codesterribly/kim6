@@ -324,7 +324,14 @@ def main():
 
         from kim_preview import save_plan
 
-        save_plan(result + '.approved', dialog.plan)
+        approved = (
+            dialog.approved_plan
+            if kind == 'unified'
+            else dialog.plan
+        )
+        if approved is None:
+            raise ValueError('No approved date changes.')
+        save_plan(result + '.approved', approved)
         Path(result).write_text(json.dumps(dialog.config()))
         return 0
 

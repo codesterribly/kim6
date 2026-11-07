@@ -509,6 +509,33 @@ def verify_plan(plan):
     for entry in plan['entries']: verify_entry(entry)
 
 
+def date_approval_plan(plan):
+    """Exclude blocked date rows before verified publication.
+
+    Never convert a blocked row into an executable change or
+    fabricate its source identity or destination snapshot.
+    """
+    import copy
+
+    if plan.get('operation') != 'date':
+        raise ValueError('Expected a Set Dates plan.')
+
+    approved = copy.deepcopy(plan)
+    approved['entries'] = [
+        entry for entry in plan['entries']
+        if entry['status'] in ('change', 'skip')
+    ]
+
+    if not any(
+        entry['status'] == 'change'
+        for entry in approved['entries']
+    ):
+        raise ValueError('No eligible date changes to apply.')
+
+    verify_plan(approved)
+    return approved
+
+
 def save_plan(path,plan):
     verify_plan(plan); Path(path).write_text(json.dumps(plan,ensure_ascii=True))
 
@@ -1259,6 +1286,16 @@ def main():
                 from kim_location import verify_dependencies
                 verify_dependencies(plan)
             target=absolute(args[0]); entry=next(e for e in plan['entries'] if e.get('target')==target); verify_entry(entry)
+        elif command == 'sources':
+            if plan.get('operation') != 'date':
+                raise ValueError('Expected a Set Dates approval.')
+            verify_plan(plan)
+            sys.stdout.buffer.write(
+                b''.join(
+                    os.fsencode(entry['source']) + bytes([0])
+                    for entry in plan['entries']
+                )
+            )
         elif command == 'entry':
             # One pre-item observation; publication guards still reload the plan.
             if plan.get('operation') == 'location':

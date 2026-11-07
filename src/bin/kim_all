@@ -5072,6 +5072,24 @@ action_resize() {
       resize_review_result=$?
     fi
 
+    if [ "$resize_review_result" -eq 131 ]; then
+      # Back: reopen the parameter editor using the geometry
+      # already approved in stage one. Keep the output directory.
+      action_options_dialog resize         --resume-geometry "$SCALE" "${files[@]}" || return 1
+
+      local -a resize_revised=()
+      mapfile -d '' -t resize_revised < "$KIMDIR/options"
+
+      [ "${#resize_revised[@]}" -eq 1 ] &&
+      [ -n "${resize_revised[0]}" ] || {
+        progress_error           'Resize editor returned invalid geometry.'
+        return 1
+      }
+
+      SCALE="${resize_revised[0]}"
+      continue
+    fi
+
     if [ "$resize_review_result" -eq 130 ] &&
        [ -s "$resize_request" ]; then
       IFS= read -r -d '' resize_newdir \
@@ -7261,6 +7279,18 @@ PYDATE
     policy="$(choose_output_mode "$(gettext 'KIM6 — Set Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
+  local -A photo_date_eligible=()
+  local -a photo_date_sources=()
+  if preview_active; then
+    python3 "$DISPATCHER_DIR/kim_preview.py"       sources "$KIMDIR/preview.approved"       > "$KIMDIR/date-authorized" || return 1
+
+    mapfile -d '' -t photo_date_sources       < "$KIMDIR/date-authorized"
+
+    for source in "${photo_date_sources[@]}"; do
+      photo_date_eligible["$source"]=1
+    done
+  fi
+
   report_init; METADATA_INTERRUPTED=false
   ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Set Dates')")" || return 1
   for source in "${files[@]}"; do
@@ -7268,6 +7298,12 @@ PYDATE
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
       report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"
       if preview_active; then break; fi
+      continue
+    fi
+    if preview_active &&
+       [ -z "${photo_date_eligible[$source]+approved}" ]; then
+      report_skip "$source (excluded from approved date plan)"
+      progress_value "$ref" "$counter"
       continue
     fi
     progress_begin_item "$ref" "$(gettext 'Planning date change:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }

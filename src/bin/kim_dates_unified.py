@@ -32,7 +32,7 @@ from kim_ui import (
     CaptureDateInput,
     CaptureDateOptions,
 )
-from kim_preview import qt_classes, verify_plan
+from kim_preview import qt_classes, verify_plan, date_approval_plan
 
 
 TARGETS = (
@@ -153,6 +153,7 @@ class ReadDates(QThread):
                     path,
                     ignore_invalid=True,
                     preview=True,
+                    allow_animation=True,
                 )
 
                 if value is not None:
@@ -182,6 +183,7 @@ class SetDatesDialog(QDialog):
         self.reference_identity = None
 
         self.plan = None
+        self.approved_plan = None
         self.worker = None
         self.reader = None
 
@@ -838,6 +840,7 @@ class SetDatesDialog(QDialog):
             return
 
         self.plan = None
+        self.approved_plan = None
         self.apply.setEnabled(False)
 
         if self.worker:
@@ -1055,9 +1058,9 @@ class SetDatesDialog(QDialog):
         self.render_rows()
 
         self.apply.setEnabled(
-            bool(ready)
-            and not blocked
+            self.plan is not None
             and self.worker is None
+            and self.reader is None
         )
 
     def render_rows(self, inspecting=False, problem=''):
@@ -1292,8 +1295,13 @@ class SetDatesDialog(QDialog):
                     'Review a fresh plan.'
                 )
 
-            verify_plan(self.plan)
             rows = publication_rows(self.plan)
+            eligible = sum(
+                entry['status'] == 'change'
+                for entry in self.plan['entries']
+            )
+            if eligible:
+                date_approval_plan(self.plan)
         except Exception as exc:
             self.apply.setEnabled(False)
             self.summary.setText(
@@ -1443,6 +1451,28 @@ class SetDatesDialog(QDialog):
             'KIM6 preview plan, including collision handling.'
         ))
 
+        excluded = [
+            entry for entry in self.plan['entries']
+            if entry['status'] == 'error'
+        ]
+
+        for entry in excluded:
+            issue = QLabel(
+                'Blocked, will not be processed: '
+                + Path(entry['source']).name
+                + ': '
+                + entry.get('error', 'Inspection failed')
+            )
+            issue.setWordWrap(True)
+            layout.addWidget(issue)
+
+        exclusion_confirm = QCheckBox(
+            f'Exclude {len(excluded)} blocked image(s) '
+            'from this operation'
+        )
+        exclusion_confirm.setVisible(bool(excluded))
+        layout.addWidget(exclusion_confirm)
+
         error_label = QLabel()
         error_label.setWordWrap(True)
         layout.addWidget(error_label)
@@ -1453,9 +1483,16 @@ class SetDatesDialog(QDialog):
         confirm = QPushButton('Apply Changes')
         confirm.setEnabled(
             (created + replaced) > 0
-            and blocked == 0
+            and not excluded
         )
         buttons.addWidget(confirm)
+
+        if excluded:
+            exclusion_confirm.toggled.connect(
+                lambda checked: confirm.setEnabled(
+                    checked and (created + replaced) > 0
+                )
+            )
 
         back = QPushButton('Back')
         back.clicked.connect(review.reject)
@@ -1469,7 +1506,12 @@ class SetDatesDialog(QDialog):
                         'Review a fresh plan.'
                     )
 
-                verify_plan(self.plan)
+                if excluded and not exclusion_confirm.isChecked():
+                    raise ValueError(
+                        'Confirm exclusion of blocked images.'
+                    )
+
+                approved = date_approval_plan(self.plan)
 
                 # Reject a plan whose publication details changed
                 # while the final review was open.
@@ -1484,6 +1526,7 @@ class SetDatesDialog(QDialog):
                 error_label.setText(str(exc))
                 return
 
+            self.approved_plan = approved
             review.accept()
 
         confirm.clicked.connect(confirm_changes)
@@ -1505,7 +1548,11 @@ class SetDatesDialog(QDialog):
             return
 
         try:
-            verify_plan(self.plan)
+            if self.approved_plan is None:
+                raise ValueError(
+                    'Complete the final output review.'
+                )
+            verify_plan(self.approved_plan)
         except Exception as exc:
             self.apply.setEnabled(False)
             self.summary.setText(

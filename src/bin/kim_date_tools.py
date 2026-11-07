@@ -38,8 +38,9 @@ def ensure_still_capture_input(path, preview=False):
             stream.seek(length+(4 if png else length%2),1)
 
 
-def _source_date_uncached(path, ignore_invalid=False, preview=False):
-    ensure_still_capture_input(path,preview)
+def _source_date_uncached(path, ignore_invalid=False, preview=False, allow_animation=False):
+    if not allow_animation:
+        ensure_still_capture_input(path,preview)
     tags=['-EXIF:all','-XMP:all','-IPTC:DateCreated','-IPTC:TimeCreated','-FileType']
     if preview:
         from kim_preview import read_metadata
@@ -64,11 +65,11 @@ def _source_date_uncached(path, ignore_invalid=False, preview=False):
 
 
 @lru_cache(maxsize=128)
-def _cache_source_date(path, ignore_invalid, preview, stamp):
-    return _source_date_uncached(path, ignore_invalid, preview)
+def _cache_source_date(path, ignore_invalid, preview, stamp, allow_animation):
+    return _source_date_uncached(path, ignore_invalid, preview, allow_animation)
 
 
-def source_date(path, ignore_invalid=False, preview=False):
+def source_date(path, ignore_invalid=False, preview=False, allow_animation=False):
     path = os.path.abspath(os.fspath(path))
 
     def fingerprint():
@@ -78,7 +79,7 @@ def source_date(path, ignore_invalid=False, preview=False):
 
     before = fingerprint()
     result = _cache_source_date(
-        path, bool(ignore_invalid), bool(preview), before
+        path, bool(ignore_invalid), bool(preview), before, bool(allow_animation)
     )
 
     if fingerprint() != before:
@@ -93,7 +94,63 @@ def source_date(path, ignore_invalid=False, preview=False):
 def resolve(path, config):
     kind = config['kind']; fields = config.get('fields','capture'); zone = config.get('timezone','embedded')
     if fields not in ('capture','all'): raise RecipeError('Choose the date fields to change.')
-    capture, fraction, fmt, raw = source_date(path, ignore_invalid=kind in ('set','file-to-exif','set-file','reference-to-exif','reference-to-file'),preview=config.get('_preview',False))
+    if kind == 'set-file':
+        capture, fraction = explicit(
+            config.get('datetime', ''), zone
+        )
+        return {
+            'epoch_ns': epoch_ns(capture, fraction),
+            'preview': display(capture, fraction),
+            'args': [],
+        }
+
+    if (
+        kind == 'reference-to-file'
+        and config.get('reference_type') == 'file'
+    ):
+        from kim_preview import identity
+
+        reference = config['reference_path']
+        expected = config['reference_identity']
+
+        if identity(reference) != expected:
+            raise RecipeError(
+                'Reference image changed. Select it again.'
+            )
+
+        ns = Path(reference).stat().st_mtime_ns
+
+        if identity(reference) != expected:
+            raise RecipeError(
+                'Reference image changed during inspection.'
+            )
+
+        seconds, subsec = divmod(ns, 10**9)
+        value = dt.datetime.fromtimestamp(
+            seconds, dt.timezone.utc
+        )
+        return {
+            'epoch_ns': ns,
+            'preview': display(
+                value, f'{subsec:09d}'.rstrip('0')
+            ),
+            'args': [],
+        }
+
+    file_date_only = kind in (
+        'set-file', 'reference-to-file', 'exif-to-file'
+    )
+
+    capture, fraction, fmt, raw = source_date(
+        path,
+        ignore_invalid=kind in (
+            'set', 'file-to-exif', 'set-file',
+            'reference-to-exif', 'reference-to-file'
+        ),
+        preview=config.get('_preview', False),
+        allow_animation=file_date_only,
+    )
+
     if kind == 'set':
         capture, fraction = explicit(config.get('datetime',''),zone)
     elif kind == 'set-file':
@@ -184,10 +241,19 @@ def resolve(path, config):
             try: capture += dt.timedelta(seconds=seconds)
             except OverflowError as exc: raise RecipeError('The adjusted date is outside the supported years.') from exc
     else: raise RecipeError('Unknown date action')
-    if fmt not in ('jpeg','png','tiff','webp','avif','heic','heif','jp2','jxl','psd'):
-        raise RecipeError(fmt.upper() + ' cannot safely store the selected image capture date fields. Convert to JPEG, PNG or TIFF first.')
     if kind in ('exif-to-file', 'set-file', 'reference-to-file'):
-        return {'epoch_ns':epoch_ns(capture,fraction),'preview':display(capture,fraction),'args':[]}
+        return {
+            'epoch_ns': epoch_ns(capture, fraction),
+            'preview': display(capture, fraction),
+            'args': [],
+        }
+
+    if fmt not in ('jpeg','png','tiff','webp','avif','heic','heif','jp2','jxl','psd'):
+        raise RecipeError(
+            fmt.upper()
+            + ' cannot safely store the selected image capture '
+            'date fields. Convert to JPEG, PNG or TIFF first.'
+        )
     args = assignments(capture,fraction,fields,fmt not in NO_LEGACY_IPTC)
     if kind == 'shift' and fields == 'all':
         # Change only dates that exist, each by the same wall-clock delta.

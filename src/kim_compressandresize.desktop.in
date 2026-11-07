@@ -5,7 +5,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
-Actions=01Resize1600;02Resize1280;03Resize1024;04ResizePercent;05ResizeCustom;06Crop;_SEPARATOR_;14Rotateexif;10Rotate90;11Rotate270;12Rotate180;13RotateCustom;_SEPARATOR_;20FlipHorizontal;21FlipVertical;
+Actions=01Resize1600;02Resize1280;03Resize1024;05ResizeCustom;06Crop;_SEPARATOR_;14Rotateexif;10Rotate90;11Rotate270;12Rotate180;13RotateCustom;_SEPARATOR_;20FlipHorizontal;21FlipVertical;
 _X-KDE-Submenu=KIM6 — Resize/Crop/Rotate
 X-KIM6-Managed=true
 
@@ -24,14 +24,9 @@ Icon=transform-scale
 _Name=Resize to Fit 1024 × 1024
 Exec=kim_all resize --size 1024x1024 -- %F
 
-[Desktop Action 04ResizePercent]
-Icon=transform-scale
-_Name=Resize by Percentage…
-Exec=kim_all resize --custom-percent -- %F
-
 [Desktop Action 05ResizeCustom]
 Icon=transform-scale
-_Name=Resize to Custom Size…
+_Name=Resize Custom…
 Exec=kim_all resize --custom -- %F
 
 [Desktop Action 06Crop]

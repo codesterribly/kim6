@@ -336,7 +336,7 @@ class ActionDialog(QDialog):
                 'Compress received no selected files from Dolphin'
             )
         self.worker=None; self.headers={}; self.header_stamps={}; self.compress_eligible=[]; self.header_error=None; self.closing=False; self.geometry_cache={}
-        self.setWindowTitle('KIM6 — '+{'rotate':'Rotate','resize':'Resize to Custom Size','percent':'Resize by Percentage',
+        self.setWindowTitle('KIM6 — '+{'rotate':'Rotate','resize':'Resize Images','percent':'Resize by Percentage',
             'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
         self.layout=QVBoxLayout(self)
         if kind=='compress':
@@ -493,7 +493,7 @@ class ActionDialog(QDialog):
             self.fields['method'].currentIndexChanged.connect(
                 self.update_resize_controls
             )
-            self.apply.setText('Apply Changes')
+            self.apply.setText('Review Changes…')
             self.update_resize_controls()
         elif kind=='convert':
             self.apply.setText('Preview Changes…')
@@ -2006,31 +2006,61 @@ def resize_output_review(
         f"Resize geometry: {geometry}"
     ))
 
+    destination_choice = QComboBox()
+    destination_choice.addItem(
+        "Beside originals", "beside"
+    )
+    destination_choice.addItem(
+        "Different directory", "directory"
+    )
+
+    destination_choice.setCurrentIndex(
+        1 if destination else 0
+    )
+
     destination_row = QHBoxLayout()
-    destination_row.setSpacing(8)
+    destination_row.addWidget(
+        QLabel("Save copies:")
+    )
+    destination_row.addWidget(
+        destination_choice, 1
+    )
 
     if policy == "create":
-        destination_text = (
-            destination if destination else "Beside each source"
-        )
+        layout.addLayout(destination_row)
     else:
-        destination_text = "Overwrite selected originals"
+        layout.addWidget(
+            QLabel("Destination: Replace selected originals")
+        )
 
-    destination_row.addWidget(
-        QLabel("Destination: " + destination_text), 1
+    directory_field = QLineEdit(destination)
+    directory_field.setPlaceholderText(
+        "Enter an existing destination directory"
+    )
+    directory_field.setAccessibleName(
+        "Output directory"
     )
 
-    choose_button = QPushButton("Change Destination…")
-    choose_button.setVisible(policy == "create")
-    destination_row.addWidget(choose_button)
+    browse_button = QPushButton("Browse…")
+    update_button = QPushButton("Update Preview")
 
-    reset_button = QPushButton("Beside each source")
-    reset_button.setVisible(
-        policy == "create" and bool(destination)
-    )
-    destination_row.addWidget(reset_button)
+    directory_row = QHBoxLayout()
+    directory_row.addWidget(directory_field, 1)
+    directory_row.addWidget(browse_button)
+    directory_row.addWidget(update_button)
 
-    layout.addLayout(destination_row)
+    if policy == "create":
+        layout.addLayout(directory_row)
+
+    def show_directory_controls():
+        different = (
+            destination_choice.currentData() == "directory"
+        )
+        directory_field.setVisible(different)
+        browse_button.setVisible(different)
+        update_button.setVisible(different)
+
+    show_directory_controls()
 
     table = QTableWidget(len(records), 4)
     table.setHorizontalHeaderLabels([
@@ -2112,17 +2142,24 @@ def resize_output_review(
     summary.setWordWrap(True)
     layout.addWidget(summary)
 
-    buttons = QDialogButtonBox(
-        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    buttons = QHBoxLayout()
+    buttons.addStretch(1)
+
+    apply_button = QPushButton("Apply Changes")
+    apply_button.setEnabled(
+        ready > 0 and blocked == 0
     )
+    buttons.addWidget(apply_button)
 
-    apply_button = buttons.button(QDialogButtonBox.Ok)
-    apply_button.setText("Apply Changes")
-    apply_button.setEnabled(ready > 0 and blocked == 0)
+    back_button = QPushButton("Back")
+    buttons.addWidget(back_button)
 
-    buttons.accepted.connect(dialog.accept)
-    buttons.rejected.connect(dialog.reject)
-    layout.addWidget(buttons)
+    apply_button.clicked.connect(dialog.accept)
+    # 131 requests a return to the resize editor.
+    # Closing the review window remains cancellation (130).
+    back_button.clicked.connect(lambda: dialog.done(131))
+
+    layout.addLayout(buttons)
 
     def request_destination(directory):
         try:
@@ -2138,24 +2175,93 @@ def resize_output_review(
         dialog.reject()
 
     def choose_directory():
-        initial = destination or os.path.dirname(records[0][0])
+        entered = directory_field.text().strip()
+        initial = (
+            entered if os.path.isdir(entered)
+            else destination
+            or os.path.dirname(records[0][0])
+        )
         selected = QFileDialog.getExistingDirectory(
             dialog, "Choose Resize destination", initial
         )
         if selected:
-            request_destination(selected)
+            directory_field.setText(selected)
 
-    choose_button.clicked.connect(choose_directory)
-    reset_button.clicked.connect(
-        lambda: request_destination("")
-    )
+    def update_destination():
+        entered = directory_field.text().strip()
+
+        if (
+            not entered
+            or not os.path.isabs(entered)
+            or not os.path.isdir(entered)
+            or os.path.islink(entered)
+            or not os.access(
+                entered, os.W_OK | os.X_OK
+            )
+        ):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                dialog,
+                "Invalid output directory",
+                "Enter an existing, writable, "
+                "absolute directory.",
+            )
+            return
+
+        request_destination(os.path.realpath(entered))
+
+    def selection_changed(*_):
+        if destination_choice.currentData() == "beside":
+            if destination:
+                request_destination("")
+            else:
+                show_directory_controls()
+        else:
+            show_directory_controls()
+            # The previous output plan remains visible until
+            # Update Preview explicitly recalculates it.
+            apply_button.setEnabled(False)
+
+    def directory_edited(*_):
+        # Never approve a plan based on an obsolete directory.
+        if (
+            policy == "create"
+            and destination_choice.currentData() == "directory"
+            and directory_field.text().strip() != destination
+        ):
+            apply_button.setEnabled(False)
+
+    if policy == "create":
+        destination_choice.currentIndexChanged.connect(
+            selection_changed
+        )
+        directory_field.textChanged.connect(
+            directory_edited
+        )
+        browse_button.clicked.connect(choose_directory)
+        update_button.clicked.connect(update_destination)
 
     dialog.resize(
         1090,
-        min(750, 245 + 32 * visible_rows)
+        min(780, 285 + 32 * visible_rows)
     )
 
-    return 0 if dialog.exec() == QDialog.Accepted else 130
+    # Qt-owned children must be destroyed before QApplication
+    # teardown, as verified during the Set Dates crash fix.
+    import shiboken6
+
+    try:
+        review_result = dialog.exec()
+        if review_result == QDialog.Accepted:
+            return 0
+        if review_result == 131:
+            return 131
+        return 130
+    finally:
+        shiboken6.delete(dialog)
+        dialog = None
+        if QApplication.instance() is app:
+            shiboken6.delete(app)
 
 
 def email_options_review(output_path, initial_size, sources):
@@ -2628,6 +2734,15 @@ def main():
             raise ValueError('Resize preset needs a value and selected images')
         resize_preset = files[1]
         files = files[2:]
+    resize_resume = None
+    if kind == 'resize' and files[:1] == ['--resume-geometry']:
+        if len(files) < 3:
+            raise ValueError(
+                'Resume needs a geometry and selected images'
+            )
+        resize_resume = files[1]
+        files = files[2:]
+
     if kind=='compress' and files[:1]==['--preset']:
         _,preset,*files=files
         if preset not in ('recommended','maximum','custom'): raise ValueError('Invalid compression preset')
@@ -2671,6 +2786,61 @@ def main():
             dialog.fields['method'].findData('percent')
         )
         dialog.fields['percent'].setValue(value)
+        dialog.refresh()
+
+    if resize_resume is not None:
+        import re
+
+        percentage = re.fullmatch(
+            r'([0-9]{1,4})%', resize_resume
+        )
+        dimensions = re.fullmatch(
+            r'([1-9][0-9]*)x([1-9][0-9]*)([!>]?)',
+            resize_resume,
+        )
+
+        if percentage:
+            value = int(percentage.group(1))
+            if not 1 <= value <= 1000:
+                raise ValueError(
+                    'Invalid saved Resize percentage'
+                )
+
+            dialog.fields['method'].setCurrentIndex(
+                dialog.fields['method'].findData('percent')
+            )
+            dialog.fields['percent'].setValue(value)
+
+        elif dimensions:
+            width = int(dimensions.group(1))
+            height = int(dimensions.group(2))
+            suffix = dimensions.group(3)
+
+            if not (
+                1 <= width <= 100000
+                and 1 <= height <= 100000
+            ):
+                raise ValueError(
+                    'Invalid saved Resize dimensions'
+                )
+
+            method = 'exact' if suffix == '!' else 'fit'
+
+            dialog.fields['method'].setCurrentIndex(
+                dialog.fields['method'].findData(method)
+            )
+            dialog.fields['width'].setValue(width)
+            dialog.fields['height'].setValue(height)
+
+            if method == 'fit':
+                dialog.fields['upscale'].setChecked(
+                    suffix != '>'
+                )
+        else:
+            raise ValueError(
+                'Unsupported saved Resize geometry'
+            )
+
         dialog.refresh()
 
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
