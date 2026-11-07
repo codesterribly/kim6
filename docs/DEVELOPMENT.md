@@ -12,7 +12,7 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | 11 KDE Dolphin service-menu definitions containing 87 executable actions. |
+| `src/kim_*.desktop.in` | 12 KDE Dolphin service-menu definitions containing 89 executable static actions and four visual separator entries. |
 | `src/gallery/` | Templates used to generate HTML photo galleries. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
@@ -39,13 +39,13 @@ The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versi
 
 The Recipes submenu has two static entries, Choose saved recipe… and Recipe editor…; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.
 
-**Safety contract:** Recipes publish derivatives only, never overwrite selected source photographs, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected photographs. Cancellation or failed publication must never be presented as success.
+**Safety contract:** Recipes publish derivatives only, never overwrite selected source images, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected images. Cancellation or failed publication must never be presented as success.
 
 See [RECIPES.md](RECIPES.md) for user-facing behavior and [ACTIONS.md](ACTIONS.md) for service-menu entry points.
 
 ## Dolphin Service Menus
 
-KIM6 uses 11 KDE service-menu definitions in `src/`. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
+KIM6 uses 12 KDE service-menu definitions in `src/`, representing eight image-related and four video-related submenu categories. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
 For example:
 
@@ -92,6 +92,17 @@ HTML rendering and give the WebEngine widget the available vertical
 space. Restore a status message only for fallback or missing-file
 conditions. Do not disable HTML rendering merely because the process
 has SSH environment variables.
+
+### Service-menu executable permissions
+
+KIM6 installs its Dolphin service-menu `.desktop` files with
+permissions `0755`. Dolphin requires these files to be authorized
+for execution in the supported KDE environment. Changing them to
+`0644` causes authorization failures.
+
+`install.sh` and dynamic recipe-menu generation must preserve
+the installed permissions. Do not confuse executable KDE service
+menus with ordinary nonexecutable desktop data files.
 
 ## Runtime Dependencies and Format Support
 
@@ -214,7 +225,7 @@ Renaming does not use the same publication mechanism as image transformations.
 
 ### Special image formats
 
-Not every image is a single-frame RGB photograph. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.
+Not every image is a single-frame RGB image. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.
 
 Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.
 
@@ -230,7 +241,7 @@ When adding or changing an action:
 4. Add or update tests for the intended behavior, including error handling and preservation of existing files.
 5. Update the corresponding service-menu definition, translations, CLI help, and documentation when necessary.
 
-Test changes against temporary files rather than personal photographs or videos.
+Test changes against temporary files rather than personal images or videos.
 
 See [ACTIONS.md](ACTIONS.md) for the menu-action inventory and [commandconfig.md](commandconfig.md) for dispatcher arguments.
 
@@ -283,7 +294,7 @@ Installation updates are performed one file at a time. An interrupted installati
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all 11 Dolphin service-menu files and their 87 executable action mappings.
+2. Verify all 12 Dolphin service-menu definitions, 89 executable static actions, and four separator entries against the current source.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.
@@ -324,7 +335,7 @@ A KDE service-menu action accepts local files. Remote URL workflows are not sile
 
 ## Reporting a Bug
 
-Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private photographs or videos without permission.
+Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.
 
 ## Installer Safety and Recovery
 
@@ -334,7 +345,7 @@ Installation is not a whole-tree transaction. There is no digest manifest, custo
 
 ## Local Smoke Test
 
-Test web export with a synthetic JPEG rather than a personal photograph. Run from the repository root:
+Test web export with a synthetic JPEG rather than a personal image. Run from the repository root:
 
 ```sh
 work=$(mktemp -d)
@@ -354,6 +365,29 @@ find "$work/output" -maxdepth 1 -type f -print
 Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.
 
 See [Command and Configuration Reference](commandconfig.md) for additional options.
+
+## Documentation screenshot assets
+
+Approved, individually anonymized application screenshots are
+stored in `docs/images/screenshots/`.
+
+The User Guide places these images alongside the relevant
+workflow instructions.
+
+Screenshots must accurately depict KDE Plasma/Dolphin and KIM6.
+Preserve actual application controls, image previews, and maps.
+Remove identifying usernames, hostnames, personal paths, and
+identifying filenames before publication.
+
+Do not replace real image or map content with generic placeholders,
+and do not combine individual dialogs into screenshot montages.
+
+Preserve approved screenshots without recompression or resizing.
+Use descriptive alt text, task-oriented captions, and links to
+the full-resolution images.
+
+The generated HTML reference pages are built from Markdown sources.
+Regenerate them after documentation changes.
 
 ## Building the offline HTML User Guide
 

@@ -38,7 +38,7 @@
       <div class="hero-copy">
         <div class="hero-kicker"><span class="kicker-dot" aria-hidden="true"></span> Made for KDE Plasma 6 &amp; Dolphin</div>
         <h1>Photo utilities,<br><em>at your fingertips.</em></h1>
-        <p class="hero-lede">Resize, convert, prepare, and organize your images and videos without having to open a full editor. This guide shows you where to start and how to use KIM6 to improve your workflow.</p>
+        <p class="hero-lede">Resize, convert, export, and organize your images and videos without having to open a full editor. This guide shows you where to start and how to use KIM6 to improve your workflow.</p>
         <div class="hero-actions">
           <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
           <a class="hero-secondary" href="#recipes">Explore Recipes <span aria-hidden="true">↓</span></a>
@@ -50,7 +50,7 @@
           <span><span class="fact-check" aria-hidden="true">✓</span> Custom filename labels</span>
         </div>
       </div>
-      <div class="hero-art" aria-label="Example showing a photograph and its resized copy">
+      <div class="hero-art" aria-label="Example showing a image and its resized copy">
         <div class="art-label">A simple example</div>
         <div class="art-file art-original">
           <div class="art-thumbnail" aria-hidden="true">
@@ -118,24 +118,48 @@
       <section id="recipes" class="content-section" aria-labelledby="recipes-title">
         <p class="section-eyebrow"><span class="section-index">02</span> REUSABLE PHOTO WORKFLOWS</p>
         <h2 id="recipes-title">Your photo workflow, one recipe.</h2>
-        <p class="section-intro">KIM6 now has a dedicated <strong>KIM6 - Recipes</strong> menu in Dolphin. Instead of repeating several operations on the same photographs, combine them into a reusable recipe and run the entire workflow from the right-click menu.</p>
+        <p class="section-intro">KIM6 now has a dedicated <strong>KIM6 - Recipes</strong> menu in Dolphin. Instead of repeating several operations on the same images, combine them into a reusable recipe and run the entire workflow from the right-click menu.</p>
 
-                <div class="screen-gallery">
-    <figure class="manual-shot manual-shot-wide" id="recipes-menu-screenshot">
-      <img src="images/kim6-recipes-menu.png" alt="KDE Dolphin KIM6 - Recipes submenu with saved recipe shortcuts, Choose saved recipe…, and Recipe editor…" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>Recipes in Dolphin.</strong> Launch a Root recipe directly, choose a saved recipe, or open Recipe Editor.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide" id="recipe-editor-screenshot">
-      <img src="images/kim6-recipe-editor.png" alt="KIM6 Recipe Editor with ordered processing steps, destination, and output preview" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>Recipe Editor.</strong> Edit and enable processing steps, assign folders, and inspect planned output and metadata.</figcaption>
-    </figure>
-        </div>
-        <div class="steps" aria-label="Running a recipe from Dolphin">
+<div class="kim6-doc-feature">
+<h3>Choose and run a recipe</h3>
+<p>The Recipes submenu contains saved Root shortcuts and commands to open the recipe chooser or editor. Review the planned operations, filenames, destination, and readiness before running. The built-in Web Export recipe creates JPEG derivatives at quality 95 without overwriting selected originals.</p>
+
+<figure class="kim6-doc-shot" id="shot-06">
+  <a href="images/screenshots/06-recipes.png" title="View full-size Recipes submenu screenshot">
+    <img src="images/screenshots/06-recipes.png"
+         alt="Recipes submenu: Choose a saved recipe, open the editor, or launch a Root shortcut."
+         width="873" height="597"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Recipes submenu.</strong> Choose a saved recipe, open the editor, or launch a Root shortcut.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-11">
+  <a href="images/screenshots/11-run-recipe.png" title="View full-size Run a Recipe screenshot">
+    <img src="images/screenshots/11-run-recipe.png"
+         alt="Run a Recipe: Inspect selected inputs, operations, output preview, and readiness."
+         width="1236" height="971"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Run a Recipe.</strong> Inspect selected inputs, operations, output preview, and readiness.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-12">
+  <a href="images/screenshots/12-recipe-editor.png" title="View full-size Recipe Editor screenshot">
+    <img src="images/screenshots/12-recipe-editor.png"
+         alt="Recipe Editor: Manage recipe steps, options, destinations, and output previews."
+         width="1247" height="991"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Recipe Editor.</strong> Manage recipe steps, options, destinations, and output previews.</figcaption>
+</figure>
+</div>
+<div class="steps" aria-label="Running a recipe from Dolphin">
           <div class="step">
             <span class="step-number">1</span>
             <div>
               <h3>Select your photos</h3>
-              <p>Select one or more photographs in Dolphin, right-click, and open <strong>KIM6 - Recipes</strong>.</p>
+              <p>Select one or more images in Dolphin, right-click, and open <strong>KIM6 - Recipes</strong>.</p>
             </div>
           </div>
           <div class="step">
@@ -158,7 +182,7 @@
           <article class="feature-block">
             <div class="feature-symbol" aria-hidden="true">↗</div>
             <h3>Web Export, ready to use</h3>
-            <p>Inside <strong>Choose saved recipe…</strong>, the built-in <strong>Web Export</strong> auto-orients and fits photographs within 1600 × 1600 pixels without upscaling, applies sRGB, saves JPEG at quality 95, and removes all metadata. Results go into a <strong>Web</strong> subfolder beside each original.</p>
+            <p>Inside <strong>Choose saved recipe…</strong>, the built-in <strong>Web Export</strong> auto-orients and fits images within 1600 × 1600 pixels without upscaling, applies sRGB, saves JPEG at quality 95, and removes all metadata. Results go into a <strong>Web</strong> subfolder beside each original.</p>
             <div class="output">
               <span>vacation.jpg</span>
               <span class="output-arrow" aria-hidden="true">→</span>
@@ -174,52 +198,25 @@
           </article>
         </div>
 
-        <p class="section-footnote"><strong>Know what will happen before running.</strong> Run a Recipe checks the selected photographs and previews the planned results. Files requiring attention are identified before processing. For example, a Photoshop PSD that needs an output conversion format can offer <strong>Fix Recipe…</strong> to open the existing recipe editor and correct the problem.</p>
+        <p class="section-footnote"><strong>Know what will happen before running.</strong> Run a Recipe checks the selected images and previews the planned results. Files requiring attention are identified before processing. For example, a Photoshop PSD that needs an output conversion format can offer <strong>Fix Recipe…</strong> to open the existing recipe editor and correct the problem.</p>
 
-        <p class="section-footnote"><strong>Your originals stay untouched.</strong> Recipes always create separate output files, never overwrite the selected source photographs, and protect existing output filenames from collisions. <a href="reference/RECIPES.html">Read the complete Recipes reference <span aria-hidden="true">↗</span></a>.</p>
+        <p class="section-footnote"><strong>Your originals stay untouched.</strong> Recipes always create separate output files, never overwrite the selected source images, and protect existing output filenames from collisions. <a href="reference/RECIPES.html">Read the complete Recipes reference <span aria-hidden="true">↗</span></a>.</p>
       </section>
 
       <section id="visual-guide" class="content-section" aria-labelledby="visual-guide-title">
-  <p class="section-eyebrow">SEE HOW IT WORKS</p>
-  <h2 id="visual-guide-title">KIM6 in Dolphin.</h2>
-  <div class="screen-gallery">
-    <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-photo-actions.png" alt="KIM6 photo actions in Dolphin" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>1. Photo actions in Dolphin.</strong> Access image conversion, creation, metadata, resizing, and export tools from the right-click menu.</figcaption>
-    </figure>
-        <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-convert-menu.png" alt="Dolphin Convert and Compress menu listing output formats and image compression options" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>2. Convert and compress.</strong> Use the Dolphin submenu to select formats or image compression.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-metadata-menu.png" alt="Dolphin Organize and Metadata menu showing rename, photo-date, and metadata operations" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>3. Organize and metadata.</strong> Rename, correct photo capture dates, synchronize file dates, and remove selected metadata.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-settings-general.png" alt="KIM6 Settings window with output policy, image quality, and creator and copyright fields" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>4. Settings and copyright.</strong> Configure output policy, compression quality, and creator and rights information.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide" id="settings-screenshot">
-      <img src="images/kim6-settings-dialog.png" alt="KIM6 Settings and Output Filenames dialogs showing general preferences and customizable filename labels" loading="lazy" decoding="async" width="1536" height="1024">
-      <figcaption><strong>5. Settings and Output Filenames.</strong> Configure file handling and export quality, then customize the labels KIM6 adds to automatically generated filenames. Choose prefixes or suffixes and preview the results before saving.</figcaption>
-    </figure>
-    <figure class="manual-shot">
-      <img src="images/kim6-collage-dialog.png" alt="KIM6 photo collage dialog" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>6. Create a collage.</strong> Choose the layout, canvas, spacing, background, and output filename.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-video-conversion.png" alt="KIM6 video conversion menu" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>7. Convert video.</strong> Choose H.264, H.265, or AV1 encoding, with simplified MP4 presets.</figcaption>
-    </figure>
-    <figure class="manual-shot manual-shot-wide">
-      <img src="images/kim6-video-utilities.png" alt="KIM6 video utilities menu" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>8. Video utilities.</strong> Extract audio or frames, remove audio, create contact sheets, or generate animated GIFs.</figcaption>
-    </figure>
-    <figure class="manual-shot">
-      <img src="images/kim6-animated-gif-dialog.png" alt="KIM6 animated GIF dialog" loading="lazy" decoding="async" width="1448" height="1086">
-      <figcaption><strong>9. Create an animated GIF.</strong> Choose the starting time, duration, frame rate, maximum width, and looping behavior.</figcaption>
-    </figure>
-  </div>
+<p class="section-eyebrow">KIM6 IN DOLPHIN</p>
+<h2 id="visual-guide-title">Find the right tool.</h2>
+<p>Select supported images or videos in Dolphin, right-click, and open <strong>Actions</strong>. Choose the relevant KIM6 submenu for the operation you want to perform.</p>
+
+<figure class="kim6-doc-shot" id="shot-01">
+  <a href="images/screenshots/01-main-menu.png" title="View full-size KIM6 in Dolphin screenshot">
+    <img src="images/screenshots/01-main-menu.png"
+         alt="KIM6 in Dolphin: Access KIM6 tools through Dolphin&#x27;s Actions context menu."
+         width="1110" height="610"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>KIM6 in Dolphin.</strong> Access KIM6 tools through Dolphin&#x27;s Actions context menu.</figcaption>
+</figure>
 </section>
 <section id="photos" class="content-section" aria-labelledby="photos-title">
         <p class="section-eyebrow"><span class="section-index">03</span> EVERYDAY EDITS</p>
@@ -239,7 +236,7 @@
             <h3>Compress an image</h3>
             <p>Compress JPEG, PNG, WebP, or AVIF images using settings appropriate for each format. PNG compression is lossless, while other formats can trade some image detail for smaller files.</p>
             <p class="menu-label">MENU PATH</p>
-            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Compress Recommended</strong></div>
+            <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Compress recommended</strong></div>
             <div class="output"><span>lake.webp</span><span class="output-arrow" aria-hidden="true">→</span><strong>lake_compressed.webp</strong></div>
           </article>
           <article class="task-card">
@@ -260,7 +257,42 @@
           </article>
         </div>
         <p class="section-footnote">KIM6 adds a number when an output filename already exists, rather than replacing that file. <a href="#filenames">See how to customize your output filenames <span aria-hidden="true">↓</span></a>.</p>
-      </section>
+
+<div class="kim6-doc-feature">
+<h3>Resize, convert, and crop</h3>
+<p>Resize presets preserve aspect ratio. Conversion and compression offer format-specific choices. Cropping lets you define the crop area, inspect the resulting image, and review output before applying changes.</p>
+
+<figure class="kim6-doc-shot" id="shot-02">
+  <a href="images/screenshots/02-convert-compress.png" title="View full-size Convert and compress screenshot">
+    <img src="images/screenshots/02-convert-compress.png"
+         alt="Convert and compress: Choose a conversion format or compression preset."
+         width="861" height="740"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Convert and compress.</strong> Choose a conversion format or compression preset.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-07">
+  <a href="images/screenshots/07-resize-crop-rotate.png" title="View full-size Resize/Crop/Rotate menu screenshot">
+    <img src="images/screenshots/07-resize-crop-rotate.png"
+         alt="Resize/Crop/Rotate menu: Choose resize presets, cropping, rotation, or flipping."
+         width="1282" height="944"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Resize/Crop/Rotate menu.</strong> Choose resize presets, cropping, rotation, or flipping.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-17">
+  <a href="images/screenshots/17-crop-image.png" title="View full-size Crop image screenshot">
+    <img src="images/screenshots/17-crop-image.png"
+         alt="Crop image: Choose crop dimensions, inspect the preview, and review output."
+         width="1196" height="937"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Crop image.</strong> Choose crop dimensions, inspect the preview, and review output.</figcaption>
+</figure>
+</div>
+</section>
 
       <section id="filenames" class="content-section" aria-labelledby="filenames-title">
         <p class="section-eyebrow"><span class="section-index">04</span> CUSTOM OUTPUT FILENAMES</p>
@@ -297,12 +329,37 @@
       <section id="sharing" class="content-section" aria-labelledby="sharing-title">
         <p class="section-eyebrow"><span class="section-index">05</span> READY TO SEND</p>
         <h2 id="sharing-title">Share without changing the source.</h2>
-        <p class="section-intro">Prepare smaller files for the web or email while leaving the selected photographs intact.</p>
+        <p class="section-intro">Prepare smaller files for the web or email while leaving the selected images intact. Direct Web Export offers JPEG, PNG, WebP and AVIF at three maximum sizes, with separately configurable quality settings for the lossy formats. The built-in Web Export recipe has its own fixed JPEG quality 95 and Web-subfolder workflow.</p>
         <div class="feature-pair">
           <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Prepare images for websites or sharing. Choose JPEG, PNG, WebP, or AVIF, select the output size, and save the results in a folder of your choice without changing your originals.</p></article>
           <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare photos for email at their original size or resize them to make sharing easier. KIM6 prepares the attachments for your email application without changing your original images.</p></article>
         </div>
-      </section>
+
+<div class="kim6-doc-feature">
+<h3>Export images for sharing</h3>
+<p>The Web Export submenu provides twelve format-and-size presets. Its shipped JPEG, WebP and AVIF quality defaults are 95, but user settings can change them (the screenshot shows one configured value). Review Web Export displays output dimensions, format, quality, filenames, readiness, and destination choices before processing. These direct presets are distinct from the built-in Web Export recipe.</p>
+
+<figure class="kim6-doc-shot" id="shot-09">
+  <a href="images/screenshots/09-web-export.png" title="View full-size Web Export presets screenshot">
+    <img src="images/screenshots/09-web-export.png"
+         alt="Web Export presets: Select an image format and one of three maximum output sizes."
+         width="1297" height="969"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Web Export presets.</strong> Select an image format and one of three maximum output sizes.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-20">
+  <a href="images/screenshots/20-review-web-export.png" title="View full-size Review Web Export screenshot">
+    <img src="images/screenshots/20-review-web-export.png"
+         alt="Review Web Export: Verify output dimensions, formats, filenames, and destinations."
+         width="1081" height="591"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Review Web Export.</strong> Verify output dimensions, formats, filenames, and destinations.</figcaption>
+</figure>
+</div>
+</section>
 
       <section id="metadata" class="content-section" aria-labelledby="metadata-title">
         <p class="section-eyebrow"><span class="section-index">06</span> INFORMATION INSIDE YOUR FILES</p>
@@ -313,7 +370,7 @@
             <h3>Remove GPS and AI metadata</h3>
             <p>Select <strong>Location/GPS › Remove GPS metadata…</strong> to remove recognized GPS coordinate fields while retaining unrelated metadata.</p>
             <p>Use <strong>Location/GPS</strong> to inspect location metadata, modify photo GPS coordinates, or approximate precise positions. <strong>Modify GPS on images…</strong> offers another image, map selection, manual coordinates, and GPX tracks as location sources.</p>
-            <p>Select <strong>Organize/Metadata › Strip AI metadata</strong> to remove recognized AI-generation information while keeping unrelated metadata.</p>
+            <p>Select <strong>Organize/Metadata › Strip metadata</strong> to review available metadata-removal options, including recognized AI-generation information.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
             <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
           </div>
@@ -324,7 +381,77 @@
           </div>
         </div>
         <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>Privacy note:</strong> KIM6 removes recognized GPS coordinates and AI-generation metadata, but some information may remain. These tools cannot guarantee complete removal of location or AI-related information.</p></div>
-      </section>
+
+<div class="kim6-doc-feature">
+<h3>Organize image files and dates</h3>
+<p>Check actual formats before correcting filename extensions. Use Set dates to inspect and change supported timestamps. The Organize/Metadata submenu also provides renaming, overlays, rights information, and unified metadata stripping.</p>
+
+<figure class="kim6-doc-shot" id="shot-05">
+  <a href="images/screenshots/05-organize-metadata.png" title="View full-size Organize/Metadata menu screenshot">
+    <img src="images/screenshots/05-organize-metadata.png"
+         alt="Organize/Metadata menu: Manage extensions, filenames, dates, overlays, and metadata."
+         width="982" height="739"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Organize/Metadata menu.</strong> Manage extensions, filenames, dates, overlays, and metadata.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-14">
+  <a href="images/screenshots/14-check-extensions.png" title="View full-size Check and correct extensions screenshot">
+    <img src="images/screenshots/14-check-extensions.png"
+         alt="Check and correct extensions: Compare detected formats with filename extensions before correction."
+         width="1026" height="659"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Check and correct extensions.</strong> Compare detected formats with filename extensions before correction.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-18">
+  <a href="images/screenshots/18-set-dates.png" title="View full-size Set dates screenshot">
+    <img src="images/screenshots/18-set-dates.png"
+         alt="Set dates: Inspect current and proposed image and filesystem timestamps."
+         width="1080" height="719"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Set dates.</strong> Inspect current and proposed image and filesystem timestamps.</figcaption>
+</figure>
+</div>
+
+<div class="kim6-doc-feature">
+<h3>Inspect and modify GPS information</h3>
+<p>Modify GPS can use a reference image, manually entered coordinates, a map, or a GPX track where supported. Reducing coordinate precision replaces precise coordinates with an approximate location. Removing GPS metadata is a separate action. Inspect the planned changes before applying them.</p>
+
+<figure class="kim6-doc-shot" id="shot-04">
+  <a href="images/screenshots/04-location-gps.png" title="View full-size Location/GPS menu screenshot">
+    <img src="images/screenshots/04-location-gps.png"
+         alt="Location/GPS menu: Inspect, modify, approximate, or remove location metadata."
+         width="1132" height="635"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Location/GPS menu.</strong> Inspect, modify, approximate, or remove location metadata.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-15">
+  <a href="images/screenshots/15-modify-gps.png" title="View full-size Modify GPS on images screenshot">
+    <img src="images/screenshots/15-modify-gps.png"
+         alt="Modify GPS on images: Review the selected location source, images, and map."
+         width="1156" height="824"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Modify GPS on images.</strong> Review the selected location source, images, and map.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-16">
+  <a href="images/screenshots/16-reduce-gps-precision.png" title="View full-size Reduce GPS precision screenshot">
+    <img src="images/screenshots/16-reduce-gps-precision.png"
+         alt="Reduce GPS precision: Inspect the original and approximate locations before applying."
+         width="1155" height="840"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Reduce GPS precision.</strong> Inspect the original and approximate locations before applying.</figcaption>
+</figure>
+</div>
+</section>
 
       <section id="collections" class="content-section" aria-labelledby="collections-title">
         <p class="section-eyebrow"><span class="section-index">07</span> MAKE SOMETHING NEW</p>
@@ -339,20 +466,91 @@
           <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Choose timing, dimensions, frame rate, background and destination in one dialog. Images play in natural filename order.</span></div>
         </div>
         <p class="section-footnote">Collages include grid, mosaic, hero, filmstrip and scattered layouts with operation-specific canvas, spacing, background, frame and shadow controls. Galleries include Dark Portfolio; printable PDF contact sheets complement albums and print layouts. Slideshows are silent and straightforward: fixed time per photo, without titles, transitions, pan, or zoom effects. Successful PDF and other publication workflows identify the saved result; when notices are available, <strong>Details (N)</strong> expands them for inspection.</p>
-      </section>
+
+<div class="kim6-doc-feature">
+<h3>Build collages and publication files</h3>
+<p>The Create/Publish submenu includes collages, PDF albums, contact sheets, galleries, animations, slideshows, and other outputs. The Collage dialog provides layout, image order, canvas, spacing, and background controls along with a composition preview.</p>
+
+<figure class="kim6-doc-shot" id="shot-03">
+  <a href="images/screenshots/03-create-publish.png" title="View full-size Create and publish screenshot">
+    <img src="images/screenshots/03-create-publish.png"
+         alt="Create and publish: Find albums, collages, galleries, animations, and publication tools."
+         width="824" height="635"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Create and publish.</strong> Find albums, collages, galleries, animations, and publication tools.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-19">
+  <a href="images/screenshots/19-create-collage.png" title="View full-size Create a collage screenshot">
+    <img src="images/screenshots/19-create-collage.png"
+         alt="Create a collage: Arrange images and configure layout, spacing, and background."
+         width="817" height="1112"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Create a collage.</strong> Arrange images and configure layout, spacing, and background.</figcaption>
+</figure>
+</div>
+</section>
 
       <section id="video" class="content-section" aria-labelledby="video-title">
-        <p class="section-eyebrow"><span class="section-index">08</span> VIDEO WORKFLOWS</p>
-        <h2 id="video-title">Useful video tools, right in Dolphin.</h2>
-        <p class="section-intro">Re-encode video, extract useful parts, or generate previews using the codecs available on your system.</p>
-        <div class="video-list">
-          <div><span class="video-num">01</span><div><h3>Resize or re-encode</h3><p>Create a video using H.264, H.265, or an available AV1 encoder. Container and codec compatibility are checked.</p></div></div>
-          <div><span class="video-num">02</span><div><h3>Extract frames and contact sheets</h3><p>Save a frame or generate a grid of representative images from a video.</p></div></div>
-          <div><span class="video-num">03</span><div><h3>Work with audio</h3><p>Extract supported audio formats or remove audio while copying the compatible video stream.</p></div></div>
-          <div><span class="video-num">04</span><div><h3>Create a GIF</h3><p>Turn a short video segment into an animated GIF.</p></div></div>
-        </div>
-        <p class="section-footnote">Encoder and container availability depend on FFmpeg and the libraries installed on your computer. <a href="reference/FORMATS.html">Read the format compatibility notes <span aria-hidden="true">↗</span></a></p>
-      </section>
+  <p class="section-eyebrow"><span class="section-index">08</span> VIDEO WORKFLOWS</p>
+  <h2 id="video-title">Video tools, directly in Dolphin.</h2>
+  <p class="section-intro">Right-click a supported video and open <strong>Actions</strong>. KIM6 provides three video conversion submenus, organized by codec, and a separate <strong>Video Utilities</strong> submenu. Settings/About remains accessible alongside them.</p>
+
+  <h3>Choose a video operation</h3>
+  <p>Use <strong>KIM6 - Convert Video: AV1</strong>, <strong>H.264</strong>, or <strong>H.265</strong> to create a re-encoded video. Use <strong>Video Utilities</strong> for extracting or publishing parts of an existing video.</p>
+
+<figure class="kim6-doc-shot">
+  <a href="images/screenshots/21-video-menu-overview.png" title="View full-size Video actions in Dolphin screenshot">
+    <img src="images/screenshots/21-video-menu-overview.png"
+         alt="Video actions in Dolphin in KDE Dolphin"
+         width="1484" height="1060"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Video actions in Dolphin.</strong> Selecting a video reveals dedicated conversion menus and Video Utilities.</figcaption>
+</figure>
+
+  <h3>Convert video: choose resolution and quality</h3>
+  <p>Each codec submenu contains six MP4 presets: <strong>1080p</strong> or <strong>720p</strong>, each with <strong>High quality</strong>, <strong>Balanced</strong>, or <strong>Smallest file</strong> settings. The quality choices represent different encoding parameters, not guaranteed output sizes. Actual file size depends on the source video and available encoder.</p>
+
+  <p><strong>H.264</strong> is generally the best starting point for broad playback compatibility. <strong>H.265</strong> offers more efficient compression in many situations but requires compatible playback software or hardware. <strong>AV1</strong> is a newer codec that can achieve high compression efficiency, although encoding speed and playback support depend on the system.</p>
+
+  <p>The screenshot below shows the AV1 presets. The H.264 and H.265 menus offer the same resolution-and-quality combinations, with their respective codecs.</p>
+
+<figure class="kim6-doc-shot">
+  <a href="images/screenshots/22-video-av1-presets.png" title="View full-size AV1 conversion presets screenshot">
+    <img src="images/screenshots/22-video-av1-presets.png"
+         alt="AV1 conversion presets in KDE Dolphin"
+         width="1619" height="971"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>AV1 conversion presets.</strong> Choose from six combinations of output resolution and quality.</figcaption>
+</figure>
+
+  <h3>Video Utilities</h3>
+  <p>These operations are separate from video transcoding:</p>
+  <ul>
+    <li><strong>Extract audio…</strong> saves supported audio from the video.</li>
+    <li><strong>Extract frame at timestamp…</strong> captures an image from a chosen point in the video.</li>
+    <li><strong>Extract automatic thumbnail</strong> creates a representative still image.</li>
+    <li><strong>Remove audio (copy video)</strong> creates a silent video without re-encoding the compatible video stream.</li>
+    <li><strong>Create video contact sheet…</strong> combines representative frames into a single overview image.</li>
+    <li><strong>Create animated GIF from video…</strong> turns a selected video segment into an animation.</li>
+  </ul>
+
+<figure class="kim6-doc-shot">
+  <a href="images/screenshots/23-video-utilities.png" title="View full-size Video Utilities screenshot">
+    <img src="images/screenshots/23-video-utilities.png"
+         alt="Video Utilities in KDE Dolphin"
+         width="1484" height="1060"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Video Utilities.</strong> Extract audio or frames, remove audio, or create a contact sheet or animated GIF.</figcaption>
+</figure>
+
+  <p class="section-footnote"><strong>Output safety.</strong> Video utilities produce separate outputs. Video conversion supports the applicable create-new and explicitly authorized overwrite policies. KIM6 checks encoder and container compatibility, and a requested format may be unavailable if the installed FFmpeg build lacks the necessary encoder. <a href="reference/FORMATS.html">Read the format compatibility reference <span aria-hidden="true">↗</span></a>.</p>
+</section>
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
         <p class="section-eyebrow"><span class="section-index">09</span> BEFORE YOU CLICK</p>
@@ -366,7 +564,47 @@
         <p><strong>Choose your defaults in Settings.</strong> In Dolphin, right-click a supported image or video and open <strong>Actions → KIM6 - Settings/About → Settings</strong>. Choose whether supported operations should create separate files automatically or ask how to proceed. Save your preferences to use them for subsequent operations.</p>
 <p><strong>Actions that create separate files.</strong> Web export, email preparation, galleries, albums, slideshows, and video frame, audio, and GIF tools leave your originals untouched. Video transcoding can also replace an original, but only after explicit confirmation.</p>
 <p><strong>Existing filenames and processing failures.</strong> KIM6 avoids silently overwriting existing results. Where supported, it adds a number to resolve filename conflicts. It checks generated output before publishing it, and successfully completed results remain available if a later item in the batch fails. See <a href="reference/commandconfig.html#output-and-file-handling">file-handling and configuration details</a>.</p>
-      </section>
+
+<div class="kim6-doc-feature">
+<h3>Review changes before publication</h3>
+<p>Inspect the proposed results, filenames, directories, and per-file status. Resolve blocked items before proceeding. Different operations have different review controls, but KIM6 protects originals through their applicable output and overwrite rules.</p>
+
+<figure class="kim6-doc-shot" id="shot-13">
+  <a href="images/screenshots/13-preview-changes.png" title="View full-size Preview changes screenshot">
+    <img src="images/screenshots/13-preview-changes.png"
+         alt="Preview changes: Review source files, planned results, destinations, and status."
+         width="1072" height="722"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Preview changes.</strong> Review source files, planned results, destinations, and status.</figcaption>
+</figure>
+</div>
+
+<div class="kim6-doc-feature">
+<h3>Configure settings and help</h3>
+<p>Settings includes output policy, image quality, location units, creator and rights information, and map loading. Output Filenames controls generated filename labels. Settings/About also provides the license, application information, and HTML User Guide.</p>
+
+<figure class="kim6-doc-shot" id="shot-08">
+  <a href="images/screenshots/08-settings-about.png" title="View full-size Settings/About menu screenshot">
+    <img src="images/screenshots/08-settings-about.png"
+         alt="Settings/About menu: Open settings, application information, license, and help."
+         width="1179" height="724"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>Settings/About menu.</strong> Open settings, application information, license, and help.</figcaption>
+</figure>
+
+<figure class="kim6-doc-shot" id="shot-10">
+  <a href="images/screenshots/10-settings-menu.png" title="View full-size KIM6 Settings screenshot">
+    <img src="images/screenshots/10-settings-menu.png"
+         alt="KIM6 Settings: Configure output policy, quality, rights information, and maps."
+         width="875" height="755"
+         loading="lazy" decoding="async">
+  </a>
+  <figcaption><strong>KIM6 Settings.</strong> Configure output policy, quality, rights information, and maps.</figcaption>
+</figure>
+</div>
+</section>
 
       <section id="troubleshooting" class="content-section" aria-labelledby="troubleshooting-title">
         <p class="section-eyebrow"><span class="section-index">10</span> WHEN SOMETHING GOES WRONG</p>
@@ -388,7 +626,7 @@
           <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/RECIPES.html"><span><strong>Recipes</strong><small>Create, edit, preview, and run reusable photo workflows.</small></span><span aria-hidden="true">↗</span></a>
-          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for all 87 static service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for the current Dolphin service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/commandconfig.html"><span><strong>Commands and configuration</strong><small>CLI syntax, naming, file handling, and troubleshooting.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/FORMATS.html"><span><strong>Image and video formats</strong><small>Decoders, encoders, frame handling, and restrictions.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/DEVELOPMENT.html"><span><strong>Development and testing</strong><small>Architecture, preservation safeguards, and contributor notes.</small></span><span aria-hidden="true">↗</span></a>

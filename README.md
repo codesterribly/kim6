@@ -2,32 +2,41 @@
 
 **Image and Video Tools for KDE Dolphin**
 
-KIM6 adds image and video tools directly to KDE Dolphin's right-click menus. Resize photographs, convert file formats, compress images, remove metadata, create galleries, build reusable photo Recipes, and process videos without opening a separate editing application.
+KIM6 adds image and video tools directly to KDE Dolphin's right-click menus. Resize images, convert file formats, compress images, remove metadata, create galleries, build reusable photo Recipes, and process videos without opening a separate editing application.
 
 Select one file or an entire group of files, right-click, and choose what you want to do.
 
 KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
 <p align="center">
-  <a href="docs/images/kim6-recipes-menu.png"><img src="docs/images/kim6-recipes-menu.png" alt="KIM6 - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a Recipe and Recipe Editor" width="760"></a>
+  <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="KIM6 - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Choose saved recipe and Recipe editor" width="760"></a>
 </p>
 <p align="center"><em>KIM6 - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
+<p align="center">
+  <a href="docs/images/screenshots/01-main-menu.png">
+    <img src="docs/images/screenshots/01-main-menu.png"
+         alt="KIM6 submenus in KDE Dolphin"
+         width="850">
+  </a>
+</p>
+
+<p align="center"><em>KIM6 in Dolphin's Actions menu.</em></p>
+
 ## Quick Start
 
-For a reusable photo workflow, select photographs and open **KIM6 - Recipes → Choose saved recipe…** from Dolphin's right-click menu. Select the built-in **Web Export** recipe or another saved recipe in the runner. You can also open **KIM6 - Recipes → Recipe editor…** to create your own. Recipes always create separate output files and leave the source photographs untouched.
+For a reusable photo workflow, select images and open **KIM6 - Recipes → Choose saved recipe…** from Dolphin's right-click menu. Select the built-in **Web Export** recipe or another saved recipe in the runner. You can also open **KIM6 - Recipes → Recipe editor…** to create your own. Recipes always create separate output files and leave the source images untouched.
 
-Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open **Actions → KIM6 - Settings/About → Settings**. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is **Create new files (originals untouched)**.
+Select one or more images in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open **Actions → KIM6 - Settings/About → Settings**. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is **Create new files (originals untouched)**.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
 | Run the built-in Web Export recipe | KIM6 - Recipes → Choose saved recipe… → Web Export | `lake_web.jpg` in a `Web` subfolder beside `lake.jpg` |
-| Resize a photograph | KIM6 - Resize/Crop/Rotate → Resize to fit 1600 × 1600 | `lake_resized.jpg` |
-| Compress a JPEG | KIM6 - Convert/Compress → Compress Recommended | `lake_compressed.jpg` |
+| Resize an image | KIM6 - Resize/Crop/Rotate → Resize to fit 1600 × 1600 | `lake_resized.jpg` |
+| Compress a JPEG | KIM6 - Convert/Compress → Compress recommended | `lake_compressed.jpg` |
 | Convert PNG to JPEG | KIM6 - Convert/Compress → Convert to JPEG | `garden.jpg` |
 | Remove GPS coordinates | KIM6 - Location/GPS → Remove GPS metadata… | `trip_gps.jpg` |
-| Remove recognized AI metadata | KIM6 - Organize/Metadata → Strip AI metadata | `portrait_ai.jpg` |
-| Resize several photographs | KIM6 - Resize/Crop/Rotate → Resize to fit 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
+| Resize several images | KIM6 - Resize/Crop/Rotate → Resize to fit 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
 
 These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
 
@@ -37,25 +46,28 @@ Use **KIM6 - Settings/About → Settings** to change your defaults. For advanced
 
 ## Features
 
+Video selections expose three video conversion submenus (AV1, H.264, and H.265) plus Video Utilities. See the [illustrated video workflows](docs/index.html#video) for the presets and extraction tools.
+
+
 ### Recipes: reusable photo workflows
 
 <p align="center">
-  <a href="docs/images/kim6-recipe-editor.png"><img src="docs/images/kim6-recipe-editor.png" alt="KIM6 Recipe Editor showing ordered operations, destination options, and planned output preview" width="760"></a>
+  <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="KIM6 Recipe Editor showing ordered operations, destination options, and planned output preview" width="760"></a>
 </p>
 <p align="center"><em>The Recipe Editor and its planned-output preview.</em></p>
 
 
-KIM6 includes a dedicated **KIM6 - Recipes** submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one photograph or an entire selection.
+KIM6 includes a dedicated **KIM6 - Recipes** submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire selection.
 
 - **Run saved recipes:** Open **Choose saved recipe…** to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.
 - **Build and edit workflows:** Use **Recipe editor…** to create, duplicate, and organize recipes. Give each recipe a meaningful name.
 - **Combine processing steps:** Choose among 25 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.
 - **Enable or disable steps:** Keep operations in a recipe without requiring every step to run each time.
-- **Preview before processing:** Review selected photographs, the enabled operations, and planned output filenames. The Run button remains unavailable until preflight requirements are satisfied.
+- **Preview before processing:** Review selected images, the enabled operations, and planned output filenames. The Run button remains unavailable until preflight requirements are satisfied.
 - **Correct recipe problems:** When a PSD input requires an explicit output format, **Fix Recipe…** opens the existing editor so you can add Convert Format and choose an appropriate format.
-- **Protect original files:** Recipes always create derivatives. They never overwrite source photographs, and existing destination filenames are protected against collisions.
+- **Protect original files:** Recipes always create derivatives. They never overwrite source images, and existing destination filenames are protected against collisions.
 
-The built-in **Web Export** recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller photographs, applies sRGB handling, converts to JPEG at quality 95, removes all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions.
+The built-in **Web Export** recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, removes all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions.
 
 Photoshop PSD files can be used as inputs in supported workflows, but KIM6 does not create PSD output files. A suitable output format must be selected when conversion is required.
 
@@ -64,36 +76,36 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 ### Resize, compress, and convert images
 
 <p align="center">
-  <a href="docs/images/kim6-convert-menu.png"><img src="docs/images/kim6-convert-menu.png" alt="Dolphin Convert and Compress submenu showing available formats and compression presets" width="760"></a>
+  <a href="docs/images/screenshots/02-convert-compress.png"><img src="docs/images/screenshots/02-convert-compress.png" alt="Dolphin Convert and Compress submenu showing available formats and compression presets" width="760"></a>
 </p>
 <p align="center"><em>Conversion and compression actions available directly from Dolphin.</em></p>
 
 
-- **Resize images:** Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple photographs together.
+- **Resize images:** Choose maximum-width/height presets, enter custom dimensions, or use percentage resizing (1–1000%; above 100% enlarges). Presets preserve the aspect ratio and may enlarge smaller inputs. Process multiple images together.
 - **Compress images:** Compress JPEG, PNG, WebP, and AVIF files. JPEG supports adjustable quality, progressive or baseline scans, and optional Huffman-table optimization. PNG compression is lossless; WebP and AVIF support adjustable quality. Compression does not guarantee a smaller file.
-- **Prepare images for the web:** Export JPEG, PNG, WebP, or AVIF derivatives. JPEG, WebP and AVIF have separate quality defaults in Settings; PNG remains lossless. Color-profile handling can also be configured.
+- **Prepare images for the web:** The direct Web Export submenu offers twelve presets across JPEG, PNG, WebP and AVIF, each at 1600 × 1600, 800 × 800 or 128 × 128 maximum dimensions. JPEG, WebP and AVIF use independently configurable quality settings (95 in the shipped defaults, or a saved user value); PNG compression is lossless. The built-in **Web Export recipe** is different: it always uses JPEG quality 95, removes metadata and writes into a `Web` subfolder.
 - **Convert formats:** Convert between JPEG, PNG, GIF, BMP, TIFF, WebP, and additional formats such as AVIF, HEIC/HEIF, JPEG XL, and JPEG 2000 (including lossless/lossy JP2 modes) when supported by your system. Frame and color-profile checks reject known unsafe or unsupported results.
 - **Rotate and flip:** Rotate images manually or use their EXIF orientation information.
 
-### Organize photographs and manage metadata
+### Organize images and manage metadata
 
 <p align="center">
-  <a href="docs/images/kim6-metadata-menu.png"><img src="docs/images/kim6-metadata-menu.png" alt="Dolphin Organize and Metadata submenu with rename, photo dates and metadata removal actions" width="760"></a>
+  <a href="docs/images/screenshots/05-organize-metadata.png"><img src="docs/images/screenshots/05-organize-metadata.png" alt="Dolphin Organize and Metadata submenu with rename, photo dates and metadata removal actions" width="760"></a>
 </p>
 <p align="center"><em>Photo dates, renaming and metadata tools in Dolphin.</em></p>
 
 
-- **Manage privacy and metadata:** Use **Remove GPS metadata…** to remove recognized coordinates, **Strip AI metadata** to remove recognized AI-generation fields, or **Strip metadata** for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.
-- **Manage photo dates:** Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.
-- **Update copyright information:** Add or modify copyright metadata across multiple photographs.
+- **Manage privacy and metadata:** Use **Remove GPS metadata…** to remove recognized coordinates, **Strip metadata** to remove selected categories of metadata, including recognized AI-generation fields. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.
+- **Manage photo dates:** Rename images using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.
+- **Update copyright information:** Add or modify copyright metadata across multiple images.
 - **Control what gets preserved:** Choose appropriate metadata and output behavior for different operations.
 
 ### Create and share
 
-- **Email photographs:** Send original images or create smaller copies suitable for email attachments.
+- **Email images:** Send original images or create smaller copies suitable for email attachments.
 - **Build photo galleries:** Generate browsable HTML galleries, including the Dark Portfolio presentation.
 - **Create collages:** Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.
-- **Create PDF albums and print layouts:** Prepare photographs for viewing or printing, including printable contact-sheet layouts.
+- **Create PDF albums and print layouts:** Prepare images for viewing or printing, including printable contact-sheet layouts.
 - **Work with TIFF and GIF:** Combine images into multipage TIFF files or create animated GIF/APNG derivatives.
 
 ### Video tools
@@ -118,7 +130,7 @@ KIM6 adds image and video tools to Dolphin's right-click menu. Select a photo or
 
 KIM6 can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under **Actions → KIM6 - Settings/About → Settings**. Replacing original files requires an additional confirmation, so KIM6 won't silently overwrite them.
 
-Resizing, compression, conversion, rotation, and flipping follow these settings where supported. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source photographs. Video transcoding can also replace an original, but only with explicit confirmation.
+Resizing, compression, conversion, rotation, and flipping follow these settings where supported. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.
 
 **Filenames and batch processing**
 

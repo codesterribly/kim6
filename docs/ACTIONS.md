@@ -1,226 +1,200 @@
-
 # KIM6 Dolphin Menu Actions
 
-KIM6 provides 94 executable Dolphin actions across 12 service-menu files. This document lists each entry, its menu label, and the command it executes.
+KIM6 integrates image and video operations into KDE Dolphin.
+Its 12 service-menu definitions expose **89 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
 
-The tables reflect the menu definitions in `src/`. Settings, User Guide, License, and About are grouped in the dedicated information service menu.
+The action inventory below is derived directly from the current `.desktop.in` files in `src/`. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.
 
-For command-line options beyond those available through Dolphin, see [commandconfig.md](commandconfig.md).
+Saved recipes assigned to Root may also appear dynamically in the Recipes submenu. They are not part of the static service-menu definitions.
 
-## Menu Behavior
+## Image menus
 
-Dolphin displays KIM6 submenus according to broad MIME-type filters, not whether every individual action is applicable to every selected file:
+### KIM6 - Convert/Compress
 
-- **Image actions:** Conversion, compression, resizing, metadata, and publication menus appear for image files.
-- **Video actions:** Video conversion and utility menus appear for video files.
-- **Recipes:** The **KIM6 - Recipes** submenu has **Choose saved recipe…** (which selects built-in and saved recipes) and **Recipe editor…**. Only user recipes assigned to **Root** are also published as direct Dolphin shortcuts. Other saved recipes are available in the runner and editor, grouped by folder or Unfiled.
-- **Compression:** JPEG, PNG, WebP, and AVIF are supported, using format-specific compression settings and encoders.
+[View submenu screenshot](images/screenshots/02-convert-compress.png)
 
-Individual conversion targets are not dynamically hidden according to the selected image format. For example, **Convert to JPEG** remains available when a JPEG is selected. In Create new mode, this can produce a separately encoded JPEG. In Overwrite mode, converting a JPEG to JPEG without special encoding options is treated as a successful no-op.
+| Menu action | Dispatcher command |
+|---|---|
+| Convert to JPEG | `kim_all convert --preview --format jpg -- %F` |
+| Convert to PNG | `kim_all convert --preview --format png -- %F` |
+| Convert to WebP | `kim_all convert --preview --format webp -- %F` |
+| Convert to AVIF | `kim_all convert --preview --format avif -- %F` |
+| Convert to TIFF | `kim_all convert --preview --format tiff -- %F` |
+| Convert to GIF | `kim_all convert --preview --format gif -- %F` |
+| Convert to HEIC/HEIF | `kim_all convert --preview --format heic -- %F` |
+| Convert to PDF | `kim_all convert --preview --format pdf -- %F` |
+| Convert to JPEG XL | `kim_all convert --preview --format jxl -- %F` |
+| Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
+| Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
+| Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
+| Custom convert… | `kim_all convert --preview --custom-format -- %F` |
+| Compress recommended | `kim_all compress --recommended --interactive -- %F` |
+| Compress maximum | `kim_all compress --maximum --interactive -- %F` |
+| Compress custom… | `kim_all compress --custom -- %F` |
 
-KIM6 validates input formats and encoder capabilities when an action runs. When multiple files are selected, format support may differ between individual files.
+### KIM6 - Create/Publish
 
-The menu definitions use `X-KDE-Protocol=file` for local files. Dolphin passes selected filenames through `%F`, allowing actions to process multiple files.
+[View submenu screenshot](images/screenshots/03-create-publish.png)
 
-File handling depends on the operation:
+| Menu action | Dispatcher command |
+|---|---|
+| Create an HTML gallery… | `kim_all gallery -- %F` |
+| Create a collage… | `kim_all collage -- %F` |
+| Create a contact sheet… | `kim_all contactsheet -- %F` |
+| Create a PDF album… | `kim_all album -- %F` |
+| Create a print-layout PDF… | `kim_all print -- %F` |
+| Create a video slideshow… | `kim_all slideshow --interactive -- %F` |
+| Create an animated image… | `kim_all animate -- %F` |
+| Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
+| Send via email… | `kim_all resizeandsend --size full -- %F` |
 
-- **Resize, compress, and convert:** Create new files or overwrite existing files when authorized.
-- **Web export and email:** Create separate output files without changing the selected images.
-- **Recipes:** Always create derivatives; the selected source photographs are never overwritten. Preflight checks selected photos before Run is enabled.
-- **Rotate, EXIF auto-orient, flip and flop:** Create mode publishes transformed copies and preserves selected originals. Overwrite mode replaces selected originals only after explicit two-stage confirmation.
-- **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
-- **Targeted GPS and AI cleanup:** **Remove GPS metadata…** removes recognized coordinate fields; **Strip AI metadata** removes recognized AI-generation fields. Neither operation guarantees complete removal of its targeted information. Other location indicators, generator-specific AI metadata, and signed C2PA / Content Credentials may remain.
-- **Galleries, collages, albums, and animations:** Create separate output files or directories.
-- **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
+### KIM6 - Location/GPS
 
-For recipe selection, building, and execution, see [RECIPES.md](RECIPES.md).
+[View submenu screenshot](images/screenshots/04-location-gps.png)
 
-For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
+| Menu action | Dispatcher command |
+|---|---|
+| Inspect location metadata… | `kim_all location-report -- %F` |
+| Modify GPS on images… | `kim_all location-apply -- %F` |
+| Reduce exact GPS location… | `kim_all location-reduce -- %F` |
+| Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
-**File-safety choices:** Open **Actions → KIM6 - Settings/About → Settings** in Dolphin to choose the default output behavior. Supported operations can create separate copies or ask whether to replace originals. When prompted, **Create new files (originals untouched)** is the default selection. Overwriting requires an additional confirmation identifying the operation and selected-file count. Cancellation or an unavailable dialog refuses replacement. Where applicable, KIM6 numbers occupied output filenames and checks source aliases, linked paths and destination safety before publication. Completed results remain available if a later batch item fails.
+### KIM6 - Organize/Metadata
 
-**Format notes:** Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.
+[View submenu screenshot](images/screenshots/05-organize-metadata.png)
 
-## Complete Menu Action Reference
+| Menu action | Dispatcher command |
+|---|---|
+| Check and correct extensions… | `kim_all checkextensions -- %F` |
+| Rename images… | `kim_all rename interactive -- %F` |
+| Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
+| Set creator and copyright… | `kim_all copyright --interactive -- %F` |
+| Add watermark / overlay… | `kim_all overlay -- %F` |
+| Strip metadata | `kim_all stripmeta --interactive -- %F` |
 
-The following tables list the 94 static executable actions from KIM6's 12 Dolphin service-menu templates. Root-assigned user recipes can add runtime-generated shortcuts; those entries depend on the user's recipe library and are not counted in the static inventory.
+### KIM6 - Recipes
 
-Each entry includes its internal action ID, the English menu label, and the command defined in the source template. Translated installations may display different labels.
+[View submenu screenshot](images/screenshots/06-recipes.png)
 
-During installation, the `kim_all` command is replaced with the full path to the installed executable. The `%F` placeholder is expanded by Dolphin into the selected filenames.
+| Menu action | Dispatcher command |
+|---|---|
+| Choose saved recipe… | `kim_all recipe --choose -- %F` |
+| Recipe editor… | `kim_all recipe --editor -- %F` |
 
-The mappings are checked against the menu templates by `tests/test_documentation.py`.
+### KIM6 - Resize/Crop/Rotate
 
-### `kim_compressandresize.desktop.in`
+[View submenu screenshot](images/screenshots/07-resize-crop-rotate.png)
 
-**Dolphin submenu:** KIM6 - Resize/Crop/Rotate
+| Menu action | Dispatcher command |
+|---|---|
+| Resize to fit 1600 × 1600 | `kim_all resize --size 1600x1600 -- %F` |
+| Resize to fit 1280 × 1280 | `kim_all resize --size 1280x1280 -- %F` |
+| Resize to fit 1024 × 1024 | `kim_all resize --size 1024x1024 -- %F` |
+| Resize custom… | `kim_all resize --custom -- %F` |
+| Crop image… | `kim_all crop -- %F` |
+| Auto-rotate using EXIF | `kim_all rotate --preview --exif -- %F` |
+| Rotate 90° clockwise | `kim_all rotate --preview --angle 90 -- %F` |
+| Rotate 90° counterclockwise | `kim_all rotate --preview --angle 270 -- %F` |
+| Rotate 180° | `kim_all rotate --preview --angle 180 -- %F` |
+| Rotate custom… | `kim_all rotate --custom -- %F` |
+| Flip horizontally | `kim_all flipflop flop -- %F` |
+| Flip vertically | `kim_all flipflop flip -- %F` |
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `01Resize1600` | Resize to fit 1600 × 1600 | `kim_all resize --size 1600x1600 -- %F` |
-| `02Resize1280` | Resize to fit 1280 × 1280 | `kim_all resize --size 1280x1280 -- %F` |
-| `03Resize1024` | Resize to fit 1024 × 1024 | `kim_all resize --size 1024x1024 -- %F` |
-| `05ResizeCustom` | Resize custom… | `kim_all resize --custom -- %F` |
-| `06Crop` | Crop image… | `kim_all crop -- %F` |
-| `14Rotateexif` | Auto-rotate using EXIF | `kim_all rotate --preview --exif -- %F` |
-| `10Rotate90` | Rotate 90° clockwise | `kim_all rotate --preview --angle 90 -- %F` |
-| `11Rotate270` | Rotate 90° counterclockwise | `kim_all rotate --preview --angle 270 -- %F` |
-| `12Rotate180` | Rotate 180° | `kim_all rotate --preview --angle 180 -- %F` |
-| `13RotateCustom` | Rotate custom… | `kim_all rotate --custom -- %F` |
-| `20FlipHorizontal` | Flip horizontally | `kim_all flipflop flop -- %F` |
-| `21FlipVertical` | Flip vertically | `kim_all flipflop flip -- %F` |
+### KIM6 - Settings/About
 
-### `kim_compressandresizevideo.desktop.in`
+[View submenu screenshot](images/screenshots/08-settings-about.png)
 
-**Dolphin submenu:** KIM6 - Convert Video: H.265
+| Menu action | Dispatcher command |
+|---|---|
+| Settings… | `kim_all settings -- %F` |
+| About KIM6 | `kim_all about -- %F` |
+| License | `kim_all license -- %F` |
+| KIM6 User Guide | `kim_all manual -- %F` |
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `Videohd108017265mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F` |
-| `Videohd108023265mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F` |
-| `Videohd108029265mp4` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F` |
-| `Videohd72017265mp4` | 720p • High Quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F` |
-| `Videohd72023265mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F` |
-| `Videohd72029265mp4` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F` |
+### KIM6 - Web Export
 
-### `kim_convertandrotate.desktop.in`
+[View submenu screenshot](images/screenshots/09-web-export.png)
 
-**Dolphin submenu:** KIM6 - Convert/Compress
+| Menu action | Dispatcher command |
+|---|---|
+| JPEG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format jpg -- %F` |
+| JPEG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format jpg -- %F` |
+| JPEG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format jpg -- %F` |
+| PNG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format png -- %F` |
+| PNG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format png -- %F` |
+| PNG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format png -- %F` |
+| WebP · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format webp -- %F` |
+| WebP · Medium (800 × 800) | `kim_all webexport --size 800x800 --format webp -- %F` |
+| WebP · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format webp -- %F` |
+| AVIF · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format avif -- %F` |
+| AVIF · Medium (800 × 800) | `kim_all webexport --size 800x800 --format avif -- %F` |
+| AVIF · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format avif -- %F` |
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `07ConvertJPG` | Convert to JPEG | `kim_all convert --preview --format jpg -- %F` |
-| `10ConvertPNG` | Convert to PNG | `kim_all convert --preview --format png -- %F` |
-| `12ConvertWEBP` | Convert to WebP | `kim_all convert --preview --format webp -- %F` |
-| `01ConvertAVIF` | Convert to AVIF | `kim_all convert --preview --format avif -- %F` |
-| `11ConvertTIFF` | Convert to TIFF | `kim_all convert --preview --format tiff -- %F` |
-| `03ConvertGIF` | Convert to GIF | `kim_all convert --preview --format gif -- %F` |
-| `04ConvertHEIC` | Convert to HEIC/HEIF | `kim_all convert --preview --format heic -- %F` |
-| `09ConvertPDF` | Convert to PDF | `kim_all convert --preview --format pdf -- %F` |
-| `08ConvertJXL` | Convert to JPEG XL | `kim_all convert --preview --format jxl -- %F` |
-| `05ConvertJP2Lossless` | Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
-| `06ConvertJP2Lossy` | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
-| `02ConvertBMP` | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
-| `13ConvertCustom` | Custom Convert… | `kim_all convert --preview --custom-format -- %F` |
-| `2001CompressRecommended` | Compress Recommended | `kim_all compress --recommended --interactive -- %F` |
-| `2102CompressMaximum` | Compress Maximum | `kim_all compress --maximum --interactive -- %F` |
-| `2203CompressCustom` | Compress Custom… | `kim_all compress --custom -- %F` |
+## Video menus
 
-### `kim_information.desktop.in`
+KIM6 shows video-specific actions when a supported video is selected
+in Dolphin. The video menu set comprises three codec conversion
+submenus, **AV1**, **H.264**, and **H.265**, plus **Video Utilities**.
+The shared **Settings/About** submenu remains available.
 
-**Dolphin submenu:** KIM6 - Settings/About
+![Video actions in Dolphin](images/screenshots/21-video-menu-overview.png)
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `01Settings` | Settings… | `kim_all settings -- %F` |
-| `02About` | About KIM6 | `kim_all about -- %F` |
-| `03License` | License | `kim_all license -- %F` |
-| `04Manual` | KIM6 User Guide | `kim_all manual -- %F` |
+### Conversion presets
 
-### `kim_location.desktop.in`
+Each video codec submenu provides six MP4 presets: 1080p or 720p
+combined with High quality, Balanced, or Smallest file. These are
+encoding choices, not promises of particular output sizes.
 
-**Dolphin submenu:** KIM6 - Location/GPS
+H.264 generally provides the broadest compatibility. H.265 and AV1
+can provide greater compression efficiency, subject to source
+content, codec implementation, encoding speed, and playback support.
+Available encoders depend on the installed FFmpeg configuration.
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `04Report` | Inspect location metadata… | `kim_all location-report -- %F` |
-| `03Apply` | Modify GPS on images… | `kim_all location-apply -- %F` |
-| `05Reduce` | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
-| `07StripGPS` | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+![AV1 conversion presets](images/screenshots/22-video-av1-presets.png)
 
-### `kim_metadata.desktop.in`
+### Video Utilities
 
-**Dolphin submenu:** KIM6 - Organize/Metadata
+The six utilities are:
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `00CheckExtensions` | Check and correct extensions… | `kim_all checkextensions -- %F` |
-| `01Rename` | Rename images… | `kim_all rename interactive -- %F` |
-| `02SetDates` | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
-| `04SetCopyright` | Set creator and copyright… | `kim_all copyright --interactive -- %F` |
-| `04Overlay` | Add Watermark / Overlay… | `kim_all overlay -- %F` |
-| `05StripMetadata` | Strip metadata | `kim_all stripmeta --interactive -- %F` |
-| `06StripAI` | Strip AI metadata | `kim_all stripmeta --mode ai --interactive -- %F` |
+- **Extract audio…**
+- **Extract frame at timestamp…**
+- **Extract automatic thumbnail**
+- **Remove audio (copy video)**
+- **Create video contact sheet…**
+- **Create animated GIF from video…**
 
-### `kim_publication.desktop.in`
+![Video Utilities menu](images/screenshots/23-video-utilities.png)
 
-**Dolphin submenu:** KIM6 - Create/Publish
+The conversion actions and utilities are also documented in the
+complete executable action inventory below, including their actual
+commands and options.
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `Gallery` | Create an HTML gallery… | `kim_all gallery -- %F` |
-| `Collage` | Create a collage… | `kim_all collage -- %F` |
-| `ContactSheet` | Create a contact sheet… | `kim_all contactsheet -- %F` |
-| `Album` | Create a PDF album… | `kim_all album -- %F` |
-| `Print` | Create a print-layout PDF… | `kim_all print -- %F` |
-| `Slideshow` | Create a video slideshow… | `kim_all slideshow --interactive -- %F` |
-| `Animation` | Create an animated image… | `kim_all animate -- %F` |
-| `TiffJoin` | Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
-| `Emailfull` | Send via email… | `kim_all resizeandsend --size full -- %F` |
+## File handling and safety
 
-### `kim_recipes.desktop.in`
+KIM6 distinguishes operations that create derivatives from operations that can replace selected originals. Where overwriting is supported, it requires explicit authorization.
 
-**Dolphin submenu:** KIM6 - Recipes
+Derivative-producing actions must use their applicable output review and filename collision protections. Canceled or blocked operations must not be reported as successful publication.
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `KIMRecipe0Run` | Choose saved recipe… | `kim_all recipe --choose -- %F` |
-| `KIMRecipe1Editor` | Recipe editor… | `kim_all recipe --editor -- %F` |
+Recipes never overwrite selected source images.
 
-### `kim_video_av1.desktop.in`
+Image format and codec support are checked at runtime. A visible menu action does not guarantee that every selected input format supports the corresponding transformation.
 
-**Dolphin submenu:** KIM6 - Convert Video: AV1
+### Metadata and location privacy
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `01Av1hd1080High` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `02Av1hd1080Balanced` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `03Av1hd1080Smallest` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality smallest --container mp4 -- %F` |
-| `04Av1hd720High` | 720p • High Quality • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
-| `05Av1hd720Balanced` | 720p • Balanced • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
-| `06Av1hd720Smallest` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality smallest --container mp4 -- %F` |
+**Modify GPS on images…** is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.
 
-### `kim_video_h264.desktop.in`
+**Strip metadata** is the unified metadata-removal action. There is no separate Strip AI metadata menu action.
 
-**Dolphin submenu:** KIM6 - Convert Video: H.264
+Removing GPS or AI-related metadata does not guarantee complete anonymity. Other metadata, signed credentials, or visible content may still disclose information.
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `Videohd108017264mp4` | 1080p • High Quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F` |
-| `Videohd108023264mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F` |
-| `Videohd108029264mp4` | 1080p • Smallest File • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F` |
-| `Videohd72017264mp4` | 720p • High Quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F` |
-| `Videohd72023264mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F` |
-| `Videohd72029264mp4` | 720p • Smallest File • MP4 | `kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F` |
+### Web Export and Recipes
 
-### `kim_videoutilities.desktop.in`
+The top-level Web Export submenu provides twelve format-and-size presets (JPEG, PNG, WebP and AVIF at 1600 × 1600, 800 × 800 or 128 × 128 maximum dimensions). JPEG, WebP and AVIF quality settings are independently configurable, with shipped defaults of 95; a screenshot may show the user's saved quality instead. The built-in Web Export recipe is a separate multi-step workflow selected through Recipes: JPEG quality 95, a 1600 × 1600 maximum without upscaling, metadata stripping and output to a `Web` subfolder.
 
-**Dolphin submenu:** KIM6 - Video Utilities
+## Related documentation
 
-| Action ID | Menu label | Command |
-|---|---|---|
-| `A01ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
-| `A02VideoFrameAt` | Extract frame at timestamp… | `kim_all videoframes --mode single --format png --interactive -- %F` |
-| `A03VideoThumbnail` | Extract automatic thumbnail | `kim_all videoframes --mode thumbnail --format jpg -- %F` |
-| `A04MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
-| `z01VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
-| `z02VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
-
-### `kim_webemail.desktop.in`
-
-**Dolphin submenu:** KIM6 - Web Export
-
-| Action ID | Menu label | Command |
-|---|---|---|
-| `0101WebExport` | JPEG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format jpg -- %F` |
-| `0102WebExport` | JPEG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format jpg -- %F` |
-| `0103WebExport` | JPEG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format jpg -- %F` |
-| `0201WebExport` | PNG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format png -- %F` |
-| `0202WebExport` | PNG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format png -- %F` |
-| `0203WebExport` | PNG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format png -- %F` |
-| `0301WebExport` | WebP · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format webp -- %F` |
-| `0302WebExport` | WebP · Medium (800 × 800) | `kim_all webexport --size 800x800 --format webp -- %F` |
-| `0303WebExport` | WebP · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format webp -- %F` |
-| `0401WebExport` | AVIF · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format avif -- %F` |
-| `0402WebExport` | AVIF · Medium (800 × 800) | `kim_all webexport --size 800x800 --format avif -- %F` |
-| `0403WebExport` | AVIF · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format avif -- %F` |
+- [User Guide](index.html)
+- [Recipes](RECIPES.md)
+- [Supported formats](FORMATS.md)
+- [Commands and configuration](commandconfig.md)
+- [Installation](../INSTALL.md)

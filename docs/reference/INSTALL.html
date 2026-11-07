@@ -35,6 +35,14 @@
 <h2 id="install-through-dolphin">Install through Dolphin</h2>
 <p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIM6.</p>
 <p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
+<h2 id="embedded-html-user-guide-prerequisite">Embedded HTML User Guide prerequisite</h2>
+<p>KIM6 includes an illustrated HTML User Guide in the <strong>Settings/About &gt; KIM6 User Guide</strong> tab. Rendering that guide inside the application requires the Python binding <code>PySide6.QtWebEngineWidgets</code>, not just the Qt WebEngine runtime libraries.</p>
+<p>On Ubuntu or Debian, install the binding with:</p>
+<pre class="bash"><code>sudo apt install python3-pyside6.qtwebenginewidgets</code></pre>
+<p>Verify that the same system Python interpreter used by KIM6 can import it:</p>
+<pre class="bash"><code>python3 -c &#39;from PySide6.QtWebEngineWidgets import QWebEngineView; print(&quot;WebEngine available&quot;)&#39;</code></pre>
+<p>The installer reports this dependency separately from required image-processing tools. It does not automatically install system packages. Without the binding, KIM6 can still operate and its guide can be opened in an external browser, but the embedded tab uses a limited Markdown fallback.</p>
+<p>The installed HTML guide and its local images must remain together under the KIM6 runtime <code>docs/</code> directory. Qt WebEngine uses those local files to display the guide offline.</p>
 <h2 id="install-this-rewrite-manually">Install this rewrite manually</h2>
 <p>KIM6 requires KDE Plasma 6 and Dolphin.</p>
 <p>To install from a source checkout, you need <code>intltool-merge</code>, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIM6 currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with <code>msgfmt</code> when they become available. No translated catalogs are required for installation.</p>
@@ -53,8 +61,111 @@
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
 <p>The installer adds KIM6's program files and 12 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
 <p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
+<h2 id="dependency-packages-by-distribution">Dependency packages by distribution</h2>
+<p>The dependency report runs on the machine executing <code>install.sh</code>. Its hostname and operating system identify where any suggested installation command applies. Suggested packages appear after the dependency table <strong>only when a dependency is missing</strong>. KIM6 does not install system packages automatically.</p>
+<p>The following table describes the package mappings for Ubuntu, Fedora, and Arch used by the installer. Package availability may depend on the distribution release and enabled repositories.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Ubuntu (apt)</th>
+<th>Fedora (dnf)</th>
+<th>Arch (pacman)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ImageMagick</td>
+<td><code>imagemagick-7.q16</code></td>
+<td><code>ImageMagick</code></td>
+<td><code>imagemagick</code></td>
+</tr>
+<tr>
+<td>ExifTool</td>
+<td><code>libimage-exiftool-perl</code></td>
+<td><code>perl-Image-ExifTool</code></td>
+<td><code>perl-image-exiftool</code></td>
+</tr>
+<tr>
+<td>KDialog</td>
+<td><code>kdialog</code></td>
+<td><code>kdialog</code></td>
+<td><code>kdialog</code></td>
+</tr>
+<tr>
+<td>QtDBus</td>
+<td><code>qdbus-qt6</code></td>
+<td><code>qt6-qttools</code></td>
+<td><code>qt6-tools</code></td>
+</tr>
+<tr>
+<td>FFmpeg and FFprobe</td>
+<td><code>ffmpeg</code></td>
+<td><code>ffmpeg</code></td>
+<td><code>ffmpeg</code></td>
+</tr>
+<tr>
+<td>Python</td>
+<td><code>python3</code></td>
+<td><code>python3</code></td>
+<td><code>python</code></td>
+</tr>
+<tr>
+<td>PySide6 Widgets</td>
+<td><code>python3-pyside6.qtwidgets</code></td>
+<td><code>python3-pyside6</code></td>
+<td><code>pyside6</code></td>
+</tr>
+<tr>
+<td>PySide6 Network</td>
+<td><code>python3-pyside6.qtnetwork</code></td>
+<td><code>python3-pyside6</code></td>
+<td><code>pyside6</code></td>
+</tr>
+<tr>
+<td>PySide6 WebEngine (optional)</td>
+<td><code>python3-pyside6.qtwebenginewidgets</code></td>
+<td><code>python3-pyside6</code> + <code>qt6-qtwebengine</code></td>
+<td><code>pyside6</code> + <code>qt6-webengine</code></td>
+</tr>
+<tr>
+<td>xdg-open</td>
+<td><code>xdg-utils</code></td>
+<td><code>xdg-utils</code></td>
+<td><code>xdg-utils</code></td>
+</tr>
+<tr>
+<td>intltool</td>
+<td><code>intltool</code></td>
+<td><code>intltool</code></td>
+<td><code>intltool</code></td>
+</tr>
+<tr>
+<td>Pandoc (optional)</td>
+<td><code>pandoc</code></td>
+<td><code>pandoc</code></td>
+<td><code>pandoc</code></td>
+</tr>
+<tr>
+<td>gettext tools (optional)</td>
+<td><code>gettext</code></td>
+<td><code>gettext</code></td>
+<td><code>gettext</code></td>
+</tr>
+<tr>
+<td>KDE service cache (optional)</td>
+<td><code>libkf6service-bin</code></td>
+<td><code>kf6-kservice</code></td>
+<td><code>kservice</code></td>
+</tr>
+</tbody>
+</table>
+<p>The optional Qt WebEngine Python binding enables the full illustrated HTML User Guide within KIM6. The standalone guide uses an HTML viewer and offers an external-browser fallback when WebEngine is unavailable.</p>
+<p>Installed KDE service-menu <code>.desktop</code> files intentionally have mode <code>0755</code>. Do not change them to <code>0644</code>, which can produce Dolphin execution-authorization errors.</p>
+<p>After installation, open <strong>Settings/About → Settings…</strong> in Dolphin to configure KIM6's output preferences.</p>
+<p><a href="../images/screenshots/10-settings-menu.png">View KIM6 Settings</a></p>
 <h2 id="what-installsh-does">What <code>install.sh</code> does</h2>
-<p>The installer prepares KIM6 for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
+<p>The installer prepares KIM6 for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h3 id="dependency-checks">Dependency checks</h3>
 <p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, Pacman, and Zypper and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
 <p>Python 3 with PySide6 Qt Widgets and <code>intltool-merge</code> are mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIM6 actions check for the tools they need when invoked.</p>
@@ -117,7 +228,7 @@
 <pre class="sh"><code>sudo ./install.sh --prefix /usr/share/kio/servicemenus</code></pre>
 <p>To uninstall a system-wide installation, use the same directory:</p>
 <pre class="sh"><code>sudo ./uninstall.sh --prefix /usr/share/kio/servicemenus</code></pre>
-<p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.</p>
+<p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
 <h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
 <p>First verify that all 11 KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>

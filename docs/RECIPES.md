@@ -1,21 +1,25 @@
 # Recipes: Reusable Photo Workflows
 
-Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 - Recipes menu**. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source photographs**.
+Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 - Recipes menu**. A recipe can handle one image or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source images**.
 
 ## Start in Dolphin
 
-![KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/kim6-recipes-menu.png)
+![KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
 
-1. Select one or more supported photographs and right-click.
+1. Select one or more supported images and right-click.
 2. Open **KIM6 - Recipes → Choose saved recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
-3. Review the selected photographs and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
+3. Review the selected images and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
 4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
 
 The Recipes menu also provides **Recipe editor…** for creating and managing your own workflows. The runner and editor group recipes under **Built-In**, **Root**, user-created folders, and **Unfiled**. Only user recipes assigned to **Root** are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.
 
+![Run a Recipe displaying readiness and planned outputs](images/screenshots/11-run-recipe.png)
+
+Inspect the selected images, enabled processing steps, planned output filenames, metadata consequences, and destination before running a recipe.
+
 ## Web Export: a ready-to-use recipe
 
-The supplied **Web Export** recipe auto-orients photographs, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and **removes all metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The destination is configured in this built-in recipe, not chosen anew for each run. Originals are unchanged.
+The supplied **Web Export** recipe auto-orients images, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and **removes all metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The destination is configured in this built-in recipe, not chosen anew for each run. Originals are unchanged.
 
 This workflow is more than a change of file extension. Its three optional rights-metadata steps, **Set Creator / Artist**, **Set Copyright Notice**, and **Set Usage Rights**, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: **Duplicate to Edit** creates a customizable copy rather than changing the supplied recipe.
 
@@ -27,13 +31,31 @@ The following recipes are shipped with this checkout. You can duplicate a built-
 |---|---|
 | Web Export | Auto-orient, fit within 1600 × 1600 without upscaling, sRGB, JPEG quality 95, strip metadata, and save to a Web subfolder. |
 
+## Web Export preset submenu versus recipe
+
+KIM6 provides two distinct Web Export workflows:
+
+- **KIM6 - Web Export** offers twelve direct Dolphin presets,
+  covering JPEG, PNG, WebP, and AVIF at three maximum
+  image sizes (1600, 800, and 128 pixels).
+- **KIM6 - Recipes → Choose saved recipe… → Web Export**
+  runs the built-in, multi-step recipe.
+
+The built-in recipe auto-orients images, fits them within
+1600 × 1600 without enlargement, applies sRGB handling,
+converts to JPEG at quality **95**, strips metadata, and
+writes `{filename}_web.jpg` into a `Web` subfolder.
+
+These workflows have different configuration and processing
+paths. Do not assume their output settings are identical.
+
 ## Create and edit recipes
 
-![KIM6 Recipe Editor with ordered steps, destination choices, and live output preview](images/kim6-recipe-editor.png)
+![KIM6 Recipe Editor with ordered steps, destination choices, and live output preview](images/screenshots/12-recipe-editor.png)
 
 Open **Recipe editor…** from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.
 
-The editor can also **Load Photos & Run**. When a run originates in the editor, returning to the editor retains the selected photographs and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.
+The editor can also **Load Photos & Run**. When a run originates in the editor, returning to the editor retains the selected images and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.
 
 ### Processing steps
 
@@ -94,7 +116,7 @@ Previously saved patterns using `{stem}` continue to work. KIM6 determines the o
 
 ## Preflight and output preview
 
-**Run a Recipe** lists each selected photograph and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked **Ready** or **Problem** as appropriate. The Run button stays disabled until every required preflight check succeeds.
+**Run a Recipe** lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked **Ready** or **Problem** as appropriate. The Run button stays disabled until every required preflight check succeeds.
 
 The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.
 
@@ -102,7 +124,7 @@ Adding JPEG and PSD files does not require the interface to freeze until the bat
 
 ## Photoshop PSD inputs and Fix Recipe
 
-KIM6 can **read** PSD photographs in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix Recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIM6 does not silently choose a format on your behalf.
+KIM6 can **read** PSD images in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix Recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIM6 does not silently choose a format on your behalf.
 
 After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.
 
@@ -110,7 +132,7 @@ PSD inputs are treated as rendered image sources rather than editable Photoshop 
 
 ## Destinations, safety, and cancellation
 
-Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source photographs. The recipe's configured destination and planned output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Occupied output filenames are numbered rather than overwritten.
+Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and planned output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Occupied output filenames are numbered rather than overwritten.
 
 File inspection, required encoder checks, and the preflight plan must succeed before a run begins. A failed or cancelled operation must not be reported as a completed publication. Successfully committed outputs can remain available if a later file in the batch fails or the user cancels.
 
@@ -120,6 +142,6 @@ Publication tools such as PDF Album can show a compact completion window with th
 
 ## Current scope
 
-Recipes currently process photographs. Video recipes, visual thumbnail previews, and in-place recipe operations are not part of this workflow. The text/table output preview reports planned results rather than attempting to simulate every rendered pixel.
+Recipes currently process images. Video recipes, visual thumbnail previews, and in-place recipe operations are not part of this workflow. The text/table output preview reports planned results rather than attempting to simulate every rendered pixel.
 
 For the exact Dolphin entry points, see [Dolphin Menu Actions](ACTIONS.md). For global output settings, see [Command and Configuration Reference](commandconfig.md). The [illustrated User Guide](index.html#recipes) starts with the Recipes menu in Dolphin.

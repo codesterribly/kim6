@@ -499,7 +499,7 @@ Opens the installed `LICENSE.md` using `xdg-open`.
 kim_all manual
 ```
 
-Opens the installed KIM6 User Guide using `xdg-open`.
+Opens the installed HTML User Guide using KIM6's standalone Qt viewer. If Qt WebEngine is unavailable, the viewer can offer to open the guide in the system browser.
 
 ### `settings`
 

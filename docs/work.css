@@ -335,3 +335,56 @@ details[open] .faq-plus::after { transform: rotate(0); }
 }
 @media (max-width: 620px) { .screen-gallery { grid-template-columns: 1fr; } }
 @media print { .reference-sidebar { display: none; } .reference-layout { display: block; } }
+
+
+/* Approved KIM6 documentation screenshots */
+.kim6-doc-feature {
+  margin: 2rem 0 2.75rem;
+}
+
+.kim6-doc-feature > h3 {
+  margin-bottom: 0.5rem;
+}
+
+.kim6-doc-feature > p {
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
+}
+
+.kim6-doc-shot {
+  width: 100%;
+  max-width: 100%;
+  margin: 1.5rem 0 2rem;
+}
+
+.kim6-doc-shot a {
+  display: block;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 135, 155, 0.25);
+  box-shadow: 0 4px 18px rgba(0, 20, 35, 0.09);
+}
+
+.kim6-doc-shot img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.kim6-doc-shot figcaption {
+  margin: 0.7rem 0.25rem 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+@media (max-width: 700px) {
+  .kim6-doc-feature {
+    margin: 1.5rem 0 2rem;
+  }
+
+  .kim6-doc-shot a {
+    border-radius: 6px;
+  }
+}

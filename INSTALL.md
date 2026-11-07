@@ -71,11 +71,53 @@ The installer adds KIM6's program files and 12 service-menu definitions to your 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
 
 
+## Dependency packages by distribution
+
+The dependency report runs on the machine executing `install.sh`.
+Its hostname and operating system identify where any suggested
+installation command applies. Suggested packages appear after
+the dependency table **only when a dependency is missing**.
+KIM6 does not install system packages automatically.
+
+The following table describes the package mappings for Ubuntu,
+Fedora, and Arch used by the installer. Package availability
+may depend on the distribution release and enabled repositories.
+
+| Component | Ubuntu (apt) | Fedora (dnf) | Arch (pacman) |
+|---|---|---|---|
+| ImageMagick | `imagemagick-7.q16` | `ImageMagick` | `imagemagick` |
+| ExifTool | `libimage-exiftool-perl` | `perl-Image-ExifTool` | `perl-image-exiftool` |
+| KDialog | `kdialog` | `kdialog` | `kdialog` |
+| QtDBus | `qdbus-qt6` | `qt6-qttools` | `qt6-tools` |
+| FFmpeg and FFprobe | `ffmpeg` | `ffmpeg` | `ffmpeg` |
+| Python | `python3` | `python3` | `python` |
+| PySide6 Widgets | `python3-pyside6.qtwidgets` | `python3-pyside6` | `pyside6` |
+| PySide6 Network | `python3-pyside6.qtnetwork` | `python3-pyside6` | `pyside6` |
+| PySide6 WebEngine (optional) | `python3-pyside6.qtwebenginewidgets` | `python3-pyside6` + `qt6-qtwebengine` | `pyside6` + `qt6-webengine` |
+| xdg-open | `xdg-utils` | `xdg-utils` | `xdg-utils` |
+| intltool | `intltool` | `intltool` | `intltool` |
+| Pandoc (optional) | `pandoc` | `pandoc` | `pandoc` |
+| gettext tools (optional) | `gettext` | `gettext` | `gettext` |
+| KDE service cache (optional) | `libkf6service-bin` | `kf6-kservice` | `kservice` |
+
+The optional Qt WebEngine Python binding enables the full
+illustrated HTML User Guide within KIM6. The standalone guide
+uses an HTML viewer and offers an external-browser fallback
+when WebEngine is unavailable.
+
+Installed KDE service-menu `.desktop` files intentionally
+have mode `0755`. Do not change them to `0644`, which can
+produce Dolphin execution-authorization errors.
+
+After installation, open **Settings/About → Settings…** in Dolphin to configure KIM6's output preferences.
+
+[View KIM6 Settings](docs/images/screenshots/10-settings-menu.png)
+
 ## What `install.sh` does
 
 The installer prepares KIM6 for Dolphin, checks the installation
 environment, and verifies the installed components. It does not install
-system packages, change KDE settings, or modify your photographs and videos.
+system packages, change KDE settings, or modify your images and videos.
 
 ### Dependency checks
 
@@ -217,7 +259,7 @@ To uninstall a system-wide installation, use the same directory:
 sudo ./uninstall.sh --prefix /usr/share/kio/servicemenus
 ```
 
-The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your photographs and videos.
+The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your images and videos.
 
 ## Installation and Removal Troubleshooting
 
