@@ -2,6 +2,9 @@
 import argparse
 import datetime as dt
 import json
+import os
+import copy
+from functools import lru_cache
 from pathlib import Path
 import sys
 from kim_recipe_core import RecipeError
@@ -35,7 +38,7 @@ def ensure_still_capture_input(path, preview=False):
             stream.seek(length+(4 if png else length%2),1)
 
 
-def source_date(path, ignore_invalid=False, preview=False):
+def _source_date_uncached(path, ignore_invalid=False, preview=False):
     ensure_still_capture_input(path,preview)
     tags=['-EXIF:all','-XMP:all','-IPTC:DateCreated','-IPTC:TimeCreated','-FileType']
     if preview:
@@ -60,12 +63,112 @@ def source_date(path, ignore_invalid=False, preview=False):
     return capture, fraction, canonical_file_type(info['FileType']).lower(),raw
 
 
+@lru_cache(maxsize=128)
+def _cache_source_date(path, ignore_invalid, preview, stamp):
+    return _source_date_uncached(path, ignore_invalid, preview)
+
+
+def source_date(path, ignore_invalid=False, preview=False):
+    path = os.path.abspath(os.fspath(path))
+
+    def fingerprint():
+        info = os.stat(path, follow_symlinks=False)
+        return (info.st_dev, info.st_ino, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+
+    before = fingerprint()
+    result = _cache_source_date(
+        path, bool(ignore_invalid), bool(preview), before
+    )
+
+    if fingerprint() != before:
+        _cache_source_date.cache_clear()
+        raise RecipeError(
+            'Source changed during date inspection. Review a fresh plan.'
+        )
+
+    return copy.deepcopy(result)
+
+
 def resolve(path, config):
     kind = config['kind']; fields = config.get('fields','capture'); zone = config.get('timezone','embedded')
     if fields not in ('capture','all'): raise RecipeError('Choose the date fields to change.')
-    capture, fraction, fmt, raw = source_date(path, ignore_invalid=kind in ('set','file-to-exif'),preview=config.get('_preview',False))
+    capture, fraction, fmt, raw = source_date(path, ignore_invalid=kind in ('set','file-to-exif','set-file','reference-to-exif','reference-to-file'),preview=config.get('_preview',False))
     if kind == 'set':
         capture, fraction = explicit(config.get('datetime',''),zone)
+    elif kind == 'set-file':
+        capture, fraction = explicit(
+            config.get('datetime', ''), zone
+        )
+    elif kind in ('reference-to-exif', 'reference-to-file'):
+        from kim_preview import identity
+
+        reference = config['reference_path']
+
+        if identity(reference) != config['reference_identity']:
+            raise RecipeError(
+                'Reference image changed. Select it again.'
+            )
+
+        ref_type = config['reference_type']
+
+        if ref_type not in ('capture', 'file'):
+            raise RecipeError('Invalid reference date source.')
+
+        if ref_type == 'capture':
+            capture, fraction, _, _ = source_date(
+                reference,
+                ignore_invalid=False,
+                preview=config.get('_preview', False),
+            )
+
+            if capture is None:
+                raise RecipeError(
+                    'The reference image has no usable capture date.'
+                )
+
+            if zone != 'embedded':
+                capture = capture.replace(
+                    tzinfo=timezone(zone)
+                )
+
+        else:
+            ns = Path(reference).stat().st_mtime_ns
+            seconds, subsec = divmod(ns, 10**9)
+
+            if kind == 'reference-to-file':
+                display_date = dt.datetime.fromtimestamp(
+                    seconds, dt.timezone.utc
+                )
+
+                return {
+                    'epoch_ns': ns,
+                    'preview': display(
+                        display_date,
+                        f'{subsec:09d}'.rstrip('0'),
+                    ),
+                    'args': [],
+                }
+
+            tz = timezone(zone)
+
+            if tz is None:
+                raise RecipeError(
+                    'Choose UTC or an explicit offset '
+                    'for the reference file date.'
+                )
+
+            capture = dt.datetime.fromtimestamp(
+                seconds, tz
+            )
+
+            fraction = f'{subsec:09d}'.rstrip('0')
+
+        if identity(reference) != config['reference_identity']:
+            raise RecipeError(
+                'Reference image changed during preview.'
+            )
+
     elif kind == 'file-to-exif':
         tz = timezone(zone)
         if tz is None: raise RecipeError('Choose a known timezone to express the File Modification Date as an Image Capture Date.')
@@ -83,7 +186,7 @@ def resolve(path, config):
     else: raise RecipeError('Unknown date action')
     if fmt not in ('jpeg','png','tiff','webp','avif','heic','heif','jp2','jxl','psd'):
         raise RecipeError(fmt.upper() + ' cannot safely store the selected image capture date fields. Convert to JPEG, PNG or TIFF first.')
-    if kind == 'exif-to-file':
+    if kind in ('exif-to-file', 'set-file', 'reference-to-file'):
         return {'epoch_ns':epoch_ns(capture,fraction),'preview':display(capture,fraction),'args':[]}
     args = assignments(capture,fraction,fields,fmt not in NO_LEGACY_IPTC)
     if kind == 'shift' and fields == 'all':

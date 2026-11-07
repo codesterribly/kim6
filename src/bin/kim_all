@@ -7232,7 +7232,7 @@ action_photo_date() {
   for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Image Capture Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Set Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
     # Pass the existing helper's exact affix seed alongside each source.
     : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
@@ -7258,11 +7258,11 @@ PYDATE
         progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
       fi
     done
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Image Capture Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 — Set Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Image Capture Dates')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Set Dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
@@ -7270,7 +7270,7 @@ PYDATE
       if preview_active; then break; fi
       continue
     fi
-    progress_begin_item "$ref" "$(gettext 'Planning image capture date:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
+    progress_begin_item "$ref" "$(gettext 'Planning date change:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
     if preview_active; then
       if [ "$(preview_value state "$source")" = skip ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
       preview_value date "$source" > "$result" || return 1
@@ -7302,7 +7302,7 @@ PYDATE
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Image Capture Dates')"
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Set Dates')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 

@@ -5,7 +5,7 @@ Name=KIM6
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
-Actions=00CheckExtensions;01Rename;02SetCaptureDate;02AdjustCaptureTime;03DateSync;04SetCopyright;04Overlay;05StripMetadata;06StripAI;
+Actions=00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;05StripMetadata;06StripAI;
 _X-KDE-Submenu=KIM6 — Organize/Metadata
 X-KIM6-Managed=true
 
@@ -13,16 +13,6 @@ X-KIM6-Managed=true
 Icon=edit-rename
 _Name=Rename Images…
 Exec=kim_all rename interactive -- %F
-
-[Desktop Action 02AdjustCaptureTime]
-Icon=image-x-generic
-_Name=Adjust Image Capture Date…
-Exec=kim_all timeshift --interactive -- %F
-
-[Desktop Action 03DateSync]
-Icon=view-calendar-day
-_Name=Set File Date from Image Capture Date…
-Exec=kim_all datesync --direction exif-to-file --interactive -- %F
 
 [Desktop Action 04SetCopyright]
 Icon=document-edit
@@ -44,12 +34,12 @@ Icon=document-properties
 _Name=Strip Metadata
 Exec=kim_all stripmeta --interactive -- %F
 
-[Desktop Action 02SetCaptureDate]
-Icon=view-calendar-day
-_Name=Set Image Capture Date…
-Exec=kim_all capturedate --interactive -- %F
-
 [Desktop Action 00CheckExtensions]
 Icon=document-preview
 _Name=Check & Correct Extensions…
 Exec=kim_all checkextensions -- %F
+
+[Desktop Action 02SetDates]
+Icon=view-calendar-day
+_Name=Set Dates…
+Exec=kim_all capturedate --mode unified --interactive -- %F

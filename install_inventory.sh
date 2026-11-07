@@ -39,6 +39,7 @@ src/bin/kim_filename.py|bin/kim_filename.py|0644
 src/bin/kim_ui.py|bin/kim_ui.py|0644
 src/bin/kim_date_tools.py|bin/kim_date_tools.py|0644
 src/bin/kim_date_dialog.py|bin/kim_date_dialog.py|0644
+src/bin/kim_dates_unified.py|bin/kim_dates_unified.py|0644
 src/bin/kim_location.py|bin/kim_location.py|0644
 src/bin/kim_location_dialog.py|bin/kim_location_dialog.py|0644
 src/bin/kim_location_ui.py|bin/kim_location_ui.py|0644

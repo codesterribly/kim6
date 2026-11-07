@@ -208,6 +208,24 @@ def inspect_png_removal(entry,mode,remove_ai):
 
 def date_plan(entry, config):
     from kim_date_tools import resolve
+
+    if (
+        config.get('kind') in (
+            'reference-to-exif',
+            'reference-to-file',
+        )
+        and entry['source'] == config.get('reference_path')
+    ):
+        entry['status'] = 'skip'
+        entry['skip_reason'] = 'Reference image, unchanged.'
+        entry['rows'] = [[
+            Path(entry['source']).name,
+            'Reference',
+            '',
+            '',
+            'Unchanged',
+        ]]
+        return
     config=dict(config,_preview=True)
     result=resolve(entry['source'],config)
     entry['args']=result['args']; entry['date_result']=result
@@ -224,8 +242,13 @@ def date_plan(entry, config):
             entry['rows'].append([Path(entry['source']).name,tag,current or '(absent)',value or 'Clear field',
                                   'Already correct' if current==value else 'Set / replace'])
         if not changed: entry['status']='skip'
-    entry['warnings'].append('Camera clocks keep the selected timezone interpretation. File Modification Date is preserved.' if 'epoch_ns' not in result else
-                             'Changes only the File Modification Date; the preview displays the capture clock and its known offset.')
+    entry['warnings'].append(
+        'Camera clocks keep the selected timezone interpretation. File Modification Date is preserved.'
+        if 'epoch_ns' not in result else
+        'Sets only the entered File Modification Date; embedded dates are unchanged.'
+        if config['kind'] == 'set-file' else
+        'Changes only the File Modification Date; the capture clock requires a known timezone.'
+    )
 
 
 def format_class(fmt):
@@ -457,6 +480,28 @@ def verify_entry(entry):
 
 
 def verify_plan(plan):
+    config = plan.get('config') or {}
+
+    if config.get('kind') in (
+        'reference-to-exif',
+        'reference-to-file',
+    ):
+        reference = config.get('reference_path')
+
+        if not reference or not any(
+            entry['source'] == reference
+            for entry in plan['entries']
+        ):
+            raise ValueError(
+                'Reference must be one of the selected images.'
+            )
+
+        if identity(reference) != config.get('reference_identity'):
+            raise ValueError(
+                'Reference image changed after preview. '
+                'Review again.'
+            )
+
     if not plan['entries']: raise ValueError('No selected images.')
     if plan.get('operation') == 'location':
         from kim_location import verify_dependencies
@@ -686,6 +731,9 @@ def qt_classes():
                     'shift': 'Adjust Image Capture Date',
                     'exif-to-file': 'Set File Date from Image Capture Date',
                     'file-to-exif': 'Set Image Capture Date',
+                    'set-file': 'Set File Modification Date',
+                    'reference-to-exif': 'Set Image Capture Date',
+                    'reference-to-file': 'Set File Modification Date',
                 }[plan['config']['kind']]
 
             elif operation == 'convert':

@@ -304,11 +304,41 @@ class PhotoDateDialog(QDialog):
 def main():
     kind,result,policy,seeds_path,*files=sys.argv[1:]
     seeds=Path(seeds_path).read_bytes().decode().split("\0")[:-1]
-    app=QApplication(sys.argv[:1]); dialog=PhotoDateDialog(kind,files,policy,seeds)
-    if dialog.exec()!=QDialog.Accepted: return 130
-    from kim_preview import save_plan
-    save_plan(result+'.approved',dialog.plan)
-    Path(result).write_text(json.dumps(dialog.config())); return 0
+    # Destroy the dialog and all its Qt children before destroying
+    # QApplication. Leaving both alive until interpreter shutdown
+    # can crash PySide6 while its binding manager deletes QObjects.
+    import shiboken6
+
+    app = QApplication(sys.argv[:1])
+    dialog = None
+
+    try:
+        if kind == 'unified':
+            from kim_dates_unified import SetDatesDialog
+            dialog = SetDatesDialog(files, policy, seeds)
+        else:
+            dialog = PhotoDateDialog(kind, files, policy, seeds)
+
+        if dialog.exec() != QDialog.Accepted:
+            return 130
+
+        from kim_preview import save_plan
+
+        save_plan(result + '.approved', dialog.plan)
+        Path(result).write_text(json.dumps(dialog.config()))
+        return 0
+
+    finally:
+        if dialog is not None:
+            # No worker may remain active after dialog acceptance.
+            # The dialog's rejection path already defers closure
+            # until its workers finish.
+            shiboken6.delete(dialog)
+            dialog = None
+
+        # QApplication must outlive every widget.
+        shiboken6.delete(app)
+        app = None
 
 
 if __name__=='__main__': raise SystemExit(main())
