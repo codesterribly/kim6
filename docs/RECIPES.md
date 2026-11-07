@@ -1,17 +1,17 @@
 # Recipes: Reusable Photo Workflows
 
-Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 — Recipes menu**. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source photographs**.
+Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 - Recipes menu**. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source photographs**.
 
 ## Start in Dolphin
 
-![KDE Dolphin KIM6 — Recipes menu showing Root shortcuts, Run a Recipe, and Recipe Editor](images/kim6-recipes-menu.png)
+![KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/kim6-recipes-menu.png)
 
 1. Select one or more supported photographs and right-click.
-2. Open **KIM6 — Recipes → Choose Saved Recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
+2. Open **KIM6 - Recipes → Choose saved recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
 3. Review the selected photographs and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
 4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
 
-The Recipes menu also provides **Recipe Editor…** for creating and managing your own workflows. The runner and editor group recipes under **Built-In**, **Root**, user-created folders, and **Unfiled**. Only user recipes assigned to **Root** are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.
+The Recipes menu also provides **Recipe editor…** for creating and managing your own workflows. The runner and editor group recipes under **Built-In**, **Root**, user-created folders, and **Unfiled**. Only user recipes assigned to **Root** are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.
 
 ## Web Export: a ready-to-use recipe
 
@@ -31,7 +31,7 @@ The following recipes are shipped with this checkout. You can duplicate a built-
 
 ![KIM6 Recipe Editor with ordered steps, destination choices, and live output preview](images/kim6-recipe-editor.png)
 
-Open **Recipe Editor…** from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.
+Open **Recipe editor…** from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.
 
 The editor can also **Load Photos & Run**. When a run originates in the editor, returning to the editor retains the selected photographs and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.
 

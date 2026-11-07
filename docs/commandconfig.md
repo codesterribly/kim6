@@ -79,7 +79,7 @@ For compression, conversion, resizing, metadata stripping and copyright editing,
 
 ## Configuration and Defaults
 
-**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIM6 — Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. The **Output Filenames** tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click **Save**. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
+**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIM6 - Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. The **Output Filenames** tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click **Save**. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
 
 ### Settings
 
@@ -178,7 +178,7 @@ See [Output and File Handling](#output-and-file-handling), [copyright](#copyrigh
 
 ## Recipes
 
-The **KIM6 — Recipes** submenu in Dolphin provides **Choose Saved Recipe…** and **Recipe Editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+The **KIM6 - Recipes** submenu in Dolphin provides **Choose saved recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
 
 Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides **Load Photos & Run**. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
 
@@ -238,6 +238,14 @@ the file modification time with the recorded photo capture date. Unknown camera 
 to be UTC or the computer local time.
 
 See also [`datesync`](#datesync) and [`timeshift`](#timeshift).
+### `checkextensions`
+
+    kim_all checkextensions -- FILE...
+
+Checks selected image filenames against their detected file formats.
+The Dolphin action is **Check and correct extensions…**.
+It provides a review before creating correctly named copies; the selected originals are preserved.
+
 ### `collage`
 
 ```sh

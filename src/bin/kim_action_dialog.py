@@ -336,8 +336,8 @@ class ActionDialog(QDialog):
                 'Compress received no selected files from Dolphin'
             )
         self.worker=None; self.headers={}; self.header_stamps={}; self.compress_eligible=[]; self.header_error=None; self.closing=False; self.geometry_cache={}
-        self.setWindowTitle('KIM6 - '+{'rotate':'Rotate','resize':'Resize Images','percent':'Resize by Percentage',
-            'convert':'Convert Format','compress':'Compress Custom','copyright':'Set Creator and Copyright','strip':'Remove Metadata','rename':'Rename Images'}[kind])
+        self.setWindowTitle('KIM6 - '+{'rotate':'Rotate','resize':'Resize images','percent':'Resize by percentage',
+            'convert':'Convert format','compress':'Compress custom','copyright':'Set creator and copyright','strip':'Remove metadata','rename':'Rename images'}[kind])
         self.layout=QVBoxLayout(self)
         if kind=='compress':
             self.setWindowTitle('KIM6 - Compress '+preset.title())
@@ -621,7 +621,7 @@ class ActionDialog(QDialog):
             self.preview.hide()
             self.update_rename_controls()
             self.fields['directory']=QLineEdit(); self.fields['directory'].setPlaceholderText('Beside each source'); self.form.addRow('Destination directory',self.fields['directory'])
-            browse=QPushButton('Choose Directory…'); browse.clicked.connect(self.browse); self.form.addRow(browse)
+            browse=QPushButton('Choose directory…'); browse.clicked.connect(self.browse); self.form.addRow(browse)
             self.message.setText('Before → after updates as you edit. '+('New copies protect original files.' if self.policy=='create' else 'You explicitly approved renaming originals; their old names will be removed after publication.')+' Names are checked again when saving.')
         self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(100); self.timer.timeout.connect(self.refresh)
         for widget in self.fields.values():

@@ -6,12 +6,12 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
 Actions=Videohd108017265mp4;Videohd108023265mp4;Videohd108029265mp4;Videohd72017265mp4;Videohd72023265mp4;Videohd72029265mp4;
-_X-KDE-Submenu=KIM6 — Convert Video: H.265
+_X-KDE-Submenu=KIM6 - Convert Video: H.265
 X-KIM6-Managed=true
 
 [Desktop Action Videohd108017265mp4]
 Icon=image-x-generic
-_Name=1080p • High Quality • MP4
+_Name=1080p • High quality • MP4
 Exec=kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F
 
 [Desktop Action Videohd108023265mp4]
@@ -21,12 +21,12 @@ Exec=kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F
 
 [Desktop Action Videohd108029265mp4]
 Icon=image-x-generic
-_Name=1080p • Smallest File • MP4
+_Name=1080p • Smallest file • MP4
 Exec=kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F
 
 [Desktop Action Videohd72017265mp4]
 Icon=image-x-generic
-_Name=720p • High Quality • MP4
+_Name=720p • High quality • MP4
 Exec=kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F
 
 [Desktop Action Videohd72023265mp4]
@@ -36,5 +36,5 @@ Exec=kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F
 
 [Desktop Action Videohd72029265mp4]
 Icon=image-x-generic
-_Name=720p • Smallest File • MP4
+_Name=720p • Smallest file • MP4
 Exec=kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F

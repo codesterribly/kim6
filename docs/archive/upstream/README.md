@@ -1,4 +1,4 @@
-# KDE Image Menu 6 — KIM6
+# KDE Image Menu 6 - KIM6
 KIM6 is a service menu for the KDE Plasma desktop. It adds context-menu actions in Dolphin and Folder View so you can resize, convert and batch-process images (and some video formats) directly from the file manager.
 
 KDE store: https://store.kde.org/p/2307290/

@@ -265,7 +265,7 @@ def reference_caption(path, data, units):
         lines.append('Image capture date: ' + (' / '.join(stamps) if stamps else 'not recorded'))
         others = [COORDINATE_CATEGORIES[r['category']] for r in info['records'] if r['category'] != 'camera' and r['position'] is not None]
         if others: lines.append('Other location records: ' + ', '.join(dict.fromkeys(others)) + ' (not copied)')
-        if info['issues']: lines.append('Location information needs review; see Technical Metadata.')
+        if info['issues']: lines.append('Location information needs review; see Technical metadata.')
         return '\n'.join(lines)
     except ValueError as exc:
         return name + '\nGPS information needs review: ' + str(exc)
@@ -385,13 +385,13 @@ def recorded_location_rows(info, units):
             if name == 'GPSAltitude':
                 # Display the signed recorded height in the
                 # selected units. Reference details remain in
-                # Technical Metadata.
+                # Technical metadata.
                 text = height(value, units)
             else:
                 text = f'{value:g}° from ' + ('true north' if ref == 'T' else 'magnetic north')
             rows.append((label, text))
         except ValueError:
-            rows.append((label, 'Recorded, but needs review: see Technical Metadata'))
+            rows.append((label, 'Recorded, but needs review: see Technical metadata'))
     if info['places']: rows.append(('Place names in file', places_text(info)))
     others = [COORDINATE_CATEGORIES[r['category']] + ': ' + position_text(r['position'])
               for r in info['records'] if r['category'] != 'camera' and r['position'] is not None and not r['issues']]
@@ -407,7 +407,7 @@ def recorded_location_rows(info, units):
         additional.append('Position measurement information recorded')
     coordinate_fields = {'GPSLatitude', 'GPSLatitudeRef', 'GPSLongitude', 'GPSLongitudeRef', 'GPSVersionID', 'GPSMapDatum'}
     if not rows and not additional and any(key.split(':')[-1] not in coordinate_fields for key in flat):
-        additional.append('Other location information recorded: see Technical Metadata')
+        additional.append('Other location information recorded: see Technical metadata')
     if additional: rows.append(('Additional information', '\n'.join(additional)))
     return rows
 
@@ -420,10 +420,10 @@ def inspection_warning(entry):
         for category, data in info['categories'].items():
             if data['issues']:
                 warnings.append((camera_status(info) if category == 'camera' else
-                                 COORDINATE_CATEGORIES[category] + ' needs review') + ': see Technical Metadata')
+                                 COORDINATE_CATEGORIES[category] + ' needs review') + ': see Technical metadata')
             if data['optional_issues']:
                 warnings.append(COORDINATE_CATEGORIES[category] + ': additional location information needs review')
-        if info['duplicate_records']: warnings.append('Duplicate location records: see Technical Metadata')
+        if info['duplicate_records']: warnings.append('Duplicate location records: see Technical metadata')
     warnings.extend(w for w in entry.get('warnings', []) if not info or w not in info['issues'])
     return '\n'.join(dict.fromkeys(warnings))
 
@@ -494,7 +494,7 @@ def privacy_inspector_rows(entry, units):
         rows.append((
             'Inspection',
             'Could not read location metadata. '
-            'See Technical Metadata for the cause.',
+            'See Technical metadata for the cause.',
         ))
 
     warning = inspection_warning(entry)
@@ -571,7 +571,7 @@ def metadata_summary_sections(entry, sections):
     result.append(('GPS location', camera))
     if other: result.append(('Other location information', other))
     quality = [('Coordinate interpretation', camera_status(info))] if info['position'] is not None else []
-    warning = inspection_warning(entry).replace(': see Technical Metadata', '')
+    warning = inspection_warning(entry).replace(': see Technical metadata', '')
     if info['duplicate_records']:
         warning = '\n'.join(line for line in warning.splitlines() if line != 'Duplicate location records')
     if warning: quality.append(('Review', warning))
@@ -597,7 +597,7 @@ class TechnicalMetadataDialog(QDialog):
     """Shared native viewer; interpretation stays in the existing GPS helpers."""
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle('Technical Metadata')
+        self.setWindowTitle('Technical metadata')
         self.setSizeGripEnabled(True)
         available = self.screen().availableGeometry()
         self.resize(min(900, available.width() * 9 // 10), min(650, available.height() * 9 // 10))
@@ -716,7 +716,7 @@ class LocationInspector(QWidget):
         self.summary.setWidget(self.summary_content); layout.addWidget(self.summary, 1)
         self.metadata_dialog = TechnicalMetadataDialog(self)
         self.metadata_controls = self.metadata_dialog.controls
-        self.metadata_button = QPushButton('Technical Metadata…')
+        self.metadata_button = QPushButton('Technical metadata…')
         self.metadata_button.setAutoDefault(False); self.metadata_button.setEnabled(False)
         layout.addWidget(self.metadata_button)
         self.sections = None

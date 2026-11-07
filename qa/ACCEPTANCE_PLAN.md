@@ -16,9 +16,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_compress.desktop:Compress90` | `Compress90` | JPEG quality: 90% | `kim_all compress --quality 90 -- %F` | photo.jpg | authorized_overwrite |
 | `kim_compress.desktop:CompressCustom` | `CompressCustom` | Compress at custom quality… | `kim_all compress --custom -- %F` | -leading ü [1].jpg | authorized_overwrite |
 
-### JPEG quality: 10% — `kim_compress.desktop:Compress10`
+### JPEG quality: 10% - `kim_compress.desktop:Compress10`
 
-- **Menu path:** KIM6 — JPEG compression → JPEG quality: 10%
+- **Menu path:** KIM6 - JPEG compression → JPEG quality: 10%
 - **Dispatcher contract:** `kim_all compress --quality 10 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -30,9 +30,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode.
 - **Human inspection:** Check that the menu starts the operation named ‘JPEG quality: 10%’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### JPEG quality: 30% — `kim_compress.desktop:Compress30`
+### JPEG quality: 30% - `kim_compress.desktop:Compress30`
 
-- **Menu path:** KIM6 — JPEG compression → JPEG quality: 30%
+- **Menu path:** KIM6 - JPEG compression → JPEG quality: 30%
 - **Dispatcher contract:** `kim_all compress --quality 30 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -44,9 +44,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode.
 - **Human inspection:** Check that the menu starts the operation named ‘JPEG quality: 30%’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### JPEG quality: 50% — `kim_compress.desktop:Compress50`
+### JPEG quality: 50% - `kim_compress.desktop:Compress50`
 
-- **Menu path:** KIM6 — JPEG compression → JPEG quality: 50%
+- **Menu path:** KIM6 - JPEG compression → JPEG quality: 50%
 - **Dispatcher contract:** `kim_all compress --quality 50 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -58,9 +58,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode.
 - **Human inspection:** Check that the menu starts the operation named ‘JPEG quality: 50%’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### JPEG quality: 70% — `kim_compress.desktop:Compress70`
+### JPEG quality: 70% - `kim_compress.desktop:Compress70`
 
-- **Menu path:** KIM6 — JPEG compression → JPEG quality: 70%
+- **Menu path:** KIM6 - JPEG compression → JPEG quality: 70%
 - **Dispatcher contract:** `kim_all compress --quality 70 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -72,9 +72,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode.
 - **Human inspection:** Check that the menu starts the operation named ‘JPEG quality: 70%’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### JPEG quality: 90% — `kim_compress.desktop:Compress90`
+### JPEG quality: 90% - `kim_compress.desktop:Compress90`
 
-- **Menu path:** KIM6 — JPEG compression → JPEG quality: 90%
+- **Menu path:** KIM6 - JPEG compression → JPEG quality: 90%
 - **Dispatcher contract:** `kim_all compress --quality 90 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -86,9 +86,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode.
 - **Human inspection:** Check that the menu starts the operation named ‘JPEG quality: 90%’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Compress at custom quality… — `kim_compress.desktop:CompressCustom`
+### Compress at custom quality… - `kim_compress.desktop:CompressCustom`
 
-- **Menu path:** KIM6 — JPEG compression → Compress at custom quality…
+- **Menu path:** KIM6 - JPEG compression → Compress at custom quality…
 - **Dispatcher contract:** `kim_all compress --custom -- %F`
 - **Select for the Dolphin context menu:** -leading ü [1].jpg
 - **Files passed to dispatcher:** yes
@@ -130,9 +130,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_compressandresize.desktop:Email600x600` | `Email600x600` | Send by mail: Resize to 600px and email | `kim_all resizeandsend --size 600x600 -- %F` | photo.jpg, wide.jpg | derived |
 | `kim_compressandresize.desktop:Email300x300` | `Email300x300` | Send by mail: Resize to 300px and email | `kim_all resizeandsend --size 300x300 -- %F` | photo.jpg, wide.jpg | derived |
 
-### Resize (300x300 pixels) — `kim_compressandresize.desktop:Resize300`
+### Resize (300x300 pixels) - `kim_compressandresize.desktop:Resize300`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (300x300 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (300x300 pixels)
 - **Dispatcher contract:** `kim_all resize --size 300x300 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -144,9 +144,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (300x300 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (600x600 pixels) — `kim_compressandresize.desktop:Resize600`
+### Resize (600x600 pixels) - `kim_compressandresize.desktop:Resize600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (600x600 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (600x600 pixels)
 - **Dispatcher contract:** `kim_all resize --size 600x600 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -158,9 +158,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (600x600 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (800x800 pixels) — `kim_compressandresize.desktop:Resize800`
+### Resize (800x800 pixels) - `kim_compressandresize.desktop:Resize800`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (800x800 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (800x800 pixels)
 - **Dispatcher contract:** `kim_all resize --size 800x800 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -172,9 +172,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (800x800 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (1024x1024 pixels) — `kim_compressandresize.desktop:Resize1024`
+### Resize (1024x1024 pixels) - `kim_compressandresize.desktop:Resize1024`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (1024x1024 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (1024x1024 pixels)
 - **Dispatcher contract:** `kim_all resize --size 1024x1024 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -186,9 +186,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (1024x1024 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (1280x1280 pixels) — `kim_compressandresize.desktop:Resize1280`
+### Resize (1280x1280 pixels) - `kim_compressandresize.desktop:Resize1280`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (1280x1280 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (1280x1280 pixels)
 - **Dispatcher contract:** `kim_all resize --size 1280x1280 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -200,9 +200,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (1280x1280 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (1400x1400 pixels) — `kim_compressandresize.desktop:Resize1400`
+### Resize (1400x1400 pixels) - `kim_compressandresize.desktop:Resize1400`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (1400x1400 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (1400x1400 pixels)
 - **Dispatcher contract:** `kim_all resize --size 1400x1400 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -214,9 +214,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (1400x1400 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (1600x1600 pixels) — `kim_compressandresize.desktop:Resize1600`
+### Resize (1600x1600 pixels) - `kim_compressandresize.desktop:Resize1600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (1600x1600 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (1600x1600 pixels)
 - **Dispatcher contract:** `kim_all resize --size 1600x1600 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -228,9 +228,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (1600x1600 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (1920x1920 pixels) — `kim_compressandresize.desktop:Resize1920`
+### Resize (1920x1920 pixels) - `kim_compressandresize.desktop:Resize1920`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (1920x1920 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (1920x1920 pixels)
 - **Dispatcher contract:** `kim_all resize --size 1920x1920 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -242,9 +242,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (1920x1920 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (2560x2560 pixels) — `kim_compressandresize.desktop:Resize2560`
+### Resize (2560x2560 pixels) - `kim_compressandresize.desktop:Resize2560`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (2560x2560 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (2560x2560 pixels)
 - **Dispatcher contract:** `kim_all resize --size 2560x2560 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -256,9 +256,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (2560x2560 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (3440x3440 pixels) — `kim_compressandresize.desktop:Resize3440`
+### Resize (3440x3440 pixels) - `kim_compressandresize.desktop:Resize3440`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (3440x3440 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (3440x3440 pixels)
 - **Dispatcher contract:** `kim_all resize --size 3440x3440 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -270,9 +270,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (3440x3440 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize (3840x3840 pixels) — `kim_compressandresize.desktop:Resize3840`
+### Resize (3840x3840 pixels) - `kim_compressandresize.desktop:Resize3840`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize (3840x3840 pixels)
+- **Menu path:** KIM6 - Compress, resize and web export → Resize (3840x3840 pixels)
 - **Dispatcher contract:** `kim_all resize --size 3840x3840 -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -284,9 +284,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize (3840x3840 pixels)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize custom… — `kim_compressandresize.desktop:ResizeCustom`
+### Resize custom… - `kim_compressandresize.desktop:ResizeCustom`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize custom…
+- **Menu path:** KIM6 - Compress, resize and web export → Resize custom…
 - **Dispatcher contract:** `kim_all resize --custom -- %F`
 - **Select for the Dolphin context menu:** large.jpg
 - **Files passed to dispatcher:** yes
@@ -298,9 +298,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize custom…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Resize by percentage… — `kim_compressandresize.desktop:ResizePercent`
+### Resize by percentage… - `kim_compressandresize.desktop:ResizePercent`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Resize by percentage…
+- **Menu path:** KIM6 - Compress, resize and web export → Resize by percentage…
 - **Dispatcher contract:** `kim_all resize --custom-percent -- %F`
 - **Select for the Dolphin context menu:** large.jpg, unicode photo ü [1].jpg
 - **Files passed to dispatcher:** yes
@@ -312,9 +312,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, actual format, frame count and dimensions are plausible for chosen geometry.
 - **Human inspection:** Check that the menu starts the operation named ‘Resize by percentage…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web thumbnail: 128x128 at 75 % — `kim_compressandresize.desktop:Web128`
+### Web thumbnail: 128x128 at 75 % - `kim_compressandresize.desktop:Web128`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web thumbnail: 128x128 at 75 %
+- **Menu path:** KIM6 - Compress, resize and web export → Web thumbnail: 128x128 at 75 %
 - **Dispatcher contract:** `kim_all webexport --size 128x128 --quality 75 -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -326,9 +326,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web thumbnail: 128x128 at 75 %’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web export: 600x600 at 75 % — `kim_compressandresize.desktop:Web600`
+### Web export: 600x600 at 75 % - `kim_compressandresize.desktop:Web600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web export: 600x600 at 75 %
+- **Menu path:** KIM6 - Compress, resize and web export → Web export: 600x600 at 75 %
 - **Dispatcher contract:** `kim_all webexport --size 600x600 --quality 75 -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -340,9 +340,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web export: 600x600 at 75 %’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web export: 800x800 at 75 % — `kim_compressandresize.desktop:Web800`
+### Web export: 800x800 at 75 % - `kim_compressandresize.desktop:Web800`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web export: 800x800 at 75 %
+- **Menu path:** KIM6 - Compress, resize and web export → Web export: 800x800 at 75 %
 - **Dispatcher contract:** `kim_all webexport --size 800x800 --quality 75 -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -354,9 +354,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web export: 800x800 at 75 %’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web export: 1024x1024 at 75 % — `kim_compressandresize.desktop:Web1024`
+### Web export: 1024x1024 at 75 % - `kim_compressandresize.desktop:Web1024`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web export: 1024x1024 at 75 %
+- **Menu path:** KIM6 - Compress, resize and web export → Web export: 1024x1024 at 75 %
 - **Dispatcher contract:** `kim_all webexport --size 1024x1024 --quality 75 -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -368,9 +368,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web export: 1024x1024 at 75 %’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web export: 1600x1600 at 75 % — `kim_compressandresize.desktop:Web1600`
+### Web export: 1600x1600 at 75 % - `kim_compressandresize.desktop:Web1600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web export: 1600x1600 at 75 %
+- **Menu path:** KIM6 - Compress, resize and web export → Web export: 1600x1600 at 75 %
 - **Dispatcher contract:** `kim_all webexport --size 1600x1600 --quality 75 -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -382,9 +382,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web export: 1600x1600 at 75 %’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Web export, keep input format… — `kim_compressandresize.desktop:WebKeep`
+### Web export, keep input format… - `kim_compressandresize.desktop:WebKeep`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Web export, keep input format…
+- **Menu path:** KIM6 - Compress, resize and web export → Web export, keep input format…
 - **Dispatcher contract:** `kim_all webexport --size 1600x1600 --quality 75 --format keep -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -396,9 +396,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual output format, dimensions and profile are checked; source remains byte-identical.
 - **Human inspection:** Check that the menu starts the operation named ‘Web export, keep input format…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Send by mail: Send original by mail — `kim_compressandresize.desktop:Emailfull`
+### Send by mail: Send original by mail - `kim_compressandresize.desktop:Emailfull`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Send original by mail
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Send original by mail
 - **Dispatcher contract:** `kim_all resizeandsend --size full -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -410,9 +410,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Draft contains only prepared files with valid formats; source hashes remain unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Send by mail: Send original by mail’. Check that the draft contains only the expected prepared images and do not send it.
 
-### Send by mail: Resize to 1600px and email — `kim_compressandresize.desktop:Email1600x1600`
+### Send by mail: Resize to 1600px and email - `kim_compressandresize.desktop:Email1600x1600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Resize to 1600px and email
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Resize to 1600px and email
 - **Dispatcher contract:** `kim_all resizeandsend --size 1600x1600 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -424,9 +424,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Draft contains only prepared files with valid formats; source hashes remain unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Send by mail: Resize to 1600px and email’. Check that the draft contains only the expected prepared images and do not send it.
 
-### Send by mail: Resize to 1200px and email — `kim_compressandresize.desktop:Email1200x1200`
+### Send by mail: Resize to 1200px and email - `kim_compressandresize.desktop:Email1200x1200`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Resize to 1200px and email
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Resize to 1200px and email
 - **Dispatcher contract:** `kim_all resizeandsend --size 1200x1200 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -438,9 +438,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Draft contains only prepared files with valid formats; source hashes remain unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Send by mail: Resize to 1200px and email’. Check that the draft contains only the expected prepared images and do not send it.
 
-### Send by mail: Resize to 800px and email — `kim_compressandresize.desktop:Email800x800`
+### Send by mail: Resize to 800px and email - `kim_compressandresize.desktop:Email800x800`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Resize to 800px and email
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Resize to 800px and email
 - **Dispatcher contract:** `kim_all resizeandsend --size 800x800 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -452,9 +452,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Draft contains only prepared files with valid formats; source hashes remain unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Send by mail: Resize to 800px and email’. Check that the draft contains only the expected prepared images and do not send it.
 
-### Send by mail: Resize to 600px and email — `kim_compressandresize.desktop:Email600x600`
+### Send by mail: Resize to 600px and email - `kim_compressandresize.desktop:Email600x600`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Resize to 600px and email
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Resize to 600px and email
 - **Dispatcher contract:** `kim_all resizeandsend --size 600x600 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -466,9 +466,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Draft contains only prepared files with valid formats; source hashes remain unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Send by mail: Resize to 600px and email’. Check that the draft contains only the expected prepared images and do not send it.
 
-### Send by mail: Resize to 300px and email — `kim_compressandresize.desktop:Email300x300`
+### Send by mail: Resize to 300px and email - `kim_compressandresize.desktop:Email300x300`
 
-- **Menu path:** KIM6 — Compress, resize and web export → Send by mail: Resize to 300px and email
+- **Menu path:** KIM6 - Compress, resize and web export → Send by mail: Resize to 300px and email
 - **Dispatcher contract:** `kim_all resizeandsend --size 300x300 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg, wide.jpg
 - **Files passed to dispatcher:** yes
@@ -523,9 +523,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_compressandresizevideo.desktop:License` | `License` | License | `kim_all license` | video-audio.mp4 | none |
 | `kim_compressandresizevideo.desktop:About` | `About` | About KIM6 | `kim_all about` | video-audio.mp4 | none |
 
-### Transcode 720 good H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd72017265orig`
+### Transcode 720 good H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd72017265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 good H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 good H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 17 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -537,9 +537,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 good H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 good H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd72017265mp4`
+### Transcode 720 good H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd72017265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 good H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 good H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -551,9 +551,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 good H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 good H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd72017264orig`
+### Transcode 720 good H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd72017264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 good H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 good H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 17 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -565,9 +565,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 good H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 good H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd72017264mp4`
+### Transcode 720 good H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd72017264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 good H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 good H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-silent.mp4
 - **Files passed to dispatcher:** yes
@@ -579,9 +579,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 good H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 medium H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd72023265orig`
+### Transcode 720 medium H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd72023265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 medium H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 medium H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 23 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -593,9 +593,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 medium H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 medium H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd72023265mp4`
+### Transcode 720 medium H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd72023265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 medium H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 medium H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -607,9 +607,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 medium H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 medium H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd72023264orig`
+### Transcode 720 medium H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd72023264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 medium H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 medium H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 23 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -621,9 +621,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 medium H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 medium H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd72023264mp4`
+### Transcode 720 medium H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd72023264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 medium H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 medium H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -635,9 +635,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 medium H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 smaller file H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd72029265orig`
+### Transcode 720 smaller file H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd72029265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 smaller file H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 smaller file H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 29 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -649,9 +649,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 smaller file H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 smaller file H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd72029265mp4`
+### Transcode 720 smaller file H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd72029265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 smaller file H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 smaller file H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -663,9 +663,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 smaller file H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 smaller file H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd72029264orig`
+### Transcode 720 smaller file H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd72029264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 smaller file H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 smaller file H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 29 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -677,9 +677,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 smaller file H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 720 smaller file H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd72029264mp4`
+### Transcode 720 smaller file H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd72029264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 720 smaller file H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 720 smaller file H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -691,9 +691,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 720 smaller file H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 good H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd108017265orig`
+### Transcode 1080 good H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd108017265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 good H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 good H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 17 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -705,9 +705,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 good H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 good H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd108017265mp4`
+### Transcode 1080 good H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd108017265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 good H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 good H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -719,9 +719,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 good H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 good H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd108017264orig`
+### Transcode 1080 good H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd108017264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 good H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 good H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 17 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -733,9 +733,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 good H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 good H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd108017264mp4`
+### Transcode 1080 good H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd108017264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 good H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 good H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -747,9 +747,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 good H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 medium H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd108023265orig`
+### Transcode 1080 medium H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd108023265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 medium H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 medium H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 23 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -761,9 +761,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 medium H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 medium H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd108023265mp4`
+### Transcode 1080 medium H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd108023265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 medium H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 medium H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -775,9 +775,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 medium H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 medium H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd108023264orig`
+### Transcode 1080 medium H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd108023264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 medium H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 medium H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 23 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -789,9 +789,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 medium H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 medium H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd108023264mp4`
+### Transcode 1080 medium H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd108023264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 medium H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 medium H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -803,9 +803,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 medium H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 smaller file H.265 (original container) — `kim_compressandresizevideo.desktop:Videohd108029265orig`
+### Transcode 1080 smaller file H.265 (original container) - `kim_compressandresizevideo.desktop:Videohd108029265orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 smaller file H.265 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 smaller file H.265 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 29 --codec libx265 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -817,9 +817,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 smaller file H.265 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 smaller file H.265 (MP4) — `kim_compressandresizevideo.desktop:Videohd108029265mp4`
+### Transcode 1080 smaller file H.265 (MP4) - `kim_compressandresizevideo.desktop:Videohd108029265mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 smaller file H.265 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 smaller file H.265 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -831,9 +831,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 smaller file H.265 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 smaller file H.264 (original container) — `kim_compressandresizevideo.desktop:Videohd108029264orig`
+### Transcode 1080 smaller file H.264 (original container) - `kim_compressandresizevideo.desktop:Videohd108029264orig`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 smaller file H.264 (original container)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 smaller file H.264 (original container)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 29 --codec libx264 --container orig -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -845,9 +845,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 smaller file H.264 (original container)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Transcode 1080 smaller file H.264 (MP4) — `kim_compressandresizevideo.desktop:Videohd108029264mp4`
+### Transcode 1080 smaller file H.264 (MP4) - `kim_compressandresizevideo.desktop:Videohd108029264mp4`
 
-- **Menu path:** KIM6 — Video transcoding → Transcode 1080 smaller file H.264 (MP4)
+- **Menu path:** KIM6 - Video transcoding → Transcode 1080 smaller file H.264 (MP4)
 - **Dispatcher contract:** `kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -859,9 +859,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Transcode 1080 smaller file H.264 (MP4)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### AV1 720p high quality — `kim_compressandresizevideo.desktop:Av1hd720High`
+### AV1 720p high quality - `kim_compressandresizevideo.desktop:Av1hd720High`
 
-- **Menu path:** KIM6 — Video transcoding → AV1 720p high quality
+- **Menu path:** KIM6 - Video transcoding → AV1 720p high quality
 - **Dispatcher contract:** `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -873,9 +873,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘AV1 720p high quality’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### AV1 720p balanced — `kim_compressandresizevideo.desktop:Av1hd720Balanced`
+### AV1 720p balanced - `kim_compressandresizevideo.desktop:Av1hd720Balanced`
 
-- **Menu path:** KIM6 — Video transcoding → AV1 720p balanced
+- **Menu path:** KIM6 - Video transcoding → AV1 720p balanced
 - **Dispatcher contract:** `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-silent.mp4
 - **Files passed to dispatcher:** yes
@@ -887,9 +887,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘AV1 720p balanced’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### AV1 1080p high quality — `kim_compressandresizevideo.desktop:Av1hd1080High`
+### AV1 1080p high quality - `kim_compressandresizevideo.desktop:Av1hd1080High`
 
-- **Menu path:** KIM6 — Video transcoding → AV1 1080p high quality
+- **Menu path:** KIM6 - Video transcoding → AV1 1080p high quality
 - **Dispatcher contract:** `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -901,9 +901,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘AV1 1080p high quality’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### AV1 1080p balanced — `kim_compressandresizevideo.desktop:Av1hd1080Balanced`
+### AV1 1080p balanced - `kim_compressandresizevideo.desktop:Av1hd1080Balanced`
 
-- **Menu path:** KIM6 — Video transcoding → AV1 1080p balanced
+- **Menu path:** KIM6 - Video transcoding → AV1 1080p balanced
 - **Dispatcher contract:** `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -915,9 +915,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘AV1 1080p balanced’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Custom AV1 settings… — `kim_compressandresizevideo.desktop:Av1Custom`
+### Custom AV1 settings… - `kim_compressandresizevideo.desktop:Av1Custom`
 
-- **Menu path:** KIM6 — Video transcoding → Custom AV1 settings…
+- **Menu path:** KIM6 - Video transcoding → Custom AV1 settings…
 - **Dispatcher contract:** `kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -929,9 +929,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms container, requested codec and size bounds; full decode and approximate source-duration preservation are checked. Review audio stream mapping and visual quality.
 - **Human inspection:** Check that the menu starts the operation named ‘Custom AV1 settings…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Extract frame at timestamp… — `kim_compressandresizevideo.desktop:VideoFrameAt`
+### Extract frame at timestamp… - `kim_compressandresizevideo.desktop:VideoFrameAt`
 
-- **Menu path:** KIM6 — Video transcoding → Extract frame at timestamp…
+- **Menu path:** KIM6 - Video transcoding → Extract frame at timestamp…
 - **Dispatcher contract:** `kim_all videoframes --mode single --format png --interactive -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -943,9 +943,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: output image fully decodes and observed dimensions/frame count are reported. Human: check requested timestamp and contact-sheet labels.
 - **Human inspection:** Check that the menu starts the operation named ‘Extract frame at timestamp…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Extract automatic thumbnail — `kim_compressandresizevideo.desktop:VideoThumbnail`
+### Extract automatic thumbnail - `kim_compressandresizevideo.desktop:VideoThumbnail`
 
-- **Menu path:** KIM6 — Video transcoding → Extract automatic thumbnail
+- **Menu path:** KIM6 - Video transcoding → Extract automatic thumbnail
 - **Dispatcher contract:** `kim_all videoframes --mode thumbnail --format jpg -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -957,9 +957,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: output image fully decodes and observed dimensions/frame count are reported. Human: check requested timestamp and contact-sheet labels.
 - **Human inspection:** Check that the menu starts the operation named ‘Extract automatic thumbnail’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Create video contact sheet… — `kim_compressandresizevideo.desktop:VideoContactSheet`
+### Create video contact sheet… - `kim_compressandresizevideo.desktop:VideoContactSheet`
 
-- **Menu path:** KIM6 — Video transcoding → Create video contact sheet…
+- **Menu path:** KIM6 - Video transcoding → Create video contact sheet…
 - **Dispatcher contract:** `kim_all videoframes --mode contact --format jpg --interactive -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -971,9 +971,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: output image fully decodes and observed dimensions/frame count are reported. Human: check requested timestamp and contact-sheet labels.
 - **Human inspection:** Check that the menu starts the operation named ‘Create video contact sheet…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Extract audio… — `kim_compressandresizevideo.desktop:ExtractVideoAudio`
+### Extract audio… - `kim_compressandresizevideo.desktop:ExtractVideoAudio`
 
-- **Menu path:** KIM6 — Video transcoding → Extract audio…
+- **Menu path:** KIM6 - Video transcoding → Extract audio…
 - **Dispatcher contract:** `kim_all videoaudio --mode extract --format m4a --interactive -- %F`
 - **Select for the Dolphin context menu:** video-multiaudio.mkv
 - **Files passed to dispatcher:** yes
@@ -985,9 +985,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms audio codec/container and stream count, or confirms no audio after mute; full decode and approximate duration are checked.
 - **Human inspection:** Check that the menu starts the operation named ‘Extract audio…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Remove audio (copy video) — `kim_compressandresizevideo.desktop:MuteVideo`
+### Remove audio (copy video) - `kim_compressandresizevideo.desktop:MuteVideo`
 
-- **Menu path:** KIM6 — Video transcoding → Remove audio (copy video)
+- **Menu path:** KIM6 - Video transcoding → Remove audio (copy video)
 - **Dispatcher contract:** `kim_all videoaudio --mode mute -- %F`
 - **Select for the Dolphin context menu:** video-multiaudio.mkv
 - **Files passed to dispatcher:** yes
@@ -999,9 +999,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** ffprobe confirms audio codec/container and stream count, or confirms no audio after mute; full decode and approximate duration are checked.
 - **Human inspection:** Check that the menu starts the operation named ‘Remove audio (copy video)’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Create animated GIF from video… — `kim_compressandresizevideo.desktop:VideoToGif`
+### Create animated GIF from video… - `kim_compressandresizevideo.desktop:VideoToGif`
 
-- **Menu path:** KIM6 — Video transcoding → Create animated GIF from video…
+- **Menu path:** KIM6 - Video transcoding → Create animated GIF from video…
 - **Dispatcher contract:** `kim_all videogif --interactive -- %F`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** yes
@@ -1013,9 +1013,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: GIF fully decodes, has at least two frames, and observed dimensions are reported. Human: inspect timing and loop behavior.
 - **Human inspection:** Check that the menu starts the operation named ‘Create animated GIF from video…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### KIM6 User Guide — `kim_compressandresizevideo.desktop:Manual`
+### KIM6 User Guide - `kim_compressandresizevideo.desktop:Manual`
 
-- **Menu path:** KIM6 — Video transcoding → KIM6 User Guide
+- **Menu path:** KIM6 - Video transcoding → KIM6 User Guide
 - **Dispatcher contract:** `kim_all manual`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** no (context file only)
@@ -1027,9 +1027,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Manual renders and stylesheet loads.
 - **Human inspection:** Confirm the expected informational resource opens, is readable, and can be closed.
 
-### License — `kim_compressandresizevideo.desktop:License`
+### License - `kim_compressandresizevideo.desktop:License`
 
-- **Menu path:** KIM6 — Video transcoding → License
+- **Menu path:** KIM6 - Video transcoding → License
 - **Dispatcher contract:** `kim_all license`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** no (context file only)
@@ -1041,9 +1041,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Opened document is the installed GPL license.
 - **Human inspection:** Confirm the expected informational resource opens, is readable, and can be closed.
 
-### About KIM6 — `kim_compressandresizevideo.desktop:About`
+### About KIM6 - `kim_compressandresizevideo.desktop:About`
 
-- **Menu path:** KIM6 — Video transcoding → About KIM6
+- **Menu path:** KIM6 - Video transcoding → About KIM6
 - **Dispatcher contract:** `kim_all about`
 - **Select for the Dolphin context menu:** video-audio.mp4
 - **Files passed to dispatcher:** no (context file only)
@@ -1080,9 +1080,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_convertandrotate.desktop:FlipVertical` | `FlipVertical` | Flip vertically | `kim_all flipflop flip -- %F` | photo.jpg | in_place |
 | `kim_convertandrotate.desktop:FlipHorizontal` | `FlipHorizontal` | Flip horizontally | `kim_all flipflop flop -- %F` | photo.jpg | in_place |
 
-### Convert to JPEG — `kim_convertandrotate.desktop:ConvertJPG`
+### Convert to JPEG - `kim_convertandrotate.desktop:ConvertJPG`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to JPEG
+- **Menu path:** KIM6 - Convert and transform → Convert to JPEG
 - **Dispatcher contract:** `kim_all convert --format jpg -- %F`
 - **Select for the Dolphin context menu:** orientation-6.jpg
 - **Files passed to dispatcher:** yes
@@ -1094,9 +1094,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to JPEG’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to PNG — `kim_convertandrotate.desktop:ConvertPNG`
+### Convert to PNG - `kim_convertandrotate.desktop:ConvertPNG`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to PNG
+- **Menu path:** KIM6 - Convert and transform → Convert to PNG
 - **Dispatcher contract:** `kim_all convert --format png -- %F`
 - **Select for the Dolphin context menu:** transparent.png
 - **Files passed to dispatcher:** yes
@@ -1108,9 +1108,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to PNG’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to WebP — `kim_convertandrotate.desktop:ConvertWEBP`
+### Convert to WebP - `kim_convertandrotate.desktop:ConvertWEBP`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to WebP
+- **Menu path:** KIM6 - Convert and transform → Convert to WebP
 - **Dispatcher contract:** `kim_all convert --format webp -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1122,9 +1122,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to WebP’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to TIFF — `kim_convertandrotate.desktop:ConvertTIFF`
+### Convert to TIFF - `kim_convertandrotate.desktop:ConvertTIFF`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to TIFF
+- **Menu path:** KIM6 - Convert and transform → Convert to TIFF
 - **Dispatcher contract:** `kim_all convert --format tiff -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1136,9 +1136,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to TIFF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to PDF — `kim_convertandrotate.desktop:ConvertPDF`
+### Convert to PDF - `kim_convertandrotate.desktop:ConvertPDF`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to PDF
+- **Menu path:** KIM6 - Convert and transform → Convert to PDF
 - **Dispatcher contract:** `kim_all convert --format pdf -- %F`
 - **Select for the Dolphin context menu:** photo.tif
 - **Files passed to dispatcher:** yes
@@ -1150,9 +1150,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to PDF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to HEIC/HEIF — `kim_convertandrotate.desktop:ConvertHEIC`
+### Convert to HEIC/HEIF - `kim_convertandrotate.desktop:ConvertHEIC`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to HEIC/HEIF
+- **Menu path:** KIM6 - Convert and transform → Convert to HEIC/HEIF
 - **Dispatcher contract:** `kim_all convert --format heic -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -1164,9 +1164,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to HEIC/HEIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to AVIF — `kim_convertandrotate.desktop:ConvertAVIF`
+### Convert to AVIF - `kim_convertandrotate.desktop:ConvertAVIF`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to AVIF
+- **Menu path:** KIM6 - Convert and transform → Convert to AVIF
 - **Dispatcher contract:** `kim_all convert --format avif -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -1178,9 +1178,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to AVIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to GIF — `kim_convertandrotate.desktop:ConvertGIF`
+### Convert to GIF - `kim_convertandrotate.desktop:ConvertGIF`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to GIF
+- **Menu path:** KIM6 - Convert and transform → Convert to GIF
 - **Dispatcher contract:** `kim_all convert --format gif -- %F`
 - **Select for the Dolphin context menu:** animated.gif
 - **Files passed to dispatcher:** yes
@@ -1192,9 +1192,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to GIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to BMP5 bitmap — `kim_convertandrotate.desktop:ConvertBMP`
+### Convert to BMP5 bitmap - `kim_convertandrotate.desktop:ConvertBMP`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to BMP5 bitmap
+- **Menu path:** KIM6 - Convert and transform → Convert to BMP5 bitmap
 - **Dispatcher contract:** `kim_all convert --format bmp --bmp5 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1206,9 +1206,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to BMP5 bitmap’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to JPEG XL — `kim_convertandrotate.desktop:ConvertJXL`
+### Convert to JPEG XL - `kim_convertandrotate.desktop:ConvertJXL`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to JPEG XL
+- **Menu path:** KIM6 - Convert and transform → Convert to JPEG XL
 - **Dispatcher contract:** `kim_all convert --format jxl -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -1220,9 +1220,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to JPEG XL’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to JPEG 2000 (lossless) — `kim_convertandrotate.desktop:ConvertJP2Lossless`
+### Convert to JPEG 2000 (lossless) - `kim_convertandrotate.desktop:ConvertJP2Lossless`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to JPEG 2000 (lossless)
+- **Menu path:** KIM6 - Convert and transform → Convert to JPEG 2000 (lossless)
 - **Dispatcher contract:** `kim_all convert --format jp2 --jp2-mode lossless -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -1234,9 +1234,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to JPEG 2000 (lossless)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to JPEG 2000 (lossy) — `kim_convertandrotate.desktop:ConvertJP2Lossy`
+### Convert to JPEG 2000 (lossy) - `kim_convertandrotate.desktop:ConvertJP2Lossy`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to JPEG 2000 (lossy)
+- **Menu path:** KIM6 - Convert and transform → Convert to JPEG 2000 (lossy)
 - **Dispatcher contract:** `kim_all convert --format jp2 --jp2-mode lossy -- %F`
 - **Select for the Dolphin context menu:** profile-wide.jpg
 - **Files passed to dispatcher:** yes
@@ -1248,9 +1248,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to JPEG 2000 (lossy)’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Convert to custom format… — `kim_convertandrotate.desktop:ConvertCustom`
+### Convert to custom format… - `kim_convertandrotate.desktop:ConvertCustom`
 
-- **Menu path:** KIM6 — Convert and transform → Convert to custom format…
+- **Menu path:** KIM6 - Convert and transform → Convert to custom format…
 - **Dispatcher contract:** `kim_all convert --custom-format -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1262,9 +1262,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Actual format matches selected format; decode succeeds; frame count is not silently lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Convert to custom format…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Auto-rotate using EXIF — `kim_convertandrotate.desktop:Rotateexif`
+### Auto-rotate using EXIF - `kim_convertandrotate.desktop:Rotateexif`
 
-- **Menu path:** KIM6 — Convert and transform → Auto-rotate using EXIF
+- **Menu path:** KIM6 - Convert and transform → Auto-rotate using EXIF
 - **Dispatcher contract:** `kim_all rotate --exif -- %F`
 - **Select for the Dolphin context menu:** orientation-6.jpg
 - **Files passed to dispatcher:** yes
@@ -1276,9 +1276,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, dimensions, frame count and source replacement are checked; visually confirm direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Auto-rotate using EXIF’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Rotate 90° — `kim_convertandrotate.desktop:Rotate90`
+### Rotate 90° - `kim_convertandrotate.desktop:Rotate90`
 
-- **Menu path:** KIM6 — Convert and transform → Rotate 90°
+- **Menu path:** KIM6 - Convert and transform → Rotate 90°
 - **Dispatcher contract:** `kim_all rotate --angle 90 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1290,9 +1290,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, dimensions, frame count and source replacement are checked; visually confirm direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Rotate 90°’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Rotate 180° — `kim_convertandrotate.desktop:Rotate180`
+### Rotate 180° - `kim_convertandrotate.desktop:Rotate180`
 
-- **Menu path:** KIM6 — Convert and transform → Rotate 180°
+- **Menu path:** KIM6 - Convert and transform → Rotate 180°
 - **Dispatcher contract:** `kim_all rotate --angle 180 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1304,9 +1304,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, dimensions, frame count and source replacement are checked; visually confirm direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Rotate 180°’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Rotate 270° — `kim_convertandrotate.desktop:Rotate270`
+### Rotate 270° - `kim_convertandrotate.desktop:Rotate270`
 
-- **Menu path:** KIM6 — Convert and transform → Rotate 270°
+- **Menu path:** KIM6 - Convert and transform → Rotate 270°
 - **Dispatcher contract:** `kim_all rotate --angle 270 -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1318,9 +1318,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, dimensions, frame count and source replacement are checked; visually confirm direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Rotate 270°’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Rotate custom angle… — `kim_convertandrotate.desktop:RotateCustom`
+### Rotate custom angle… - `kim_convertandrotate.desktop:RotateCustom`
 
-- **Menu path:** KIM6 — Convert and transform → Rotate custom angle…
+- **Menu path:** KIM6 - Convert and transform → Rotate custom angle…
 - **Dispatcher contract:** `kim_all rotate --custom -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1332,9 +1332,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, dimensions, frame count and source replacement are checked; visually confirm direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Rotate custom angle…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Flip vertically — `kim_convertandrotate.desktop:FlipVertical`
+### Flip vertically - `kim_convertandrotate.desktop:FlipVertical`
 
-- **Menu path:** KIM6 — Convert and transform → Flip vertically
+- **Menu path:** KIM6 - Convert and transform → Flip vertically
 - **Dispatcher contract:** `kim_all flipflop flip -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1346,9 +1346,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode and dimensions are valid; compare asymmetric shapes to confirm axis.
 - **Human inspection:** Check that the menu starts the operation named ‘Flip vertically’. Open the result beside its input and use the asymmetric colored shapes to confirm which axis changed.
 
-### Flip horizontally — `kim_convertandrotate.desktop:FlipHorizontal`
+### Flip horizontally - `kim_convertandrotate.desktop:FlipHorizontal`
 
-- **Menu path:** KIM6 — Convert and transform → Flip horizontally
+- **Menu path:** KIM6 - Convert and transform → Flip horizontally
 - **Dispatcher contract:** `kim_all flipflop flop -- %F`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** yes
@@ -1384,9 +1384,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 | `kim_publication.desktop:License` | `License` | License | `kim_all license` | photo.jpg | none |
 | `kim_publication.desktop:About` | `About` | About KIM6 | `kim_all about` | photo.jpg | none |
 
-### Create an HTML gallery… — `kim_publication.desktop:Gallery`
+### Create an HTML gallery… - `kim_publication.desktop:Gallery`
 
-- **Menu path:** KIM6 — Publish and organize → Create an HTML gallery…
+- **Menu path:** KIM6 - Publish and organize → Create an HTML gallery…
 - **Dispatcher contract:** `kim_all gallery -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1398,9 +1398,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** index.html and all relative image/thumbnail references exist.
 - **Human inspection:** Check that the menu starts the operation named ‘Create an HTML gallery…’. Open the gallery index in a browser, click a thumbnail and check the title, author and columns.
 
-### Create a photo collage… — `kim_publication.desktop:Collage`
+### Create a photo collage… - `kim_publication.desktop:Collage`
 
-- **Menu path:** KIM6 — Publish and organize → Create a photo collage…
+- **Menu path:** KIM6 - Publish and organize → Create a photo collage…
 - **Dispatcher contract:** `kim_all collage -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1412,9 +1412,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Image decodes and selected tile ordering/layout is visible.
 - **Human inspection:** Check that the menu starts the operation named ‘Create a photo collage…’. Open the result beside its input; check framing, orientation and visible detail. Automated checks cannot judge subjective quality.
 
-### Rename images… — `kim_publication.desktop:Rename`
+### Rename images… - `kim_publication.desktop:Rename`
 
-- **Menu path:** KIM6 — Publish and organize → Rename images…
+- **Menu path:** KIM6 - Publish and organize → Rename images…
 - **Dispatcher contract:** `kim_all rename interactive -- %F`
 - **Select for the Dolphin context menu:** dated-photo.jpg, sequence-red.png, -leading ü [1].jpg
 - **Files passed to dispatcher:** yes
@@ -1426,9 +1426,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Each selected byte hash appears under the expected new name; no unrelated entry is lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Rename images…’. Check the resulting names and verify every selected image remains present; compare the names with the selected mode.
 
-### Rename by EXIF date… — `kim_publication.desktop:SortByDate`
+### Rename by EXIF date… - `kim_publication.desktop:SortByDate`
 
-- **Menu path:** KIM6 — Publish and organize → Rename by EXIF date…
+- **Menu path:** KIM6 - Publish and organize → Rename by EXIF date…
 - **Dispatcher contract:** `kim_all rename exifdate -- %F`
 - **Select for the Dolphin context menu:** dated-photo.jpg, sequence-red.png, -leading ü [1].jpg
 - **Files passed to dispatcher:** yes
@@ -1440,9 +1440,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Each selected byte hash appears under the expected new name; no unrelated entry is lost.
 - **Human inspection:** Check that the menu starts the operation named ‘Rename by EXIF date…’. Check the resulting names and verify every selected image remains present; compare the names with the selected mode.
 
-### Strip metadata… — `kim_publication.desktop:StripMetadata`
+### Strip metadata… - `kim_publication.desktop:StripMetadata`
 
-- **Menu path:** KIM6 — Publish and organize → Strip metadata…
+- **Menu path:** KIM6 - Publish and organize → Strip metadata…
 - **Dispatcher contract:** `kim_all stripmeta -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1454,9 +1454,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, pixel/frame integrity and requested tag scope are checked.
 - **Human inspection:** Check that the menu starts the operation named ‘Strip metadata…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Remove GPS coordinates… — `kim_publication.desktop:StripGPS`
+### Remove GPS coordinates… - `kim_publication.desktop:StripGPS`
 
-- **Menu path:** KIM6 — Publish and organize → Remove GPS coordinates…
+- **Menu path:** KIM6 - Publish and organize → Remove GPS coordinates…
 - **Dispatcher contract:** `kim_all stripmeta --mode gps -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1468,9 +1468,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, pixel/frame integrity and requested tag scope are checked.
 - **Human inspection:** Check that the menu starts the operation named ‘Remove GPS coordinates…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Remove recognized AI metadata… — `kim_publication.desktop:RemoveAIMetadata`
+### Remove recognized AI metadata… - `kim_publication.desktop:RemoveAIMetadata`
 
-- **Menu path:** KIM6 — Publish and organize → Remove recognized AI metadata…
+- **Menu path:** KIM6 - Publish and organize → Remove recognized AI metadata…
 - **Dispatcher contract:** `kim_all stripmeta --mode ai -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1482,9 +1482,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Decode, pixel/frame integrity and requested tag scope are checked.
 - **Human inspection:** Check that the menu starts the operation named ‘Remove recognized AI metadata…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Set creator and copyright… — `kim_publication.desktop:SetCopyright`
+### Set creator and copyright… - `kim_publication.desktop:SetCopyright`
 
-- **Menu path:** KIM6 — Publish and organize → Set creator and copyright…
+- **Menu path:** KIM6 - Publish and organize → Set creator and copyright…
 - **Dispatcher contract:** `kim_all copyright --interactive -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1496,9 +1496,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Creator/copyright fields read back; unrelated metadata and pixels remain.
 - **Human inspection:** Check that the menu starts the operation named ‘Set creator and copyright…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Adjust camera timestamps… — `kim_publication.desktop:AdjustCaptureTime`
+### Adjust camera timestamps… - `kim_publication.desktop:AdjustCaptureTime`
 
-- **Menu path:** KIM6 — Publish and organize → Adjust camera timestamps…
+- **Menu path:** KIM6 - Publish and organize → Adjust camera timestamps…
 - **Dispatcher contract:** `kim_all timeshift --interactive -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1510,9 +1510,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Selected camera date tags read back with expected offset; filesystem mtime unchanged.
 - **Human inspection:** Check that the menu starts the operation named ‘Adjust camera timestamps…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Synchronize photo/file dates… — `kim_publication.desktop:DateSync`
+### Synchronize photo/file dates… - `kim_publication.desktop:DateSync`
 
-- **Menu path:** KIM6 — Publish and organize → Synchronize photo/file dates…
+- **Menu path:** KIM6 - Publish and organize → Synchronize photo/file dates…
 - **Dispatcher contract:** `kim_all datesync --interactive -- %F`
 - **Select for the Dolphin context menu:** metadata.jpg
 - **Files passed to dispatcher:** yes
@@ -1524,9 +1524,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Compare EXIF date and filesystem mtime in the selected direction.
 - **Human inspection:** Check that the menu starts the operation named ‘Synchronize photo/file dates…’. Open the result and confirm it still looks the same; compare the exact metadata/date fields requested in this case.
 
-### Create MP4 slideshow… — `kim_publication.desktop:Slideshow`
+### Create MP4 slideshow… - `kim_publication.desktop:Slideshow`
 
-- **Menu path:** KIM6 — Publish and organize → Create MP4 slideshow…
+- **Menu path:** KIM6 - Publish and organize → Create MP4 slideshow…
 - **Dispatcher contract:** `kim_all slideshow --interactive -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1538,9 +1538,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: ffprobe confirms H.264 MP4, observed dimensions, selected frame rate, approximate duration, frame count when reported, no audio, and full decode. Human: compare image order and dimensions to the interactive choices.
 - **Human inspection:** Check that the menu starts the operation named ‘Create MP4 slideshow…’. Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality.
 
-### Create a PDF album… — `kim_publication.desktop:Album`
+### Create a PDF album… - `kim_publication.desktop:Album`
 
-- **Menu path:** KIM6 — Publish and organize → Create a PDF album…
+- **Menu path:** KIM6 - Publish and organize → Create a PDF album…
 - **Dispatcher contract:** `kim_all album -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1552,9 +1552,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page count, image order and layout to the selected options.
 - **Human inspection:** Check that the menu starts the operation named ‘Create a PDF album…’. Open the PDF and check page orientation, image order and layout; automated page counts do not judge layout quality.
 
-### Create a photo contact sheet… — `kim_publication.desktop:ContactSheet`
+### Create a photo contact sheet… - `kim_publication.desktop:ContactSheet`
 
-- **Menu path:** KIM6 — Publish and organize → Create a photo contact sheet…
+- **Menu path:** KIM6 - Publish and organize → Create a photo contact sheet…
 - **Dispatcher contract:** `kim_all contactsheet -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1566,9 +1566,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: pdfinfo reports readable pages and correct physical size. Human: inspect image order, number/filename labels, grid and pagination.
 - **Human inspection:** Check that the menu starts the operation named ‘Create a photo contact sheet…’. Check that the result matches the expected behavior below.
 
-### Create a print-layout PDF… — `kim_publication.desktop:Print`
+### Create a print-layout PDF… - `kim_publication.desktop:Print`
 
-- **Menu path:** KIM6 — Publish and organize → Create a print-layout PDF…
+- **Menu path:** KIM6 - Publish and organize → Create a print-layout PDF…
 - **Dispatcher contract:** `kim_all print -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1580,9 +1580,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: pdfinfo can read the PDF and reports a positive page count and physical page size. Human: compare page orientation and print layout to the chosen options.
 - **Human inspection:** Check that the menu starts the operation named ‘Create a print-layout PDF…’. Open the PDF and check page orientation, image order and layout; automated page counts do not judge layout quality.
 
-### Join images into a multi-page TIFF… — `kim_publication.desktop:TiffJoin`
+### Join images into a multi-page TIFF… - `kim_publication.desktop:TiffJoin`
 
-- **Menu path:** KIM6 — Publish and organize → Join images into a multi-page TIFF…
+- **Menu path:** KIM6 - Publish and organize → Join images into a multi-page TIFF…
 - **Dispatcher contract:** `kim_all tiffjoin -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1594,9 +1594,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: TIFF fully decodes and page count matches selected input frame count. Human: inspect page order.
 - **Human inspection:** Check that the menu starts the operation named ‘Join images into a multi-page TIFF…’. Open the TIFF as pages and check that red, green, then blue appear in that order.
 
-### Create an animated GIF… — `kim_publication.desktop:Animation`
+### Create an animated GIF… - `kim_publication.desktop:Animation`
 
-- **Menu path:** KIM6 — Publish and organize → Create an animated GIF…
+- **Menu path:** KIM6 - Publish and organize → Create an animated GIF…
 - **Dispatcher contract:** `kim_all animate -- %F`
 - **Select for the Dolphin context menu:** sequence-red.png, sequence-green.png, sequence-blue.png
 - **Files passed to dispatcher:** yes
@@ -1608,9 +1608,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Automated: GIF fully decodes and frame count matches selected input frame count. Human: inspect frame order, delay and loop behavior.
 - **Human inspection:** Check that the menu starts the operation named ‘Create an animated GIF…’. Open the GIF in an animation-capable viewer and check red, green, blue order, delay and looping.
 
-### KIM6 User Guide — `kim_publication.desktop:Manual`
+### KIM6 User Guide - `kim_publication.desktop:Manual`
 
-- **Menu path:** KIM6 — Publish and organize → KIM6 User Guide
+- **Menu path:** KIM6 - Publish and organize → KIM6 User Guide
 - **Dispatcher contract:** `kim_all manual`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** no (context file only)
@@ -1622,9 +1622,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Manual renders and stylesheet loads.
 - **Human inspection:** Confirm the expected informational resource opens, is readable, and can be closed.
 
-### License — `kim_publication.desktop:License`
+### License - `kim_publication.desktop:License`
 
-- **Menu path:** KIM6 — Publish and organize → License
+- **Menu path:** KIM6 - Publish and organize → License
 - **Dispatcher contract:** `kim_all license`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** no (context file only)
@@ -1636,9 +1636,9 @@ Each case has a disposable input copy under `qa/generated/cases/`. Actions must 
 - **Technical validation:** Opened document is the installed GPL license.
 - **Human inspection:** Confirm the expected informational resource opens, is readable, and can be closed.
 
-### About KIM6 — `kim_publication.desktop:About`
+### About KIM6 - `kim_publication.desktop:About`
 
-- **Menu path:** KIM6 — Publish and organize → About KIM6
+- **Menu path:** KIM6 - Publish and organize → About KIM6
 - **Dispatcher contract:** `kim_all about`
 - **Select for the Dolphin context menu:** photo.jpg
 - **Files passed to dispatcher:** no (context file only)

@@ -1,4 +1,4 @@
-# November 3, 2026 audit — Step 2 implementation
+# November 3, 2026 audit - Step 2 implementation
 
 Implemented against `recovery/kim-all`, starting at
 `42477c8292581d616e5a4eadc69fe87f40e34147`. The working tree was clean before
@@ -51,7 +51,7 @@ interactive responsiveness improvement is claimed.
 
 ## Implementation
 
-**ARCH-005 — completed with bounded reductions.** `kim_preview entry` combines
+**ARCH-005 - completed with bounded reductions.** `kim_preview entry` combines
 state, exact target selection, dependency validation and the live pre-item guard.
 The shell consumes its NUL-delimited response only to select the work. A combined
 location `stage` command writes and verifies within one parsed-plan lifetime,
@@ -61,7 +61,7 @@ was moved outside the entry-search generator. Both final publication guards
 still independently reload and validate the approval plan. The existing
 `write`, `verify`, and preview query interfaces remain available.
 
-**ARCH-006 — completed for normal result delivery.** Ready, problem and repair
+**ARCH-006 - completed for normal result delivery.** Ready, problem and repair
 counts update from the affected row, including replacement results. Execution
 job counts also update on completion rather than rescanning on every stage.
 Diagnostics append for ordered results and rebuild only for replacements or
@@ -77,7 +77,7 @@ Replacing a warning-bearing row genuinely rebuilds warning groups. Expanded
 warning details must reflect new data and can still regenerate the detailed
 text; this batch does not introduce a new presentation framework.
 
-**ARCH-007 — completed for compatible selective-removal verification.** A single
+**ARCH-007 - completed for compatible selective-removal verification.** A single
 ExifTool JSON query verifies the union of known empty GPS/AI removal selections.
 Family 0/1/4 groups, duplicate instances and structured values are retained.
 Only absent fields or empty strings satisfy removal; arrays, objects, numeric
@@ -89,7 +89,7 @@ conversion. Without Python on PATH, verification retains the complete original
 per-tag path. Further scalar/date batching is deferred because it requires
 careful ExifTool print-conversion equivalence and gives less benefit here.
 
-**ARCH-008 — completed for selected planning observations.** Copyright, GPS, AI,
+**ARCH-008 - completed for selected planning observations.** Copyright, GPS, AI,
 ICC description and ICC information share one deliberate text-valued query for
 ordinary inputs. Numeric header/date inspection remains separate, as does the
 existing descriptive-metadata preservation query. Family 0/1 matching preserves
@@ -98,7 +98,7 @@ composite ICC observations remain separate because they describe different
 objects. Private execution-source snapshots are still inspected freshly.
 No broad metadata cache or new PSD parser was introduced.
 
-**ARCH-009 — completed.** Intrinsic logo identity, oriented dimensions, opacity,
+**ARCH-009 - completed.** Intrinsic logo identity, oriented dimensions, opacity,
 profile/color checks and decode validation are reused within an explicit
 batch/generation context, bounded to 64 paths and discarded on exit. Every
 lookup checks current regular-file identity and the current sRGB policy profile
@@ -140,7 +140,7 @@ concurrency, format support, output naming or user workflow was introduced.
   were compared, not merely process exit codes.
 - `test_recipe_workflow.py`: 15 passed; one failure and one timeout reproduced
   against the starting implementation: the existing menu-caption expectation
-  (`KIM6 Recipes` versus `KIM6 — Recipes`) and the editor-to-run test timeout.
+  (`KIM6 Recipes` versus `KIM6 - Recipes`) and the editor-to-run test timeout.
 - `test_metadata_actions.py`: 20 initially passed; nine new missing-Python
   failures were corrected by retaining the legacy verification fallback and all
   nine passed on focused rerun. Two unrelated failures reproduce at the starting
@@ -151,7 +151,7 @@ concurrency, format support, output naming or user workflow was introduced.
 - Python syntax validation, Bash syntax validation and `git diff --check` pass.
   ShellCheck reports the same 17 pre-existing diagnostics, with no new diagnostic
   code/message combinations.
-- Two-axis code review: Standards — no findings; Spec — no confirmed correctness
+- Two-axis code review: Standards - no findings; Spec - no confirmed correctness
   findings. The Spec reviewer requested confirmation of separate before/after,
   PSD and fallback evidence, supplied above.
 

@@ -125,7 +125,7 @@ def completion_dialog(action, outputs, groups):
     dialog.details_button.toggled.connect(expand)
     from PySide6.QtWidgets import QApplication
     dialog.copy.clicked.connect(lambda:QApplication.clipboard().setText(dialog.details.toPlainText()))
-    buttons=QHBoxLayout(); folder=QPushButton('Open Folder'); dialog.done_button=QPushButton('Done')
+    buttons=QHBoxLayout(); folder=QPushButton('Open folder'); dialog.done_button=QPushButton('Done')
     folder.clicked.connect(lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(outputs[0]).parent))))
     buttons.addWidget(folder); buttons.addStretch(1); buttons.addWidget(dialog.details_button); buttons.addWidget(dialog.done_button); layout.addLayout(buttons)
     dialog.done_button.clicked.connect(dialog.accept); dialog.done_button.setDefault(True)

@@ -27,7 +27,7 @@ kdialog --title "$(gettext 'Kim')" --yesnocancel "$(gettext 'Do you want to crea
 
 case $? in
     1)  # Replace existing files!
-    dbusRef=$(kdialog --progressbar "$(gettext 'Kim — Initialising metadate stripping')" $nbfiles)
+    dbusRef=$(kdialog --progressbar "$(gettext 'Kim - Initialising metadate stripping')" $nbfiles)
     qdbus $dbusRef showCancelButton true
     counter=0
     for i in "$@";do
@@ -39,13 +39,13 @@ case $? in
                 let "counter +=1"
                 FILE="$i"
                 exiftool -overwrite_original -all= -tagsfromfile "$i" -icc_profile -Orientation -- "$i" #>/dev/null 2>&1
-                qdbus $dbusRef setLabelText "$(gettext 'Kim — Stripping metadata from file: ') `basename -- "$FILE"`"
+                qdbus $dbusRef setLabelText "$(gettext 'Kim - Stripping metadata from file: ') `basename -- "$FILE"`"
                 qdbus $dbusRef org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value $counter
         fi
     done;;
 
     0) # Create new files
-    dbusRef=$(kdialog --progressbar "$(gettext 'Kim — Initialising…')" $nbfiles)
+    dbusRef=$(kdialog --progressbar "$(gettext 'Kim - Initialising…')" $nbfiles)
     # $dbusRef expands to "service path" (two args), do not quote it
     qdbus $dbusRef showCancelButton true
     counter=0
@@ -61,7 +61,7 @@ case $? in
           NAME="${BASENAME%.*}"
           EXT="${BASENAME##*.}"
           exiftool -all= -tagsfromfile "$i" -icc_profile -Orientation -o "$DIR/${NAME}_stripped.${EXT}" -- "$i" >/dev/null 2>&1
-          qdbus $dbusRef setLabelText "$(gettext 'Kim — Stripping metadata from file: ')$BASENAME"
+          qdbus $dbusRef setLabelText "$(gettext 'Kim - Stripping metadata from file: ')$BASENAME"
           qdbus $dbusRef org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value $counter
         fi
     done;;

@@ -118,7 +118,7 @@ class LocationDialog(QDialog):
         photo_layout = QVBoxLayout(photo_content); photo_layout.setContentsMargins(0, 0, 0, 0)
         self.photo_stack = QSplitter(Qt.Vertical); self.photo_stack.setChildrenCollapsible(False)
         self.photo_stack.addWidget(photo_content); photo_container.addWidget(self.photo_stack, 1)
-        self.visual_role = self.label('GPS Source Image' if self.uses_reference() else 'Selected image')
+        self.visual_role = self.label('GPS source image' if self.uses_reference() else 'Selected image')
         self.visual_role.setFont(heading_font); photo_layout.addWidget(self.visual_role)
         self.photo_preview = PhotoPreview(self); photo_layout.addWidget(self.photo_preview, 1)
         self.selected_image = self.label('Select an image'); self.selected_image.setFont(heading_font); photo_layout.addWidget(self.selected_image)
@@ -131,8 +131,8 @@ class LocationDialog(QDialog):
         self.report_map.setEnabled(False); self.report_map.clicked.connect(self.map_selected_coordinates); action_row.addWidget(self.report_map)
         photo_layout.addLayout(action_row)
         self.reference_options = QWidget(); options = QVBoxLayout(self.reference_options); options.setContentsMargins(0, 0, 0, 0)
-        self.copy_altitude = QCheckBox('Copy Altitude'); self.copy_altitude.setChecked(False)
-        self.copy_direction = QCheckBox('Copy Recorded Image Direction')
+        self.copy_altitude = QCheckBox('Copy altitude'); self.copy_altitude.setChecked(False)
+        self.copy_direction = QCheckBox('Copy recorded image direction')
         for control in (self.copy_altitude, self.copy_direction): options.addWidget(control); control.toggled.connect(self.schedule_plan)
         self.copy_altitude.setToolTip('Unchecked: remove destination altitude. Checked: copy the GPS source altitude with its recorded height reference.')
         self.copy_direction.setToolTip('Unchecked: remove destination direction. Checked: copy the GPS source’s recorded direction and its north reference.')
@@ -143,7 +143,7 @@ class LocationDialog(QDialog):
         self.photo_panel = photo_panel; self.visual_splitter.addWidget(photo_panel)
         map_panel = QWidget(); map_panel.setMinimumWidth(0)
         map_layout = QVBoxLayout(map_panel); map_layout.setContentsMargins(0, 0, 0, 0)
-        self.map_heading = QLabel('GPS Source Location' if self.uses_reference() else 'GPS Location')
+        self.map_heading = QLabel('GPS source location' if self.uses_reference() else 'GPS Location')
         self.map_heading.setFont(heading_font); map_layout.addWidget(self.map_heading)
         self.map_subject = QComboBox(); self.map_subject.addItem('Original GPS location', 'existing'); self.map_subject.addItem('New GPS location', 'proposed')
         self.map_subject.setCurrentIndex(1 if kind == 'reduce' else 0)
@@ -172,12 +172,12 @@ class LocationDialog(QDialog):
         detail_actions = QHBoxLayout()
         self.details_copy = QToolButton(); self.details_copy.setIcon(QIcon.fromTheme('edit-copy'))
         self.details_copy.setText('Copy coordinates'); self.details_copy.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.details_copy.setToolTip('Copy camera coordinates from the image named in Technical Metadata')
+        self.details_copy.setToolTip('Copy camera coordinates from the image named in Technical metadata')
         self.details_copy.setEnabled(False); self.details_copy.clicked.connect(self.copy_detail_coordinates)
         detail_actions.addWidget(self.details_copy); self.details_copy.setVisible(kind != 'report')
         self.details_browser = QToolButton(); self.details_browser.setIcon(QIcon.fromTheme('globe'))
         self.details_browser.setText('Open in Browser'); self.details_browser.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.details_browser.setToolTip('Open the camera coordinates of the image named in Technical Metadata')
+        self.details_browser.setToolTip('Open the camera coordinates of the image named in Technical metadata')
         self.details_browser.setEnabled(False); self.details_browser.clicked.connect(self.map_detail_coordinates)
         detail_actions.addWidget(self.details_browser); self.details_browser.setVisible(kind != 'report')
         self.inspector.metadata_controls.addLayout(detail_actions)
@@ -261,7 +261,7 @@ class LocationDialog(QDialog):
         for path in self.files: self.add_candidate(path)
         self.candidates.setCurrentIndex(-1); self.candidates.currentIndexChanged.connect(self.select_reference)
         reference_row = QHBoxLayout(); reference_row.addWidget(self.candidates, 1)
-        browse = QPushButton(QIcon.fromTheme('document-open'), '&Browse…'); browse.clicked.connect(self.choose_reference); browse.setToolTip('Browse for GPS Source Image'); reference_row.addWidget(browse); photo_layout.addLayout(reference_row)
+        browse = QPushButton(QIcon.fromTheme('document-open'), '&Browse…'); browse.clicked.connect(self.choose_reference); browse.setToolTip('Browse for GPS source image'); reference_row.addWidget(browse); photo_layout.addLayout(reference_row)
         self.candidate_help = self.label('Choose the image that supplies GPS.'); photo_layout.addWidget(self.candidate_help)
         self.method_pages.addWidget(photo_page)
         map_page = QWidget(); map_layout = QVBoxLayout(map_page); map_layout.setContentsMargins(0, 0, 0, 0)
@@ -367,7 +367,7 @@ class LocationDialog(QDialog):
 
     def choose_reference(self):
         paths = choose_images(self, str(Path(self.reference or self.files[0]).parent),
-                              title='Choose a GPS Source Image', multiple=False,
+                              title='Choose a GPS source image', multiple=False,
                               extensions=photo_extensions(), accept_label='Choose GPS Source')
         if not paths: return
         path = absolute(paths[0])
@@ -921,7 +921,7 @@ class LocationDialog(QDialog):
         self.remove_image.setEnabled(self.selection_only and bool(self.image_list.current_path()))
         self.details_subject.setVisible(reference)
         self.reference_options.setVisible(reference)
-        self.visual_role.setText('GPS Source Image' if reference else 'Selected image')
+        self.visual_role.setText('GPS source image' if reference else 'Selected image')
         path = self.reference if reference else self.image_list.current_path()
         self.visual_source = path
         self.photo_preview.set_path(path)
@@ -942,7 +942,7 @@ class LocationDialog(QDialog):
         self.map_subject.setVisible(bool(approved)); self.map_subject.setEnabled(bool(approved))
         if approved and self.map_subject.currentData() == 'proposed':
             position = approved['position']; self.map_heading.setText('New GPS location')
-        else: self.map_heading.setText('GPS Source Location' if reference else 'GPS Location')
+        else: self.map_heading.setText('GPS source location' if reference else 'GPS Location')
         empty = ('Choose a GPS source image with camera GPS.' if reference else 'Select an image to see its GPS location.') if not path else camera_status(info) + '. No camera marker can be shown.'
         self.location_map.set_position(position, empty)
         if reference:

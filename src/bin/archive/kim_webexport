@@ -41,7 +41,7 @@ let "nbfiles = ($# -1)/2"
 kdialog --title "$(gettext "Kim")" --yesnocancel "$(gettext "Do you want to create new files?")" --yes-label "$(gettext "Create new")" --no-label "$(gettext "Replace existing")"
 case $? in
     1) # Replace existing files!
-    dbusRef=`kdialog --progressbar "$(gettext "Kim — Initialising…")" $nbfiles`
+    dbusRef=`kdialog --progressbar "$(gettext "Kim - Initialising…")" $nbfiles`
     qdbus $dbusRef showCancelButton true
     counter=0
     for i in "$@";do
@@ -53,13 +53,13 @@ case $? in
             let "counter +=1"
             FILE="$i"
             mogrify -resize "$SCELTA" -quality "$WEB_Q" -- "$FILE"
-            qdbus $dbusRef setLabelText "$(gettext "Kim — Compressing file: ") `basename -- "$FILE"`"
+            qdbus $dbusRef setLabelText "$(gettext "Kim - Compressing file: ") `basename -- "$FILE"`"
             qdbus $dbusRef org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value $counter
         fi;
     done;;
 
     0) # Create new files
-    dbusRef=`kdialog --progressbar "$(gettext "Kim — Initialising…")" $nbfiles`
+    dbusRef=`kdialog --progressbar "$(gettext "Kim - Initialising…")" $nbfiles`
     qdbus $dbusRef showCancelButton true
     counter=0
     for i in "$@";do
@@ -73,7 +73,7 @@ case $? in
             BASENAME="$(basename -- "$FILE")"
             NAME="${BASENAME%.*}"
             EXT="${BASENAME##*.}"
-            qdbus $dbusRef setLabelText "$(gettext "Kim — Compressing file: ") `basename -- "$FILE"`"
+            qdbus $dbusRef setLabelText "$(gettext "Kim - Compressing file: ") `basename -- "$FILE"`"
             qdbus $dbusRef org.freedesktop.DBus.Properties.Set org.kde.kdialog.ProgressDialog value $counter
             magick -- "$FILE" -resize $SCELTA -quality $WEB_Q "$DIR/${NAME}_web.${EXT}"
         fi;

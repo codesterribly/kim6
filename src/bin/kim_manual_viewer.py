@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""KIM6 offline HTML User Guide viewer.
-
-Uses the installed documentation without requiring a web browser.
-Relative HTML links and images resolve from the installed User Guide.
-"""
+"""Display the installed KIM6 HTML User Guide in a standalone Qt window."""
 
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
     QMessageBox,
-    QTextBrowser,
+    QPushButton,
     QVBoxLayout,
+    QHBoxLayout,
 )
 
 
@@ -24,61 +22,52 @@ def main():
         return 2
 
     manual = Path(sys.argv[1]).resolve()
-
     if not manual.is_file():
-        print(
-            f"KIM6 User Guide not found: {manual}",
-            file=sys.stderr,
-        )
+        print(f"KIM6 User Guide not found: {manual}", file=sys.stderr)
         return 1
 
     app = QApplication(sys.argv)
+    url = QUrl.fromLocalFile(str(manual))
+
+    try:
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+    except (ImportError, RuntimeError):
+        choice = QMessageBox.question(
+            None,
+            "KIM6 User Guide",
+            "The embedded HTML viewer requires PySide6 Qt WebEngine. "
+            "Open the illustrated User Guide in your browser?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if choice == QMessageBox.Yes:
+            return 0 if QDesktopServices.openUrl(url) else 1
+        return 1
 
     dialog = QDialog()
     dialog.setWindowTitle("KIM6 - User Guide")
-    dialog.resize(1000, 760)
+    dialog.resize(1100, 800)
 
     layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(8, 8, 8, 8)
+    layout.setSpacing(6)
 
-    browser = QTextBrowser()
-    browser.setOpenExternalLinks(True)
-    browser.setSearchPaths([str(manual.parent)])
-    # QTextBrowser cannot faithfully render the full HTML User Guide.
-    # Use the installed Markdown guide for a readable fallback.
-    markdown = manual.parent.parent / "README.md"
+    viewer = QWebEngineView(dialog)
+    viewer.setUrl(url)
+    layout.addWidget(viewer, 1)
 
-    browser.setSearchPaths([
-        str(markdown.parent),
-        str(markdown.parent / "docs"),
-    ])
-    browser.setStyleSheet(
-        "QTextBrowser { font-size: 14px; padding: 20px 28px; }"
-    )
+    controls = QHBoxLayout()
+    controls.addStretch()
 
-    if markdown.is_file():
-        browser.setMarkdown(
-            markdown.read_text(
-                encoding="utf-8", errors="replace"
-            )
-        )
-    else:
-        browser.setPlainText(
-            "The installed Markdown guide could not be found."
-        )
-
-    layout.addWidget(browser)
+    open_browser = QPushButton("Open in browser…")
+    open_browser.clicked.connect(lambda: QDesktopServices.openUrl(url))
+    controls.addWidget(open_browser)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Close)
     buttons.rejected.connect(dialog.reject)
-    layout.addWidget(buttons)
+    controls.addWidget(buttons)
 
-    if not browser.toPlainText().strip():
-        QMessageBox.critical(
-            dialog,
-            "KIM6 User Guide",
-            "The User Guide could not be displayed.",
-        )
-        return 1
+    layout.addLayout(controls)
 
     dialog.exec()
     return 0

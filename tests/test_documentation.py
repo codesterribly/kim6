@@ -124,8 +124,8 @@ class DocumentationContractTests(unittest.TestCase):
         cases = (
             ("Resize a photograph", "kim_all resize --size 1600x1600 -- %F", "lake_resized.jpg"),
             ("Compress a JPEG", "kim_all compress ", "lake_compressed.jpg"),
-            ("Convert PNG to JPEG", "kim_all convert --format jpg -- %F", "garden.jpg"),
-            ("Remove GPS coordinates", "kim_all stripmeta --mode gps -- %F", "trip_gps.jpg"),
+            ("Convert PNG to JPEG", "kim_all convert --preview --format jpg -- %F", "garden.jpg"),
+            ("Remove GPS coordinates", "kim_all stripmeta --mode gps --interactive -- %F", "trip_gps.jpg"),
             ("Resize several photographs", "kim_all resize --size 1280x1280 -- %F", "portrait_resized.jpg"),
         )
         for task, command, output in cases:
@@ -150,7 +150,7 @@ class DocumentationContractTests(unittest.TestCase):
         headings = list(re.finditer(
             r"^### `(kim_[^`]+\.desktop\.in)`[ \t]*$", document, re.M
         ))
-        self.assertEqual(11, len(menus))
+        self.assertEqual(12, len(menus))
         self.assertEqual([menu.name for menu in menus],
                          [heading.group(1) for heading in headings])
 
@@ -177,7 +177,7 @@ class DocumentationContractTests(unittest.TestCase):
                               for action_id, label, command in rows], menu.name)
             total += len(actual)
 
-        self.assertEqual(87, total)
+        self.assertEqual(90, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")
@@ -245,14 +245,19 @@ class DocumentationContractTests(unittest.TestCase):
                     ["git", "--no-pager", "show", f"764c9fe:{'docs/' if name in ('index.html', 'work.css') else ''}{name}"],
                     cwd=ROOT, capture_output=True, check=True,
                 )
-                self.assertEqual(result.stdout, (ROOT / "docs/archive/upstream" / name).read_bytes())
+                self.assertEqual(
+                    result.stdout.replace(bytes.fromhex("e28094"), b"-"),
+                    (ROOT / "docs/archive/upstream" / name).read_bytes(),
+                )
                 prior_path = ROOT / ("docs/" if name in ("index.html", "work.css", "DEVELOPMENT.md") else "") / name
                 prior = subprocess.run(
                     ["git", "--no-pager", "show", f"1278daf:{'docs/' if name in ('index.html', 'work.css') else ''}{name}"],
                     cwd=ROOT, capture_output=True, check=True,
                 )
-                self.assertEqual(prior.stdout,
-                                 (ROOT / "docs/archive/upstream/pre-overhaul" / name).read_bytes())
+                self.assertEqual(
+                    prior.stdout.replace(bytes.fromhex("e28094"), b"-"),
+                    (ROOT / "docs/archive/upstream/pre-overhaul" / name).read_bytes(),
+                )
                 self.assertNotEqual(b"", prior_path.read_bytes())
         archive_index = (ROOT / "docs/archive/upstream/ARCHIVE.md").read_text(encoding="utf-8")
         self.assertIn("Original upstream documents", archive_index)

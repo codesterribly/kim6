@@ -72,7 +72,7 @@ class AcceptanceInventoryTests(unittest.TestCase):
         cases = acceptance.load_cases(ROOT)
         preset = next(case for case in cases if case["action_id"] == "2001CompressRecommended")
         text = acceptance._instructions(preset, Path("/qa/generated/cases/example"))
-        self.assertIn("KIM6 — Convert/Compress → Compress Recommended", text)
+        self.assertIn("KIM6 - Convert/Compress → Compress Recommended", text)
         self.assertIn("Menu path:", text)
         self.assertIn("Output location: This case folder", text)
         self.assertIn("recommended", text.lower())

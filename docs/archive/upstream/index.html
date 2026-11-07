@@ -13,7 +13,7 @@
     </head>
     <body>
         <!-- The title on top -->
-        <h1 id="maintitle">Documentation of Kde Image Menu 6 — KIM6</h1>
+        <h1 id="maintitle">Documentation of Kde Image Menu 6 - KIM6</h1>
         <!-- The actual content of the page -->
         <div id="content">
             <h1>KIM6 (Kde Image Menu 6)</h1>
@@ -50,7 +50,7 @@
                 </li>
                 <li>
                     <b>Video Compress and resize</b>
-                    <p>Transcodes video using either libx264 or libx265 to HD (1280x720) or FullHD (1920x1080) in three qualities (CFR values 17, 23 and 29 — only 17 should more or less preserve the amount of detail). Audio is copied and container (like MKV) is either preserved or converted to MP4.</p>
+                    <p>Transcodes video using either libx264 or libx265 to HD (1280x720) or FullHD (1920x1080) in three qualities (CFR values 17, 23 and 29 - only 17 should more or less preserve the amount of detail). Audio is copied and container (like MKV) is either preserved or converted to MP4.</p>
                 </li>
             </ul>
             <h1>Usage</h1>
@@ -59,13 +59,13 @@
             <p> Some behavior can be customized using environment variables. These variables can be set in the environment where your file manager is launched. </p>
             <p>You can also run the scripts (usually stored in <span id="code">~/.local/share/kio/servicemenus/kim6/bin/</span>) directly: <span id="code">./kim_resize ~/example.jpg 300x300 </span>
             </p>
-            <h1>Configuration — Web export quality</h1>
+            <h1>Configuration - Web export quality</h1>
             <p>When using the <b>Webexport</b> actions in the <b>Compress and resize</b> menu, KIM6 allows control over the JPEG compression quality via a configuration file. </p>
             <p>Unless you have set <span id="code">$XDG_CONFIG_HOME</span>, in which case you know where your configurations live, run <span id="code">kwriteconfig6 --file ~/.config/kim_kdeimagemenu --group "<default>" --key WEB_EXPORT_QUALITY 80</span> to set it to 80. Possible values are between <b>1</b> and <b>100</b>. Note that in the UI, it will always say 75 %, which is the default value.</p>
             <p>Note that for other formats but JPEG, this is unreliable, especially for PNG. Under the hood, this passes your value to the <span id="code">-quality</span> <a href="https://imagemagick.org/script/command-line-options.php#quality">parameter</a> to ImageMagick, which interprets it differently for different formats.</p>
             <h1>Installation</h1> See <a href="https://github.com/KIM-6/kim6?tab=readme-ov-file#install">here.</a>
         </div>
         <!-- The footer information -->
-        <div id="footer"> KIM6 — Kde Image Menu 6 | Copyleft 2004–2026 </div>
+        <div id="footer"> KIM6 - Kde Image Menu 6 | Copyleft 2004–2026 </div>
     </body>
 </html>

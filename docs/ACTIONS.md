@@ -13,7 +13,7 @@ Dolphin displays KIM6 submenus according to broad MIME-type filters, not whether
 
 - **Image actions:** Conversion, compression, resizing, metadata, and publication menus appear for image files.
 - **Video actions:** Video conversion and utility menus appear for video files.
-- **Recipes:** The **KIM6 — Recipes** submenu has **Choose Saved Recipe…** (which selects built-in and saved recipes) and **Recipe Editor…**. Only user recipes assigned to **Root** are also published as direct Dolphin shortcuts. Other saved recipes are available in the runner and editor, grouped by folder or Unfiled.
+- **Recipes:** The **KIM6 - Recipes** submenu has **Choose saved recipe…** (which selects built-in and saved recipes) and **Recipe editor…**. Only user recipes assigned to **Root** are also published as direct Dolphin shortcuts. Other saved recipes are available in the runner and editor, grouped by folder or Unfiled.
 - **Compression:** JPEG, PNG, WebP, and AVIF are supported, using format-specific compression settings and encoders.
 
 Individual conversion targets are not dynamically hidden according to the selected image format. For example, **Convert to JPEG** remains available when a JPEG is selected. In Create new mode, this can produce a separately encoded JPEG. In Overwrite mode, converting a JPEG to JPEG without special encoding options is treated as a successful no-op.
@@ -29,7 +29,7 @@ File handling depends on the operation:
 - **Recipes:** Always create derivatives; the selected source photographs are never overwritten. Preflight checks selected photos before Run is enabled.
 - **Rotate, EXIF auto-orient, flip and flop:** Create mode publishes transformed copies and preserves selected originals. Overwrite mode replaces selected originals only after explicit two-stage confirmation.
 - **Metadata and date operations:** Follow their specific create, overwrite, or timestamp-handling rules.
-- **Targeted GPS and AI cleanup:** **Remove GPS Metadata…** removes recognized coordinate fields; **Strip AI Metadata** removes recognized AI-generation fields. Neither operation guarantees complete removal of its targeted information. Other location indicators, generator-specific AI metadata, and signed C2PA / Content Credentials may remain.
+- **Targeted GPS and AI cleanup:** **Remove GPS metadata…** removes recognized coordinate fields; **Strip AI metadata** removes recognized AI-generation fields. Neither operation guarantees complete removal of its targeted information. Other location indicators, generator-specific AI metadata, and signed C2PA / Content Credentials may remain.
 - **Galleries, collages, albums, and animations:** Create separate output files or directories.
 - **Video utilities and slideshows:** Create separate results. Video transcoding also supports authorized overwriting.
 
@@ -37,7 +37,7 @@ For recipe selection, building, and execution, see [RECIPES.md](RECIPES.md).
 
 For detailed command options, dependencies, and output behavior, see [commandconfig.md](commandconfig.md). For file preservation and overwrite protections, see [File handling](commandconfig.md#output-and-file-handling).
 
-**File-safety choices:** Open **Actions → KIM6 — Settings/About → Settings** in Dolphin to choose the default output behavior. Supported operations can create separate copies or ask whether to replace originals. When prompted, **Create new files (originals untouched)** is the default selection. Overwriting requires an additional confirmation identifying the operation and selected-file count. Cancellation or an unavailable dialog refuses replacement. Where applicable, KIM6 numbers occupied output filenames and checks source aliases, linked paths and destination safety before publication. Completed results remain available if a later batch item fails.
+**File-safety choices:** Open **Actions → KIM6 - Settings/About → Settings** in Dolphin to choose the default output behavior. Supported operations can create separate copies or ask whether to replace originals. When prompted, **Create new files (originals untouched)** is the default selection. Overwriting requires an additional confirmation identifying the operation and selected-file count. Cancellation or an unavailable dialog refuses replacement. Where applicable, KIM6 numbers occupied output filenames and checks source aliases, linked paths and destination safety before publication. Completed results remain available if a later batch item fails.
 
 **Format notes:** Animated APNG conversion uses a dedicated FFmpeg path; Resize and Web Export refuse animated APNG instead of silently flattening it. The Convert, Resize, Web Export, and video actions also check format-specific capabilities and output integrity before publication. The action table below is an exact menu mapping, not a guarantee that every installed codec supports every input.
 
@@ -53,27 +53,26 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_compressandresize.desktop.in`
 
-**Dolphin submenu:** KIM6 — Resize/Crop/Rotate
+**Dolphin submenu:** KIM6 - Resize/Crop/Rotate
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `01Resize1600` | Resize to Fit 1600 × 1600 | `kim_all resize --size 1600x1600 -- %F` |
-| `02Resize1280` | Resize to Fit 1280 × 1280 | `kim_all resize --size 1280x1280 -- %F` |
-| `03Resize1024` | Resize to Fit 1024 × 1024 | `kim_all resize --size 1024x1024 -- %F` |
-| `04ResizePercent` | Resize by Percentage… | `kim_all resize --custom-percent -- %F` |
-| `05ResizeCustom` | Resize to Custom Size… | `kim_all resize --custom -- %F` |
-| `06Crop` | Crop Image… | `kim_all crop -- %F` |
-| `14Rotateexif` | Auto-Rotate Using EXIF | `kim_all rotate --exif -- %F` |
-| `10Rotate90` | Rotate 90° Clockwise | `kim_all rotate --angle 90 -- %F` |
-| `11Rotate270` | Rotate 90° Counterclockwise | `kim_all rotate --angle 270 -- %F` |
-| `12Rotate180` | Rotate 180° | `kim_all rotate --angle 180 -- %F` |
-| `13RotateCustom` | Rotate Custom… | `kim_all rotate --custom -- %F` |
-| `20FlipHorizontal` | Flip Horizontally | `kim_all flipflop flop -- %F` |
-| `21FlipVertical` | Flip Vertically | `kim_all flipflop flip -- %F` |
+| `01Resize1600` | Resize to fit 1600 × 1600 | `kim_all resize --size 1600x1600 -- %F` |
+| `02Resize1280` | Resize to fit 1280 × 1280 | `kim_all resize --size 1280x1280 -- %F` |
+| `03Resize1024` | Resize to fit 1024 × 1024 | `kim_all resize --size 1024x1024 -- %F` |
+| `05ResizeCustom` | Resize custom… | `kim_all resize --custom -- %F` |
+| `06Crop` | Crop image… | `kim_all crop -- %F` |
+| `14Rotateexif` | Auto-rotate using EXIF | `kim_all rotate --preview --exif -- %F` |
+| `10Rotate90` | Rotate 90° clockwise | `kim_all rotate --preview --angle 90 -- %F` |
+| `11Rotate270` | Rotate 90° counterclockwise | `kim_all rotate --preview --angle 270 -- %F` |
+| `12Rotate180` | Rotate 180° | `kim_all rotate --preview --angle 180 -- %F` |
+| `13RotateCustom` | Rotate custom… | `kim_all rotate --custom -- %F` |
+| `20FlipHorizontal` | Flip horizontally | `kim_all flipflop flop -- %F` |
+| `21FlipVertical` | Flip vertically | `kim_all flipflop flip -- %F` |
 
 ### `kim_compressandresizevideo.desktop.in`
 
-**Dolphin submenu:** KIM6 — Convert Video: H.265
+**Dolphin submenu:** KIM6 - Convert Video: H.265
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -86,13 +85,10 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_convertandrotate.desktop.in`
 
-**Dolphin submenu:** KIM6 — Convert/Compress
+**Dolphin submenu:** KIM6 - Convert/Compress
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `2001CompressRecommended` | Compress Recommended | `kim_all compress --recommended --interactive -- %F` |
-| `2102CompressMaximum` | Compress Maximum | `kim_all compress --maximum --interactive -- %F` |
-| `2203CompressCustom` | Compress Custom… | `kim_all compress --custom -- %F` |
 | `07ConvertJPG` | Convert to JPEG | `kim_all convert --preview --format jpg -- %F` |
 | `10ConvertPNG` | Convert to PNG | `kim_all convert --preview --format png -- %F` |
 | `12ConvertWEBP` | Convert to WebP | `kim_all convert --preview --format webp -- %F` |
@@ -102,52 +98,53 @@ The mappings are checked against the menu templates by `tests/test_documentation
 | `04ConvertHEIC` | Convert to HEIC/HEIF | `kim_all convert --preview --format heic -- %F` |
 | `09ConvertPDF` | Convert to PDF | `kim_all convert --preview --format pdf -- %F` |
 | `08ConvertJXL` | Convert to JPEG XL | `kim_all convert --preview --format jxl -- %F` |
-| `05ConvertJP2Lossless` | Convert to JPEG 2000 (Lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
-| `06ConvertJP2Lossy` | Convert to JPEG 2000 (Lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
+| `05ConvertJP2Lossless` | Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
+| `06ConvertJP2Lossy` | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
 | `02ConvertBMP` | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
 | `13ConvertCustom` | Custom Convert… | `kim_all convert --preview --custom-format -- %F` |
+| `2001CompressRecommended` | Compress Recommended | `kim_all compress --recommended --interactive -- %F` |
+| `2102CompressMaximum` | Compress Maximum | `kim_all compress --maximum --interactive -- %F` |
+| `2203CompressCustom` | Compress Custom… | `kim_all compress --custom -- %F` |
 
 ### `kim_information.desktop.in`
 
-**Dolphin submenu:** KIM6 — Settings/About
+**Dolphin submenu:** KIM6 - Settings/About
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `01Settings` | Settings… | `kim_all settings` |
-| `02About` | About KIM6 | `kim_all about` |
-| `03License` | License | `kim_all license` |
-| `04Manual` | KIM6 User Guide | `kim_all manual` |
+| `01Settings` | Settings… | `kim_all settings -- %F` |
+| `02About` | About KIM6 | `kim_all about -- %F` |
+| `03License` | License | `kim_all license -- %F` |
+| `04Manual` | KIM6 User Guide | `kim_all manual -- %F` |
 
 ### `kim_location.desktop.in`
 
-**Dolphin submenu:** KIM6 — Location/GPS
+**Dolphin submenu:** KIM6 - Location/GPS
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `04Report` | Inspect Location Metadata… | `kim_all location-report -- %F` |
-| `03Apply` | Modify GPS on Images… | `kim_all location-apply -- %F` |
-| `05Reduce` | Approximate GPS Location… | `kim_all location-reduce -- %F` |
-| `07StripGPS` | Remove GPS Metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+| `04Report` | Inspect location metadata… | `kim_all location-report -- %F` |
+| `03Apply` | Modify GPS on images… | `kim_all location-apply -- %F` |
+| `05Reduce` | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
+| `07StripGPS` | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
 ### `kim_metadata.desktop.in`
 
-**Dolphin submenu:** KIM6 — Organize/Metadata
+**Dolphin submenu:** KIM6 - Organize/Metadata
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `00CheckExtensions` | Check & Correct Extensions… | `kim_all checkextensions -- %F` |
-| `01Rename` | Rename Images… | `kim_all rename interactive -- %F` |
-| `02SetCaptureDate` | Set Capture Date… | `kim_all capturedate --interactive -- %F` |
-| `02AdjustCaptureTime` | Adjust Capture Date… | `kim_all timeshift --interactive -- %F` |
-| `03DateSync` | Set File Date from Capture Date… | `kim_all datesync --direction exif-to-file --interactive -- %F` |
+| `00CheckExtensions` | Check and correct extensions… | `kim_all checkextensions -- %F` |
+| `01Rename` | Rename images… | `kim_all rename interactive -- %F` |
+| `02SetDates` | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
 | `04SetCopyright` | Set creator and copyright… | `kim_all copyright --interactive -- %F` |
 | `04Overlay` | Add Watermark / Overlay… | `kim_all overlay -- %F` |
-| `05StripMetadata` | Strip Metadata | `kim_all stripmeta --interactive -- %F` |
-| `06StripAI` | Strip AI Metadata | `kim_all stripmeta --mode ai --interactive -- %F` |
+| `05StripMetadata` | Strip metadata | `kim_all stripmeta --interactive -- %F` |
+| `06StripAI` | Strip AI metadata | `kim_all stripmeta --mode ai --interactive -- %F` |
 
 ### `kim_publication.desktop.in`
 
-**Dolphin submenu:** KIM6 — Create/Publish
+**Dolphin submenu:** KIM6 - Create/Publish
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -163,16 +160,16 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_recipes.desktop.in`
 
-**Dolphin submenu:** KIM6 — Recipes
+**Dolphin submenu:** KIM6 - Recipes
 
 | Action ID | Menu label | Command |
 |---|---|---|
-| `KIMRecipe0Run` | Choose Saved Recipe… | `kim_all recipe --choose -- %F` |
-| `KIMRecipe1Editor` | Recipe Editor… | `kim_all recipe --editor` |
+| `KIMRecipe0Run` | Choose saved recipe… | `kim_all recipe --choose -- %F` |
+| `KIMRecipe1Editor` | Recipe editor… | `kim_all recipe --editor -- %F` |
 
 ### `kim_video_av1.desktop.in`
 
-**Dolphin submenu:** KIM6 — Convert Video: AV1
+**Dolphin submenu:** KIM6 - Convert Video: AV1
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -185,7 +182,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_video_h264.desktop.in`
 
-**Dolphin submenu:** KIM6 — Convert Video: H.264
+**Dolphin submenu:** KIM6 - Convert Video: H.264
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -198,7 +195,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_videoutilities.desktop.in`
 
-**Dolphin submenu:** KIM6 — Video Utilities
+**Dolphin submenu:** KIM6 - Video Utilities
 
 | Action ID | Menu label | Command |
 |---|---|---|
@@ -211,7 +208,7 @@ The mappings are checked against the menu templates by `tests/test_documentation
 
 ### `kim_webemail.desktop.in`
 
-**Dolphin submenu:** KIM6 — Web Export
+**Dolphin submenu:** KIM6 - Web Export
 
 | Action ID | Menu label | Command |
 |---|---|---|

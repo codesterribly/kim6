@@ -31,16 +31,16 @@
       <div class="reference-source">KIM6 DOCUMENTATION · docs/RECIPES.md</div>
       <article class="markdown-body">
 <h1 id="recipes-reusable-photo-workflows">Recipes: Reusable Photo Workflows</h1>
-<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIM6 — Recipes menu</strong>. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and <strong>recipes never modify the source photographs</strong>.</p>
+<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIM6 - Recipes menu</strong>. A recipe can handle one photograph or a batch. KIM6 shows what it intends to produce before processing, and <strong>recipes never modify the source photographs</strong>.</p>
 <h2 id="start-in-dolphin">Start in Dolphin</h2>
-<p><img src="../images/kim6-recipes-menu.png" alt="KDE Dolphin KIM6 — Recipes menu showing Root shortcuts, Run a Recipe, and Recipe Editor" /></p>
+<p><img src="../images/kim6-recipes-menu.png" alt="KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…" /></p>
 <ol type="1">
 <li>Select one or more supported photographs and right-click.</li>
-<li>Open <strong>KIM6 — Recipes → Choose Saved Recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
+<li>Open <strong>KIM6 - Recipes → Choose saved recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
 <li>Review the selected photographs and the <strong>Run a Recipe</strong> window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.</li>
 <li>When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.</li>
 </ol>
-<p>The Recipes menu also provides <strong>Recipe Editor…</strong> for creating and managing your own workflows. The runner and editor group recipes under <strong>Built-In</strong>, <strong>Root</strong>, user-created folders, and <strong>Unfiled</strong>. Only user recipes assigned to <strong>Root</strong> are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.</p>
+<p>The Recipes menu also provides <strong>Recipe editor…</strong> for creating and managing your own workflows. The runner and editor group recipes under <strong>Built-In</strong>, <strong>Root</strong>, user-created folders, and <strong>Unfiled</strong>. Only user recipes assigned to <strong>Root</strong> are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.</p>
 <h2 id="web-export-a-ready-to-use-recipe">Web Export: a ready-to-use recipe</h2>
 <p>The supplied <strong>Web Export</strong> recipe auto-orients photographs, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and <strong>removes all metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The destination is configured in this built-in recipe, not chosen anew for each run. Originals are unchanged.</p>
 <p>This workflow is more than a change of file extension. Its three optional rights-metadata steps, <strong>Set Creator / Artist</strong>, <strong>Set Copyright Notice</strong>, and <strong>Set Usage Rights</strong>, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: <strong>Duplicate to Edit</strong> creates a customizable copy rather than changing the supplied recipe.</p>
@@ -62,7 +62,7 @@
 </table>
 <h2 id="create-and-edit-recipes">Create and edit recipes</h2>
 <p><img src="../images/kim6-recipe-editor.png" alt="KIM6 Recipe Editor with ordered steps, destination choices, and live output preview" /></p>
-<p>Open <strong>Recipe Editor…</strong> from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.</p>
+<p>Open <strong>Recipe editor…</strong> from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.</p>
 <p>The editor can also <strong>Load Photos &amp; Run</strong>. When a run originates in the editor, returning to the editor retains the selected photographs and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.</p>
 <h3 id="processing-steps">Processing steps</h3>
 <p>The Recipe Editor offers <strong>25 operations</strong> in four groups. Each entry below uses the label shown in <strong>Add Operation…</strong>. Some operations have format-dependent parameters or ordering requirements.</p>

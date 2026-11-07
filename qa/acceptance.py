@@ -448,7 +448,7 @@ def render_plan(cases: list[dict[str, Any]]) -> str:
             lines.append(f"| `{case['id']}` | `{case['action_id']}` | {case['label']} | `kim_all {args}` | {fixtures} | {case['source_behavior']} |")
         lines.append("")
         for case in group:
-            lines += [f"### {case['label']} — `{case['id']}`", "",
+            lines += [f"### {case['label']} - `{case['id']}`", "",
                       f"- **Menu path:** {case['submenu']} → {case['label']}",
                       f"- **Dispatcher contract:** `{case['exec']}`",
                       f"- **Select for the Dolphin context menu:** {', '.join(case['fixtures']) if case['fixtures'] else 'No files.'}",
@@ -1780,7 +1780,7 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
     for menu in sorted({case["menu"] for case in cases}):
         group = [c for c in cases if c["menu"] == menu]
         menu_passed = sum(state.get("results", {}).get(c["id"], {}).get("status") == "passed" for c in group)
-        parts += [f"<section class='group'><h2>{html.escape(group[0].get('menu_title', menu))} — {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>Test type</th><th>Technical validation</th><th>Outputs</th><th>Instructions / files</th><th>Recorded environment</th><th>Notes</th></tr></thead><tbody>"]
+        parts += [f"<section class='group'><h2>{html.escape(group[0].get('menu_title', menu))} - {menu_passed}/{len(group)} passed</h2><table><thead><tr><th>Case</th><th>Action</th><th>Status</th><th>Test type</th><th>Technical validation</th><th>Outputs</th><th>Instructions / files</th><th>Recorded environment</th><th>Notes</th></tr></thead><tbody>"]
         for case in (c for c in cases if c["menu"] == menu):
             row = state.get("results", {}).get(case["id"], {})
             status = row.get("status", "pending")
@@ -1810,7 +1810,7 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
                     continue
                 external_link = "../generated/" + quote(relative.as_posix(), safe="/")
                 output_links.append(f"<a href='{html.escape(external_link)}'>{html.escape(relative.as_posix())} (persistent)</a>")
-            outputs_html = " · ".join(output_links) if output_links else "—"
+            outputs_html = " · ".join(output_links) if output_links else "-"
             provenance = row.get("provenance", {})
             env_text = "\n".join(str(provenance.get(key) or "not recorded") for key in ("hostname", "git_revision", "kde_version", "qt_version", "test_mode"))
             recorded_at = row.get("updated_at", "not recorded")
@@ -1870,7 +1870,7 @@ def _open_dolphin(path: Path, isolated: bool = False, generated: Path = GENERATE
 
 
 def _print_case(case: dict[str, Any], directory: Path) -> None:
-    print(f"\n{case['label']} — {case['id']}")
+    print(f"\n{case['label']} - {case['id']}")
     print(f"Menu: {case['submenu']} → {case['label']}")
     print("Select: " + (", ".join(case["fixtures"]) if case["fixtures"] else "no files"))
     print("Dispatcher contract: " + case["exec"])
@@ -2155,7 +2155,7 @@ def run_cli(argv: list[str] | None = None) -> int:
                 status = row.get("status", "pending")
                 if options.filter == "all" or options.filter == status:
                     mode = row.get("mode", "not tested")
-                    print(f"{status:7} {case['id']} — {case['label']} [{mode}]")
+                    print(f"{status:7} {case['id']} - {case['label']} [{mode}]")
                     if row.get("note") or row.get("reason"):
                         print("        " + row.get("note", row.get("reason", "")))
             return 0

@@ -187,6 +187,25 @@ if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
     if [ -f "$path" ]; then rm -f -- "$path"; fi
     rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" "$RUNTIME/locale/$language" 2>/dev/null || true
   done
+    # Remove bytecode generated from installed KIM6 modules only.
+    # Preserve unrelated files, symlinks, and unknown cache entries.
+    cache="$RUNTIME/bin/__pycache__"
+    if [ -d "$cache" ] && [ ! -L "$cache" ]; then
+      for relative in "${runtime_files[@]}"; do
+        case "$relative" in
+          bin/*.py) ;;
+          *) continue ;;
+        esac
+        module="${relative##*/}"
+        module="${module%.py}"
+        for compiled in "$cache/$module".cpython-*.pyc; do
+          if [ -f "$compiled" ] && [ ! -L "$compiled" ]; then
+            rm -f -- "$compiled"
+          fi
+        done
+      done
+      rmdir -- "$cache" 2>/dev/null || true
+    fi
   rmdir -- "$RUNTIME/docs/images" "$RUNTIME/docs/reference" 2>/dev/null || true
   rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" 2>/dev/null || true
 

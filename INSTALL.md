@@ -1,7 +1,7 @@
 
 # Install KIM6
 
-KIM6 adds 11 image, recipe, and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
+KIM6 adds 12 image, recipe, and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.
 
 ## Install through Dolphin
 
@@ -9,11 +9,42 @@ Dolphin can install service menus from its online catalog. Open **Settings → C
 
 The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.
 
+## Embedded HTML User Guide prerequisite
+
+KIM6 includes an illustrated HTML User Guide in the
+**Settings/About > KIM6 User Guide** tab. Rendering that guide
+inside the application requires the Python binding
+`PySide6.QtWebEngineWidgets`, not just the Qt WebEngine runtime
+libraries.
+
+On Ubuntu or Debian, install the binding with:
+
+```bash
+sudo apt install python3-pyside6.qtwebenginewidgets
+```
+
+Verify that the same system Python interpreter used by KIM6 can
+import it:
+
+```bash
+python3 -c 'from PySide6.QtWebEngineWidgets import QWebEngineView; print("WebEngine available")'
+```
+
+The installer reports this dependency separately from required
+image-processing tools. It does not automatically install system
+packages. Without the binding, KIM6 can still operate and its guide
+can be opened in an external browser, but the embedded tab uses a
+limited Markdown fallback.
+
+The installed HTML guide and its local images must remain together
+under the KIM6 runtime `docs/` directory. Qt WebEngine uses those
+local files to display the guide offline.
+
 ## Install this rewrite manually
 
 KIM6 requires KDE Plasma 6 and Dolphin.
 
-To install from a source checkout, you need `intltool-merge`, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). The installer uses `msgfmt` to compile translations when available; without it, the menus can still be installed in English.
+To install from a source checkout, you need `intltool-merge`, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIM6 currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with `msgfmt` when they become available. No translated catalogs are required for installation.
 
 KIM6 uses several common tools to process images and videos:
 
@@ -25,7 +56,7 @@ KIM6 uses several common tools to process images and videos:
 
 Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
 
-**Output policy:** In Dolphin, open **Actions → KIM6 — Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
+**Output policy:** In Dolphin, open **Actions → KIM6 - Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
 
 Download or clone the KIM6 source code, then open a terminal in the project directory and run:
 
@@ -35,7 +66,7 @@ Download or clone the KIM6 source code, then open a terminal in the project dire
 
 If you downloaded a source archive, extract it first and run the installer from the extracted folder.
 
-The installer adds KIM6's program files and 11 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
+The installer adds KIM6's program files and 12 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.
 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
 
@@ -90,8 +121,8 @@ The installed components include:
 - Seven Python graphical dialog and application helper files.
 - Metadata processing and format-verification helpers.
 - Gallery generation resources.
-- 11 Dolphin service-menu definitions, including the Recipes submenu.
-- Available compiled translation catalogs.
+- 12 Dolphin service-menu definitions, including the Recipes submenu.
+- Compiled translation catalogs when new language files are supplied (none currently ship).
 - The offline HTML User Guide, illustrations, stylesheet, and reference pages.
 
 The installer generates the Dolphin service-menu entries using

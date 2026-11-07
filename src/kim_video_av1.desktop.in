@@ -6,12 +6,12 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
 Actions=01Av1hd1080High;02Av1hd1080Balanced;03Av1hd1080Smallest;04Av1hd720High;05Av1hd720Balanced;06Av1hd720Smallest;
-_X-KDE-Submenu=KIM6 — Convert Video: AV1
+_X-KDE-Submenu=KIM6 - Convert Video: AV1
 X-KIM6-Managed=true
 
 [Desktop Action 01Av1hd1080High]
 Icon=image-x-generic
-_Name=1080p • High Quality • MP4
+_Name=1080p • High quality • MP4
 Exec=kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F
 
 [Desktop Action 02Av1hd1080Balanced]
@@ -21,12 +21,12 @@ Exec=kim_all video --size hd1080 --codec av1 --av1-quality balanced --container 
 
 [Desktop Action 03Av1hd1080Smallest]
 Icon=image-x-generic
-_Name=1080p • Smallest File • MP4
+_Name=1080p • Smallest file • MP4
 Exec=kim_all video --size hd1080 --codec av1 --av1-quality smallest --container mp4 -- %F
 
 [Desktop Action 04Av1hd720High]
 Icon=image-x-generic
-_Name=720p • High Quality • MP4
+_Name=720p • High quality • MP4
 Exec=kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F
 
 [Desktop Action 05Av1hd720Balanced]
@@ -36,5 +36,5 @@ Exec=kim_all video --size hd720 --codec av1 --av1-quality balanced --container m
 
 [Desktop Action 06Av1hd720Smallest]
 Icon=image-x-generic
-_Name=720p • Smallest File • MP4
+_Name=720p • Smallest file • MP4
 Exec=kim_all video --size hd720 --codec av1 --av1-quality smallest --container mp4 -- %F

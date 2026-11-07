@@ -542,6 +542,12 @@ def main():
         if args[1] == '%x:%y':
             print(f'{info.st_atime_ns}:{info.st_mtime_ns}')
             return 0
+        if args[1] == '%h:%d:%i:%s:%y:%z':
+            return subprocess.run(
+                [shutil.which('stat', path=os.defpath), *args],
+                timeout=10,
+                env=dict(os.environ, PATH=os.defpath),
+            ).returncode
         if args[1] in ('%x', '%y', '%Y'):
             return subprocess.run([shutil.which('stat', path=os.defpath), *args], timeout=10,
                                   env=dict(os.environ, PATH=os.defpath)).returncode

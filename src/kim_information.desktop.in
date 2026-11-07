@@ -6,7 +6,7 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;video/*;
 X-KDE-Protocol=file
 Actions=01Settings;02About;03License;04Manual;
-_X-KDE-Submenu=KIM6 — Settings/About
+_X-KDE-Submenu=KIM6 - Settings/About
 X-KIM6-Managed=true
 
 [Desktop Action 02About]

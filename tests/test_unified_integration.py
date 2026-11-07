@@ -28,7 +28,7 @@ def action_entries(path):
 
 class MenuContractTests(unittest.TestCase):
     def test_each_menu_action_uses_unified_dispatcher_and_local_argument_boundary(self):
-        self.assertEqual(11, len(MENU_TEMPLATES))
+        self.assertEqual(12, len(MENU_TEMPLATES))
         entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
         self.assertGreater(len(entries), 60)
         for path in MENU_TEMPLATES:
@@ -37,9 +37,15 @@ class MenuContractTests(unittest.TestCase):
                             if line.startswith("Actions="))
             defined = [action_id for action_id, _, _ in action_entries(path)]
             # Actions= determines menu order; group order may differ.
-            self.assertCountEqual(declared, defined, f"{path.name}: declared IDs must match action groups")
+            self.assertEqual(set(declared), set(defined),
+                             f"{path.name}: referenced and defined action IDs must match")
+            self.assertEqual(len(declared), len(set(declared)) + declared.count("_SEPARATOR_") - int("_SEPARATOR_" in declared),
+                             f"{path.name}: only KDE separators may be reused")
             self.assertEqual(len(defined), len(set(defined)), f"{path.name}: duplicate action IDs")
         for action_id, command, label in entries:
+            if action_id == '_SEPARATOR_':
+                self.assertFalse(command, 'KDE separators must not execute commands')
+                continue
             with self.subTest(action=action_id):
                 self.assertTrue(command, f"{action_id} has no Exec")
                 self.assertRegex(command, r"(?:^|/)kim_all(?:\s|$)", command)
@@ -53,81 +59,72 @@ class MenuContractTests(unittest.TestCase):
                 self.assertTrue(label, f"{action_id} has no display label")
 
     def test_supported_menu_capabilities_and_presets_are_represented(self):
-        entries = [entry for path in MENU_TEMPLATES for entry in action_entries(path)]
-        commands = [command for _, command, _ in entries]
-        self.assertEqual(108, len(entries))
-        dispatcher = (ROOT / "src/bin/kim_all").read_text()
-        self.assertNotRegex(dispatcher, r"action_[A-Za-z0-9_]+\(\)\s*\{\s*:\s*;\s*\}")
-        routes = set(re.findall(r'^\s{4}([a-z][a-z0-9]*)\)\s+[^;]*;', dispatcher, re.M))
-        for action_id, command, _ in entries:
-            if action_id in {"Manual", "License", "About"}:
-                continue
+        from collections import Counter
+        entries = [
+            (action_id, command)
+            for path in MENU_TEMPLATES
+            for action_id, command, _ in action_entries(path)
+            if action_id != "_SEPARATOR_"
+        ]
+        self.assertEqual(12, len(MENU_TEMPLATES))
+        self.assertEqual(90, len(entries))
+        self.assertEqual(len(entries), len(set(
+            (path.name, action_id)
+            for path in MENU_TEMPLATES
+            for action_id, _, _ in action_entries(path)
+            if action_id != "_SEPARATOR_"
+        )))
+        routes = Counter()
+        for action_id, command in entries:
             argv = shlex.split(command)
             self.assertGreaterEqual(len(argv), 2, action_id)
-            self.assertIn(argv[1], routes, f"{action_id}: no dispatcher route for {argv[1]}")
-            self.assertIn("%F", argv)
-            self.assertEqual(argv[-1], "%F")
+            self.assertEqual("kim_all", argv[0])
+            self.assertEqual(["--", "%F"], argv[-2:], action_id)
+            routes[argv[1]] += 1
             self.assertNotRegex(command, r"`|\$\(|\$[A-Za-z_{]")
-        legacy_video = {command for command in commands
-                        if command.startswith("kim_all video ") and "--crf " in command}
-        self.assertEqual(24, len(legacy_video))
-        metadata_commands = {action_id: command for action_id, command, _ in entries}
-        self.assertEqual("kim_all stripmeta --mode gps -- %F", metadata_commands["StripGPS"])
-        self.assertEqual("kim_all stripmeta --mode ai -- %F", metadata_commands["RemoveAIMetadata"])
-        self.assertEqual("kim_all copyright --interactive -- %F", metadata_commands["SetCopyright"])
-        self.assertEqual("kim_all timeshift --interactive -- %F", metadata_commands["AdjustCaptureTime"])
-        self.assertEqual("kim_all datesync --interactive -- %F", metadata_commands["DateSync"])
-        self.assertEqual("kim_all slideshow --interactive -- %F", metadata_commands["Slideshow"])
-        self.assertEqual("kim_all resize --custom-percent -- %F",
-                         dict((action_id, command) for action_id, command, _ in entries)["ResizePercent"])
-        expected_video = {
-            f"kim_all video --size {size} --crf {crf} --codec {codec} --container {container} -- %F"
-            for size in ("hd720", "hd1080") for crf in (17, 23, 29)
-            for codec in ("libx264", "libx265") for container in ("orig", "mp4")
-        }
-        self.assertEqual(expected_video, legacy_video)
-        av1_commands = {command for command in commands if "--codec av1" in command}
-        self.assertEqual({
-            "kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F",
-            "kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F",
-            "kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F",
-            "kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F",
-            "kim_all video --size hd1080 --codec av1 --av1-quality custom --container mp4 -- %F",
-        }, av1_commands)
-        utility_actions = {
-            "VideoFrameAt": "kim_all videoframes --mode single --format png --interactive -- %F",
-            "VideoThumbnail": "kim_all videoframes --mode thumbnail --format jpg -- %F",
-            "VideoContactSheet": "kim_all videoframes --mode contact --format jpg --interactive -- %F",
-            "ExtractVideoAudio": "kim_all videoaudio --mode extract --format m4a --interactive -- %F",
-            "MuteVideo": "kim_all videoaudio --mode mute -- %F",
-            "VideoToGif": "kim_all videogif --interactive -- %F",
-        }
-        video_menu = dict((action_id, command) for action_id, command, _ in action_entries(
-            ROOT / "src/kim_compressandresizevideo.desktop.in"))
-        for action_id, command in utility_actions.items():
-            self.assertEqual(command, video_menu[action_id])
-        self.assertEqual(6, sum(command.startswith("kim_all compress ") for command in commands))
-        self.assertEqual(13, sum(command.startswith("kim_all resize ") for command in commands))
-        for required in ("webexport", "resizeandsend", "rename", "album", "print", "gallery",
-                         "collage", "tiffjoin", "animate", "stripmeta", "copyright", "timeshift",
-                         "rotate", "flipflop", "convert", "about", "license", "manual"):
-            self.assertTrue(any(re.search(rf"\b{required}\b", command) for command in commands), required)
-        self.assertTrue(any("bmp5" in command for command in commands))
-        bmp = next(command for command in commands if "--format bmp" in command)
-        self.assertIn("--format bmp --bmp5 -- %F", bmp)
-        self.assertTrue(any("KIM6" in line for line in
-                            (ROOT / "src/kim_compress.desktop.in").read_text().splitlines()[:8]))
-        self.assertIn("MimeType=image/jpeg;", (ROOT / "src/kim_compress.desktop.in").read_text())
+        for name, count in {
+            "compress": 3, "convert": 13, "resize": 4,
+            "rotate": 5, "flipflop": 2, "video": 18,
+            "webexport": 12, "videoframes": 3,
+            "videoaudio": 2, "recipe": 2,
+        }.items():
+            self.assertEqual(count, routes[name], name)
+        commands = dict(entries)
+        self.assertEqual(
+            "kim_all convert --preview --format bmp --bmp5 -- %F",
+            commands["02ConvertBMP"],
+        )
+        dispatcher = (ROOT / "src/bin/kim_all").read_text()
+        self.assertNotRegex(
+            dispatcher,
+            r"action_[A-Za-z0-9_]+\(\)\s*\{\s*:\s*;\s*\}",
+        )
 
     def test_compression_preset_labels_describe_jpeg_quality(self):
-        entries = dict((action_id, (command, label)) for action_id, command, label in
-                       action_entries(ROOT / "src/kim_compress.desktop.in"))
-        for action_id, quality in (("Compress10", 10), ("Compress30", 30), ("Compress50", 50),
-                                   ("Compress70", 70), ("Compress90", 90)):
-            command, label = entries[action_id]
-            self.assertIn(f"--quality {quality}", command)
-            self.assertIn(f"JPEG quality: {quality}%", label)
-        self.assertIn("quality", entries["CompressCustom"][1].lower())
+        entries = {
+            action_id: (command, label)
+            for action_id, command, label in action_entries(
+                ROOT / "src/kim_convertandrotate.desktop.in"
+            )
+        }
+        expected = {
+            "2001CompressRecommended":
+                "kim_all compress --recommended --interactive -- %F",
+            "2102CompressMaximum":
+                "kim_all compress --maximum --interactive -- %F",
+            "2203CompressCustom":
+                "kim_all compress --custom -- %F",
+        }
+        for action_id, command in expected.items():
+            with self.subTest(action=action_id):
+                self.assertEqual(command, entries[action_id][0])
+                self.assertIn("Compress", entries[action_id][1])
+        self.assertEqual(
+            3, sum(
+                command.startswith("kim_all compress ")
+                for command, _ in entries.values()
+            )
+        )
 
     def test_kde_service_menu_actions_have_valid_structure(self):
         validator = shutil.which("desktop-file-validate")
@@ -188,41 +185,85 @@ class InstallWorkflowTests(unittest.TestCase):
         self.assertTrue((runtime / "INSTALL.md").is_file())
         self.assertTrue((runtime / "docs/index.html").is_file())
         self.assertTrue((runtime / "docs/work.css").is_file())
-        self.assertFalse((runtime / ".kim6-owned").exists(), "a separate runtime ownership marker is not installed")
-        if shutil.which("msgfmt"):
-            for language in ("de", "es", "fr", "hu", "it", "nl", "zh_TW"):
-                translation = runtime / f"locale/{language}/LC_MESSAGES/kim6.mo"
-                self.assertTrue(translation.is_file(), translation)
-                self.assertEqual(0o644, translation.stat().st_mode & 0o777)
+        self.assertEqual("KIM6 runtime\n", (runtime / ".kim6-owned").read_text())
+        # Obsolete language catalogs are no longer installed.
+        for language in ("de", "es", "fr", "hu", "it", "nl", "zh_TW"):
+            translation = runtime / f"locale/{language}/LC_MESSAGES/kim6.mo"
+            self.assertFalse(translation.exists(), translation)
+        # Read the exact file list and modes used by install.sh.
+        inventory_command = (
+            'set -euo pipefail; source "$1"; '
+            'for index in "${!runtime_files[@]}"; do '
+            r'printf "%s\0%s\0" '
+            '"${runtime_files[$index]}" '
+            '"${runtime_modes[$index]}"; '
+            'done'
+        )
+        inventory_result = subprocess.run(
+            ["bash", "-c", inventory_command,
+             "bash", str(ROOT / "install_inventory.sh")],
+            capture_output=True,
+            check=True,
+        )
+        records = inventory_result.stdout.split(b"\0")
+        self.assertEqual(b"", records.pop())
+        self.assertEqual(0, len(records) % 2)
+
+        manifest = {
+            destination.decode("utf-8"): int(mode, 8)
+            for destination, mode in zip(
+                records[0::2], records[1::2]
+            )
+        }
+        self.assertEqual(len(records) // 2, len(manifest))
+        self.assertIn("bin/kim_all", manifest)
+        self.assertEqual(0o755, manifest["bin/kim_all"])
+
+        for relative, expected_mode in manifest.items():
+            installed = runtime / relative
+            with self.subTest(runtime_file=relative):
+                self.assertTrue(installed.is_file(), installed)
+                self.assertFalse(installed.is_symlink(), installed)
+                self.assertEqual(
+                    expected_mode,
+                    installed.stat().st_mode & 0o777,
+                    installed,
+                )
+
         expected_runtime_bin = {
-            "kim_all",
-            "kim_png_metadata.py",
-            "kim_jpeg_webp_metadata.py",
-            "kim_gif_metadata.py",
-            "kim_tiff_verify.py",
-            "kim_isobmff_verify.py",
+            Path(relative).name
+            for relative in manifest
+            if Path(relative).parent == Path("bin")
+        }
+        actual_runtime_bin = {
+            path.name
+            for path in (runtime / "bin").iterdir()
+            if path.name != "__pycache__"
         }
         self.assertEqual(
             expected_runtime_bin,
-            {path.name for path in (runtime / "bin").iterdir()},
+            actual_runtime_bin,
         )
-        for companion in expected_runtime_bin - {"kim_all"}:
-            installed = runtime / "bin" / companion
-            self.assertTrue(installed.is_file(), installed)
-            self.assertEqual(
-                0o644, installed.stat().st_mode & 0o777,
-                installed,
+        self.assertTrue(
+            all(
+                (runtime / "bin" / name).is_file()
+                for name in actual_runtime_bin
             )
+        )
         menu_files = list(self.prefix.glob("kim_*.desktop"))
-        self.assertEqual(11, len(menu_files))
+        self.assertEqual(12, len(menu_files))
         for path in menu_files:
             self.assertNotRegex(path.read_text(), r"Exec=.*\bkim_(?!all\b)[A-Za-z0-9_]*")
         second = self.run_install()
         self.assertEqual(0, second.returncode, second.stdout + second.stderr)
-        self.assertEqual(11, len(list(self.prefix.glob("kim_*.desktop"))))
+        self.assertEqual(12, len(list(self.prefix.glob("kim_*.desktop"))))
         installed_dispatcher = runtime / "bin/kim_all"
         for menu in self.prefix.glob("kim_*.desktop"):
-            for _, command, _ in action_entries(menu):
+            for action_id, command, _ in action_entries(menu):
+                if action_id == '_SEPARATOR_':
+                    self.assertFalse(command, menu.name)
+                    continue
+                self.assertTrue(command.strip(), f'{menu.name}: {action_id} has no Exec')
                 executable = shlex.split(command)[0]
                 self.assertEqual(str(installed_dispatcher), executable)
                 self.assertTrue(Path(executable).is_file())
@@ -460,7 +501,7 @@ class InstallWorkflowTests(unittest.TestCase):
                         "legacy commands remain until every menu points to kim_all")
         updated_menus = [path for path in self.prefix.glob("kim_*.desktop")
                          if path.name != "kim_publication.desktop"]
-        self.assertEqual(4, len(updated_menus))
+        self.assertEqual(8, len(updated_menus))
         self.assertTrue(all('Exec="' in path.read_text() and "kim6/bin/kim_all" in path.read_text()
                             for path in updated_menus))
         self.assertFalse(list(self.prefix.rglob("*.tmp.*")))
@@ -473,7 +514,7 @@ class InstallWorkflowTests(unittest.TestCase):
 
     def test_unmarked_menu_collision_is_refused_without_modification(self):
         runtime = self.prefix / "kim6"
-        old_menu = self.prefix / "kim_compress.desktop"
+        old_menu = self.prefix / "kim_convertandrotate.desktop"
         old_content = "[Desktop Entry]\nType=Service\nName=unrelated\nExec=custom-launcher %F\n"
         old_menu.write_text(old_content)
         result = self.run_install()
@@ -490,7 +531,7 @@ class InstallWorkflowTests(unittest.TestCase):
         external = self.root / "external menu.desktop"
         content = "[Desktop Entry]\nName=not KIM\nExec=some-launcher\n"
         external.write_text(content)
-        menu = self.prefix / "kim_compress.desktop"
+        menu = self.prefix / "kim_convertandrotate.desktop"
         menu.symlink_to(external)
 
         installed = self.run_install()

@@ -6,25 +6,25 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=04Report;03Apply;05Reduce;07StripGPS;
-_X-KDE-Submenu=KIM6 — Location/GPS
+_X-KDE-Submenu=KIM6 - Location/GPS
 X-KIM6-Managed=true
 
 [Desktop Action 03Apply]
 Icon=mark-location
-_Name=Modify GPS on Images…
+_Name=Modify GPS on images…
 Exec=kim_all location-apply -- %F
 
 [Desktop Action 04Report]
 Icon=document-properties
-_Name=Inspect Location Metadata…
+_Name=Inspect location metadata…
 Exec=kim_all location-report -- %F
 
 [Desktop Action 05Reduce]
 Icon=mark-location
-_Name=Reduce Exact GPS Location…
+_Name=Reduce exact GPS location…
 Exec=kim_all location-reduce -- %F
 
 [Desktop Action 07StripGPS]
 Icon=document-properties
-_Name=Remove GPS Metadata…
+_Name=Remove GPS metadata…
 Exec=kim_all stripmeta --mode gps --interactive -- %F

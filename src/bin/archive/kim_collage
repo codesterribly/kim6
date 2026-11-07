@@ -34,7 +34,7 @@ W=`echo $SIZE | sed 's/[^0-9]/ /g' | awk '{print $1}'`
 let "OVER = ($RATIO*$W)/100"
 let "BORDER = (2*$W)/100"
 trap 'qdbus $dbusRef close 2>/dev/null; rm -rf "$KIMDIR"' EXIT
-dbusRef=`kdialog --progressbar "$(gettext "Kim — Initialising…")" $nbfiles`
+dbusRef=`kdialog --progressbar "$(gettext "Kim - Initialising…")" $nbfiles`
 qdbus $dbusRef showCancelButton true
 counter=0
 
@@ -47,7 +47,7 @@ for i in "$@";do
         let "counter +=1"
         FILE=`basename "$i"`;
         RANDOM_NUM=${RANDOM}${RANDOM}${RANDOM}${RANDOM};
-        qdbus $dbusRef setLabelText "$(gettext "Kim — resizing file: ") $FILE"
+        qdbus $dbusRef setLabelText "$(gettext "Kim - resizing file: ") $FILE"
         magick -- $i -resize $SIZE "$KIMDIR/$FILE"
         magick -- "$KIMDIR/$FILE" \
             -bordercolor white  -border $BORDER \

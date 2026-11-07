@@ -6,42 +6,42 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;
 X-KDE-Protocol=file
 Actions=01Resize1600;02Resize1280;03Resize1024;05ResizeCustom;06Crop;_SEPARATOR_;14Rotateexif;10Rotate90;11Rotate270;12Rotate180;13RotateCustom;_SEPARATOR_;20FlipHorizontal;21FlipVertical;
-_X-KDE-Submenu=KIM6 — Resize/Crop/Rotate
+_X-KDE-Submenu=KIM6 - Resize/Crop/Rotate
 X-KIM6-Managed=true
 
 [Desktop Action 01Resize1600]
 Icon=transform-scale
-_Name=Resize to Fit 1600 × 1600
+_Name=Resize to fit 1600 × 1600
 Exec=kim_all resize --size 1600x1600 -- %F
 
 [Desktop Action 02Resize1280]
 Icon=transform-scale
-_Name=Resize to Fit 1280 × 1280
+_Name=Resize to fit 1280 × 1280
 Exec=kim_all resize --size 1280x1280 -- %F
 
 [Desktop Action 03Resize1024]
 Icon=transform-scale
-_Name=Resize to Fit 1024 × 1024
+_Name=Resize to fit 1024 × 1024
 Exec=kim_all resize --size 1024x1024 -- %F
 
 [Desktop Action 05ResizeCustom]
 Icon=transform-scale
-_Name=Resize Custom…
+_Name=Resize custom…
 Exec=kim_all resize --custom -- %F
 
 [Desktop Action 06Crop]
 Icon=transform-crop
-_Name=Crop Image…
+_Name=Crop image…
 Exec=kim_all crop -- %F
 
 [Desktop Action 10Rotate90]
 Icon=object-rotate-right
-_Name=Rotate 90° Clockwise
+_Name=Rotate 90° clockwise
 Exec=kim_all rotate --preview --angle 90 -- %F
 
 [Desktop Action 11Rotate270]
 Icon=object-rotate-left
-_Name=Rotate 90° Counterclockwise
+_Name=Rotate 90° counterclockwise
 Exec=kim_all rotate --preview --angle 270 -- %F
 
 [Desktop Action 12Rotate180]
@@ -51,22 +51,22 @@ Exec=kim_all rotate --preview --angle 180 -- %F
 
 [Desktop Action 13RotateCustom]
 Icon=transform-rotate
-_Name=Rotate Custom…
+_Name=Rotate custom…
 Exec=kim_all rotate --custom -- %F
 
 [Desktop Action 14Rotateexif]
 Icon=transform-rotate
-_Name=Auto-Rotate Using EXIF
+_Name=Auto-rotate using EXIF
 Exec=kim_all rotate --preview --exif -- %F
 
 [Desktop Action 20FlipHorizontal]
 Icon=object-flip-horizontal
-_Name=Flip Horizontally
+_Name=Flip horizontally
 Exec=kim_all flipflop flop -- %F
 
 [Desktop Action 21FlipVertical]
 Icon=object-flip-horizontal
-_Name=Flip Vertically
+_Name=Flip vertically
 Exec=kim_all flipflop flip -- %F
 
 [Desktop Action _SEPARATOR_]

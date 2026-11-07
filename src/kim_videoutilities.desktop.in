@@ -6,7 +6,7 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
 Actions=A01ExtractVideoAudio;A02VideoFrameAt;A03VideoThumbnail;A04MuteVideo;_SEPARATOR_;z01VideoContactSheet;z02VideoToGif;
-_X-KDE-Submenu=KIM6 — Video Utilities
+_X-KDE-Submenu=KIM6 - Video Utilities
 X-KIM6-Managed=true
 
 [Desktop Action A01ExtractVideoAudio]

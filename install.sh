@@ -52,11 +52,13 @@ python3 -B "$SOURCE_DIR/src/bin/kim_desktop_exec.py" "$PREFIX" >/dev/null || {
 # Display required and optional dependencies without installing packages.
 # Distribution-specific package names are suggestions, not guarantees.
 kim6_report_dependencies() {
-  local os_name='Linux' os_id='' os_like='' manager=''
-  local tool label purpose path package group entry
-  local -a installed=() missing=() optional=() packages=()
-  local -a optional_packages=()
-  local -A seen_packages=() seen_optional_packages=()
+  local os_name='Linux' os_id='' os_like='' manager='' host_name=''
+  local group tool label purpose found package row status
+  local required_ok=0 required_missing=0 optional_ok=0 optional_missing=0
+  local -a missing_required=() missing_optional=()
+  local -a required_rows=() optional_rows=()
+  local -a required_packages=() optional_packages=() words=()
+  local -A seen_required=() seen_optional=()
 
   if [ -r /etc/os-release ]; then
     . /etc/os-release
@@ -69,210 +71,245 @@ kim6_report_dependencies() {
     *ubuntu*|*debian*) manager=apt ;;
     *fedora*|*rhel*|*centos*) manager=dnf ;;
     *arch*|*manjaro*) manager=pacman ;;
-    *suse*) manager=zypper ;;
+    *) manager=unknown ;;
   esac
 
+  # Verified distribution package mappings.
+  # A mapping may contain multiple packages when a module is split.
+  # FFprobe is supplied by the FFmpeg package.
   kim6_suggest_package() {
-    local name="$1"
-    case "$manager:$name" in
+    case "$manager:$1" in
       apt:magick) echo imagemagick-7.q16 ;;
       apt:exiftool) echo libimage-exiftool-perl ;;
+      apt:kdialog) echo kdialog ;;
       apt:qdbus) echo qdbus-qt6 ;;
-      apt:xdg-open) echo xdg-utils ;;
+      apt:ffmpeg|apt:ffprobe) echo ffmpeg ;;
+      apt:python3) echo python3 ;;
       apt:qtwidgets) echo python3-pyside6.qtwidgets ;;
       apt:qtnetwork) echo python3-pyside6.qtnetwork ;;
+      apt:qtwebenginewidgets) echo python3-pyside6.qtwebenginewidgets ;;
+      apt:xdg-open) echo xdg-utils ;;
       apt:intltool-merge) echo intltool ;;
+      apt:pandoc) echo pandoc ;;
       apt:msgfmt) echo gettext ;;
       apt:kbuildsycoca6) echo libkf6service-bin ;;
 
       dnf:magick) echo ImageMagick ;;
       dnf:exiftool) echo perl-Image-ExifTool ;;
+      dnf:kdialog) echo kdialog ;;
       dnf:qdbus) echo qt6-qttools ;;
+      dnf:ffmpeg|dnf:ffprobe) echo ffmpeg ;;
+      dnf:python3) echo python3 ;;
+      dnf:qtwidgets|dnf:qtnetwork) echo python3-pyside6 ;;
+      dnf:qtwebenginewidgets) echo 'python3-pyside6 qt6-qtwebengine' ;;
       dnf:xdg-open) echo xdg-utils ;;
-      dnf:qtwidgets) echo python3-pyside6 ;;
-      dnf:qtnetwork) echo python3-pyside6 ;;
       dnf:intltool-merge) echo intltool ;;
+      dnf:pandoc) echo pandoc ;;
       dnf:msgfmt) echo gettext ;;
       dnf:kbuildsycoca6) echo kf6-kservice ;;
 
       pacman:magick) echo imagemagick ;;
       pacman:exiftool) echo perl-image-exiftool ;;
+      pacman:kdialog) echo kdialog ;;
       pacman:qdbus) echo qt6-tools ;;
+      pacman:ffmpeg|pacman:ffprobe) echo ffmpeg ;;
+      pacman:python3) echo python ;;
+      pacman:qtwidgets|pacman:qtnetwork) echo pyside6 ;;
+      pacman:qtwebenginewidgets) echo 'pyside6 qt6-webengine' ;;
       pacman:xdg-open) echo xdg-utils ;;
-      pacman:qtwidgets) echo pyside6 ;;
-      pacman:qtnetwork) echo pyside6 ;;
       pacman:intltool-merge) echo intltool ;;
+      pacman:pandoc) echo pandoc ;;
       pacman:msgfmt) echo gettext ;;
       pacman:kbuildsycoca6) echo kservice ;;
 
-      zypper:magick) echo ImageMagick ;;
-      zypper:exiftool) echo perl-Image-ExifTool ;;
-      zypper:qdbus) echo libqt6-qttools ;;
-      zypper:xdg-open) echo xdg-utils ;;
-      zypper:qtwidgets) echo python3-PySide6 ;;
-      zypper:qtnetwork) echo python3-PySide6 ;;
-      zypper:intltool-merge) echo intltool ;;
-      zypper:msgfmt) echo gettext-tools ;;
-      zypper:kbuildsycoca6) echo kf6-kservice ;;
-
-      *) echo "$name" ;;
+      *) echo '' ;;
     esac
   }
 
   echo
-  echo "======================================================================"
-  echo " KIM6 DEPENDENCY CHECK"
-  echo "======================================================================"
-  printf 'System: %s\n' "$os_name"
-  printf 'Package manager: %s\n' "${manager:-unknown}"
+  host_name="$(hostname -s 2>/dev/null || hostname)"
+  echo 'KIM6 | Dependency check'
+  printf 'Host: %s\n' "$host_name"
+  printf 'OS: %s\n' "$os_name"
+  printf 'Package manager: %s\n' "$manager"
 
   while IFS='|' read -r group tool label purpose; do
     [ -n "$tool" ] || continue
-    path=''
+
+    found=''
 
     case "$tool" in
       qdbus)
-        path="$(type -P qdbus 2>/dev/null || true)"
-        [ -n "$path" ] || path="$(type -P qdbus6 2>/dev/null || true)"
-        if [ -z "$path" ] && [ -x /usr/lib/qt6/bin/qdbus ]; then
-          path=/usr/lib/qt6/bin/qdbus
+        found="$(type -P qdbus 2>/dev/null || true)"
+        [ -n "$found" ] ||
+          found="$(type -P qdbus6 2>/dev/null || true)"
+        if [ -z "$found" ] && [ -x /usr/lib/qt6/bin/qdbus ]; then
+          found=/usr/lib/qt6/bin/qdbus
         fi
         ;;
       qtwidgets)
         if python3 -c 'from PySide6.QtWidgets import QApplication, QDialog' \
-             >/dev/null 2>&1; then
-          path="$(command -v python3)"
-          path="$path (PySide6)"
+          >/dev/null 2>&1; then
+          found=available
+        fi
+        ;;
+      qtwebenginewidgets)
+        if python3 -c 'from PySide6.QtWebEngineWidgets import QWebEngineView' \
+          >/dev/null 2>&1; then
+          found=available
         fi
         ;;
       qtnetwork)
-        if python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check >/dev/null 2>&1; then
-          path="$(command -v python3) (QtNetwork, TLS, PNG, platform plugin files)"
+        if python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check \
+          >/dev/null 2>&1; then
+          found=available
         fi
         ;;
       *)
-        path="$(command -v "$tool" 2>/dev/null || true)"
+        found="$(command -v "$tool" 2>/dev/null || true)"
         ;;
     esac
 
-    if [ -n "$path" ]; then
+    if [ -n "$found" ]; then
+      status=OK
       if [ "$group" = required ]; then
-        installed+=("$label|$path|$purpose")
+        required_ok=$((required_ok + 1))
       else
-        optional+=("installed|$label|$path|$purpose")
+        optional_ok=$((optional_ok + 1))
       fi
     else
-      package="$(kim6_suggest_package "$tool")"
+      status=MISSING
       if [ "$group" = required ]; then
-        missing+=("$label|$package|$purpose")
-        if [ -z "${seen_packages[$package]+yes}" ]; then
-          packages+=("$package")
-          seen_packages["$package"]=1
-        fi
+        required_missing=$((required_missing + 1))
+        missing_required+=("$tool|$label")
       else
-        optional+=("missing|$label|$package|$purpose")
+        optional_missing=$((optional_missing + 1))
+        missing_optional+=("$tool|$label")
       fi
+    fi
+
+    # Store results for two clean sections, regardless of manifest order.
+    if [ "$group" = required ]; then
+      required_rows+=("$label|$purpose|$status")
+    else
+      optional_rows+=("$label|$purpose|$status")
     fi
   done <<'KIM6_DEPENDENCIES'
-required|magick|ImageMagick|Image conversion, resize and compression
-required|exiftool|ExifTool|EXIF and metadata operations
-required|kdialog|KDialog|KDE dialogs and progress
-required|qdbus|QtDBus|KDE desktop integration
-required|ffmpeg|FFmpeg|Video and animation processing
-required|ffprobe|FFprobe|Video and audio inspection
-required|python3|Python 3|Application helpers
-required|qtwidgets|PySide6 Qt Widgets|Graphical configuration dialogs
-required|qtnetwork|D1 map capabilities|Qt Network, TLS, PNG decoding and platform plugin files
-required|xdg-open|xdg-open|Opening generated output
+required|magick|ImageMagick|Image processing
+required|exiftool|ExifTool|Metadata
+required|kdialog|KDialog|KDE dialogs
+required|qdbus|QtDBus|Desktop integration
+required|ffmpeg|FFmpeg|Video processing
+required|ffprobe|FFprobe|Video inspection
+required|python3|Python 3|Application runtime
+required|qtwidgets|PySide6 Qt Widgets|Graphical dialogs
+required|qtnetwork|Qt map support|Maps and networking
+required|xdg-open|xdg-open|Open output files
 required|intltool-merge|intltool|Dolphin menu generation
-optional|pandoc|Pandoc|HTML manual generation
-optional|msgfmt|gettext tools|Translation catalog compilation
-optional|kbuildsycoca6|KDE service cache|Desktop service cache refresh
+optional|qtwebenginewidgets|PySide6 WebEngine|Embedded HTML guide
+optional|pandoc|Pandoc|HTML documentation
+optional|msgfmt|gettext tools|Translations
+optional|kbuildsycoca6|KDE service cache|Menu cache refresh
 KIM6_DEPENDENCIES
 
-  echo
-  echo "Installed"
-  echo "---------"
-  for entry in "${installed[@]}"; do
-    IFS='|' read -r label path purpose <<< "$entry"
-    printf '  %-21s %-30s %s\n' "$label" "$path" "$purpose"
+  # The table is displayed in two groups, independent of check order.
+  printf '\n%-23s %-26s %s\n' 'REQUIRED DEPENDENCIES' 'PURPOSE' 'STATUS'
+  printf '%s\n' '------------------------------------------------------------'
+  for row in "${required_rows[@]}"; do
+    IFS='|' read -r label purpose status <<< "$row"
+    printf '%-23s %-26s %s\n' "$label" "$purpose" "$status"
   done
 
-  if [ "${#missing[@]}" -gt 0 ]; then
-    echo
-    echo "Missing Required"
-    echo "----------------"
-    for entry in "${missing[@]}"; do
-      IFS='|' read -r label package purpose <<< "$entry"
-      printf '  %-21s %-30s %s\n' "$label" "Package: $package" "$purpose"
-    done
-
-    echo
-    echo "Suggested installation:"
-    case "$manager" in
-      apt) printf '  sudo apt install' ;;
-      dnf) printf '  sudo dnf install' ;;
-      pacman) printf '  sudo pacman -S' ;;
-      zypper) printf '  sudo zypper install' ;;
-      *) printf '  Use your distribution package manager for:' ;;
-    esac
-    printf ' %s' "${packages[@]}"
-    printf '\n'
-    echo "Package availability and names may vary by distribution release."
-  fi
-
-  echo
-  echo "Optional"
-  echo "--------"
-  for entry in "${optional[@]}"; do
-    IFS='|' read -r group label path purpose <<< "$entry"
-    if [ "$group" = installed ]; then
-      printf '  %-21s %-30s %s\n' "$label" "$path" "$purpose"
-    else
-      printf '  %-21s %-30s %s\n' "$label" "Not installed" "$purpose"
-
-      case "$label" in
-        Pandoc) tool=pandoc ;;
-        "gettext tools") tool=msgfmt ;;
-        "KDE service cache") tool=kbuildsycoca6 ;;
-        *) continue ;;
-      esac
-
-      package="$(kim6_suggest_package "$tool")"
-
-      if [ -z "${seen_optional_packages[$package]+yes}" ]; then
-        optional_packages+=("$package")
-        seen_optional_packages["$package"]=1
-      fi
-    fi
+  printf '\n%-23s %-26s %s\n' 'OPTIONAL DEPENDENCIES' 'PURPOSE' 'STATUS'
+  printf '%s\n' '------------------------------------------------------------'
+  for row in "${optional_rows[@]}"; do
+    IFS='|' read -r label purpose status <<< "$row"
+    printf '%-23s %-26s %s\n' "$label" "$purpose" "$status"
   done
 
-  if [ "${#optional_packages[@]}" -gt 0 ]; then
-    echo
-    printf 'Suggested optional packages for %s:\n' "$os_name"
+  printf '\n%s\n' '------------------------------------------------------------'
 
-    case "$manager" in
-      apt) printf '  sudo apt install' ;;
-      dnf) printf '  sudo dnf install' ;;
-      pacman) printf '  sudo pacman -S' ;;
-      zypper) printf '  sudo zypper install' ;;
-      *) printf '  Packages:' ;;
-    esac
-
-    printf ' %s' "${optional_packages[@]}"
-    printf '\n'
-  fi
-
-  if [ "${#missing[@]}" -eq 0 ]; then
-    echo
-    echo "PASS: All required dependencies available."
+  if [ "$required_missing" -eq 0 ]; then
+    printf 'PASS  %d/%d required dependencies available.\n' "$required_ok" "$required_ok"
   else
-    echo
-    echo "WARNING: Some required dependencies are unavailable."
+    printf 'WARN  %d/%d required dependencies missing.\n' "$required_missing" "$((required_ok + required_missing))"
   fi
 
-}
+  if [ "$optional_missing" -eq 0 ]; then
+    printf 'PASS  %d/%d optional dependencies available.\n' "$optional_ok" "$optional_ok"
+  else
+    printf 'INFO  %d/%d optional dependencies available.\n' "$optional_ok" "$((optional_ok + optional_missing))"
+  fi
 
+  # Suggestions appear after the prerequisite table, only when needed.
+  for entry in "${missing_required[@]}"; do
+    IFS='|' read -r tool label <<< "$entry"
+    package="$(kim6_suggest_package "$tool")"
+    if [ -z "$package" ]; then
+      printf 'No verified package mapping for: %s\n' "$label"
+      continue
+    fi
+    read -r -a words <<< "$package"
+    for package in "${words[@]}"; do
+      if [ -z "${seen_required[$package]+yes}" ]; then
+        required_packages+=("$package")
+        seen_required["$package"]=1
+      fi
+    done
+  done
+
+  for entry in "${missing_optional[@]}"; do
+    IFS='|' read -r tool label <<< "$entry"
+    package="$(kim6_suggest_package "$tool")"
+    if [ -z "$package" ]; then
+      printf 'No verified package mapping for: %s\n' "$label"
+      continue
+    fi
+    read -r -a words <<< "$package"
+    for package in "${words[@]}"; do
+      if [ -z "${seen_required[$package]+yes}" ] &&
+         [ -z "${seen_optional[$package]+yes}" ]; then
+        optional_packages+=("$package")
+        seen_optional["$package"]=1
+      fi
+    done
+  done
+
+  if [ "${#required_packages[@]}" -gt 0 ] ||
+     [ "${#optional_packages[@]}" -gt 0 ]; then
+    echo
+    echo 'MISSING DEPENDENCY PACKAGES'
+    printf '%s\n' '------------------------------------------------------------'
+    printf 'Target host: %s (%s)\n' "$host_name" "$os_name"
+
+    local install_command=''
+    case "$manager" in
+      apt) install_command='sudo apt install' ;;
+      dnf) install_command='sudo dnf install' ;;
+      pacman) install_command='sudo pacman -S' ;;
+    esac
+
+    if [ "${#required_packages[@]}" -gt 0 ]; then
+      printf 'Required packages for %s:\n' "$host_name"
+      printf '  %s' "$install_command"
+      printf ' %s' "${required_packages[@]}"
+      printf '\n'
+    fi
+
+    if [ "${#optional_packages[@]}" -gt 0 ]; then
+      printf 'Optional packages for %s:\n' "$host_name"
+      printf '  %s' "$install_command"
+      printf ' %s' "${optional_packages[@]}"
+      printf '\n'
+    fi
+
+    echo
+    echo 'Package availability depends on enabled distribution repositories.'
+    echo 'Commands are suggestions only; KIM6 does not install packages.'
+  fi
+
+  echo
+}
 kim6_report_dependencies
 
 # Both graphical configuration dialogs require PySide6 Qt Widgets.
@@ -287,13 +324,15 @@ fi
 # D1 uses software Qt painting, QtNetwork HTTPS and Qt's PNG decoder. This
 # read-only probe creates no application/window and makes no network requests.
 # Missing modules and local runtime/plugin defects must not look like readiness.
-if ! python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check; then
+map_probe_output=''
+if ! map_probe_output="$(python3 -B "$SOURCE_DIR/src/bin/kim_location_map.py" --check 2>&1)"; then
+  printf '%s\n' "$map_probe_output" >&2
   echo "install.sh: D1 map dependencies are incomplete; installation stopped." >&2
-  echo "Use the package-manager command above for system Python. For pip-managed Python," >&2
-  echo "use its interpreter with the matching-version PySide6-Essentials repair command reported by the probe." >&2
+  echo "Check the missing components reported above." >&2
   exit 1
 fi
-echo "D1 display connection, remote X11 authorization, network and map-provider availability must be checked at runtime."
+echo "PASS  Qt map modules, TLS, PNG and platform files available."
+echo "      Display authorization and network access are checked at runtime."
 
 
 
@@ -467,6 +506,19 @@ for index in "${!runtime_files[@]}"; do
   install_file "$SOURCE_DIR/${runtime_sources[$index]}" "$RUNTIME/${runtime_files[$index]}" "${runtime_modes[$index]}"
 done
 
+# Remove retired KIM6 catalogs during an upgrade.
+# Existing runtime preflight checks these language paths.
+# Never remove unrelated translation domains.
+for language in de es fr hu it nl zh_TW; do
+  [ ! -f "$SOURCE_DIR/po/$language.po" ] || continue
+  catalog="$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
+  if [ -f "$catalog" ]; then
+    rm -f -- "$catalog"
+  fi
+  rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" \
+    "$RUNTIME/locale/$language" 2>/dev/null || true
+done
+
 if command -v msgfmt >/dev/null 2>&1; then
   for language in "${languages[@]}"; do
     if [ -f "$SOURCE_DIR/po/$language.po" ]; then compile_translation "$language"; fi
@@ -481,6 +533,7 @@ for name in "${menu_names[@]}"; do
   destination="$PREFIX/$name"
   temporary="$(mktemp "$PREFIX/.${name}.tmp.XXXXXX")"
   intltool-merge --desktop-style "$SOURCE_DIR/po" "$SOURCE_DIR/src/$name.in" "$temporary" >/dev/null
+chmod 0755 -- "$temporary"
   # Pass data as arguments; a callable replacement adds no sed/regex escaping.
   python3 - "$exec_path" "$temporary" <<'KIM6_EXEC_REPLACE'
 from pathlib import Path

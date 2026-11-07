@@ -6,7 +6,7 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;image/jpeg;image/png;image/webp;image/avif;
 X-KDE-Protocol=file
 Actions=07ConvertJPG;10ConvertPNG;12ConvertWEBP;01ConvertAVIF;11ConvertTIFF;03ConvertGIF;04ConvertHEIC;09ConvertPDF;08ConvertJXL;05ConvertJP2Lossless;06ConvertJP2Lossy;02ConvertBMP;13ConvertCustom;_SEPARATOR_;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
-_X-KDE-Submenu=KIM6 — Convert/Compress
+_X-KDE-Submenu=KIM6 - Convert/Compress
 X-KIM6-Managed=true
 
 [Desktop Action 01ConvertAVIF]
@@ -31,12 +31,12 @@ Exec=kim_all convert --preview --format heic -- %F
 
 [Desktop Action 05ConvertJP2Lossless]
 Icon=image-x-generic
-_Name=Convert to JPEG 2000 (Lossless)
+_Name=Convert to JPEG 2000 (lossless)
 Exec=kim_all convert --preview --format jp2 --jp2-mode lossless -- %F
 
 [Desktop Action 06ConvertJP2Lossy]
 Icon=image-x-generic
-_Name=Convert to JPEG 2000 (Lossy)
+_Name=Convert to JPEG 2000 (lossy)
 Exec=kim_all convert --preview --format jp2 --jp2-mode lossy -- %F
 
 [Desktop Action 07ConvertJPG]
@@ -71,22 +71,22 @@ Exec=kim_all convert --preview --format webp -- %F
 
 [Desktop Action 13ConvertCustom]
 Icon=image-x-generic
-_Name=Custom Convert…
+_Name=Custom convert…
 Exec=kim_all convert --preview --custom-format -- %F
 
 [Desktop Action 2001CompressRecommended]
 Icon=document-save
-_Name=Compress Recommended
+_Name=Compress recommended
 Exec=kim_all compress --recommended --interactive -- %F
 
 [Desktop Action 2102CompressMaximum]
 Icon=document-save
-_Name=Compress Maximum
+_Name=Compress maximum
 Exec=kim_all compress --maximum --interactive -- %F
 
 [Desktop Action 2203CompressCustom]
 Icon=document-save
-_Name=Compress Custom…
+_Name=Compress custom…
 Exec=kim_all compress --custom -- %F
 
 [Desktop Action _SEPARATOR_]

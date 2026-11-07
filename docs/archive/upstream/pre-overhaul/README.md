@@ -1,4 +1,4 @@
-# KDE Image Menu 6 — KIM6
+# KDE Image Menu 6 - KIM6
 KIM6 is a KDE Dolphin service-menu package with one processing executable: `kim_all`. Its menus route image and video workflows through that unified dispatcher, including batch transformations, safe publication, rename, PDF albums/print layouts, galleries, collages, TIFF/GIF creation, email resize, and 24 video presets.
 
 KDE store: https://store.kde.org/p/2307290/

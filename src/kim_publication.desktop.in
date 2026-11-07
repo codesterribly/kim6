@@ -6,7 +6,7 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=Gallery;Collage;ContactSheet;Album;Print;Slideshow;Animation;TiffJoin;Emailfull;
-_X-KDE-Submenu=KIM6 — Create/Publish
+_X-KDE-Submenu=KIM6 - Create/Publish
 X-KIM6-Managed=true
 
 [Desktop Action Album]

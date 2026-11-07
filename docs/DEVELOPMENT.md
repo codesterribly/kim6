@@ -37,7 +37,7 @@ The `docs/` directory contains additional references:
 
 The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in `src/bin/` include `kim_recipe_core.py`, `kim_recipe_image.py`, `kim_recipe_dialog.py`, `kim_recipe_run.py`, and `kim_recipe_menu.py`; the shipped definitions are kept under `src/recipes/`.
 
-The Recipes submenu has two static entries, Run a Recipe and Recipe Editor; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.
+The Recipes submenu has two static entries, Choose saved recipe… and Recipe editor…; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.
 
 **Safety contract:** Recipes publish derivatives only, never overwrite selected source photographs, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected photographs. Cancellation or failed publication must never be presented as success.
 
@@ -70,6 +70,29 @@ The dispatcher's command-line help is maintained in `src/bin/kim_all` and should
 
 See [ACTIONS.md](ACTIONS.md) for the complete menu definitions and [commandconfig.md](commandconfig.md) for command-line arguments.
 
+## Embedded User Guide rendering
+
+`src/bin/kim_settings_dialog.py` embeds the installed
+`docs/index.html` using `PySide6.QtWebEngineWidgets.QWebEngineView`.
+The binding is optional for general KIM6 operation but required for
+the full HTML guide inside Settings/About.
+
+For Ubuntu or Debian, the package is
+`python3-pyside6.qtwebenginewidgets`. The Qt WebEngine runtime
+libraries alone do not provide the Python import. `install.sh`
+checks `from PySide6.QtWebEngineWidgets import QWebEngineView`
+and reports the missing optional dependency.
+
+The guide opens from a local file URL, so installed CSS, illustrations,
+and reference pages must retain their relative paths. The application
+keeps an external-browser action and a limited Markdown fallback.
+
+When modifying this tab, keep the status label hidden during successful
+HTML rendering and give the WebEngine widget the available vertical
+space. Restore a status message only for fallback or missing-file
+conditions. Do not disable HTML rendering merely because the process
+has SSH environment variables.
+
 ## Runtime Dependencies and Format Support
 
 KIM6 uses Bash and common command-line utilities, along with:
@@ -89,7 +112,7 @@ See [FORMATS.md](FORMATS.md) for details about supported formats and dependencie
 
 ## Configuration
 
-The user-facing entry point is **Actions → KIM6 — Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
+The user-facing entry point is **Actions → KIM6 - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
 
 `kim6_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
@@ -392,14 +415,38 @@ The design must account for KDE service-menu MIME filtering, mixed-format batch 
 
 ### Translation infrastructure and localization
 
-Rebuild the translation infrastructure around the current KIM6 implementation:
+KIM6 currently ships with English source strings only. The seven
+obsolete translation catalogs were retired after the English interface
+and Dolphin service menus changed substantially.
 
-- Regenerate `po/kim6.pot` from the current unified dispatcher and Dolphin service-menu definitions.
-- Make user-visible strings in the Python graphical dialogs available for translation.
-- Reconcile the existing German, Spanish, French, Hungarian, Italian, Dutch, and Traditional Chinese catalogs with the updated template.
-- Preserve valid existing translations and identify missing, outdated, or fuzzy entries.
-- Develop a repeatable translation-maintenance workflow with automated extraction, catalog updates, and coverage reporting.
-- Use AI-assisted translation where appropriate, with consistent terminology and validation of placeholders, formatting, commands, and technical identifiers.
-- Prioritize native-speaker review of file-safety warnings and destructive-operation confirmations.
+The gettext infrastructure remains available for future localization.
+The current `po/kim6.pot` template was rebuilt from the active unified
+dispatcher, active Python source files, and all 12 Dolphin menu
+templates. Archived scripts and historical documents were excluded.
 
-Translation work should follow stabilization of the English interface to avoid repeatedly translating changing messages.
+To regenerate the template after additional English UI changes:
+
+1. Extract `gettext` strings from `src/bin/kim_all` with GNU
+   `xgettext --language=Shell --keyword=gettext`.
+2. Extract explicitly marked translation strings from active
+   `src/bin/*.py` files with `xgettext --language=Python`.
+3. Extract the `_Name` and `_X-KDE-Submenu` values from all 12
+   `src/kim_*.desktop.in` templates and include them as gettext
+   source strings.
+4. Merge the extraction results using `msgcat --use-first
+   --sort-output` and write the result to `po/kim6.pot`.
+5. Validate the template using `msgfmt --check` and verify that
+   no archived sources are included.
+
+Future language catalogs can be created from this template.
+Do not reuse the retired catalogs as translations for the
+current application.
+
+Not every Python dialog string currently has a translation marker.
+Full graphical-interface localization remains future work.
+English source strings are used as the fallback without overriding
+the user's system locale settings.
+
+File-safety warnings, destructive-operation confirmations,
+placeholders, filenames, and command terminology require
+particular care when new translations are prepared.

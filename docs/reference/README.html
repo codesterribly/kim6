@@ -36,13 +36,13 @@
 <p>Select one file or an entire group of files, right-click, and choose what you want to do.</p>
 <p>KIM6 is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.</p>
 <p align="center">
-  <a href="../images/kim6-recipes-menu.png"><img src="../images/kim6-recipes-menu.png" alt="KIM6 — Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a Recipe and Recipe Editor" width="760"></a>
+  <a href="../images/kim6-recipes-menu.png"><img src="../images/kim6-recipes-menu.png" alt="KIM6 - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a Recipe and Recipe Editor" width="760"></a>
 </p>
-<p align="center"><em>KIM6 — Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
+<p align="center"><em>KIM6 - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
 <h2 id="quick-start">Quick Start</h2>
-<p>For a reusable photo workflow, select photographs and open <strong>KIM6 — Recipes → Choose Saved Recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIM6 — Recipes → Recipe Editor…</strong> to create your own. Recipes always create separate output files and leave the source photographs untouched.</p>
-<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open <strong>Actions → KIM6 — Settings/About → Settings</strong>. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals.</p>
+<p>For a reusable photo workflow, select photographs and open <strong>KIM6 - Recipes → Choose saved recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIM6 - Recipes → Recipe editor…</strong> to create your own. Recipes always create separate output files and leave the source photographs untouched.</p>
+<p>Select one or more photographs in Dolphin, right-click, and choose a KIM6 action. To configure how KIM6 handles your files, open <strong>Actions → KIM6 - Settings/About → Settings</strong>. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIM6 uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is <strong>Create new files (originals untouched)</strong>.</p>
 <table>
 <thead>
 <tr>
@@ -54,44 +54,44 @@
 <tbody>
 <tr>
 <td>Run the built-in Web Export recipe</td>
-<td>KIM6 — Recipes → Choose Saved Recipe… → Web Export</td>
+<td>KIM6 - Recipes → Choose saved recipe… → Web Export</td>
 <td><code>lake_web.jpg</code> in a <code>Web</code> subfolder beside <code>lake.jpg</code></td>
 </tr>
 <tr>
 <td>Resize a photograph</td>
-<td>KIM6 — Resize/Crop/Rotate → Resize to Fit 1600 × 1600</td>
+<td>KIM6 - Resize/Crop/Rotate → Resize to fit 1600 × 1600</td>
 <td><code>lake_resized.jpg</code></td>
 </tr>
 <tr>
 <td>Compress a JPEG</td>
-<td>KIM6 — Convert/Compress → Compress Recommended</td>
+<td>KIM6 - Convert/Compress → Compress Recommended</td>
 <td><code>lake_compressed.jpg</code></td>
 </tr>
 <tr>
 <td>Convert PNG to JPEG</td>
-<td>KIM6 — Convert/Compress → Convert to JPEG</td>
+<td>KIM6 - Convert/Compress → Convert to JPEG</td>
 <td><code>garden.jpg</code></td>
 </tr>
 <tr>
 <td>Remove GPS coordinates</td>
-<td>KIM6 — Location/GPS → Remove GPS Metadata…</td>
+<td>KIM6 - Location/GPS → Remove GPS metadata…</td>
 <td><code>trip_gps.jpg</code></td>
 </tr>
 <tr>
 <td>Remove recognized AI metadata</td>
-<td>KIM6 — Organize/Metadata → Strip AI Metadata</td>
+<td>KIM6 - Organize/Metadata → Strip AI metadata</td>
 <td><code>portrait_ai.jpg</code></td>
 </tr>
 <tr>
 <td>Resize several photographs</td>
-<td>KIM6 — Resize/Crop/Rotate → Resize to Fit 1280 × 1280</td>
+<td>KIM6 - Resize/Crop/Rotate → Resize to fit 1280 × 1280</td>
 <td><code>lake_resized.jpg</code>, <code>garden_resized.jpg</code>, <code>portrait_resized.jpg</code></td>
 </tr>
 </tbody>
 </table>
 <p>These examples assume default suffix naming. KIM6 numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.</p>
 <p>GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.</p>
-<p>Use <strong>KIM6 — Settings/About → Settings</strong> to change your defaults. For advanced configuration and command-line overrides, see <a href="commandconfig.html#configuration-and-defaults">Command and Configuration Reference</a>.</p>
+<p>Use <strong>KIM6 - Settings/About → Settings</strong> to change your defaults. For advanced configuration and command-line overrides, see <a href="commandconfig.html#configuration-and-defaults">Command and Configuration Reference</a>.</p>
 <h2 id="features">Features</h2>
 <h3 id="recipes-reusable-photo-workflows">Recipes: reusable photo workflows</h3>
 <p align="center">
@@ -99,10 +99,10 @@
 </p>
 <p align="center"><em>The Recipe Editor and its planned-output preview.</em></p>
 
-<p>KIM6 includes a dedicated <strong>KIM6 — Recipes</strong> submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one photograph or an entire selection.</p>
+<p>KIM6 includes a dedicated <strong>KIM6 - Recipes</strong> submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one photograph or an entire selection.</p>
 <ul>
-<li><strong>Run saved recipes:</strong> Open <strong>Choose Saved Recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
-<li><strong>Build and edit workflows:</strong> Use <strong>Recipe Editor…</strong> to create, duplicate, and organize recipes. Give each recipe a meaningful name.</li>
+<li><strong>Run saved recipes:</strong> Open <strong>Choose saved recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
+<li><strong>Build and edit workflows:</strong> Use <strong>Recipe editor…</strong> to create, duplicate, and organize recipes. Give each recipe a meaningful name.</li>
 <li><strong>Combine processing steps:</strong> Choose among 25 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.</li>
 <li><strong>Enable or disable steps:</strong> Keep operations in a recipe without requiring every step to run each time.</li>
 <li><strong>Preview before processing:</strong> Review selected photographs, the enabled operations, and planned output filenames. The Run button remains unavailable until preflight requirements are satisfied.</li>
@@ -132,7 +132,7 @@
 <p align="center"><em>Photo dates, renaming and metadata tools in Dolphin.</em></p>
 
 <ul>
-<li><strong>Manage privacy and metadata:</strong> Use <strong>Remove GPS Metadata…</strong> to remove recognized coordinates, <strong>Strip AI Metadata</strong> to remove recognized AI-generation fields, or <strong>Strip Metadata</strong> for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.</li>
+<li><strong>Manage privacy and metadata:</strong> Use <strong>Remove GPS metadata…</strong> to remove recognized coordinates, <strong>Strip AI metadata</strong> to remove recognized AI-generation fields, or <strong>Strip metadata</strong> for broader metadata removal. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.</li>
 <li><strong>Manage photo dates:</strong> Rename photographs using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.</li>
 <li><strong>Update copyright information:</strong> Add or modify copyright metadata across multiple photographs.</li>
 <li><strong>Control what gets preserved:</strong> Choose appropriate metadata and output behavior for different operations.</li>
@@ -160,7 +160,7 @@
 <h2 id="how-kim6-works">How KIM6 works</h2>
 <p>KIM6 adds image and video tools to Dolphin's right-click menu. Select a photo or video, right-click it, and choose what you want to do. You can also select multiple files to process them together.</p>
 <p><strong>Keeping your originals safe</strong></p>
-<p>KIM6 can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under <strong>Actions → KIM6 — Settings/About → Settings</strong>. Replacing original files requires an additional confirmation, so KIM6 won't silently overwrite them.</p>
+<p>KIM6 can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under <strong>Actions → KIM6 - Settings/About → Settings</strong>. Replacing original files requires an additional confirmation, so KIM6 won't silently overwrite them.</p>
 <p>Resizing, compression, conversion, rotation, and flipping follow these settings where supported. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source photographs. Video transcoding can also replace an original, but only with explicit confirmation.</p>
 <p><strong>Filenames and batch processing</strong></p>
 <p>When KIM6 creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. Open <strong>Settings → Output Filenames</strong> to customize descriptive labels, such as changing <code>photo_compressed.jpg</code> to <code>photo_com.jpg</code>. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use <code>{filename}</code> to represent the original filename without its extension. For example, <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The Recipe Editor previews the resulting names.</p>
@@ -176,14 +176,14 @@
 <p>To uninstall KIM6, run <code>./uninstall.sh</code> from the source directory. See <a href="INSTALL.html">Installation Instructions</a> for dependencies, upgrades, system-wide installation, custom directories, and uninstall options.</p>
 <h2 id="documentation">Documentation</h2>
 <ul>
-<li><a href="#quick-start">Getting Started</a> — Common tasks and examples.</li>
-<li><a href="../index.html#recipes">Recipes</a> — Build, preview, and run reusable photo workflows from Dolphin.</li>
-<li><a href="https://codesterribly.github.io/kim6/">Online User Guide</a> — Using KIM6's image and video tools.</li>
-<li><a href="RECIPES.html">Detailed Recipes Reference</a> — Build, manage, preview, and run saved photo workflows.</li>
-<li><a href="ACTIONS.html">Complete Action List</a> — Available Dolphin menu actions.</li>
-<li><a href="FORMATS.html">Supported Formats</a> — Image and video format support.</li>
-<li><a href="commandconfig.html">Configuration</a> — Customizing KIM6's behavior.</li>
-<li><a href="DEVELOPMENT.html">Development</a> — Technical information and contributing.</li>
+<li><a href="#quick-start">Getting Started</a> - Common tasks and examples.</li>
+<li><a href="../index.html#recipes">Recipes</a> - Build, preview, and run reusable photo workflows from Dolphin.</li>
+<li><a href="https://codesterribly.github.io/kim6/">Online User Guide</a> - Using KIM6's image and video tools.</li>
+<li><a href="RECIPES.html">Detailed Recipes Reference</a> - Build, manage, preview, and run saved photo workflows.</li>
+<li><a href="ACTIONS.html">Complete Action List</a> - Available Dolphin menu actions.</li>
+<li><a href="FORMATS.html">Supported Formats</a> - Image and video format support.</li>
+<li><a href="commandconfig.html">Configuration</a> - Customizing KIM6's behavior.</li>
+<li><a href="DEVELOPMENT.html">Development</a> - Technical information and contributing.</li>
 </ul>
 <p>For source and project updates, see <a href="https://github.com/codesterribly/kim6">this KIM6 rewrite</a>. Report bugs or suggest improvements through <a href="https://github.com/codesterribly/kim6/issues">GitHub Issues</a>. The original project remains credited in the history section below.</p>
 <h2 id="project-history">Project history</h2>

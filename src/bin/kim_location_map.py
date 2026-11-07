@@ -559,7 +559,7 @@ def choose_location(parent, initial=None, units='metric'):
     """Selection changes proposed input only; publication still requires approval."""
     try:
         if initial is not None: initial = [coordinate(initial[0], None, True), coordinate(initial[1], None, False)]
-        dialog = QDialog(parent); dialog.setWindowTitle('Choose an Image Location')
+        dialog = QDialog(parent); dialog.setWindowTitle('Choose an image location')
         available = dialog.screen().availableGeometry()
         dialog.resize(min(800, available.width()*9//10), min(680, available.height()*9//10))
         layout = QVBoxLayout(dialog)

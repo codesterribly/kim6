@@ -6,7 +6,7 @@ X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=0101WebExport;0102WebExport;0103WebExport;_SEPARATOR_;0201WebExport;0202WebExport;0203WebExport;_SEPARATOR_;0301WebExport;0302WebExport;0303WebExport;_SEPARATOR_;0401WebExport;0402WebExport;0403WebExport;
-_X-KDE-Submenu=KIM6 — Web Export
+_X-KDE-Submenu=KIM6 - Web Export
 X-KIM6-Managed=true
 
 [Desktop Action 0101WebExport]

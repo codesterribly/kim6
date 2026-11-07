@@ -212,12 +212,12 @@ def main():
 
     maps = QGroupBox("Maps")
     maps_layout = QVBoxLayout(maps)
-    online_maps = QCheckBox("Automatically load online maps")
+    online_maps = QCheckBox("Load maps automatically")
     online_maps.setChecked(values["KIM_LOCATION_ONLINE_MAPS"] == "yes")
     maps_layout.addWidget(online_maps)
-    maps_explanation = QLabel("When enabled, location maps load geographic imagery automatically. "
-                             "Visible map areas are requested from OpenStreetMap.")
-    maps_explanation.setWordWrap(True); maps_layout.addWidget(maps_explanation)
+    online_maps.setToolTip(
+        "Load OpenStreetMap tiles automatically when displaying maps."
+    )
     settings_layout.addWidget(maps)
 
     quality = {}
@@ -233,12 +233,6 @@ def main():
         form.addRow(label, widget)
         quality[key] = widget
 
-    png_info = QLabel(
-        "PNG exports use lossless compression. "
-        "There is no lossy quality percentage to configure."
-    )
-    png_info.setWordWrap(True)
-    settings_layout.addWidget(png_info)
 
 
     copyright_widgets = {}
@@ -394,15 +388,10 @@ def main():
         manual_view = None
 
         try:
-            if any(os.environ.get(key) for key in (
-                "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"
-            )):
-                raise ImportError("Prefer Markdown under SSH forwarding")
-
             from PySide6.QtWebEngineWidgets import QWebEngineView
             manual_view = QWebEngineView()
             manual_view.setUrl(QUrl.fromLocalFile(str(manual_path)))
-            manual_status.setText("HTML User Guide.")
+            manual_status.hide()
         except (ImportError, RuntimeError):
             manual_view = QTextBrowser()
             manual_view.setOpenExternalLinks(True)
@@ -429,7 +418,7 @@ def main():
                 "NOTE: Full HTML rendering is unavailable in this viewer session, so KIM6 is displaying the Markdown version of the README. Use Open in Browser for the complete illustrated User Guide."
             )
 
-        manual_layout.addWidget(manual_view)
+        manual_layout.addWidget(manual_view, 1)
     else:
         manual_status.setText("Installed HTML User Guide not found.")
 

@@ -1366,13 +1366,13 @@ progress_begin_item() {
   remaining=$((total-${REPORT_OK:-0}-${REPORT_FAIL:-0}-${REPORT_CANCELLED:-0}-${REPORT_SKIPPED:-0}))
   # Composition actions already supply preparation N/M; these are source items,
   # never a claim that each source produces a separate composed deliverable.
-  text="$action — file $index of $total: $text
+  text="$action: file $index of $total: $text
 Succeeded: ${REPORT_OK:-0}; failed: ${REPORT_FAIL:-0}; cancelled: ${REPORT_CANCELLED:-0}; skipped: ${REPORT_SKIPPED:-0}; remaining: $remaining"
   case "${cmd:-}" in
     album|animate|contactsheet|collage|gallery|print|tiffjoin|slideshow)
       # Their existing labels distinguish source N/M from busy rendering and
       # verification. These jobs publish one composed deliverable.
-      text="$action — $2" ;;
+      text="$action: $2" ;;
   esac
   local active_source
   for active_source in "${source:-}" "${i:-}" "${f:-}" "${file:-}"; do
@@ -1433,7 +1433,7 @@ kim6_create_select_more() {
   [ -d "$initial_dir" ] || initial_dir="$PWD"
 
   kdialog \
-    --title "KIM6 — ${action_title}" \
+    --title "KIM6 - ${action_title}" \
     --yes-label "Select More Images" \
     --no-label "Use One Image" \
     --yesnocancel \
@@ -1739,7 +1739,7 @@ publication_prepare_source() {
   PUBLICATION_PREPARED_COUNT=$((PUBLICATION_PREPARED_COUNT + 1))
   label="$(gettext 'Preparing and validating source images')"
   if is_psd_source "$file"; then label="$(gettext 'Decoding and staging PSD composite')"; fi
-  progress_begin_item "$ref" "$label — $PUBLICATION_PREPARED_COUNT / $total: ${file##*/}" || return 1
+  progress_begin_item "$ref" "$label: $PUBLICATION_PREPARED_COUNT / $total: ${file##*/}" || return 1
   publication_run_image "$ref" identify -ping -format '%m|%w|%h|%n\n' -- "$file" || rc=$?
   if [ "$rc" -eq 130 ]; then return 1; fi
   if [ "$rc" -ne 0 ]; then
@@ -1756,7 +1756,7 @@ publication_render_stage() {
   publication_run_image "$ref" "$@" || rc=$?
   if [ "$rc" -eq 130 ]; then return 1; fi
   if [ "$rc" -ne 0 ]; then
-    publication_fail "$ref" '' "$label — $(gettext 'processing failed.')
+    publication_fail "$ref" '' "$label: $(gettext 'processing failed.')
 $(cat -- "$KIMDIR/publication-errors")"; return 1
   fi
 }
@@ -1895,7 +1895,7 @@ action_album() {
   capacity=$(( ${tile%x*} * ${tile#*x} ))
   # Open before source inspection: even identify -ping can invoke the shared
   # PSD decoder and color-managed staging path on the first use of a document.
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Preparing PDF album sources…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Preparing PDF album sources…')")" || return 1
   trap 'publication_stop_owned_child; exit 130' INT TERM HUP
   records="$KIMDIR/album-records"
   errors="$KIMDIR/album-errors"
@@ -1907,9 +1907,9 @@ action_album() {
   for file in "${files[@]}"; do
     index=$((index + 1))
     local label
-    label="$(gettext 'Preparing and validating source images') — $index / ${#files[@]}: ${file##*/}"
+    label="$(gettext 'Preparing and validating source images'): $index / ${#files[@]}: ${file##*/}"
     if is_psd_source "$file"; then
-      label="$(gettext 'Decoding and staging PSD composite') — $index / ${#files[@]}: ${file##*/}"
+      label="$(gettext 'Decoding and staging PSD composite'): $index / ${#files[@]}: ${file##*/}"
     fi
     progress_begin_item "$ref" "$label" || return 1
     rc=0
@@ -1953,7 +1953,7 @@ $(cat -- "$errors")"
     index=0
     for file in "${files[@]}"; do
       index=$((index+1)); annotated_tile="${tmp%/*}/captions/$index.png"
-      progress_begin_item "$ref" "$(gettext 'Rendering album caption') — $index / ${#files[@]}: ${file##*/}" || return 1
+      progress_begin_item "$ref" "$(gettext 'Rendering album caption'): $index / ${#files[@]}: ${file##*/}" || return 1
       if ! publication_caption_tile "$ref" "$file" "$annotated_tile" "$cell_width" "$cell_height" "$label_height" \
           "$pixels" white fit below "$caption_mode" "$index" "$capture_date" "$camera_lens" "${album_choices[index+5]}"; then
         publication_fail "$ref" "$tmp" "$(gettext 'Album: annotated image rendering failed or was interrupted.')"; return 1
@@ -1963,7 +1963,7 @@ $(cat -- "$errors")"
   else
     album_tiles=("${files[@]}")
   fi
-  progress_begin_item "$ref" "$(gettext 'Rendering PDF document') — $page_label" || return 1
+  progress_begin_item "$ref" "$(gettext 'Rendering PDF document'): $page_label" || return 1
   progress_maximum "$ref" 0 || return 1
   rc=0
   publication_run_monitored "$ref" "$KIMDIR/album-render-output" "$errors" "${renderer[@]}" montage \
@@ -1974,7 +1974,7 @@ $(cat -- "$errors")"
     publication_fail "$ref" "$tmp" "$(gettext 'Album: PDF rendering failed.')
 $(cat -- "$errors")"; return 1
   fi
-  progress_begin_item "$ref" "$(gettext 'Verifying resulting PDF') — $page_label" || return 1
+  progress_begin_item "$ref" "$(gettext 'Verifying resulting PDF'): $page_label" || return 1
   rc=0
   publication_run_monitored "$ref" "$records" "$errors" identify \
     -regard-warnings -format '%m|%w|%h|%T|%n|%#\n' -- "$tmp" || rc=$?
@@ -2637,7 +2637,7 @@ action_convert() {
     if preview_active; then
       OUTFILE="$(preview_value target "$i")" || return 1
       if [ "$(preview_value state "$i")" = skip ]; then report_skip "$i"; progress_value "$dbusRef" "$counter"; continue; fi
-      preview_guard "$OUTFILE" || { report_fail "$i — approved plan changed"; break; }
+      preview_guard "$OUTFILE" || { report_fail "$i: approved plan changed"; break; }
     fi
     local input_is_psd=false
     if is_psd_source "$i"; then input_is_psd=true; fi
@@ -2808,7 +2808,7 @@ action_convert() {
         fi
       elif [ "$FORMAT" = pdf ] && [ "$input_is_psd" = true ]; then
         if [ "$strip_metadata" != true ] && ! preview_active; then
-          if ! kdialog --title "$(gettext 'Kim — Photoshop to PDF')" --warningyesno \
+          if ! kdialog --title "$(gettext 'KIM6 - Photoshop to PDF')" --warningyesno \
             "$(gettext 'Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged.')"; then
             rc=1
           fi
@@ -3064,7 +3064,7 @@ action_gallery() {
   dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
 
   [ -r "$dialog_script" ] || {
-    kdialog --title "KIM6 — HTML Gallery" --error       "The HTML Gallery settings dialog is not installed."
+    kdialog --title "KIM6 - HTML gallery" --error       "The HTML Gallery settings dialog is not installed."
     return 1
   }
 
@@ -3217,7 +3217,7 @@ EOF
     printf '<div class="gallery-shell">\n'
     printf '<header class="gallery-header"><h1>%s</h1><p>By %s · %s</p></header>\n' \
       "$etitle" "$eauthor" "$DATE_STR"
-    printf '<main class="gallery" style="--columns: %s" aria-label="Photographs">\n' "$COLUMNS"
+    printf '<main class="gallery" style="--columns: %s" aria-label="Images">\n' "$COLUMNS"
   } >> "$index_file"; then
     publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot write the HTML page.')"
     return 1
@@ -3337,7 +3337,7 @@ EOF
   else
     if ! cat >> "$index_file" <<'KIM6_GALLERY_FALLBACK'
 </main></div>
-<dialog class="lightbox" aria-label="Photo viewer" style="border:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;background:#121417;color:white">
+<dialog class="lightbox" aria-label="Image viewer" style="border:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;background:#121417;color:white">
   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem">
     <img id="lightbox-image" alt="" style="max-width:96%;max-height:80vh;object-fit:contain">
     <div id="lightbox-caption"></div>
@@ -3531,7 +3531,7 @@ action_checkextensions() {
   if [ "${#interrupted_files[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Interrupted files:')"$'\n'"$(printf '%s\n' "${interrupted_files[@]}")"; fi
   if [ "$not_scheduled_count" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Files not scheduled:')"$'\n'"$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"; fi
   if [ -s "$PROGRESS_ERROR_FILE" ]; then summary+=$'\n\n'"$(cat -- "$PROGRESS_ERROR_FILE")"; fi
-  kdialog --title "$(gettext 'KIM6 — Correctly named copies')" "$result_option" "$summary" || true
+  kdialog --title "$(gettext 'KIM6 - Correctly named copies')" "$result_option" "$summary" || true
   [ "$interrupted" = false ] && [ "$REPORT_OK" -eq "${#files[@]}" ] && [ ! -f "$KIMDIR/job.cancelled" ]
 }
 
@@ -3769,7 +3769,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     for ((index = first; index < last; index++)); do
       file="${files[index]}"
       counter=$((counter + 1))
-      if ! progress_begin_item "$ref" "$(gettext 'Rendering contact-sheet thumbnail') — $counter / ${#files[@]}: ${file##*/}" || progress_cancelled "$ref"; then
+      if ! progress_begin_item "$ref" "$(gettext 'Rendering contact-sheet thumbnail'): $counter / ${#files[@]}: ${file##*/}" || progress_cancelled "$ref"; then
         publication_fail "$ref" "$tmp" "$(gettext 'Contact sheet interrupted.')"
         return 1
       fi
@@ -3812,7 +3812,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
         magick "${composition_args[@]}" -units PixelsPerInch -density "$dpi" "PNG:$page" || return 1
     else
       if ! publication_render_stage "$ref" "$(gettext 'Rendering contact-sheet page') $((page_index + 1)) / $page_count" magick montage "${montage_args[@]}" -tile "$grid" -geometry "+$((dpi / 25))+$((dpi / 25))" \
-          -title "$title — Page $((page_index + 1)) / $page_count" "PNG:$raw"; then
+          -title "$title: Page $((page_index + 1)) / $page_count" "PNG:$raw"; then
         return 1
       fi
       if ! publication_run_image "$ref" magick "$raw" -background "$background" -gravity north -extent "${width}x${height}" \
@@ -5167,7 +5167,7 @@ action_resize() {
     # ImageMagick can decode a valid APNG as a single still PNG frame.
     # Refuse resize rather than silently discard animation timing or frames.
     if image_has_apng_control_chunk "$i"; then
-      report_fail "$i — $(gettext 'Animated PNG resizing is unavailable: the original animation is unchanged.')"
+      report_fail "$i: $(gettext 'Animated PNG resizing is unavailable: the original animation is unchanged.')"
       progress_value "$dbusRef" "$counter"
       continue
     fi
@@ -5200,7 +5200,7 @@ action_resize() {
     OUTFILE="${resize_targets[$i]:-}"
 
     if [ -z "$OUTFILE" ]; then
-      report_fail "$i — no approved output path"
+      report_fail "$i: no approved output path"
       progress_value "$dbusRef" "$counter"
       continue
     fi
@@ -5209,7 +5209,7 @@ action_resize() {
     # The existing atomic create helper also protects against races.
     if [ "$mode" = create ] &&
        { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then
-      report_fail "$i — approved output path is now occupied"
+      report_fail "$i: approved output path is now occupied"
       progress_value "$dbusRef" "$counter"
       continue
     fi
@@ -5462,7 +5462,7 @@ action_resizeandsend() {
     # ImageMagick may decode animated PNG as one still frame. Full-size
     # attachments copy the original bytes, but resizing must fail closed.
     if [ "$size" != full ] && image_has_apng_control_chunk "$i"; then
-      report_fail "$i — $(gettext 'Animated PNG email resizing is unavailable; use full size to keep the animation.')"
+      report_fail "$i: $(gettext 'Animated PNG email resizing is unavailable; use full size to keep the animation.')"
       progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
       continue
     fi
@@ -5718,7 +5718,7 @@ action_resizeandsend() {
       email_client_detail="$(head -c 1600 -- "$KIMDIR/email-client.log")"
     fi
 
-    kdialog --title "KIM6 — Email Handoff Failed" --error       "Mail client: $client
+    kdialog --title "KIM6 - Email handoff failed" --error       "Mail client: $client
 Exit status: $handoff
 ${email_client_detail:-No diagnostic output from the mail client.}
 
@@ -7160,7 +7160,7 @@ KIM6_LOCATION_INPUTS
     mapfile -d '' -t files < "$KIMDIR/location-inputs"
     datesync_collect_files files "${files[@]}" || { progress_error "$DATESYNC_SELECTION_ERROR"; return 1; }
   fi
-  policy="$(choose_output_mode 'KIM6 — Image Location Tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
+  policy="$(choose_output_mode 'KIM6 - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   : > "$KIMDIR/location-seeds" || return 1
   for source in "${files[@]}"; do
@@ -7172,11 +7172,11 @@ KIM6_LOCATION_INPUTS
   # Preview acceptance never substitutes for choose_output_mode's explicit
   # replacement confirmation under KIM_POLICY=prompt.
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" 'KIM6 — Image Location Tools')" || return 1
+  ref="$(progress_open "${#files[@]}" 'KIM6 - Image location tools')" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if ! progress_begin_item "$ref" "Location metadata: ${source##*/}"; then
-      report_fail "$source — processing stopped or approved plan changed; review a fresh plan"; rc=1; break
+      report_fail "$source: processing stopped or approved plan changed; review a fresh plan"; rc=1; break
     fi
     if [ "$PREVIEW_ITEM_STATE" = skip ]; then
       location_unchanged+=("$source")
@@ -7186,7 +7186,7 @@ KIM6_LOCATION_INPUTS
     if metadata_publish_one "$source" "$target" "$policy" "$ref" expected; then
       report_ok; location_saved+=("$target")
     else
-      report_fail "$source — GPS staging, verification or publication failed; no incomplete output was published"
+      report_fail "$source: GPS staging, verification or publication failed; no incomplete output was published"
       rc=1; break
     fi
     progress_value "$ref" "$counter" || { rc=1; break; }
@@ -7222,8 +7222,8 @@ KIM6_LOCATION_INPUTS
     printf '%s\0' 'Unchanged or unprocessed images:' "${REPORT_SKIP_LIST[@]}" >> "$location_result"
   fi
   python3 "$DISPATCHER_DIR/kim_location_dialog.py" --result "$location_result" "$location_plan" || {
-    report_finish_dialog 'KIM6 — Image Location Tools'
-    kdialog --title 'KIM6 — Image Location Tools' --error 'The location result summary could not be displayed. Any images already saved were kept.' || true
+    report_finish_dialog 'KIM6 - Image location tools'
+    kdialog --title 'KIM6 - Image location tools' --error 'The location result summary could not be displayed. Any images already saved were kept.' || true
   }
   [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
@@ -7250,7 +7250,7 @@ action_photo_date() {
   for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Set Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
     # Pass the existing helper's exact affix seed alongside each source.
     : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
@@ -7276,7 +7276,7 @@ PYDATE
         progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
       fi
     done
-    policy="$(choose_output_mode "$(gettext 'KIM6 — Set Dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIM6 - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
   local -A photo_date_eligible=()
@@ -7292,11 +7292,11 @@ PYDATE
   fi
 
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Set Dates')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Set dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
-      report_fail "$source — $(gettext 'The selected source changed. Select it again to review its date.')"
+      report_fail "$source: $(gettext 'The selected source changed. Select it again to review its date.')"
       if preview_active; then break; fi
       continue
     fi
@@ -7306,7 +7306,7 @@ PYDATE
       progress_value "$ref" "$counter"
       continue
     fi
-    progress_begin_item "$ref" "$(gettext 'Planning date change:') ${source##*/}" || { report_fail "$source — approved plan changed or processing stopped"; break; }
+    progress_begin_item "$ref" "$(gettext 'Planning date change:') ${source##*/}" || { report_fail "$source: approved plan changed or processing stopped"; break; }
     if preview_active; then
       if [ "$(preview_value state "$source")" = skip ]; then report_skip "$source"; progress_value "$ref" "$counter"; continue; fi
       preview_value date "$source" > "$result" || return 1
@@ -7334,11 +7334,11 @@ PYDATE
       for argument in "${args[@]}"; do expected+=("${argument%%=*}"$'\034'"${argument#*=}"); done
       metadata_publish_one "$source" "$target" "$policy" "$ref" expected "${args[@]}" || rc=1
     fi
-    if [ "$rc" -eq 0 ]; then report_ok; else report_fail "$source — $(gettext 'Image capture date update failed; no incomplete output was published.')"; fi
+    if [ "$rc" -eq 0 ]; then report_ok; else report_fail "$source: $(gettext 'Image capture date update failed; no incomplete output was published.')"; fi
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 — Set Dates')"
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 - Set dates')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 
@@ -7630,7 +7630,7 @@ datesync_collect_files() {
     elif [ "$links" != 1 ]; then reason="has $links hard links; select an independent regular image file"
     fi
     if [ -n "$reason" ]; then
-      DATESYNC_SELECTION_ERROR="Selected image $path — $reason."
+      DATESYNC_SELECTION_ERROR="Selected image $path: $reason."
       printf '%s\n' "$DATESYNC_SELECTION_ERROR" >&2; return 1
     fi
     identity="$(stat -c '%d:%i' -- "$path")" || {
@@ -7728,14 +7728,14 @@ action_datesync() {
       return 1
     fi
     if [ "$direction" = exif-to-file ]; then
-      kdialog --title "$(gettext 'Kim — Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
+      kdialog --title "$(gettext 'KIM6 - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
         "$(gettext 'Filesystem modification time preview')" "$(gettext 'Camera capture time:')" "${stamp:-$(gettext 'missing or invalid')}" \
         "$(gettext 'Proposed local filesystem time:')" "${proposed_date:-$(gettext 'missing or invalid')}" \
         "$(gettext 'Current file time:')" "$first_fs" \
         "$(gettext 'Camera offset:')" "${preview_offset:-$(gettext 'none; interpreted in system local time')}" \
         "$(gettext 'A timezone-less camera value is not assumed to be UTC.')")" || return 1
     else
-      kdialog --title "$(gettext 'Kim — Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s' \
+      kdialog --title "$(gettext 'KIM6 - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s' \
         "$(gettext 'EXIF timestamp preview')" "$(gettext 'Current file time:')" "$first_fs" \
         "$(gettext 'Proposed DateTimeOriginal:')" "$proposed_date" \
         "$(gettext 'Fields:')" "$fields")" || return 1
@@ -7758,16 +7758,16 @@ action_datesync() {
   if [ "$direction" = file-to-exif ]; then
     require_action_tools datesync magick identify || return 1
   fi
-  policy="$(choose_output_mode "$(gettext 'Kim — Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
+  policy="$(choose_output_mode "$(gettext 'KIM6 - Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
-  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 — Synchronizing image capture dates…')")" || return 1
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Synchronizing image capture dates…')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
 
     if [ -L "$source" ] || [ ! -f "$source" ] ||
        [ "$(stat -c '%h:%d:%i' -- "$source" 2>/dev/null)" != "1:${original_identities[$((counter-1))]}" ]; then
-      report_fail "$source — $(gettext 'selected original changed before processing')"
+      report_fail "$source: $(gettext 'selected original changed before processing')"
       progress_value "$ref" "$counter"
       continue
     fi
@@ -7779,7 +7779,7 @@ action_datesync() {
     fi
     if [ "$direction" = exif-to-file ]; then
       epoch="$(datesync_exif_epoch "$source")" || {
-        report_fail "$source — $(gettext 'missing or invalid image capture date')"
+        report_fail "$source: $(gettext 'missing or invalid image capture date')"
         progress_value "$ref" "$counter"
         continue
       }
@@ -7799,13 +7799,13 @@ action_datesync() {
       if [ "$policy" = create ]; then
         target="$(metadata_output_path "$source" datesync create)"
         local stage
-        stage="$(tmp_for_target "$target")" || { report_fail "$source — $(gettext 'staging failed')"; progress_value "$ref" "$counter"; continue; }
+        stage="$(tmp_for_target "$target")" || { report_fail "$source: $(gettext 'staging failed')"; progress_value "$ref" "$counter"; continue; }
         if ! cp --preserve=mode,timestamps -- "$source" "$stage" || ! cmp -s -- "$source" "$stage" ||
            ! touch -m -d "$epoch" -- "$stage"; then
-          rm -f -- "$stage"; report_fail "$source — $(gettext 'date copy preparation failed')"; progress_value "$ref" "$counter"; continue
+          rm -f -- "$stage"; report_fail "$source: $(gettext 'date copy preparation failed')"; progress_value "$ref" "$counter"; continue
         fi
         if progress_cancelled "$ref" || ! commit_tmp_to_target "$stage" "$target" create; then
-          rm -f -- "$stage"; report_fail "$source — $(gettext 'interrupted or publication failed')"
+          rm -f -- "$stage"; report_fail "$source: $(gettext 'interrupted or publication failed')"
           if progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; break; fi
           progress_value "$ref" "$counter"; continue
         fi
@@ -7813,7 +7813,7 @@ action_datesync() {
         if progress_cancelled "$ref"; then METADATA_INTERRUPTED=true; report_fail "$source"; break; fi
         if [ -L "$source" ] || [ ! -f "$source" ] ||
            [ "$(stat -c '%h:%d:%i' -- "$source" 2>/dev/null)" != "1:${original_identities[$((counter-1))]}" ]; then
-          report_fail "$source — $(gettext 'selected original changed before timestamp update')"
+          report_fail "$source: $(gettext 'selected original changed before timestamp update')"
           progress_value "$ref" "$counter"
           continue
         fi
@@ -7821,22 +7821,22 @@ action_datesync() {
         if ! touch -m -d "$epoch" -- "$source"; then
           touch -m -d "$mtime_before" -- "$source" >/dev/null 2>&1 || true
           touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1 || true
-          report_fail "$source — $(gettext 'could not set modification time')"; progress_value "$ref" "$counter"; continue
+          report_fail "$source: $(gettext 'could not set modification time')"; progress_value "$ref" "$counter"; continue
         fi
         if ! touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1; then
           touch -m -d "$mtime_before" -- "$source" >/dev/null 2>&1 || true
           touch -a -d "$atime_before" -- "$source" >/dev/null 2>&1 || true
-          report_fail "$source — $(gettext 'timestamp changed but original access time could not be restored')"
+          report_fail "$source: $(gettext 'timestamp changed but original access time could not be restored')"
           progress_value "$ref" "$counter"; continue
         fi
       fi
       report_ok
     else
-      metadata_is_raw "$source" && { report_fail "$source — $(gettext 'RAW metadata editing is unsupported')"; progress_value "$ref" "$counter"; continue; }
+      metadata_is_raw "$source" && { report_fail "$source: $(gettext 'RAW metadata editing is unsupported')"; progress_value "$ref" "$counter"; continue; }
       stamp="$(stat -c '%y' -- "$source")" || { report_fail "$source"; continue; }
       seconds="$(stat -c '%Y' -- "$source")" || { report_fail "$source"; continue; }
       offset_original="$(metadata_query "$source" -OffsetTimeOriginal)" || { report_fail "$source"; continue; }
-      wanted_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_original")" || { report_fail "$source — $(gettext 'invalid timezone offset')"; progress_value "$ref" "$counter"; continue; }
+      wanted_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_original")" || { report_fail "$source: $(gettext 'invalid timezone offset')"; progress_value "$ref" "$counter"; continue; }
       fraction_field="${stamp#*.}"; fraction_field="${fraction_field%% *}"
       [[ "$fraction_field" =~ ^[0-9]{1,9}$ ]] || fraction_field=000000000
       wanted_subsec="$fraction_field"
@@ -7849,8 +7849,8 @@ action_datesync() {
       if [ "$fields" = all ]; then
         offset_create="$(metadata_query "$source" -OffsetTimeDigitized)" || { report_fail "$source"; continue; }
         offset_modify="$(metadata_query "$source" -OffsetTime)" || { report_fail "$source"; continue; }
-        create_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_create")" || { report_fail "$source — $(gettext 'invalid CreateDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
-        modify_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_modify")" || { report_fail "$source — $(gettext 'invalid ModifyDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
+        create_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_create")" || { report_fail "$source: $(gettext 'invalid CreateDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
+        modify_date="$(datesync_epoch_to_wall_time "$seconds" "$offset_modify")" || { report_fail "$source: $(gettext 'invalid ModifyDate timezone offset')"; progress_value "$ref" "$counter"; continue; }
         create_subsec="$(metadata_query "$source" -SubSecTimeDigitized)" || create_subsec=''
         modify_subsec="$(metadata_query "$source" -SubSecTime)" || modify_subsec=''
         args+=("-CreateDate=$create_date" "-SubSecTimeDigitized=$wanted_subsec" "-ModifyDate=$modify_date" "-SubSecTime=$wanted_subsec")
@@ -8375,7 +8375,7 @@ KIM6_DISCLOSURE_CHECK
     # Web export is not an animation editor. A decoded APNG may appear to
     # ImageMagick as one still frame, so never publish a flattened export.
     if [ "$rc" -eq 0 ] && image_has_apng_control_chunk "$i"; then
-      report_fail "$i — $(gettext 'Animated PNG web export is unavailable: the original animation is unchanged.')"
+      report_fail "$i: $(gettext 'Animated PNG web export is unavailable: the original animation is unchanged.')"
       failures=$((failures + 1))
       progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
       continue
@@ -8905,10 +8905,10 @@ action_collage() {
     grid|mosaic|hero|filmstrip)
       if [ "$interactive_layout" = true ]; then
         canvas="$(kdialog --radiolist "$(gettext 'Collage canvas size:')" \
-          3840x2560 "$(gettext 'Classic 3:2 — 3840 × 2560')" on \
-          3840x2160 "$(gettext 'Widescreen 16:9 — 3840 × 2160')" off \
-          3200x3200 "$(gettext 'Square — 3200 × 3200')" off \
-          3200x4000 "$(gettext 'Portrait 4:5 — 3200 × 4000')" off \
+          3840x2560 "$(gettext 'Classic 3:2 (3840 × 2560)')" on \
+          3840x2160 "$(gettext 'Widescreen 16:9 (3840 × 2160)')" off \
+          3200x3200 "$(gettext 'Square (3200 × 3200)')" off \
+          3200x4000 "$(gettext 'Portrait 4:5 (3200 × 4000)')" off \
           custom "$(gettext 'Custom canvas size')" off)" || return 1
         if [ "$canvas" = custom ]; then
           canvas="$(kdialog --inputbox "$(gettext 'Canvas dimensions (WIDTHxHEIGHT):')" '3840x2560')" || return 1
@@ -9211,7 +9211,7 @@ action_manual() {
   manual_file="$(dispatcher_resource docs/index.html)" || return 1
 
   if [ ! -r "$manual_file" ]; then
-    kdialog --title "KIM6 — User Guide" --error \
+    kdialog --title "KIM6 - User guide" --error \
       "The installed KIM6 User Guide is missing."
     return 1
   fi
@@ -9235,7 +9235,7 @@ action_manual() {
     return $?
   fi
 
-  kdialog --title "KIM6 — User Guide" --error \
+  kdialog --title "KIM6 - User guide" --error \
     "Unable to open the User Guide. Neither a working browser nor the internal viewer is available."
   return 1
 }
@@ -9377,7 +9377,7 @@ video_run_monitored() {
           if [[ "$value" =~ ^[0-9]+$ ]] && awk -v d="$duration" 'BEGIN { exit !(d > 0) }'; then
             percent="$(awk -v t="$value" -v d="$duration" 'BEGIN { p = int(t / 1000000 / d * 100); if (p > 100) p = 100; print p }')"
             if ! progress_label "$ref" "$(cat "$KIMDIR/job.label" 2>/dev/null)
-$label — ${percent}% of measured video duration"; then
+$label: ${percent}% of measured video duration"; then
               interrupted=1
               video_terminate_owned_process "$pid"
               break
@@ -9482,7 +9482,7 @@ video_validate_output() {
 
 video_item_error() {
   local file="$1" detail="$2"
-  report_fail "$file — $detail"
+  report_fail "$file: $detail"
 }
 
 video_ffmpeg_error_summary() {
@@ -9589,7 +9589,7 @@ action_video() {
   if ! collect_publication_inputs files "${raw_files[@]}"; then
     progress_error "$(gettext 'Video selection is empty or contains an unsafe, aliased, linked or invalid source.')"; return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'Kim — Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
+  mode="$(choose_output_mode "$(gettext 'KIM6 - Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
   [ "$mode" != cancel ] || return 1
   # Preflight every selected video before starting FFmpeg.
   # Use the same probe, container, and naming rules as execution.
@@ -9751,12 +9751,12 @@ action_video() {
   # collision handling, and ownership of published results.
 
   report_init
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Initialising video transcode…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Initializing video transcode…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
 
   for source in "${files[@]}"; do
     index=$((index + 1))
-    label="$(gettext 'Kim — Transcoding video:') $index/${#files[@]}: ${source##*/}"
+    label="$(gettext 'KIM6 - Transcoding video:') $index/${#files[@]}: ${source##*/}"
     if ! progress_begin_item "$ref" "$label"; then
       video_item_error "$source" "$(gettext 'interrupted before processing')"
       progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
@@ -10370,28 +10370,28 @@ action_videoframes() {
     }
   fi
 
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Extracting video frames…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Extracting video frames…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   report_init
   for source in "${files[@]}"; do
     index=$((index + 1))
-    progress_begin_item "$ref" "$(gettext 'Kim — Video frame:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIM6 - Video frame:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     }
     video_utility_probe "$source" || {
-      report_fail "$source — $(gettext 'invalid video')"
+      report_fail "$source: $(gettext 'invalid video')"
       progress_value "$ref" "$index"
       continue
     }
     [ "$VU_VIDEO_COUNT" -gt 0 ] || {
-      report_fail "$source — $(gettext 'no video stream')"
+      report_fail "$source: $(gettext 'no video stream')"
       progress_value "$ref" "$index"
       continue
     }
     if progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted before frame extraction')"
+      report_fail "$source: $(gettext 'interrupted before frame extraction')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -10401,7 +10401,7 @@ action_videoframes() {
     case "$mode" in
       single)
         awk -v t="$sample" -v d="$duration" 'BEGIN { split(t,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < d) }' || {
-          report_fail "$source — $(gettext 'timestamp is outside the video')"
+          report_fail "$source: $(gettext 'timestamp is outside the video')"
           progress_value "$ref" "$index"
           continue
         }
@@ -10416,7 +10416,7 @@ action_videoframes() {
     video_utility_target "$source" "$tag" "$ext"
     target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     stage="$(tmp_for_target "$target")" || {
-      report_fail "$source — $(gettext 'staging failed')"
+      report_fail "$source: $(gettext 'staging failed')"
       progress_value "$ref" "$index"
       continue
     }
@@ -10444,14 +10444,14 @@ action_videoframes() {
       video_run_monitored "$ref" "$(gettext 'Video frame')" "$duration" "$error_file" "${args[@]}" || rc=$?
     fi
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no frame was published')"
+      report_fail "$source: $(gettext 'interrupted; no frame was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
     if [ "$rc" -ne 0 ] || ! video_utility_image_valid "$stage" "$ext"; then
-      report_fail "$source — $(gettext 'frame production or validation failed')"
+      report_fail "$source: $(gettext 'frame production or validation failed')"
       rm -f -- "$stage"
       progress_value "$ref" "$index"
       continue
@@ -10459,7 +10459,7 @@ action_videoframes() {
     if video_utility_publish "$ref" "$stage" "$source" "$tag" "$ext" "$target" "$target_number"; then
       report_ok
     else
-      report_fail "$source — $(gettext 'publication failed or operation interrupted')"
+      report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -10514,7 +10514,7 @@ action_videoaudio() {
   video_utility_files files "${raw[@]}" || return 1
   if [ "$interactive" = true ]; then
     [ -n "$mode" ] || mode="$(kdialog --combobox "$(gettext 'Video audio operation:')" extract extract mute)" || return 1
-    [ "$mode" != extract ] || format="$(kdialog --title "$(gettext 'KIM6 — Extract Audio')" --default "$format" --combobox "$(gettext 'Audio output format:')" m4a mp3 flac wav)" || return 1
+    [ "$mode" != extract ] || format="$(kdialog --title "$(gettext 'KIM6 - Extract audio')" --default "$format" --combobox "$(gettext 'Audio output format:')" m4a mp3 flac wav)" || return 1
   fi
   case "$mode" in
     extract)
@@ -10676,28 +10676,28 @@ action_videoaudio() {
       }
     fi
   fi
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Processing video audio…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Processing video audio…')")" || return 1
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
     index=$((index+1))
-    progress_begin_item "$ref" "$(gettext 'Kim — Video audio:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIM6 - Video audio:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     }
     video_utility_probe "$source" || {
-      report_fail "$source — $(gettext 'invalid video')"
+      report_fail "$source: $(gettext 'invalid video')"
       progress_value "$ref" "$index"
       continue
     }
     [ "$VU_VIDEO_COUNT" -gt 0 ] || {
-      report_fail "$source — $(gettext 'no video stream')"
+      report_fail "$source: $(gettext 'no video stream')"
       progress_value "$ref" "$index"
       continue
     }
     if progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted before audio processing')"
+      report_fail "$source: $(gettext 'interrupted before audio processing')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -10705,7 +10705,7 @@ action_videoaudio() {
     duration="$VU_DURATION"
     if [ "$mode" = extract ]; then
       if [ "$VU_AUDIO_COUNT" -eq 0 ]; then
-        report_fail "$source — $(gettext 'no audio stream')"
+        report_fail "$source: $(gettext 'no audio stream')"
         progress_value "$ref" "$index"
         continue
       fi
@@ -10750,7 +10750,7 @@ action_videoaudio() {
             *mpegts*) extension=ts ;;
             *mpeg*) extension=mpeg ;;
             *)
-              report_fail "$source — $(gettext 'cannot select a safe output container for this video')"
+              report_fail "$source: $(gettext 'cannot select a safe output container for this video')"
               progress_value "$ref" "$index"
               continue
               ;;
@@ -10761,7 +10761,7 @@ action_videoaudio() {
       target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     fi
     stage="$(tmp_for_target "$target")" || {
-      report_fail "$source — $(gettext 'staging failed')"
+      report_fail "$source: $(gettext 'staging failed')"
       progress_value "$ref" "$index"
       continue
     }
@@ -10779,7 +10779,7 @@ action_videoaudio() {
     fi
     video_run_monitored "$ref" "$(gettext 'Video audio')" "$duration" "$error_file" "${args[@]}" || rc=$?
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no audio artifact was published')"
+      report_fail "$source: $(gettext 'interrupted; no audio artifact was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -10831,7 +10831,7 @@ action_videoaudio() {
       fi
     fi
     if [ "$valid" != true ]; then
-      report_fail "$source — $(gettext 'audio output validation failed')"
+      report_fail "$source: $(gettext 'audio output validation failed')"
       rm -f -- "$stage"
       progress_value "$ref" "$index"
       continue
@@ -10839,7 +10839,7 @@ action_videoaudio() {
     if video_utility_publish "$ref" "$stage" "$source" "$tag" "$extension" "$target" "$target_number" "-"; then
       report_ok
     else
-      report_fail "$source — $(gettext 'publication failed or operation interrupted')"
+      report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -10941,33 +10941,33 @@ action_videogif() {
   esac
   awk -v d="$duration" -v f="$fps" 'BEGIN { exit !(d*f <= 360) }' || { progress_error "$(gettext 'GIF request exceeds 360 frames; shorten the duration or lower the frame rate.')"; return 2; }
   video_utility_init || return 1
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim — Creating video GIFs…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Creating video GIFs…')")" || return 1
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
     index=$((index+1))
-    progress_begin_item "$ref" "$(gettext 'Kim — Video GIF:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIM6 - Video GIF:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     }
     video_utility_probe "$source" || {
-      report_fail "$source — $(gettext 'invalid video')"
+      report_fail "$source: $(gettext 'invalid video')"
       progress_value "$ref" "$index"
       continue
     }
     [ "$VU_VIDEO_COUNT" -gt 0 ] || {
-      report_fail "$source — $(gettext 'no video stream')"
+      report_fail "$source: $(gettext 'no video stream')"
       progress_value "$ref" "$index"
       continue
     }
     if progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted before GIF encoding')"
+      report_fail "$source: $(gettext 'interrupted before GIF encoding')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
-    awk -v s="$start" -v d="$duration" -v total="$VU_DURATION" 'BEGIN { split(s,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < total && x+d <= total) }' || { report_fail "$source — $(gettext 'GIF interval exceeds video duration; shorten the requested interval')"; progress_value "$ref" "$index"; continue; }
+    awk -v s="$start" -v d="$duration" -v total="$VU_DURATION" 'BEGIN { split(s,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < total && x+d <= total) }' || { report_fail "$source: $(gettext 'GIF interval exceeds video duration; shorten the requested interval')"; progress_value "$ref" "$index"; continue; }
     local rotation_data
     rotation_data="$(ffprobe -v error -select_streams v:0 -show_entries stream_side_data=rotation -of default=noprint_wrappers=1:nokey=1 -i "$source" 2>/dev/null)"
     rotation="${rotation_data%%$'\n'*}"
@@ -10987,13 +10987,13 @@ action_videogif() {
       if (h < 1) h = 1
       exit !(w * h * frames <= 200000000)
     }'; then
-      report_fail "$source — $(gettext 'GIF request exceeds the 200 million output pixel-frame work limit; lower the frame rate, width or duration')"; progress_value "$ref" "$index"; continue
+      report_fail "$source: $(gettext 'GIF request exceeds the 200 million output pixel-frame work limit; lower the frame rate, width or duration')"; progress_value "$ref" "$index"; continue
     fi
     tag=animated
     video_utility_target "$source" "$tag" gif
     target="$VIDEO_UTILITY_TARGET"; target_number="$VIDEO_UTILITY_NEXT_NUMBER"
     stage="$(tmp_for_target "$target")" || {
-      report_fail "$source — $(gettext 'staging failed')"
+      report_fail "$source: $(gettext 'staging failed')"
       progress_value "$ref" "$index"
       continue
     }
@@ -11004,7 +11004,7 @@ action_videogif() {
     rc=0
     video_run_monitored "$ref" "$(gettext 'Video GIF')" "$duration" "$error_file" "${args[@]}" || rc=$?
     if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no GIF was published')"
+      report_fail "$source: $(gettext 'interrupted; no GIF was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -11028,7 +11028,7 @@ action_videogif() {
         -i "$stage" -map 0:v -f null - || decode_rc=$?
     fi
     if [ "$rc" -eq 130 ] || [ "$decode_rc" -eq 130 ] || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted; no GIF was published')"
+      report_fail "$source: $(gettext 'interrupted; no GIF was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -11047,7 +11047,7 @@ action_videogif() {
       ! [[ "$actual_width" =~ ^[1-9][0-9]*$ && "$actual_width" -le "$width" && "$actual_height" =~ ^[1-9][0-9]*$ && "$frames" =~ ^[1-9][0-9]*$ && "$frames" -gt 1 ]] || \
       ! awk -v a="$duration" -v b="$output_duration" -v f="$fps" 'BEGIN { if(a!~/^[0-9]+([.][0-9]+)?$/||b!~/^[0-9]+([.][0-9]+)?$/)exit 1;d=a-b;if(d<0)d=-d;tol=1/f;exit !(d<=tol) }' || \
       [ "$frames" -lt "$(awk -v d="$duration" -v f="$fps" 'BEGIN { print int(d*f) }')" ]; then
-      report_fail "$source — $(gettext 'GIF output is invalid or contains fewer than two frames')"
+      report_fail "$source: $(gettext 'GIF output is invalid or contains fewer than two frames')"
       rm -f -- "$stage"
       progress_value "$ref" "$index"
       continue
@@ -11055,7 +11055,7 @@ action_videogif() {
     if video_utility_publish "$ref" "$stage" "$source" "$tag" gif "$target" "$target_number"; then
       report_ok
     else
-      report_fail "$source — $(gettext 'publication failed or operation interrupted')"
+      report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
@@ -11281,19 +11281,19 @@ action_slideshow() {
   done
   [ -n "$rec709_profile" ] || { progress_error "$(gettext 'An installed Rec. 709 ICC profile is required for slideshow color conversion.')"; return 1; }
   report_init
-  ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'Kim — Preparing slideshow…')")" || return 1
+  ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'KIM6 - Preparing slideshow…')")" || return 1
   trap 'slideshow_stop_owned_magick; video_cleanup_owned_process; exit 130' INT TERM HUP
   stage="$(tmp_for_target "$target")" || { progress_close "$ref" || true; progress_error "$(gettext 'Slideshow staging failed.')"; return 1; }
   for source in "${ordered[@]}"; do
     index=$((index + 1))
-    if ! progress_begin_item "$ref" "$(gettext 'KIM6 — Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
-      report_fail "$source — $(gettext 'interrupted before frame preparation')"
+    if ! progress_begin_item "$ref" "$(gettext 'KIM6 - Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
+      report_fail "$source: $(gettext 'interrupted before frame preparation')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
     case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
-      report_fail "$source — $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
+      report_fail "$source: $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
     record="$(identify -regard-warnings +ping -format '%m|%w|%h|%[orientation]|%[colorspace]|%n\n' - < "$source" 2>/dev/null)" || rc=1
     [[ "$record" != *$'\n'* && -n "$record" ]] || rc=1
     IFS='|' read -r format source_width source_height orientation colorspace frames <<< "$record"
@@ -11301,7 +11301,7 @@ action_slideshow() {
     source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
     if [[ "${colorspace,,}" == *cmyk* && -z "$source_icc" ]]; then rc=1; fi
     if [ "$rc" -ne 0 ]; then
-      report_fail "$source — $(gettext 'unsupported, ambiguous or multi-frame image')"
+      report_fail "$source: $(gettext 'unsupported, ambiguous or multi-frame image')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -11316,12 +11316,12 @@ action_slideshow() {
     else
       rc=$?
       if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
-        report_fail "$source — $(gettext 'interrupted during frame preparation')"
+        report_fail "$source: $(gettext 'interrupted during frame preparation')"
         progress_close "$ref" || true
         report_finish_dialog "$(gettext 'Kim')"
         return 1
       fi
-      report_fail "$source — $(gettext 'frame preparation failed')"
+      report_fail "$source: $(gettext 'frame preparation failed')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -11330,7 +11330,7 @@ action_slideshow() {
     frame_check="$(identify -regard-warnings +ping -format '%m|%w|%h|%n\n' - < "$frame_path" 2>/dev/null)" || rc=1
     [ "$frame_check" = "PNG|$width|$height|1" ] || rc=1
     if [ "$rc" -ne 0 ]; then
-      report_fail "$source — $(gettext 'prepared frame failed validation')"
+      report_fail "$source: $(gettext 'prepared frame failed validation')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1

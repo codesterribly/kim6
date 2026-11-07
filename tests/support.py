@@ -69,44 +69,32 @@ class Workspace:
         self.dispatcher = self.control / "kim_all"
         shutil.copyfile(self.production, self.dispatcher)
         self.dispatcher.chmod(0o700)
-        # Keep companion runtime code alongside the isolated dispatcher.
-        companion = self.production.with_name("kim_png_metadata.py")
-        if companion.is_file():
-            shutil.copyfile(companion, self.control / companion.name)
-        native_companion = self.production.with_name(
-            "kim_jpeg_webp_metadata.py"
+        # Mirror the Python companions declared by the production installer.
+        # Keep the isolated dispatcher and restricted tool PATH unchanged.
+        inventory = self.production.parents[2] / "install_inventory.sh"
+        inventory_command = (
+            'set -euo pipefail; source "$1"; '
+            'for index in "${!runtime_files[@]}"; do '
+            'printf "%s|%s\\n" '
+            '"${runtime_sources[$index]}" '
+            '"${runtime_files[$index]}"; '
+            'done'
         )
-        if native_companion.is_file():
-            shutil.copyfile(
-                native_companion,
-                self.control / native_companion.name,
-            )
-        gif_companion = self.production.with_name("kim_gif_metadata.py")
-        if gif_companion.is_file():
-            shutil.copyfile(
-                gif_companion, self.control / gif_companion.name
-            )
-        tiff_companion = self.production.with_name(
-            "kim_tiff_verify.py"
+        result = subprocess.run(
+            ["bash", "-c", inventory_command, "bash", str(inventory)],
+            capture_output=True, text=True, check=True,
         )
-        if tiff_companion.is_file():
-            shutil.copyfile(
-                tiff_companion,
-                self.control / tiff_companion.name,
-            )
-        bmff_companion = self.production.with_name(
-            "kim_isobmff_verify.py"
-        )
-        if bmff_companion.is_file():
-            shutil.copyfile(
-                bmff_companion,
-                self.control / bmff_companion.name,
-            )
-        psd_companion = self.production.with_name('kim_psd_source.py')
-        shutil.copyfile(psd_companion, self.control / psd_companion.name)
-        for companion in ('kim_process.py','kim_settings_file.py','kim_filename.py','kim_ui.py','kim_date_tools.py','kim_date_dialog.py','kim_job.py','kim_job_process.py','kim_action_dialog.py','kim_recipe_core.py','kim_recipe_image.py','kim_recipe_dates.py'):
-            path=self.production.with_name(companion)
-            if path.exists(): shutil.copyfile(path,self.control/companion)
+        for record in result.stdout.splitlines():
+            source, destination = record.split("|", 1)
+            if not destination.startswith("bin/") or not destination.endswith(".py"):
+                continue
+            source_path = self.production.parents[2] / source
+            target_path = self.control / Path(destination).name
+            if not source_path.is_file() or target_path.exists():
+                raise RuntimeError(
+                    f"Invalid isolated runtime companion: {source}"
+                )
+            shutil.copyfile(source_path, target_path)
         self.plan = self.control / "plan.json"
         self.plan.write_text(json.dumps({"responses": {}, "config": {}}))
         self.log = self.control / "calls.jsonl"
@@ -126,9 +114,11 @@ class Workspace:
         for tool in self.tools:
             (self.bin / tool).symlink_to(adapter)
         (self.bin / "bash").symlink_to(shutil.which("bash"))
+        (self.bin / "python3").symlink_to(sys.executable)
         self.env = {
             "HOME": str(self.control / "home"), "PATH": str(self.bin),
             "TMPDIR": str(self.control / "tmp"), "LANG": "C.UTF-8",
+            "QT_QPA_PLATFORM": "offscreen",
             "LC_ALL": "C.UTF-8", "TZ": "UTC", "PYTHONDONTWRITEBYTECODE": "1",
             "XDG_CONFIG_HOME": str(self.control / "config"),
             "XDG_DATA_HOME": str(self.control / "data"),

@@ -515,7 +515,7 @@ class ImageOperationDialog(QDialog):
         self.loading = True; self.worker = None; self.generation = 0; self.pending = False; self.closing = False
         self.dimensions = None; self.checked_generation = None
         self.fields = {}
-        self.setWindowTitle('Crop Image' if self.crop else 'Add Watermark / Overlay'); self.resize(1160, 870)
+        self.setWindowTitle('Crop image' if self.crop else 'Add watermark / overlay'); self.resize(1160, 870)
         layout = QVBoxLayout(self)
         note = QLabel('One configuration applies to every selected image. Manual crop areas use relative coordinates; exact crop pixels are checked individually. The table shows each image’s coordinates and output size.' if self.crop else
                       'Visible overlays change image pixels independently of embedded rights metadata. Size and margins are percentages of each final image’s shorter edge; relative placement applies to every selected image.')
@@ -523,7 +523,7 @@ class ImageOperationDialog(QDialog):
         selection = QHBoxLayout(); selection.addWidget(QLabel('Preview image:'))
         self.images = QComboBox()
         for path in self.files: self.images.addItem(Path(path).name, str(path))
-        selection.addWidget(self.images, 1); choose = QPushButton('Choose Image…'); choose.clicked.connect(self.choose_image); selection.addWidget(choose)
+        selection.addWidget(self.images, 1); choose = QPushButton('Choose image…'); choose.clicked.connect(self.choose_image); selection.addWidget(choose)
         layout.addLayout(selection); self.images.currentIndexChanged.connect(self.schedule)
         split = QSplitter(Qt.Horizontal); split.setChildrenCollapsible(False); split.setHandleWidth(8); layout.addWidget(split, 1)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); controls = QWidget(); self.form = QFormLayout(controls)
@@ -635,7 +635,7 @@ class ImageOperationDialog(QDialog):
         self.show_text_value(); self.fields['value'].textChanged.connect(lambda: self.control_changed('value'))
         self.fields['logo'] = QLineEdit(self.step['logo']); self.fields['logo'].setAccessibleName('Local watermark image filename')
         self.form.addRow('Watermark image', self.fields['logo']); self.fields['logo'].textChanged.connect(lambda: self.control_changed('logo'))
-        self.logo_button = QPushButton('Choose Watermark Image…'); self.logo_button.clicked.connect(self.choose_logo); self.form.addRow(self.logo_button)
+        self.logo_button = QPushButton('Choose watermark image…'); self.logo_button.clicked.connect(self.choose_logo); self.form.addRow(self.logo_button)
         self.combo('anchor', 'Position', ANCHORS)
         self.spin('margin', 'Margin (% of shorter edge)', 0, 40, 2)
         self.spin('size', 'Size (% of shorter edge)', .1, 100, 2)
@@ -646,7 +646,7 @@ class ImageOperationDialog(QDialog):
         self.fields['font'].currentFontChanged.connect(lambda *_: self.control_changed('font'))
         self.fields['color'] = QLineEdit(self.step['color']); self.fields['color'].setAccessibleName('Text color, hexadecimal RGB')
         self.form.addRow('Text color', self.fields['color']); self.fields['color'].textChanged.connect(lambda: self.control_changed('color'))
-        self.color_button = QPushButton('Choose Color…'); self.color_button.clicked.connect(self.choose_color); self.form.addRow(self.color_button)
+        self.color_button = QPushButton('Choose color…'); self.color_button.clicked.connect(self.choose_color); self.form.addRow(self.color_button)
         self.check('bold', 'Bold'); self.check('italic', 'Italic')
         self.combo('assistance', 'Readability', [('Outline', 'outline'), ('Shadow', 'shadow'), ('None', 'none')])
 
@@ -662,7 +662,7 @@ class ImageOperationDialog(QDialog):
         self.form.addRow('Destination', self.destination); self.destination.currentIndexChanged.connect(self.schedule)
         self.folder = QLineEdit('cropped' if self.crop else 'watermarked'); self.form.addRow('Subfolder', self.folder); self.folder.textChanged.connect(self.schedule)
         self.directory = QLineEdit(); self.form.addRow('Directory', self.directory); self.directory.textChanged.connect(self.schedule)
-        self.directory_button = QPushButton('Choose Output Directory…'); self.directory_button.clicked.connect(self.choose_directory); self.form.addRow(self.directory_button)
+        self.directory_button = QPushButton('Choose output directory…'); self.directory_button.clicked.connect(self.choose_directory); self.form.addRow(self.directory_button)
 
     def show_text_value(self):
         value = self.step['value'] or ''
@@ -888,7 +888,7 @@ class ImageOperationDialog(QDialog):
         if color.isValid(): self.fields['color'].setText(color.name())
 
     def choose_directory(self):
-        path = QFileDialog.getExistingDirectory(self, 'Choose Output Directory')
+        path = QFileDialog.getExistingDirectory(self, 'Choose output directory')
         if path: self.directory.setText(path)
 
     def accept(self):

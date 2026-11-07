@@ -694,7 +694,7 @@ class RecipePackagingTests(unittest.TestCase):
                 self.assertIn('Actions=KIMRecipe0Run;KIMRecipe1Editor;', menu.read_text())
                 self.assertIn('X-KDE-Submenu=KIM6 - Recipes', menu.read_text())
                 self.assertNotIn('X-KDE-Priority', menu.read_text())
-                self.assertIn('Name=Choose Saved Recipe…', menu.read_text())
+                self.assertIn('Name=Choose saved recipe…', menu.read_text())
                 command = ['bash', str(helper.runtime/'bin/kim_all'), 'recipe', '--list']
                 result = subprocess.run(command, capture_output=True, text=True, env=helper.env)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -738,12 +738,12 @@ from kim_recipe_core import read_recipes, config_path, handler
 app = QApplication([])
 with patch('kim_recipe_dialog.preview', return_value=[]) as preview:
     w = RecipeWidget()
-    with patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=(['example-a.jpg', 'example-b.png'], '')):
+    with patch('kim_recipe_dialog.choose_images', return_value=['example-a.jpg', 'example-b.png']):
         w.choose_examples()
     assert w.files == [] and w.example_files == ['example-a.jpg', 'example-b.png']
     _wait_for_preview(w)
     assert preview.call_args.args[1] == [w.example_files[0]]
-    with patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=([], '')), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
+    with patch('kim_recipe_dialog.choose_images', return_value=[]), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
         w.load_photos_and_run()
         assert not confirmation.called and w.run_dialog is None
     w.duplicate()
@@ -940,7 +940,7 @@ with patch('kim_recipe_dialog.preview', side_effect=planned) as preview:
     w.example_selector.setCurrentIndex(1); _wait_for_preview(w)
     assert preview.call_args.args[1] == ['/photos/second.jpg']
     assert preview.call_args.kwargs['start_index'] == 2
-    with patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=(['/custom/example.png'], '')):
+    with patch('kim_recipe_dialog.choose_images', return_value=['/custom/example.png']):
         w.choose_examples(); _wait_for_preview(w); _wait_for_preview(w)
     assert not w.reset_examples.isHidden()
     assert preview.call_args.args[1] == ['/custom/example.png']
@@ -1143,7 +1143,7 @@ for op, key, changed in (('image.rotate', 'degrees', 180), ('image.convert', 'qu
     row = w.steps.currentRow()
     w.steps.item(row).setCheckState(Qt.Unchecked)
     w.parameter(row, key, changed)
-    assert w.step_defaults_button.text() == 'Reset Step Defaults'
+    assert w.step_defaults_button.text() == 'Reset step defaults'
     w.step_defaults_button.click()
     assert w.recipe['steps'][row][key] == w.definitions[op]['parameters'][key]['default']
     assert w.recipe['steps'][row]['enabled'] is False
