@@ -1,5 +1,6 @@
 """Focused tests for the standalone browser's structured read-only reader."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import sys
@@ -53,7 +54,9 @@ class MetadataReaderTests(unittest.TestCase):
             sidecar = Path(temporary) / "雪.XMP"
             image.write_bytes(b"fixture image")
             sidecar.write_text("fixture xmp", encoding="utf-8")
-            before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in (image, sidecar)}
+            before = {p: (hashlib.sha256(p.read_bytes()).hexdigest(),
+                          p.stat().st_atime_ns, p.stat().st_mtime_ns, p.stat().st_ctime_ns)
+                      for p in (image, sidecar)}
             self.assertEqual([sidecar], associated_xmp_sidecars(image))
             stdout = json.dumps([
                 {"SourceFile": str(image), "EXIF:IFD0:Make": "Maker"},
@@ -74,7 +77,10 @@ class MetadataReaderTests(unittest.TestCase):
                 "filename=UTF8", "-all:all", "-XMP:*", "--"
             } for arg in command[1:]))
             self.assertEqual(2, len(run.call_args.kwargs["pass_fds"]))
-            self.assertEqual(before, {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in (image, sidecar)})
+            after = {p: (hashlib.sha256(p.read_bytes()).hexdigest(),
+                         p.stat().st_atime_ns, p.stat().st_mtime_ns, p.stat().st_ctime_ns)
+                     for p in (image, sidecar)}
+            self.assertEqual(before, after)
 
     def test_missing_exiftool_fails_with_actionable_error(self):
         with patch("kim_metadata_reader.shutil.which", return_value=None):
