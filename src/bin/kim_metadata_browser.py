@@ -10,7 +10,7 @@ import signal
 import sys
 
 try:
-    from PySide6.QtCore import QSettings, Qt, QThread, Signal, QSortFilterProxyModel, QSize, QRect, QModelIndex, QTimer, QItemSelectionModel
+    from PySide6.QtCore import QSettings, Qt, QThread, Signal, QSortFilterProxyModel, QSize, QRect, QModelIndex, QTimer, QItemSelectionModel, QLocale
     from PySide6.QtGui import QIcon, QImage, QPalette, QStandardItem, QStandardItemModel, QPixmap
     from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
         QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QScrollArea,
@@ -24,6 +24,7 @@ except ModuleNotFoundError as exc:
     raise
 
 from kim_metadata_reader import MetadataEntry, MetadataRecord, read_metadata, value_text
+from kim_metadata_sources import MetadataSourcePreferences, preferred_entry, source_name
 from kim_metadata_compare import compare_records, visible_rows, SECTION_ORDER, _entry_display, entry_provenance
 from kim_photo_selection import read_thumbnail
 from kim_process import inspection_context
@@ -242,6 +243,7 @@ class MetadataBrowser(QMainWindow):
         self.resize(min(1160, max(minimum_width, available.width() - 24)),
                     min(740, max(minimum_height, available.height() - 60)))
         self.settings = QSettings("KIM6", "MetadataBrowser")
+        self.metadata_preferences = MetadataSourcePreferences()
         self.section_expanded = {
             name: self.settings.value(f"overview/expanded/{name}", True, type=bool)
             for name in ("Description", "Creator & rights", "Camera & capture")
@@ -1261,7 +1263,17 @@ class MetadataBrowser(QMainWindow):
         by_language = {}
         for language, shown, sources in grouped:
             by_language.setdefault(language, []).append((shown, sources))
-        has_conflict = any(len(values) > 1 for values in by_language.values())
+        preferred = preferred_entry(entries, record, self.metadata_preferences.priority,
+                                    language_alt=label in {"Title", "Caption / Description"},
+                                    locale=QLocale().name())
+        if preferred:
+            preferred_text = _overview_value(preferred.value)
+            preferred_language = preferred.language or ""
+            grouped.sort(key=lambda value: (value[0] != preferred_language,
+                                            value[1] != preferred_text))
+        # Different source representations are alternatives, not an
+        # automatic conflict. All remain visible in Overview and All tags.
+        has_conflict = preferred is None and len(entries) > 1
 
         self.section_layout.addWidget(self._subdued_label(label))
         self.section_layout.addSpacing(3)
@@ -1276,7 +1288,7 @@ class MetadataBrowser(QMainWindow):
                     self.section_layout.addSpacing(2)
         else:
             default = next((value for value in grouped if value[0] == "x-default"), None)
-            primary = default or next((value for value in grouped if not value[0]), grouped[0])
+            primary = grouped[0] if preferred else (default or next((value for value in grouped if not value[0]), grouped[0]))
             language, shown, _sources = primary
             primary_text = (f"{language}: {shown}" if language and language != "x-default" else shown)
             self.section_layout.addWidget(self._content_label(primary_text, prominent=label == "Title"))
@@ -1293,6 +1305,8 @@ class MetadataBrowser(QMainWindow):
             sources = set().union(*(source_set for _lang, _value, source_set in grouped))
             if sources:
                 self.section_layout.addWidget(self._subdued_label(" · ".join(sorted(sources))))
+            if preferred:
+                self.section_layout.addWidget(self._subdued_label(f"Preferred source: {source_name(preferred, record)}"))
         self.section_layout.addSpacing(7)
 
     def _add_rights_field(self, label, entries, record):
@@ -1303,7 +1317,14 @@ class MetadataBrowser(QMainWindow):
         by_language = {}
         for language, shown, sources in grouped:
             by_language.setdefault(language, []).append((shown, sources))
-        has_conflict = any(len(values) > 1 for values in by_language.values())
+        preferred = preferred_entry(entries, record, self.metadata_preferences.priority,
+                                    language_alt=True, locale=QLocale().name())
+        if preferred:
+            preferred_text = _overview_value(preferred.value)
+            preferred_language = preferred.language or ""
+            grouped.sort(key=lambda value: (value[0] != preferred_language,
+                                            value[1] != preferred_text))
+        has_conflict = preferred is None and len(entries) > 1
         self.section_layout.addWidget(self._subdued_label(label))
         self.section_layout.addSpacing(3)
         if has_conflict:
@@ -1315,7 +1336,7 @@ class MetadataBrowser(QMainWindow):
                     text = f"{source}: {language_prefix}{shown}" if source else f"{language_prefix}{shown}"
                     self.section_layout.addWidget(self._content_label(text))
         else:
-            primary = next((value for value in grouped if value[0] == "x-default"), None)
+            primary = grouped[0] if preferred else next((value for value in grouped if value[0] == "x-default"), None)
             primary = primary or next((value for value in grouped if not value[0]), grouped[0])
             _language, shown, _sources = primary
             self.section_layout.addWidget(self._content_label(shown))
@@ -1326,6 +1347,8 @@ class MetadataBrowser(QMainWindow):
             sources = set().union(*(source_set for _lang, _value, source_set in grouped))
             if sources:
                 self.section_layout.addWidget(self._subdued_label(" · ".join(sorted(sources))))
+            if preferred:
+                self.section_layout.addWidget(self._subdued_label(f"Preferred source: {source_name(preferred, record)}"))
         self.section_layout.addSpacing(7)
 
     def _camera_values(self, label, aliases, record):
@@ -1393,6 +1416,7 @@ class MetadataBrowser(QMainWindow):
                 item.layout().deleteLater()
 
     def update_overview(self):
+        self.metadata_preferences.reload()
         self._clear_layout(self.overview_layout)
         row = self.image_list.currentRow()
         record = self.records.get(self.paths[row]) if 0 <= row < len(self.paths) else None
