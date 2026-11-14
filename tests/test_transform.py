@@ -6,6 +6,7 @@ import subprocess
 import unittest
 from support import Workspace
 from test_stripmeta import ICC_PROFILE
+from test_flip import automate_flip_review
 
 
 class TransformTests(unittest.TestCase):
@@ -15,6 +16,7 @@ class TransformTests(unittest.TestCase):
         self.source = self.w.png('input/photo 雪.png')
         self.w.approve_overwrite()
         self.w.use_real_transform()
+        automate_flip_review(self.w)
 
     def pixels(self, path):
         result = subprocess.run([shutil.which('magick'), str(path), '-depth', '8', 'rgb:-'],
@@ -213,13 +215,18 @@ def real_transform_case(action, argument, pixels, dimensions):
         before = self.w.observe(self.source)
         self.source.chmod(0o604)
         result = self.w.dispatch(action, argument, self.source)
-        self.assertEqual(self.pixels(self.source), pixels, result.stderr)
-        self.assertEqual(self.dimensions(self.source), 'PNG ' + dimensions)
-        self.assertEqual(self.w.observe(self.source).mode, 0o604)
+        output = self.source
+        if action == 'flipflop':
+            tag = 'vertical' if argument.lstrip('-') == 'flip' else 'horizontal'
+            output = self.source.with_name(self.source.stem + '_flipped_' + tag + self.source.suffix)
+            self.assertEqual(before.sha256, self.w.observe(self.source).sha256)
+        self.assertEqual(self.pixels(output), pixels, result.stderr)
+        self.assertEqual(self.dimensions(output), 'PNG ' + dimensions)
+        self.assertEqual(self.w.observe(output).mode, 0o604)
         if action == 'rotate':
             self.assertEqual(self.w.observe(self.source).mtime_ns, before.mtime_ns)
         else:
-            self.assertGreater(self.w.observe(self.source).mtime_ns, before.mtime_ns)
+            self.assertGreater(self.w.observe(output).mtime_ns, before.mtime_ns)
         self.assertFalse(any(c['tool'] == 'mogrify' for c in result.calls))
         producer = next(c for c in result.calls if c['tool'] == 'magick')
         from pathlib import Path
@@ -288,7 +295,9 @@ def interruption_case(action, argument, phase, state):
         elif phase == 'metadata':
             self.w.respond('chmod', **injection)
         result = self.w.dispatch(action, argument, self.source, second)
-        self.assert_failed_unchanged(result, before,'Cancelled: 1' if state=='cancelled' and phase!='before' else 'Failed: 1')
+        cancelled = (state == 'cancelled' and phase != 'before') or (
+            action == 'flipflop' and phase == 'production' and state == 'query_failed')
+        self.assert_failed_unchanged(result, before, 'Cancelled: 1' if cancelled else 'Failed: 1')
         self.assertFalse(any(c['tool'] in ('mv', 'ln') for c in result.calls))
         self.assertLessEqual(len([c for c in result.calls if c['tool'] == 'magick']),
                              0 if phase in ('before', 'input') else 1)

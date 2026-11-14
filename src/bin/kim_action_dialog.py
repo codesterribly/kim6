@@ -5,7 +5,8 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, QThread, Qt, QSize
 from PySide6.QtWidgets import (QApplication,QDialog,QVBoxLayout,QFormLayout,QLabel,
     QDialogButtonBox,QComboBox,QSpinBox,QLineEdit,QCheckBox,QPushButton,QFileDialog,QPlainTextEdit,
-    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout,QHBoxLayout,QWidget)
+    QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout,QHBoxLayout,QWidget,
+    QGridLayout,QSizePolicy)
 from kim_ui import RotationInput, with_help
 from PySide6.QtGui import QPixmap, QTransform
 from kim_recipe_image import copyright_settings
@@ -1761,16 +1762,35 @@ class RotateBatchDialog(QDialog):
 
 
 
+class FlipSourceLabel(QLabel):
+    """Keep the source extension visible, with its complete path in a tooltip."""
+
+    def __init__(self, path):
+        self.filename = Path(path).name
+        super().__init__(self.filename)
+        self.setTextFormat(Qt.PlainText)
+        self.setToolTip(str(path))
+        self.setAccessibleName(self.filename)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.setText(self.fontMetrics().elidedText(
+            self.filename, Qt.ElideMiddle, self.contentsRect().width()))
+
+
 class FlipReviewDialog(QDialog):
     """Review a batch flip using bounded, read-only thumbnails."""
 
-    def __init__(self, files, operation):
+    def __init__(self, files, operation, require_output_plan=False):
         super().__init__()
 
         if operation not in ('flip', 'flop') or not files:
             raise ValueError('Invalid Flip review selection')
 
         self.operation = operation
+        self.require_output_plan = require_output_plan
+        self.output_plan = None
         self.rows = []
         self.pending = []
 
@@ -1802,53 +1822,67 @@ class FlipReviewDialog(QDialog):
 
         note = QLabel(
             'Review the original and resulting images below. '
-            'After approval, KIM6 applies its configured output policy.'
+            'Originals remain unchanged. Review the exact output names '
+            'and destinations before applying.'
         )
         note.setWordWrap(True)
         outer.addWidget(note)
 
-        headings = QHBoxLayout()
-        headings.addWidget(QLabel('Image'), 2)
-        headings.addWidget(QLabel('Original'), 3, Qt.AlignCenter)
-        headings.addWidget(QLabel('Planned result'), 3, Qt.AlignCenter)
-        outer.addLayout(headings)
-
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         container = QWidget()
-        listing = QVBoxLayout(container)
-        listing.setContentsMargins(5, 5, 5, 5)
+        listing = QGridLayout(container)
+        listing.setContentsMargins(8, 8, 8, 8)
+        listing.setHorizontalSpacing(12)
+        listing.setVerticalSpacing(10)
+        for column in range(2):
+            listing.setColumnMinimumWidth(column, 280)
+            listing.setColumnStretch(column, 1)
+        for column, title in enumerate(('Original', 'Modified')):
+            listing.addWidget(QLabel(title), 0, column, Qt.AlignHCenter)
 
-        for path in files:
-            panel = QFrame()
-            panel.setFrameShape(QFrame.StyledPanel)
-
-            line = QHBoxLayout(panel)
-
-            name = QLabel(Path(path).name)
-            name.setToolTip(path)
-            name.setWordWrap(True)
-            name.setMinimumWidth(175)
-            name.setMaximumWidth(240)
+        for index, path in enumerate(files):
+            name = FlipSourceLabel(path)
 
             original = QLabel('Inspecting…')
             result = QLabel('Inspecting…')
-
+            source_directory = QLabel(str(Path(path).absolute().parent))
+            source_directory.setToolTip(source_directory.text())
+            result_name = QLabel()
+            result_directory = QLabel()
+            for label in (source_directory, result_name, result_directory):
+                label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+                label.setWordWrap(True)
+                label.setTextFormat(Qt.PlainText)
+                label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             for widget in (original, result):
                 widget.setFixedSize(180, 130)
                 widget.setAlignment(Qt.AlignCenter)
 
-            line.addWidget(name, 2)
-            line.addWidget(original, 3)
-            line.addWidget(result, 3)
-
-            listing.addWidget(panel)
+            # Share all three rows so wrapping never offsets the preview pair.
+            row = 1 + index * 4
+            listing.addWidget(name, row, 0, Qt.AlignTop)
+            listing.addWidget(result_name, row, 1, Qt.AlignTop)
+            listing.addWidget(original, row + 1, 0, Qt.AlignHCenter)
+            listing.addWidget(result, row + 1, 1, Qt.AlignHCenter)
+            listing.addWidget(source_directory, row + 2, 0, Qt.AlignTop)
+            listing.addWidget(result_directory, row + 2, 1, Qt.AlignTop)
+            if index < len(files) - 1:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.HLine)
+                listing.addWidget(separator, row + 3, 0, 1, 2)
 
             self.rows.append({
                 'path': path,
+                'source_name': name,
+                'source_directory': source_directory,
                 'original': original,
                 'result': result,
+                'result_name': result_name,
+                'result_directory': result_directory,
+                'target': None,
                 'stamp': None,
                 'ready': False,
                 'error': None,
@@ -1941,6 +1975,7 @@ class FlipReviewDialog(QDialog):
             and ready == len(self.rows)
             and not blocked
             and not self.pending
+            and (not self.require_output_plan or self.output_plan is not None)
         )
 
         self.status.setText(
@@ -1965,6 +2000,14 @@ class FlipReviewDialog(QDialog):
                     row['result'].setToolTip(str(exc))
 
         self.update_state()
+
+        if self.require_output_plan and self.output_plan is not None:
+            try:
+                verify_flip_plan(self.output_plan)
+            except Exception as exc:
+                self.output_plan = None
+                self.update_state()
+                self.status.setText(f'Output plan changed: {exc}. Review again.')
 
         if self.apply.isEnabled():
             super().accept()
@@ -2649,7 +2692,324 @@ def email_ready_review(plan_path, mail_client):
     return 0 if dialog.exec() == QDialog.Accepted else 130
 
 
+
+def verify_flip_plan(plan, entries=None):
+    import os
+    from kim_preview import verify_entry, verify_plan
+    if (plan.get('policy') != 'create' or
+            plan.get('config', {}).get('flip') not in ('flip', 'flop')):
+        raise ValueError('Invalid Flip publication plan')
+    if entries is None:
+        verify_plan(plan)
+        entries = plan['entries']
+    else:
+        for entry in entries:
+            verify_entry(entry)
+    for entry in entries:
+        if os.lstat(entry['source']).st_atime_ns != entry['atime_ns']:
+            raise ValueError('Source access time changed after preview: ' + entry['source'])
+
+
+def flip_source_read(plan_path, source, command):
+    """Delegate reads through inherited O_NOATIME stdin, never a reopened path."""
+    import json
+    import os
+    from kim_preview import absolute, identity, inspection_path
+    from kim_process import run_process
+
+    plan = json.loads(plan_path.read_text())
+    source = absolute(source)
+    entry = next(entry for entry in plan['entries'] if entry['source'] == source)
+    verify_flip_plan(plan, [entry])
+    if not command or command[0] not in ('identify', 'magick', 'exiftool'):
+        raise ValueError('Unsupported Flip reader')
+    with inspection_path(source) as (_, descriptor):
+        info = os.fstat(descriptor)
+        stamp = [info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                 info.st_ctime_ns, info.st_mode, info.st_uid, info.st_gid]
+        if stamp != entry['identity'] or info.st_atime_ns != entry['atime_ns']:
+            raise ValueError('Source changed while opening Flip input')
+        workspace = plan_path.parent
+        if (workspace / 'job.ref').is_file():
+            # The existing monitor owns and reaps codec/delegate groups on
+            # cancellation. Its child inherits this same no-atime stdin.
+            command = [sys.executable, str(Path(__file__).with_name('kim_job_process.py')),
+                       str(workspace), *command]
+        result = run_process(command, stdin=descriptor)
+        after = os.fstat(descriptor)
+        if (after != info or after.st_atime_ns != info.st_atime_ns or
+                after.st_mtime_ns != info.st_mtime_ns or after.st_ctime_ns != info.st_ctime_ns):
+            raise ValueError('Source changed during Flip processing')
+    if identity(source) != entry['identity']:
+        raise ValueError('Source changed during Flip processing')
+    verify_flip_plan(plan, [entry])
+    sys.stdout.buffer.write(result.stdout)
+    sys.stderr.buffer.write(result.stderr)
+    return result.returncode
+
+
+def flip_output_review(inputs_path, approved_path, policy, operation):
+    """Review exact Flip destinations before permitting publication."""
+    import os
+    from kim_preview import (
+        absolute, allocate, base_entry, finish_entry,
+        save_plan,
+    )
+
+    if policy != 'create' or operation not in ('flip', 'flop'):
+        raise ValueError('Invalid Flip output policy')
+
+    raw = inputs_path.read_bytes().split(b'\0')
+    if not raw or raw[-1] != b'':
+        raise ValueError('Incomplete Flip output request')
+
+    values = [os.fsdecode(value) for value in raw[:-1]]
+    if not values or len(values) % 2 or any(not value for value in values):
+        raise ValueError('Invalid Flip source and target pairs')
+
+    pairs = list(zip(values[::2], values[1::2]))
+
+    window = FlipReviewDialog([source for source, _ in pairs], operation, require_output_plan=True)
+    window.setWindowTitle('KIM6 - Review Flip changes')
+    window.resize(960, min(740, window.height() + 90))
+
+    layout = window.layout()
+
+    introduction = QLabel(
+        f'{len(pairs)} selected images. Review the planned '
+        'filenames and destinations before processing.'
+    )
+    introduction.setWordWrap(True)
+    layout.insertWidget(2, introduction)
+
+    choice = QComboBox()
+    choice.addItem('Beside each source', 'beside')
+    choice.addItem('Choose shared destination', 'shared')
+
+    destination = QLineEdit()
+    destination.setPlaceholderText(
+        'Enter an existing absolute directory'
+    )
+    destination.setAccessibleName('Shared destination directory')
+
+    browse = QPushButton('Change Destination…')
+    update = QPushButton('Update preview')
+
+    selector = QHBoxLayout()
+    selector.addWidget(QLabel('Destination:'))
+    selector.addWidget(choice, 1)
+    selector.addWidget(browse)
+    layout.insertLayout(3, selector)
+
+    directory_controls = QHBoxLayout()
+    directory_controls.addWidget(destination, 1)
+    directory_controls.addWidget(update)
+    layout.insertLayout(4, directory_controls)
+
+    summary = QLabel()
+    summary.setWordWrap(True)
+    layout.insertWidget(layout.count() - 1, summary)
+    apply = window.apply
+
+    state = {'plan': None}
+
+    def show_directory_controls():
+        enabled = (
+            policy == 'create'
+            and choice.currentData() == 'shared'
+        )
+        for widget in (destination, update):
+            widget.setVisible(enabled)
+
+    def invalidate(*_):
+        state['plan'] = None
+        window.output_plan = None
+        apply.setEnabled(False)
+        summary.setText(
+            'Destination changed. Update the preview before applying.'
+        )
+
+    def refresh():
+        state['plan'] = None
+        window.output_plan = None
+        apply.setEnabled(False)
+
+        directory = None
+
+        if (
+            policy == 'create'
+            and choice.currentData() == 'shared'
+        ):
+            directory = destination.text().strip()
+
+            if not directory or not os.path.isabs(directory):
+                summary.setText(
+                    'Enter an existing absolute output directory.'
+                )
+                return
+
+            if (
+                os.path.islink(directory)
+                or not os.path.isdir(directory)
+            ):
+                summary.setText(
+                    'The output directory must exist and '
+                    'must not be a symbolic link.'
+                )
+                return
+
+        reserved = set()
+        seen = set()
+        selected = {
+            absolute(source) for source, _ in pairs
+        }
+
+        entries = []
+        errors = []
+
+        for row, (source, candidate) in enumerate(pairs):
+            try:
+                entry = base_entry(source)
+                entry['atime_ns'] = os.lstat(entry['source']).st_atime_ns
+                source_identity = tuple(entry['identity'][:2])
+
+                if source_identity in seen:
+                    raise ValueError('Repeated source identity')
+
+                seen.add(source_identity)
+
+                proposed = (
+                    os.path.join(
+                        directory,
+                        os.path.basename(candidate)
+                    )
+                    if directory is not None
+                    else candidate
+                )
+
+                target = allocate(entry['source'], proposed, policy, reserved, separator='_')
+                if target in selected:
+                    raise ValueError('Output aliases a selected source')
+
+                finish_entry(entry, target, policy)
+                entries.append(entry)
+
+                columns = (
+                    os.path.basename(source),
+                    os.path.basename(target),
+                    os.path.dirname(target),
+                    'Ready',
+                )
+                tooltip = target
+
+            except Exception as exc:
+                errors.append(
+                    f'{os.path.basename(source)}: {exc}'
+                )
+
+                columns = (
+                    os.path.basename(source),
+                    'Blocked',
+                    directory or os.path.dirname(candidate),
+                    'Blocked',
+                )
+                tooltip = str(exc)
+
+            preview_row = window.rows[row]
+            preview_row['target'] = target if columns[3] == 'Ready' else None
+            preview_row['result_name'].setText(columns[1])
+            preview_row['result_directory'].setText(columns[2])
+            preview_row['result_name'].setToolTip(tooltip)
+            preview_row['result_directory'].setToolTip(tooltip)
+
+        if errors:
+            summary.setText('\n'.join(errors[:4]))
+            return
+
+        plan = {
+            'operation': 'transform',
+            'policy': policy,
+            'total': len(pairs),
+            'config': {'flip': operation},
+            'entries': entries,
+        }
+
+        try:
+            verify_flip_plan(plan)
+        except Exception as exc:
+            summary.setText(f'Output plan changed: {exc}')
+            return
+
+        state['plan'] = plan
+        window.output_plan = plan
+
+        message = (
+            'Original images remain untouched. The approved '
+            'filenames are exact. A late collision will block '
+            'that output rather than silently rename it.'
+        )
+
+        summary.setText(
+            f'{len(entries)} outputs planned. {message}'
+        )
+        window.update_state()
+
+    def choose_directory():
+        initial = (
+            destination.text().strip()
+            or os.path.dirname(pairs[0][0])
+        )
+
+        selected = QFileDialog.getExistingDirectory(
+            window,
+            'Choose Flip destination',
+            initial,
+        )
+
+        if selected:
+            destination.setText(selected)
+            choice.setCurrentIndex(choice.findData('shared'))
+            refresh()
+
+    choice.currentIndexChanged.connect(
+        lambda *_: (
+            show_directory_controls(),
+            refresh(),
+        )
+    )
+    destination.textChanged.connect(invalidate)
+    browse.clicked.connect(choose_directory)
+    update.clicked.connect(refresh)
+
+    show_directory_controls()
+    refresh()
+
+    if window.exec() != QDialog.Accepted:
+        return 130
+
+    if state['plan'] is None or window.output_plan is None:
+        return 125
+
+    verify_flip_plan(state['plan'])
+    save_plan(approved_path, state['plan'])
+    return 0
+
+
 def main():
+    if len(sys.argv) >= 6 and sys.argv[1] == 'flip-source-read':
+        return flip_source_read(Path(sys.argv[2]), sys.argv[3], sys.argv[4:])
+    if (
+        len(sys.argv) == 6
+        and sys.argv[1] == 'flip-output-review'
+    ):
+        app = QApplication(sys.argv[:1])
+        return flip_output_review(
+            Path(sys.argv[2]),
+            Path(sys.argv[3]),
+            sys.argv[4],
+            sys.argv[5],
+        )
+
     if (
         len(sys.argv) >= 5
         and sys.argv[1] == "email-options"

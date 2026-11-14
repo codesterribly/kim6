@@ -67,7 +67,7 @@ def main():
     # Profile validation is independent of scripted metadata producers.
     profile_query = ["-j", "-b", "-f", "-a", "-G1:4", "-ICC_Profile", "--"]
     if tool == "exiftool" and args[:-1] == profile_query and "-ICC_Profile" not in plan.get("routes", {}).get(tool, {}):
-        fixture = owned(args[-1])
+        fixture = owned(os.readlink('/proc/self/fd/0')) if args[-1] == '-' else owned(args[-1])
         if fixture.stat().st_size > 8388608:
             raise ValueError("profile fixture exceeds owned test bound")
         executable = shutil.which("exiftool", path=os.defpath)
@@ -1026,7 +1026,8 @@ def real_resize(executable, args):
 
 
 def real_transform(executable, args):
-    if (args[:1] != ["--"] or args[2] not in ("-rotate", "-auto-orient", "-flip", "-flop")
+    stdin_flip = args[:1] in (["-"], ["TGA:-"]) and args[1] in ("-flip", "-flop")
+    if ((not stdin_flip and (args[:1] != ["--"] or args[2] not in ("-rotate", "-auto-orient", "-flip", "-flop")))
             or args[-5:-1] != ["-format", "%w %h\\n", "-write", "info:"]):
         raise ValueError("unsupported real transformation")
     output = args[-1]
@@ -1034,7 +1035,8 @@ def real_transform(executable, args):
         encoding, output = output.split(":", 1)
         if not encoding.isalnum():
             raise ValueError("invalid transformation encoder")
-    source, destination = owned(args[1]), owned(output)
+    source = owned(os.readlink('/proc/self/fd/0')) if stdin_flip else owned(args[1])
+    destination = owned(output)
     if (source.stat().st_size > 65536 or destination.exists() or destination.is_symlink()
             or not destination.parent.name.startswith('.kim6-stage.')):
         raise ValueError("transformation requires small source and unused private stage")
