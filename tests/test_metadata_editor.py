@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from metadata_integrity import sha256_noatime
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/bin"))
 
@@ -490,6 +492,19 @@ class MetadataEditorQtTests(unittest.TestCase):
         editor.close()
         self.app.processEvents()
 
+    def assert_preview_fits_cached_image(self, editor):
+        from PySide6.QtCore import Qt
+        self.app.processEvents()
+        source = editor.previews[editor.current_preview_path]
+        available = editor.preview.contentsRect().size()
+        pixmap = editor.preview.pixmap().size()
+        self.assertEqual(source.size().scaled(available, Qt.KeepAspectRatio), pixmap)
+        self.assertLessEqual(pixmap.width(), available.width())
+        self.assertLessEqual(pixmap.height(), available.height())
+        self.assertAlmostEqual(source.width() / source.height(),
+                               pixmap.width() / pixmap.height(), delta=0.02)
+        return pixmap
+
     def select_rows(self, editor, indexes):
         selected = set(indexes)
         for index in range(editor.file_list.count()):
@@ -576,18 +591,17 @@ class MetadataEditorQtTests(unittest.TestCase):
         app.processEvents()
         horizontal_before = editor.splitter.sizes()
         vertical_before = editor.image_splitter.sizes()
-        preview_before = editor.preview.pixmap().size()
+        self.assert_preview_fits_cached_image(editor)
         total_width = sum(horizontal_before)
         total_height = sum(vertical_before)
         editor.splitter.moveSplitter(min(total_width - 390, horizontal_before[0] + 80), 1)
         app.processEvents()
-        preview_after_horizontal = editor.preview.pixmap().size()
-        self.assertNotEqual(preview_before, preview_after_horizontal)
+        self.assert_preview_fits_cached_image(editor)
         editor.image_splitter.moveSplitter(min(total_height - 165, vertical_before[0] + 55), 1)
         app.processEvents()
         self.assertNotEqual(horizontal_before, editor.splitter.sizes())
         self.assertNotEqual(vertical_before, editor.image_splitter.sizes())
-        self.assertNotEqual(preview_after_horizontal, editor.preview.pixmap().size())
+        self.assert_preview_fits_cached_image(editor)
         moved_horizontal = editor.splitter.sizes()
         moved_vertical = editor.image_splitter.sizes()
         wait = QEventLoop()
@@ -599,11 +613,18 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.close_editor(editor)
 
         reopened = self.make_editor(["complete.jpg"], self.settings_preferences(settings_path))
+        for saved, restored in ((moved_horizontal, reopened.splitter.sizes()),
+                                (moved_vertical, reopened.image_splitter.sizes())):
+            self.assertAlmostEqual(saved[0] / sum(saved), restored[0] / sum(restored),
+                                   delta=1 / sum(restored))
+        self.assert_preview_fits_cached_image(reopened)
         reopened.resize(1400, 900)
-        reopened._restore_splitter_sizes()
         app.processEvents()
-        self.assertEqual(moved_horizontal, reopened.splitter.sizes())
-        self.assertEqual(moved_vertical, reopened.image_splitter.sizes())
+        for saved, restored in ((moved_horizontal, reopened.splitter.sizes()),
+                                (moved_vertical, reopened.image_splitter.sizes())):
+            for expected, actual in zip(saved, restored):
+                self.assertAlmostEqual(expected, actual, delta=1)
+        self.assert_preview_fits_cached_image(reopened)
         self.close_editor(reopened)
         temp.cleanup()
 
@@ -626,36 +647,61 @@ class MetadataEditorQtTests(unittest.TestCase):
         temp.cleanup()
 
     def test_preview_rescales_without_rereading_and_keeps_image_aspect(self):
-        from PySide6.QtCore import QEventLoop, QTimer
-        editor = self.make_editor(["complete.jpg"])
-        source_size = editor.previews[editor.paths[0]].size()
-        with patch("kim_metadata_editor.read_thumbnail", side_effect=AssertionError("resize reread image")):
-            editor.resize(1400, 900)
-            self.app.processEvents()
-            wait = QEventLoop()
-            QTimer.singleShot(50, wait.quit)
-            wait.exec()
-            pixmap = editor.preview.pixmap()
-            ratio = pixmap.width() / pixmap.height()
-            self.assertAlmostEqual(source_size.width() / source_size.height(), ratio, delta=0.02)
-            self.assertLessEqual(pixmap.width(), editor.preview.width())
-            self.assertLessEqual(pixmap.height(), editor.preview.height())
-            before = pixmap.size()
-            editor.splitter.moveSplitter(editor.splitter.sizes()[0] + 100, 1)
-            self.app.processEvents()
-            self.assertNotEqual(before, editor.preview.pixmap().size())
-            self.assertAlmostEqual(source_size.width() / source_size.height(),
-                                   editor.preview.pixmap().width() / editor.preview.pixmap().height(), delta=0.02)
-        self.close_editor(editor)
+        with tempfile.TemporaryDirectory(prefix="kim6-editor-preview-") as temporary:
+            preferences = self.settings_preferences(Path(temporary) / "editor.ini")
+            editor = self.make_editor(["complete.jpg"], preferences)
+            cached = editor.previews[editor.paths[0]]
+            cache_key = cached.cacheKey()
+            try:
+                with patch("kim_metadata_editor.read_thumbnail", side_effect=AssertionError("resize reread image")) as read:
+                    for dimensions in ((1000, 700), (1400, 900)):
+                        editor.resize(*dimensions)
+                        self.assert_preview_fits_cached_image(editor)
+
+                    # A tall preview makes width the limiting dimension.
+                    editor.image_splitter.moveSplitter(120, 1)
+                    editor.splitter.moveSplitter(220, 1)
+                    before = self.assert_preview_fits_cached_image(editor)
+                    for position in (320, 220):
+                        editor.splitter.moveSplitter(position, 1)
+                        after = self.assert_preview_fits_cached_image(editor)
+                        self.assertNotEqual(before, after)
+                        before = after
+
+                    # A wide preview makes height the limiting dimension.
+                    editor.splitter.moveSplitter(600, 1)
+                    bottom = editor.image_splitter.getRange(1)[1]
+                    editor.image_splitter.moveSplitter(bottom, 1)
+                    before = self.assert_preview_fits_cached_image(editor)
+                    for position in (bottom - 80, bottom):
+                        editor.image_splitter.moveSplitter(position, 1)
+                        after = self.assert_preview_fits_cached_image(editor)
+                        self.assertNotEqual(before, after)
+                        before = after
+                    editor.splitter.moveSplitter(700, 1)
+                    self.assertEqual(before, self.assert_preview_fits_cached_image(editor))
+
+                    for splitter in (editor.splitter, editor.image_splitter):
+                        for position in (0, 10000):
+                            splitter.moveSplitter(position, 1)
+                            self.assert_preview_fits_cached_image(editor)
+                            self.assertGreaterEqual(editor.splitter.sizes()[0], 220)
+                            self.assertGreaterEqual(editor.splitter.sizes()[1], 640)
+                            self.assertGreaterEqual(editor.image_splitter.sizes()[0], 120)
+                            self.assertGreaterEqual(editor.image_splitter.sizes()[1], 155)
+                    read.assert_not_called()
+                    self.assertIs(cached, editor.previews[editor.paths[0]])
+                    self.assertEqual(cache_key, cached.cacheKey())
+            finally:
+                self.close_editor(editor)
 
     def test_resizing_and_navigation_do_not_modify_image_or_sidecar(self):
-        import hashlib
         image = self.fixtures / "conflicting_sidecar.jpg"
         sidecar = image.with_suffix(".xmp")
         targets = [image, sidecar]
         def signature(path):
             stat = path.stat()
-            return (hashlib.sha256(path.read_bytes()).hexdigest(), stat.st_size,
+            return (sha256_noatime(path), stat.st_size,
                     stat.st_atime_ns, stat.st_mtime_ns, stat.st_ctime_ns)
         before = {path: signature(path) for path in targets}
         editor = self.make_editor(["conflicting_sidecar.jpg", "complete.jpg"])

@@ -1482,7 +1482,7 @@ class MetadataEditor(QMainWindow):
             self.preview.setPixmap(QPixmap())
             self.preview.setText("Preview unavailable")
             return
-        size = self.preview.size()
+        size = self.preview.contentsRect().size()
         if size.width() <= 0 or size.height() <= 0:
             return
         scaled = image.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)

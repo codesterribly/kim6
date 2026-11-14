@@ -12,7 +12,9 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
+import time
 from typing import Any, Iterable
 
 from kim_process import run_process
@@ -150,15 +152,27 @@ def associated_xmp_sidecars(filename: str | Path) -> list[Path]:
     return sorted(candidates, key=lambda p: p.name.casefold())
 
 
+def _source_path(path: str | Path) -> str:
+    # Canonicalize the parent, but let O_NOFOLLOW reject a final symlink.
+    source = Path(os.path.abspath(path))
+    return str(source.parent.resolve(strict=False) / source.name)
+
+
+def _source_identity(info: os.stat_result) -> tuple[int, ...]:
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
+            info.st_uid, info.st_gid, info.st_size,
+            info.st_atime_ns, info.st_mtime_ns, info.st_ctime_ns)
+
+
 def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
                   timeout: float = 120.0) -> dict[str, MetadataRecord]:
-    """Read selected images and adjacent XMP sidecars using one ExifTool run.
+    """Read images and adjacent XMP sidecars through inherited no-atime stdin.
 
     No binary extraction option is used. ExifTool therefore reports binary
     blocks as bounded descriptions instead of returning embedded thumbnails,
     previews or full image data. No write option is ever passed.
     """
-    images = [str(Path(path).resolve(strict=False)) for path in paths]
+    images = [_source_path(path) for path in paths]
     if not images:
         return {}
     tool = shutil.which(executable) if "/" not in executable else executable
@@ -169,7 +183,7 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
     inputs: list[str] = []
     seen: set[str] = set()
     for image in images:
-        sidecars = [str(path.resolve(strict=False)) for path in associated_xmp_sidecars(image)]
+        sidecars = [_source_path(path) for path in associated_xmp_sidecars(image)]
         sidecars_by_image[image] = sidecars
         for candidate in (image, *sidecars):
             if candidate not in seen:
@@ -180,61 +194,87 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
     if noatime is None:
         raise MetadataReadError("This system cannot inspect images without changing their access timestamps.")
 
-    descriptors: list[int] = []
-    fd_inputs: list[str] = []
-    fd_aliases: dict[str, str] = {}
+    # Opening /proc/self/fd/N creates a new open file description and drops
+    # O_NOATIME. ExifTool's supported '-' input duplicates inherited stdin
+    # instead. Each input needs its own invocation; share the timeout budget.
+    command = [tool, "-j", "-a", "-u", "-G0:1:2:4", "-D", "-struct",
+               "-charset", "filename=UTF8", "-all:all", "-XMP:*", "--", "-"]
+    deadline = time.monotonic() + timeout
+    records: dict[str, MetadataRecord] = {}
     input_errors: dict[str, str] = {}
-    try:
-        for filename in inputs:
+    for filename in inputs:
+        descriptor = None
+        try:
             try:
-                descriptor = os.open(filename, os.O_RDONLY | noatime | getattr(os, "O_CLOEXEC", 0))
+                before = os.stat(filename, follow_symlinks=False)
+                if not stat.S_ISREG(before.st_mode):
+                    raise OSError("Select a regular file, not a symbolic link or special file.")
+                expected = _source_identity(before)
+                descriptor = os.open(filename, os.O_RDONLY | noatime | os.O_NOFOLLOW |
+                                     os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+                if _source_identity(os.fstat(descriptor)) != expected:
+                    raise OSError("Source changed while opening metadata input.")
             except OSError as exc:
                 input_errors[filename] = (
                     f"Cannot inspect {Path(filename).name} without risking a filesystem timestamp change: {exc}"
                 )
                 continue
-            descriptors.append(descriptor)
-            descriptor_path = f"/proc/self/fd/{descriptor}"
-            fd_inputs.append(descriptor_path)
-            fd_aliases[descriptor_path] = filename
 
-        if not descriptors:
-            records = {image: MetadataRecord(path=image) for image in images}
-            for image in images:
-                record = records[image]
-                record.error = input_errors.get(image, "No image or sidecar could be opened safely.")
-                record.sidecars = sidecars_by_image[image]
-                for sidecar in record.sidecars:
-                    if sidecar in input_errors:
-                        record.warnings.append(input_errors[sidecar])
-            return records
+            # -a/-G4 preserve duplicate identities, -D supplies tag IDs, -struct
+            # retains arrays/structures, and -XMP:* retrieves lang-alt values.
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                completed = run_process(command, timeout=remaining, stdin=descriptor)
+            except subprocess.TimeoutExpired as exc:
+                raise MetadataReadError("ExifTool took too long to inspect the selected images.") from exc
+            except (OSError, ValueError) as exc:
+                raise MetadataReadError(f"Could not start ExifTool: {exc}") from exc
+            try:
+                if (_source_identity(os.fstat(descriptor)) != expected or
+                        _source_identity(os.stat(filename, follow_symlinks=False)) != expected):
+                    raise OSError("Source changed while extracting metadata.")
+            except OSError as exc:
+                input_errors[filename] = str(exc)
+                continue
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
-        # -a/-G4 preserve duplicate identities, -D supplies tag IDs, -struct
-        # retains arrays/structures, and -XMP:* retrieves every lang-alt value.
-        # O_NOATIME descriptors keep the read itself from changing source times.
-        command = [tool, "-j", "-a", "-u", "-G0:1:2:4", "-D", "-struct",
-                   "-charset", "filename=UTF8", "-all:all", "-XMP:*", "--", *fd_inputs]
-        try:
-            completed = run_process(command, timeout=timeout, pass_fds=tuple(descriptors))
-        except subprocess.TimeoutExpired as exc:
-            raise MetadataReadError("ExifTool took too long to inspect the selected images.") from exc
-        except (OSError, ValueError) as exc:
-            raise MetadataReadError(f"Could not start ExifTool: {exc}") from exc
-    finally:
-        for descriptor in descriptors:
-            os.close(descriptor)
-    if not completed.stdout:
+        if not completed.stdout:
+            detail = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise MetadataReadError(detail or "ExifTool returned no metadata.")
+        record = parse_exiftool_json(completed.stdout, [filename], {"-": filename})[filename]
         detail = completed.stderr.decode("utf-8", errors="replace").strip()
-        raise MetadataReadError(detail or "ExifTool returned no metadata.")
-    records = parse_exiftool_json(completed.stdout, inputs, fd_aliases)
+        if not record.entries and not record.error:
+            record.error = detail or "ExifTool could not read this image."
+        if record.entries:
+            # Stdin supplies the same stat and embedded metadata, but omits
+            # these two pathname tags. Preserve their normal group provenance.
+            for name, value in (("FileName", Path(filename).name),
+                                ("Directory", str(Path(filename).parent))):
+                if not any(entry.name == name and entry.groups == ("File", "System", "Other")
+                           for entry in record.entries):
+                    record.entries.append(MetadataEntry(name, ("File", "System", "Other"), name,
+                                                        value, filename, f"File:System:Other:{name}"))
+        # Keep partial ExifTool results and attach diagnostics to this input.
+        if completed.returncode and detail:
+            detail = "\n".join(line for line in detail.splitlines()
+                               if not re.fullmatch(r"\s*\d+ image files? read\s*", line)).strip()
+            if not record.entries and not record.error:
+                record.error = detail or f"ExifTool reported an inspection error (exit {completed.returncode})."
+            elif detail and detail not in record.warnings:
+                record.warnings.append(f"ExifTool batch warning: {detail}")
+        records[filename] = record
+
     for image in images:
         record = records.setdefault(image, MetadataRecord(path=image))
         record.sidecars = sidecars_by_image[image]
         if image in input_errors:
             record.error = input_errors[image]
         elif not record.entries and not record.error:
-            detail = completed.stderr.decode("utf-8", errors="replace").strip()
-            record.error = detail or "ExifTool could not read this image."
+            record.error = "ExifTool could not read this image."
         for sidecar in record.sidecars:
             if sidecar in input_errors:
                 record.warnings.append(input_errors[sidecar])
@@ -244,19 +284,6 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
                 record.warnings.extend(sidecar_record.warnings)
                 if sidecar_record.error:
                     record.warnings.append(f"{Path(sidecar).name}: {sidecar_record.error}")
-    # ExifTool may return valid records alongside a non-zero status. Keep those
-    # records and expose a concise per-image failure wherever no data arrived.
-    if completed.returncode and completed.stderr:
-        diagnostics = completed.stderr.decode("utf-8", errors="replace").splitlines()
-        diagnostics = [line for line in diagnostics
-                       if not re.fullmatch(r"\s*\d+ image files? read\s*", line, re.IGNORECASE)]
-        detail = "\n".join(diagnostics).strip()
-        for image in images:
-            record = records[image]
-            if not record.entries and not record.error:
-                record.error = detail or f"ExifTool reported an inspection error (exit {completed.returncode})."
-            elif detail and detail not in record.warnings:
-                record.warnings.append(f"ExifTool batch warning: {detail}")
     return {image: records[image] for image in images}
 
 
