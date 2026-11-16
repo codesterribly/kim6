@@ -297,6 +297,97 @@ def conversion_rules(input_format,frames,apng,webp_animation,config,extension):
     return 'change'
 
 
+def conversion_impact_warnings(
+    output, config, metadata, source_alpha, source_depth
+):
+    """Report only supported source facts and documented format impacts."""
+    warnings = []
+
+    if source_alpha:
+        if output == 'JPEG':
+            warnings.append(
+                'Transparency: the source contains transparency '
+                'information. JPEG cannot preserve it.'
+            )
+        elif output in ('BMP', 'PDF'):
+            warnings.append(
+                'Transparency: the source contains transparency. '
+                'Preservation depends on the destination encoder.'
+            )
+        elif output == 'GIF':
+            warnings.append(
+                'Transparency: GIF cannot preserve partial-alpha precision.'
+            )
+
+    if (
+        source_depth is not None
+        and source_depth > 8
+        and output in ('JPEG', 'GIF', 'BMP')
+    ):
+        warnings.append(
+            f'Color precision: source declares {source_depth} '
+            'bits per channel. The selected output may reduce precision.'
+        )
+
+    groups = {
+        key.split(':', 1)[0]
+        for key, value in metadata.items()
+        if value not in (None, '', [], {})
+    }
+
+    categories = []
+
+    if groups.intersection((
+        'EXIF', 'IFD0', 'ExifIFD', 'InteropIFD', 'GPS'
+    )):
+        categories.append('EXIF')
+
+    if 'IPTC' in groups:
+        categories.append('IPTC-IIM')
+
+    if any(group.startswith('XMP') for group in groups):
+        categories.append('XMP')
+
+    if categories:
+        names = ', '.join(categories)
+
+        if config.get('strip_metadata') in (True, 'true'):
+            warnings.append(
+                'Metadata: removal explicitly requested. '
+                'Source contains ' + names + '.'
+            )
+        elif output in ('BMP', 'GIF', 'PDF'):
+            warnings.append(
+                'Metadata: source contains ' + names + '. '
+                'The selected format has limited descriptive metadata '
+                'support. Some fields may not be retained.'
+            )
+
+    if (
+        output in ('JPEG', 'AVIF', 'HEIC')
+        or (
+            output == 'JP2'
+            and config.get('jp2_mode') != 'lossless'
+        )
+    ):
+        warnings.append(
+            'Image quality: lossy encoding may discard image detail. '
+            'Actual output size is known only after encoding.'
+        )
+    elif output == 'WEBP':
+        warnings.append(
+            'Image quality: WebP may use lossy encoding under '
+            'the current encoder settings.'
+        )
+
+    if output == 'GIF':
+        warnings.append(
+            'Color palette: GIF supports at most 256 colors per frame.'
+        )
+
+    return warnings
+
+
 def conversion_plan(entry,config,registry):
     fmt=config['format']; output=format_class(fmt)
     coder={'dib':'BMP','jfif':'JPEG','heif':'HEIC'}.get(fmt,fmt.upper())
@@ -305,6 +396,17 @@ def conversion_plan(entry,config,registry):
     with inspection_path(entry['source']) as (opened,fd):
         with os.fdopen(os.dup(fd),'rb') as stream: signature=stream.read(26)
         psd=signature.startswith(b'8BPS')
+        source_alpha = False
+        source_depth = None
+
+        if (
+            signature.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
+            and signature[12:16] == b'IHDR'
+            and len(signature) >= 26
+        ):
+            source_depth = signature[24]
+            source_alpha = signature[25] in (4, 6)
+
         if psd:
             from kim_psd_source import WARNING
             import struct
@@ -313,6 +415,7 @@ def conversion_plan(entry,config,registry):
             height,width,depth,mode=struct.unpack('>IIHH',signature[14:26])
             if version!=1 or not width or not height or max(width,height)>30000 or width*height>100000000 or depth not in (8,16) or mode not in (1,3,4):
                 raise ValueError('Unsupported PSD version, canvas, depth or color mode.')
+            source_depth = depth
             input_format='PSD'; frames=1; entry['warnings'].append(WARNING)
         else:
             with os.fdopen(os.dup(fd),'rb') as stream:
@@ -336,7 +439,29 @@ def conversion_plan(entry,config,registry):
                     raw=stream.read(8)
                     length,tag=struct.unpack('>I4s',raw) if png else (lambda t,n:(n,t))(*struct.unpack('<4sI',raw))
                     if stream.tell()+length+(4 if png else length%2)>size: raise ValueError('Truncated image container.')
-                    if tag in (b'acTL',b'ANIM',b'ANMF'): animated=True
+                    if tag in (b'acTL',b'ANIM',b'ANMF'):
+                        animated=True
+
+                    if png and tag == b'tRNS':
+                        source_alpha = True
+
+                    if not png and tag == b'ALPH':
+                        source_alpha = True
+
+                    if not png and tag == b'VP8X' and length:
+                        flags = stream.read(1)
+                        source_alpha |= bool(
+                            flags and flags[0] & 0x10
+                        )
+                        stream.seek(-1, 1)
+
+                    if not png and tag == b'VP8L' and length >= 5:
+                        header = stream.read(5)
+                        source_alpha |= bool(
+                            header[0] == 0x2f and header[4] & 0x10
+                        )
+                        stream.seek(-5, 1)
+
                     stream.seek(length+(4 if png else length%2),1)
         _,ext=split_name(entry['source'])
         entry['input_format']=input_format
@@ -356,17 +481,26 @@ def conversion_plan(entry,config,registry):
         entry['warnings'].append('Photoshop pixels are normalized to sRGB. Original CMYK/grayscale profiles are not copied onto transformed pixels; existing output profile checks apply.')
     elif has_icc:
         entry['warnings'].append('Embedded ICC profile: byte-for-byte retention is required for profile-bearing output; incompatible encoders stop before publication.')
-    if output in ('BMP','GIF','PDF'):
-        entry['warnings'].append('This output has limited descriptive metadata support. Existing format-specific retention rules apply.')
     entry['input_format']=input_format
     entry['psd']=psd
-    if output in ('JPEG','AVIF','HEIC') or (output=='JP2' and config.get('jp2_mode')!='lossless'):
-        entry['warnings'].append('Lossy output encoding; output size is known only after encoding.')
-    if output=='JPEG': entry['warnings'].append('JPEG cannot retain transparency. Photoshop composites are flattened onto white by the existing source adapter.')
-    elif output in ('BMP','PDF'): entry['warnings'].append('Transparency support depends on the requested encoder/settings. Photoshop composites are flattened onto white for this output.')
-    if output=='GIF': entry['warnings'].append('Palette encoding reduces colors and transparency precision.')
-    entry['warnings'].append('ICC compatibility and metadata retention are verified at encoding; unsupported preservation stops the file. Some formats cannot retain all source metadata.')
-    if frames>1 or animated: entry['warnings'].append('Playback / page preservation must pass existing output verification before publication.')
+
+    entry['warnings'].extend(
+        conversion_impact_warnings(
+            output, config, data, source_alpha, source_depth
+        )
+    )
+
+    if psd and output in ('JPEG', 'BMP', 'PDF'):
+        entry['warnings'].append(
+            'Photoshop composite: the existing source adapter '
+            'uses an opaque white background for this output.'
+        )
+
+    if frames>1 or animated:
+        entry['warnings'].append(
+            'Animation/pages: preservation must pass existing '
+            'output verification before publication.'
+        )
 
 
 def build_plan(operation,policy,files,config=None,seeds=None,progress=lambda *_:None,cancelled=lambda:False):
@@ -658,7 +792,7 @@ def format_plan_row(entry, mode):
 def qt_classes():
     from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
     from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
-                                  QDialog,QApplication,QComboBox,QPushButton)
+                                  QDialog,QApplication,QComboBox,QPushButton,QPlainTextEdit)
 
     from PySide6.QtGui import QPixmap, QIcon
 
@@ -672,11 +806,65 @@ def qt_classes():
             layout.addWidget(self.table)
             self.table.setIconSize(QSize(84, 64))
 
+            self.impact_details = QPlainTextEdit(self)
+            self.impact_details.setReadOnly(True)
+            self.impact_details.setMaximumHeight(136)
+            self.impact_details.setPlaceholderText(
+                'Select an image to review conversion impacts.'
+            )
+            layout.addWidget(self.impact_details)
+            self.impact_details.hide()
+
+            self._conversion_rows = []
+            self.table.itemSelectionChanged.connect(
+                self.show_conversion_impacts
+            )
+
             self._thumbnail_jobs = []
             self._thumbnail_timer = QTimer(self)
             self._thumbnail_timer.setInterval(0)
             self._thumbnail_timer.timeout.connect(
                 self.load_next_thumbnail
+            )
+
+
+        def show_conversion_impacts(self):
+            if not self._conversion_rows:
+                return
+
+            row = self.table.currentRow()
+            if not 0 <= row < len(self._conversion_rows):
+                return
+
+            entry = self._conversion_rows[row]
+            notes = list(entry.get('warnings', []))
+
+            if entry['status'] == 'skip':
+                notes.insert(
+                    0,
+                    'Skipped: ' + entry.get(
+                        'skip_reason', 'Conversion not applicable'
+                    )
+                )
+            elif entry['status'] == 'error':
+                notes.insert(
+                    0,
+                    'Blocked: ' + entry.get(
+                        'error', 'Source inspection failed'
+                    )
+                )
+
+            if not notes:
+                notes = [
+                    'No additional conversion impacts identified '
+                    'from inspected source information. '
+                    'Final output verification still applies.'
+                ]
+
+            self.impact_details.setPlainText(
+                Path(entry['source']).name
+                + '\n'
+                + '\n'.join(notes)
             )
 
 
@@ -723,6 +911,11 @@ def qt_classes():
 
             operation = plan['operation']
             entries = plan['entries']
+
+            self._conversion_rows = []
+            self.impact_details.setVisible(
+                operation == 'convert'
+            )
 
             ready = sum(
                 e['status'] == 'change' for e in entries
@@ -985,9 +1178,16 @@ def qt_classes():
                             status == 'skip',
                         ))
 
+                    if operation == 'convert':
+                        self._conversion_rows.append(entry)
+
                     row += 1
 
             fit_review_table(self.table)
+
+            if operation == 'convert' and self._conversion_rows:
+                self.table.selectRow(0)
+                self.show_conversion_impacts()
 
             if self._thumbnail_jobs:
                 self._thumbnail_timer.start()
@@ -1016,7 +1216,7 @@ def qt_classes():
             self.setWindowTitle(
                 'KIM6 - Remove Metadata'
                 if spec['operation'] == 'strip'
-                else 'Preview changes'
+                else 'Review changes'
             )
 
             layout = QVBoxLayout(self)
@@ -1182,7 +1382,10 @@ def qt_classes():
                     )
 
                     extra = (
-                        178 if self.mode_select else 125
+                        178 if self.mode_select else (
+                            260 if self.spec['operation'] == 'convert'
+                            else 125
+                        )
                     )
 
                     self.resize(

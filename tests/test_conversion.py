@@ -26,6 +26,141 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.decode(), fmt + " 3x2")
 
+    def test_conversion_impacts_are_source_specific(self):
+        from kim_preview import conversion_impact_warnings
+
+        plain = conversion_impact_warnings(
+            'JPEG', {'format': 'jpeg'}, {}, False, 8
+        )
+        self.assertFalse(
+            any(note.startswith('Transparency:') for note in plain)
+        )
+        self.assertTrue(
+            any(note.startswith('Image quality:') for note in plain)
+        )
+
+        alpha = conversion_impact_warnings(
+            'JPEG', {'format': 'jpeg'},
+            {
+                'ExifIFD:DateTimeOriginal': '2026:01:01 12:00:00',
+                'XMP-dc:Description': 'Example',
+            },
+            True, 16,
+        )
+        self.assertTrue(
+            any(note.startswith('Transparency:') for note in alpha)
+        )
+        self.assertTrue(
+            any(note.startswith('Color precision:') for note in alpha)
+        )
+
+        gif = conversion_impact_warnings(
+            'GIF', {'format': 'gif'},
+            {'IPTC:Caption-Abstract': 'Caption'},
+            True, 8,
+        )
+        self.assertTrue(
+            any('IPTC-IIM' in note for note in gif)
+        )
+        self.assertTrue(
+            any(note.startswith('Color palette:') for note in gif)
+        )
+
+    def test_png_alpha_is_detected_in_conversion_plan(self):
+        from unittest.mock import patch
+        from kim_preview import base_entry, conversion_plan
+
+        source = self.workspace.path('input/transparent.png')
+
+        subprocess.run(
+            [
+                shutil.which('magick'),
+                '-size', '4x4',
+                'xc:none',
+                'PNG32:' + str(source),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=20,
+        )
+
+        before = self.workspace.observe(source)
+        entry = base_entry(str(source))
+
+        with patch('kim_preview.read_metadata', return_value={}):
+            conversion_plan(
+                entry,
+                {'format': 'jpeg'},
+                ' JPEG* rw+ JPEG encoder',
+            )
+
+        self.assertEqual('change', entry['status'])
+        self.assertTrue(
+            any(
+                note.startswith('Transparency:')
+                for note in entry['warnings']
+            ),
+            entry['warnings'],
+        )
+        self.assertEqual(before, self.workspace.observe(source))
+
+    def test_conversion_review_shows_selected_image_impacts(self):
+        from PySide6.QtWidgets import QApplication
+        from kim_preview import qt_classes
+
+        app = QApplication.instance() or QApplication([])
+        view = qt_classes()[0]()
+
+        try:
+            plan = {
+                'operation': 'convert',
+                'policy': 'create',
+                'total': 2,
+                'config': {'format': 'jpeg'},
+                'entries': [
+                    {
+                        'source': str(self.source),
+                        'status': 'change',
+                        'publication': 'create',
+                        'warnings': [
+                            'Transparency: JPEG cannot preserve alpha.'
+                        ],
+                        'rows': [[
+                            'source.ppm', 'output.jpg', '/tmp',
+                            'PPM to JPEG', 'Ready'
+                        ]],
+                    },
+                    {
+                        'source': str(self.source),
+                        'status': 'skip',
+                        'publication': 'create',
+                        'warnings': [],
+                        'skip_reason': 'Already JPEG',
+                        'rows': [[
+                            'source.ppm', '(no output)', '',
+                            'Already JPEG', 'Skipped'
+                        ]],
+                    },
+                ],
+            }
+
+            self.assertTrue(view.show_plan(plan))
+            self.assertIn(
+                'Transparency:',
+                view.impact_details.toPlainText(),
+            )
+
+            view.table.selectRow(1)
+
+            self.assertIn(
+                'Skipped: Already JPEG',
+                view.impact_details.toPlainText(),
+            )
+        finally:
+            view._thumbnail_timer.stop()
+            view.close()
+            view.deleteLater()
+
     def test_real_successful_create_is_destination_locally_staged(self):
         before = self.workspace.observe(self.source)
         self.workspace.use_real_conversion()
