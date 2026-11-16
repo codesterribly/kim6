@@ -50,6 +50,45 @@ class AcceptanceTests(unittest.TestCase):
         os.utime(self.source,ns=(1700000000000000001,1700000000123456789))
         self.original = (self.source.read_bytes(),self.source.stat().st_mtime_ns)
 
+    def test_resize_resampling_options_are_serialized(self):
+        dialog = ActionDialog('resize', [])
+        try:
+            self.assertEqual(
+                ['1600x1600>', 'auto'],
+                dialog.values,
+            )
+
+            names = {
+                'Lanczos': 'Lanczos',
+                'Cubic': 'Bicubic',
+                'Point': 'Nearest-neighbor',
+            }
+
+            for value, label in names.items():
+                with self.subTest(filter=value):
+                    index = dialog.fields[
+                        'resize_filter'
+                    ].findData(value)
+
+                    self.assertGreaterEqual(index, 0)
+                    dialog.fields[
+                        'resize_filter'
+                    ].setCurrentIndex(index)
+
+                    dialog.refresh()
+
+                    self.assertEqual(
+                        ['1600x1600>', value],
+                        dialog.values,
+                    )
+                    self.assertIn(
+                        label,
+                        dialog.preview.toPlainText(),
+                    )
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+
     def test_calendar_selection_enables_apply_without_touching_time(self):
         d=PhotoDateDialog('set',[self.source,self.source]); d.show()
         wait(self.app,lambda:d.worker is None)

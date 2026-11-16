@@ -1008,6 +1008,14 @@ def real_resize(executable, args):
         offset = 2
     if args[offset:offset + 1] == ["-auto-orient"]:
         offset += 1
+    if args[offset:offset + 1] == ["-filter"]:
+        if (
+            len(args) <= offset + 1
+            or args[offset + 1]
+            not in ("Lanczos", "Cubic", "Point")
+        ):
+            raise ValueError("Unsupported test resize filter")
+        offset += 2
     if (len(args) != offset + 7 or args[0] != "--" or args[offset] != "-resize"
             or args[offset + 2:offset + 6] != ["-format", "%w %h\\n", "-write", "info:"]):
         raise ValueError("real resize requires explicit source, geometry and output")

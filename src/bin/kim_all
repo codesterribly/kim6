@@ -140,6 +140,12 @@ preview_run() {
   case "$status" in
     0) return 0 ;;
     125|130) return "$status" ;;
+    131)
+      if [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
+         [ "${3:-}" = resize-output-review ]; then
+        return 131
+      fi
+      ;;
   esac
   detail="$diagnostic"
   case "$detail" in
@@ -4879,6 +4885,7 @@ Would you like to choose another rename method?"; then
 # ---------------------------------------------------------------------------
 action_resize() {
   local SCALE='' outdir='' custom=false percent='' custom_percent=false
+  local resize_filter=auto
   local -a raw_files=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
@@ -4919,28 +4926,35 @@ action_resize() {
       [ -z "$percent" ] && [ "$custom_percent" != true ] || die "resize: choose only one size option"
       action_options_dialog resize "${raw_files[@]}" || return 1
       local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
+      [ "${#choices[@]}" -eq 2 ] || {
+        progress_error 'Resize options are incomplete.'
+        return 1
+      }
       SCALE="${choices[0]}"
+      resize_filter="${choices[1]}"
     fi
     if [ "$custom" != true ] && [ -n "$SCALE" ] && [ -z "$percent" ] && [ "$custom_percent" != true ]; then
       action_options_dialog resize --preset "$SCALE" "${raw_files[@]}" || return 1
       local -a reviewed_choices=()
       mapfile -d '' -t reviewed_choices < "$KIMDIR/options"
-      [ "${#reviewed_choices[@]}" -eq 1 ] || {
-        progress_error 'Resize review did not return exactly one geometry.'
+      [ "${#reviewed_choices[@]}" -eq 2 ] || {
+        progress_error 'Resize options are incomplete.'
         return 1
       }
       SCALE="${reviewed_choices[0]}"
+      resize_filter="${reviewed_choices[1]}"
     fi
     if [ "$custom_percent" = true ]; then
       [ -z "$SCALE" ] && [ -z "$percent" ] || die "resize: choose only one size option"
       action_options_dialog resize --preset-percent 50 "${raw_files[@]}" || return 1
       local -a percent_choices=()
       mapfile -d '' -t percent_choices < "$KIMDIR/options"
-      [ "${#percent_choices[@]}" -eq 1 ] || {
-        progress_error 'Resize review did not return exactly one geometry.'
+      [ "${#percent_choices[@]}" -eq 2 ] || {
+        progress_error 'Resize options are incomplete.'
         return 1
       }
       SCALE="${percent_choices[0]}"
+      resize_filter="${percent_choices[1]}"
     fi
     if [ -n "$percent" ]; then
       [ -z "$SCALE" ] || die "resize: use either --size or --percent"
@@ -4951,11 +4965,12 @@ action_resize() {
       action_options_dialog resize --preset-percent "$percent" "${raw_files[@]}" || return 1
       local -a approved_percent=()
       mapfile -d '' -t approved_percent < "$KIMDIR/options"
-      [ "${#approved_percent[@]}" -eq 1 ] || {
-        progress_error 'Resize review did not return exactly one geometry.'
+      [ "${#approved_percent[@]}" -eq 2 ] || {
+        progress_error 'Resize options are incomplete.'
         return 1
       }
       SCALE="${approved_percent[0]}"
+      resize_filter="${approved_percent[1]}"
     fi
   else
     SCALE="${1:-}"
@@ -4963,6 +4978,14 @@ action_resize() {
     shift 2 || true
     raw_files+=("$@")
   fi
+
+  case "$resize_filter" in
+    auto|Lanczos|Cubic|Point) ;;
+    *)
+      progress_error 'Unsupported Resize resampling algorithm.'
+      return 1
+      ;;
+  esac
 
   if [ -z "$SCALE" ]; then
     kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: missing scale.')"
@@ -5062,7 +5085,7 @@ action_resize() {
     if preview_run python3 \
       "$DISPATCHER_DIR/kim_action_dialog.py" \
       resize-output-review "$resize_plan" "$resize_request" \
-      "$outdir" "$mode" "$SCALE"; then
+      "$outdir" "$mode" "$SCALE" "$resize_filter"; then
       break
     else
       resize_review_result=$?
@@ -5071,18 +5094,28 @@ action_resize() {
     if [ "$resize_review_result" -eq 131 ]; then
       # Back: reopen the parameter editor using the geometry
       # already approved in stage one. Keep the output directory.
-      action_options_dialog resize         --resume-geometry "$SCALE" "${files[@]}" || return 1
+      action_options_dialog resize         --resume-geometry "$SCALE"         --resume-filter "$resize_filter"         "${files[@]}" || return 1
 
       local -a resize_revised=()
       mapfile -d '' -t resize_revised < "$KIMDIR/options"
 
-      [ "${#resize_revised[@]}" -eq 1 ] &&
+      [ "${#resize_revised[@]}" -eq 2 ] &&
       [ -n "${resize_revised[0]}" ] || {
-        progress_error           'Resize editor returned invalid geometry.'
+        progress_error 'Resize options are incomplete.'
         return 1
       }
 
       SCALE="${resize_revised[0]}"
+      resize_filter="${resize_revised[1]}"
+
+      case "$resize_filter" in
+        auto|Lanczos|Cubic|Point) ;;
+        *)
+          progress_error 'Unsupported Resize resampling algorithm.'
+          return 1
+          ;;
+      esac
+
       continue
     fi
 
@@ -5271,6 +5304,11 @@ action_resize() {
     # or second resize is needed. Validate the encoded file against this stream.
     local -a resize_options=()
     [ -z "$percent" ] || resize_options+=(-auto-orient)
+
+    if [ "$resize_filter" != auto ]; then
+      resize_options+=(-filter "$resize_filter")
+    fi
+
     expected_dimensions="$(magick -- "$i" "${resize_options[@]}" -resize "$SCALE" -format '%w %h\n' -write info: "$OUTTMP" 2>/dev/null)" || rc=$?
     produced_frames=0
     while IFS= read -r dimensions; do

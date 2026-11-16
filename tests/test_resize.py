@@ -1,5 +1,6 @@
 """K20 resizing at the isolated dispatcher boundary, with real geometry/codec tests."""
 import base64
+import json
 import os
 from pathlib import Path
 import shutil
@@ -14,11 +15,143 @@ class ResizeTests(unittest.TestCase):
     def setUp(self):
         self.workspace = Workspace()
         self.addCleanup(self.workspace.close)
+
+        # These dispatcher tests run in an isolated offscreen workspace.
+        # Exercise the real Resize review, including its enabled-state
+        # validation, by supplying the missing test-user Apply click.
+        # Never alter the production dialog or its approval behavior.
+        helper = self.workspace.control / "kim_action_dialog.py"
+        helper_source = helper.read_text(encoding="utf-8")
+
+        approval_anchor = (
+            "    apply_button.clicked.connect(dialog.accept)"
+            + chr(10)
+        )
+
+        if helper_source.count(approval_anchor) != 1:
+            raise RuntimeError(
+                "Resize review approval anchor changed"
+            )
+
+        approval_hook = """    # Isolated test workspace only.
+    # Accept only a review whose actual Apply button is enabled.
+    QTimer.singleShot(
+        0,
+        lambda: (
+            apply_button.click()
+            if apply_button.isEnabled()
+            else dialog.reject()
+        ),
+    )
+"""
+
+        helper_source = helper_source.replace(
+            approval_anchor,
+            approval_anchor + approval_hook,
+            1,
+        )
+
+        # Percentage presets open a first-stage options dialog.
+        # Approve it only after asynchronous source inspection and
+        # geometry planning have completed successfully.
+        percent_anchor = (
+            "    if dialog.exec()!=QDialog.Accepted: return 130 if kind in "
+            "('convert','copyright','strip','rename','rotate') else 1"
+        )
+
+        if helper_source.count(percent_anchor) != 1:
+            raise RuntimeError(
+                "Resize options approval anchor changed"
+            )
+
+        percent_hook = """
+    if kind == 'resize' and resize_percent is not None:
+        attempts = [0]
+
+        def approve_percent_options():
+            attempts[0] += 1
+
+            if attempts[0] > 160:
+                dialog.reject()
+                return
+
+            if (
+                dialog.worker is not None
+                or dialog.timer.isActive()
+            ):
+                QTimer.singleShot(
+                    25, approve_percent_options
+                )
+                return
+
+            if dialog.apply.isEnabled():
+                requested_filter = __import__("os").environ.get(
+                    "KIM_TEST_RESIZE_FILTER"
+                )
+
+                if requested_filter:
+                    selector = dialog.fields["resize_filter"]
+                    index = selector.findData(requested_filter)
+
+                    if index < 0:
+                        dialog.reject()
+                        return
+
+                    selector.setCurrentIndex(index)
+                    dialog.refresh()
+
+                    if not dialog.apply.isEnabled():
+                        dialog.reject()
+                        return
+
+                dialog.apply.click()
+            else:
+                dialog.reject()
+
+        QTimer.singleShot(0, approve_percent_options)
+
+"""
+
+        helper_source = helper_source.replace(
+            percent_anchor,
+            percent_hook + percent_anchor,
+            1,
+        )
+
+        compile(
+            helper_source,
+            str(helper),
+            "exec",
+        )
+
+        helper.write_text(
+            helper_source,
+            encoding="utf-8",
+        )
+
         self.source = self.workspace.png('input/photo 雪.png')
         self.workspace.env['KIM_POLICY'] = 'create'
 
     def dispatch(self, geometry='2x2', destination='', sources=None):
         return self.workspace.dispatch('resize', geometry, destination, *(sources or (self.source,)))
+
+    def configure_percent_headers(self, source):
+        """Provide real fixture dimensions to the isolated ExifTool adapter."""
+        fmt, width, height = self.workspace.image_info(source)
+
+        self.workspace.respond_to(
+            "exiftool",
+            "-ImageWidth",
+            {
+                "stdout": json.dumps([{
+                    "SourceFile": str(source),
+                    "File:ImageWidth": width,
+                    "File:ImageHeight": height,
+                    "File:FileType": fmt,
+                }]),
+                "status": 0,
+            },
+        )
 
     def assert_clean(self):
         self.assertFalse(list(self.workspace.root.rglob('.kim6-stage.*')))
@@ -125,10 +258,107 @@ class ResizeTests(unittest.TestCase):
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
+    def test_selected_resampling_filters_reach_real_encoder(self):
+        source = self.workspace.png("input/resampling.png")
+
+        subprocess.run(
+            [
+                shutil.which("magick"),
+                "-size", "8x4",
+                "gradient:red-blue",
+                str(source),
+            ],
+            check=True,
+        )
+
+        self.workspace.use_real_resize()
+        self.configure_percent_headers(source)
+
+        before = self.workspace.observe(source)
+        output = source.with_name("resampling_resized.png")
+
+        for filter_name in ("Lanczos", "Cubic", "Point"):
+            with self.subTest(filter=filter_name):
+                self.workspace.env[
+                    "KIM_TEST_RESIZE_FILTER"
+                ] = filter_name
+
+                result = self.workspace.dispatch(
+                    "resize",
+                    "--percent",
+                    "50",
+                    "--",
+                    str(source),
+                )
+
+                self.assertEqual(
+                    0, result.returncode, result.stderr
+                )
+
+                producers = [
+                    call for call in result.calls
+                    if (
+                        call["tool"] == "magick"
+                        and call["argv"][:1] == ["--"]
+                    )
+                ]
+
+                self.assertEqual(1, len(producers))
+                arguments = producers[0]["argv"]
+
+                self.assertIn("-filter", arguments)
+                filter_index = arguments.index("-filter")
+
+                self.assertEqual(
+                    filter_name,
+                    arguments[filter_index + 1],
+                )
+
+                self.assertEqual(
+                    "PNG 4 2",
+                    self.decoded(output),
+                )
+
+                self.assertEqual(
+                    self.workspace.observe(source),
+                    before,
+                )
+
+                output.unlink()
+                self.assert_clean()
+
+        self.workspace.env.pop(
+            "KIM_TEST_RESIZE_FILTER", None
+        )
+
+    def test_resize_back_status_reaches_dispatcher(self):
+        script = """
+python3() { return 131; }
+
+if preview_run python3 "$DISPATCHER_DIR/kim_action_dialog.py" resize-output-review; then
+    exit 90
+else
+    status=$?
+    [ "$status" -eq 131 ] || exit 91
+fi
+"""
+
+        result = self.workspace.shared_progress(script)
+
+        self.assertEqual(
+            0, result.returncode, result.stderr
+        )
+        self.assertNotIn(
+            "Preview Changes could not complete",
+            result.stderr,
+        )
+
+
     def test_percent_option_resizes_without_changing_aspect_ratio(self):
         source = self.workspace.png('input/percent.png')
         subprocess.run([shutil.which('magick'), '-size', '8x4', 'xc:red', str(source)], check=True)
         self.workspace.use_real_resize()
+        self.configure_percent_headers(source)
         result = self.workspace.dispatch('resize', '--percent', '50', '--', str(source))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(self.decoded(source.with_name('percent_resized.png')), 'PNG 4 2')
@@ -144,6 +374,7 @@ class ResizeTests(unittest.TestCase):
         source = self.workspace.png('input/enlarge.png')
         subprocess.run([shutil.which('magick'), '-size', '8x4', 'xc:blue', str(source)], check=True)
         self.workspace.use_real_resize()
+        self.configure_percent_headers(source)
         result = self.workspace.dispatch('resize', '--percent', '150', '--', str(source))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(self.decoded(source.with_name('enlarge_resized.png')), 'PNG 12 6')

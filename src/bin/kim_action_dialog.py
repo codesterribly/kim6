@@ -471,6 +471,12 @@ class ActionDialog(QDialog):
                 ('Exact Dimensions', 'exact'),
                 ('Percentage', 'percent'),
             ])
+            self.choice('resize_filter', 'Resampling algorithm', [
+                ('Automatic (ImageMagick default)', 'auto'),
+                ('Lanczos', 'Lanczos'),
+                ('Bicubic', 'Cubic'),
+                ('Nearest-neighbor', 'Point'),
+            ])
             sizes = [
                 300, 600, 800, 1024, 1280, 1400,
                 1600, 1920, 2048, 2560, 3440, 3840
@@ -1171,8 +1177,27 @@ class ActionDialog(QDialog):
                         'geometry': geometry
                     })
 
-                self.values = [geometry]
-                lines = ['Planned geometry: ' + geometry]
+                resize_filter = self.fields[
+                    'resize_filter'
+                ].currentData()
+
+                filter_labels = {
+                    'auto': 'Automatic (ImageMagick default)',
+                    'Lanczos': 'Lanczos',
+                    'Cubic': 'Bicubic',
+                    'Point': 'Nearest-neighbor',
+                }
+
+                if resize_filter not in filter_labels:
+                    raise ValueError(
+                        'Select a supported resampling algorithm.'
+                    )
+
+                self.values = [geometry, resize_filter]
+                lines = [
+                    'Planned geometry: ' + geometry,
+                    'Resampling: ' + filter_labels[resize_filter],
+                ]
 
                 if self.files and geometry not in self.geometry_cache:
                     self.worker = GeometryPlan(
@@ -2014,7 +2039,8 @@ class FlipReviewDialog(QDialog):
 
 
 def resize_output_review(
-    plan_path, request_path, destination, policy, geometry
+    plan_path, request_path, destination, policy, geometry,
+    resize_filter
 ):
     """Review exact Resize output paths before publication."""
     import os
@@ -2036,6 +2062,18 @@ def resize_output_review(
     if policy not in ("create", "overwrite"):
         raise ValueError("Invalid Resize output policy")
 
+    filter_labels = {
+        'auto': 'Automatic (ImageMagick default)',
+        'Lanczos': 'Lanczos',
+        'Cubic': 'Bicubic',
+        'Point': 'Nearest-neighbor',
+    }
+
+    if resize_filter not in filter_labels:
+        raise ValueError(
+            "Invalid approved Resize resampling algorithm"
+        )
+
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
     dialog.setWindowTitle("KIM6 - Review resize outputs")
@@ -2046,7 +2084,8 @@ def resize_output_review(
 
     layout.addWidget(QLabel(
         f"{len(records)} selected image(s) | "
-        f"Resize geometry: {geometry}"
+        f"Resize geometry: {geometry} | "
+        f"Resampling: {filter_labels[resize_filter]}"
     ))
 
     destination_choice = QComboBox()
@@ -3028,7 +3067,7 @@ def main():
             Path(sys.argv[2]), sys.argv[3]
         )
     if (
-        len(sys.argv) == 7
+        len(sys.argv) == 8
         and sys.argv[1] == "resize-output-review"
     ):
         return resize_output_review(
@@ -3037,6 +3076,7 @@ def main():
             sys.argv[4],
             sys.argv[5],
             sys.argv[6],
+            sys.argv[7],
         )
     if len(sys.argv) >= 4 and sys.argv[1] == 'flipreview':
         _, _, operation, *files = sys.argv
@@ -3101,6 +3141,21 @@ def main():
                 'Resume needs a geometry and selected images'
             )
         resize_resume = files[1]
+        files = files[2:]
+
+    resize_resume_filter = None
+
+    if (
+        kind == 'resize'
+        and resize_resume is not None
+        and files[:1] == ['--resume-filter']
+    ):
+        if len(files) < 3:
+            raise ValueError(
+                'Resume needs a filter and selected images'
+            )
+
+        resize_resume_filter = files[1]
         files = files[2:]
 
     if kind=='compress' and files[:1]==['--preset']:
@@ -3201,6 +3256,18 @@ def main():
                 'Unsupported saved Resize geometry'
             )
 
+        dialog.refresh()
+
+    if resize_resume_filter is not None:
+        index = dialog.fields['resize_filter'].findData(
+            resize_resume_filter
+        )
+        if index < 0:
+            raise ValueError(
+                'Invalid saved Resize resampling algorithm'
+            )
+
+        dialog.fields['resize_filter'].setCurrentIndex(index)
         dialog.refresh()
 
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
