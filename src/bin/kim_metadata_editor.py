@@ -35,7 +35,7 @@ from kim_process import inspection_context
 from kim_metadata_sources import (
     MetadataSourcePreferences, MetadataRepresentation, TargetIdentity,
     SOURCE_PRIORITY_DEFAULT, metadata_representations, index_metadata_representations,
-    ordered_representations, preferred_entry, preferred_representation, OverviewPreferences,
+    ordered_representations, preferred_entry, preferred_representation, OverviewPreferences, overview_source,
 )
 
 from kim_metadata_browser import (MetadataWorker as InspectionWorker, PreviewWorker, InspectionCache,
@@ -1505,9 +1505,25 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.target_notice = QLabel('Planning only. Your image files will not be changed.')
         self.target_notice.setWordWrap(True)
         self.fields_layout.addWidget(self.target_notice)
+        pin_row = QHBoxLayout()
+        pin_help = QLabel(
+            "Pins control which fields appear in Browser and Editor."
+        )
+        pin_help.setTextFormat(Qt.PlainText)
+        pin_help.setWordWrap(True)
+        pin_row.addWidget(pin_help, 1)
+        configure = QPushButton("Configure fields…")
+        configure.setIcon(QIcon.fromTheme("configure"))
+        configure.clicked.connect(self._configure_editor_pins)
+        pin_row.addWidget(configure)
+        self.fields_layout.addLayout(pin_row)
+        self._pin_signature = None
+        self._readonly_pins = {}
+        self._pin_order = []
         self._build_fields()
         self.advanced_layout.addStretch(1)
         self.fields_layout.addStretch(1)
+        self._refresh_editor_pins()
         self.form_scroll.setWidget(self.form_content)
         self.tabs = QTabWidget()
         self.tabs.addTab(self.form_scroll, 'Edit metadata')
@@ -1643,6 +1659,8 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                 self._inspect_entry(self.all_table.currentIndex())
                 self.all_table.viewport().update()
                 self._update_overview()
+                self._refresh_editor_pins()
+                self._pump_load()
                 self.statusBar().showMessage('Removed from Browser overview' if pinned else 'Added to Browser overview', 3500)
             except ValueError as exc:
                 QMessageBox.warning(self, 'Cannot change overview fields', str(exc))
@@ -1683,6 +1701,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._inspect_entry(self.all_table.currentIndex())
         self.all_table.viewport().update()
         self._update_overview()
+        self._refresh_editor_pins()
         self._pump_load()
 
     def changeEvent(self, event):
@@ -1941,6 +1960,20 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             missing = self._overview_missing(path)
             if missing:
                 return path, missing
+        if (path and self.tabs.currentIndex() == self.EDIT_TAB
+                and self._record(path) is not None
+                and self._full_record(path) is None):
+            extra = {
+                name for field in self.overview_preferences.fields
+                if self._pin_spec(field) is None
+                for name in field.selectors
+            }
+            missing = tuple(
+                name for name in self._overview_missing(path)
+                if name in extra
+            )
+            if missing:
+                return path, missing
         for candidate in self._load_paths:
             if self._record(candidate) is None:
                 return candidate, EDITOR_FIELDS
@@ -2048,6 +2081,215 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._pump_load()
         return True
 
+    @staticmethod
+    def _pin_spec(field):
+        if field.source or field.language or ":" in field.selector:
+            return None
+        return {
+            "title": "title",
+            "description": "caption",
+            "keywords": "keywords",
+            "creator": "creator",
+            "copyright": "copyright",
+            "usageterms": "usage",
+        }.get(field.selector.casefold())
+
+    def _configure_editor_pins(self):
+        if OverviewFieldsDialog(
+                self.overview_preferences, self
+        ).exec() == QDialog.Accepted:
+            self._reload_overview_preferences()
+
+    def _unpin_supported_field(self, key):
+        for field in self.overview_preferences.fields:
+            if self._pin_spec(field) == key:
+                self._unpin_editor_field(field)
+                return
+
+    def _unpin_editor_field(self, field):
+        self.overview_preferences.reload()
+        remaining = [
+            current for current in self.overview_preferences.fields
+            if current.key != field.key
+        ]
+        if len(remaining) == len(self.overview_preferences.fields):
+            return
+        self.overview_preferences.save(remaining)
+        self._refresh_editor_pins()
+        self._refresh_pending()
+        self._update_overview()
+        self._pump_load()
+
+    def _new_readonly_pin(self, field):
+        card = QFrame()
+        card.setFrameShape(QFrame.StyledPanel)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 4, 8, 5)
+
+        heading = QHBoxLayout()
+        title = QLabel(field.label)
+        title.setTextFormat(Qt.PlainText)
+        title.setWordWrap(True)
+        font = title.font()
+        font.setBold(True)
+        title.setFont(font)
+        heading.addWidget(title, 1)
+
+        pin = QToolButton()
+        pin.setIcon(QIcon.fromTheme(
+            "pin", QIcon.fromTheme("emblem-favorite")
+        ))
+        pin.setAutoRaise(True)
+        pin.setToolTip("Unpin from Browser and Editor")
+        pin.clicked.connect(
+            lambda _checked=False, selected=field:
+            self._unpin_editor_field(selected)
+        )
+        heading.addWidget(pin)
+        layout.addLayout(heading)
+
+        value = QPlainTextEdit()
+        value.setReadOnly(True)
+        value.setEnabled(False)
+        value.setMaximumHeight(80)
+        layout.addWidget(value)
+
+        provenance = QLabel()
+        provenance.setTextFormat(Qt.PlainText)
+        provenance.setWordWrap(True)
+        layout.addWidget(provenance)
+
+        note = QLabel("Editing not supported in this version.")
+        note.setEnabled(False)
+        layout.addWidget(note)
+
+        details = QPushButton("Details…")
+        details.setEnabled(False)
+        details.clicked.connect(
+            lambda _checked=False, selected=field:
+            self._readonly_pin_details(selected)
+        )
+        layout.addWidget(details, 0, Qt.AlignLeft)
+
+        self._readonly_pins[field.key] = {
+            "card": card, "value": value,
+            "source": provenance, "details": details,
+        }
+        return card
+
+    def _readonly_pin_details(self, field):
+        path = self._active_path()
+        if not path:
+            return
+        record = self._full_record(path)
+        if record is None:
+            record, _coverage = self._overview_snapshot(path)
+        if record and not record.error:
+            entries = field.entries(record)
+            if entries:
+                MetadataDetailsDialog(
+                    entries, self, field.label
+                ).exec()
+
+    def _refresh_editor_pins(self):
+        if not hasattr(self, "_pin_signature"):
+            return
+        fields = tuple(self.overview_preferences.fields)
+        if fields != self._pin_signature:
+            for control in self.field_controls.values():
+                card = control["card"]
+                self.fields_layout.removeWidget(card)
+                card.hide()
+
+            for widgets in self._readonly_pins.values():
+                card = widgets["card"]
+                self.fields_layout.removeWidget(card)
+                card.hide()
+                card.deleteLater()
+
+            self._readonly_pins.clear()
+            self._pin_order.clear()
+
+            for field in fields:
+                key = self._pin_spec(field)
+                card = (
+                    self.field_controls[key]["card"]
+                    if key else self._new_readonly_pin(field)
+                )
+                self.fields_layout.insertWidget(
+                    self.fields_layout.count() - 1, card
+                )
+                self._pin_order.append((field, card, key))
+
+            self._pin_signature = fields
+
+        path = self._active_path()
+        base = self._record(path) if path else None
+        record = self._full_record(path) if path else None
+        if record is None and path:
+            record, _coverage = self._overview_snapshot(path)
+
+        missing = (
+            set(self._overview_missing(path))
+            if path and self._full_record(path) is None
+            else set()
+        )
+
+        for field, card, key in self._pin_order:
+            card.setVisible(bool(base and not base.error))
+            if key:
+                continue
+
+            widgets = self._readonly_pins[field.key]
+            value = widgets["value"]
+            source = widgets["source"]
+            details = widgets["details"]
+
+            details.setEnabled(False)
+            source.clear()
+            value.setToolTip("")
+
+            if not base or not record:
+                value.setPlainText("Loading…")
+                continue
+            if record.error:
+                value.setPlainText("Metadata unavailable")
+                continue
+            if any(name in missing for name in field.selectors):
+                value.setPlainText("Loading pinned value…")
+                continue
+
+            entries = field.entries(record)
+            if not entries:
+                value.setPlainText("Not present")
+                continue
+
+            chosen = preferred_entry(
+                entries, record, self.preferences.priority,
+                language_alt=True, locale=QLocale().name()
+            )
+            if chosen is None and len(entries) == 1:
+                chosen = entries[0]
+
+            text = (
+                _entry_value(chosen)
+                if chosen is not None
+                else "Multiple representations. See Details."
+            )
+            text = str(text)
+            value.setPlainText(
+                text[:500] + "…" if len(text) > 500 else text
+            )
+            value.setToolTip(text[:1000])
+
+            sources = list(dict.fromkeys(
+                overview_source(entry, record)
+                + (f" ({entry.language})" if entry.language else "")
+                for entry in entries
+            ))
+            source.setText("Source: " + ", ".join(sources))
+            details.setEnabled(True)
+
     def _build_fields(self):
         for spec in FIELD_SPECS:
             card = QFrame()
@@ -2059,6 +2301,17 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             title = QLabel(spec.label)
             title.setStyleSheet("font-weight: bold;")
             heading.addWidget(title)
+            pin = QToolButton()
+            pin.setIcon(QIcon.fromTheme(
+                "pin", QIcon.fromTheme("emblem-favorite")
+            ))
+            pin.setAutoRaise(True)
+            pin.setToolTip("Unpin from Browser and Editor")
+            pin.clicked.connect(
+                lambda _checked=False, key=spec.key:
+                self._unpin_supported_field(key)
+            )
+            heading.addWidget(pin)
             state = QLabel()
             state.setWordWrap(True)
             heading.addStretch(1)
@@ -2112,6 +2365,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self.fields_layout.addWidget(card)
 
             control = {"spec": spec, "card": card, "state": state, "clear": clear,
+                       "pin": pin,
                        "details": details, "conflict": conflict, "conflict_layout": conflict_layout,
                        "edit": edit, "note": note, "byte_status": byte_status,
                        "advanced": advanced, "sync": sync, "create_target": create_target,
@@ -2425,8 +2679,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.loading_label.setText(record.error if record and record.error else 'Loading metadata…')
         self.loading_label.setVisible(record is None or bool(record.error))
         self.retry_metadata.setVisible(bool(record and record.error))
-        for control in self.field_controls.values():
-            control['card'].setVisible(record is not None and not record.error)
+        self._refresh_editor_pins()
         self.target_notice.setVisible(bool(record and not record.error))
         self._refresh_pending()
         self._update_all_fields()

@@ -343,7 +343,7 @@ print(json.dumps([doc]))
 
     def test_overview_configuration_search_reorder_remove_defaults_and_validation(self):
         from kim_metadata_browser import OverviewFieldsDialog
-        from kim_metadata_sources import OverviewPreferences, OVERVIEW_DEFAULTS, OverviewField
+        from kim_metadata_sources import OverviewPreferences, PINNED_DEFAULTS, OverviewField
         window = self.open_browser()
         dialog = OverviewFieldsDialog(window.overview_preferences, window)
         dialog.search.setText('white balance')
@@ -363,14 +363,14 @@ print(json.dumps([doc]))
         dialog.remove()
         self.assertFalse(any(field.selector == 'WhiteBalance' for field in dialog.fields))
         dialog.defaults()
-        self.assertEqual(list(OVERVIEW_DEFAULTS), dialog.fields)
+        self.assertEqual(list(PINNED_DEFAULTS), dialog.fields)
 
     def test_malformed_saved_overview_fields_fall_back_to_defaults(self):
-        from kim_metadata_sources import OverviewPreferences, OVERVIEW_DEFAULTS
+        from kim_metadata_sources import OverviewPreferences, PINNED_DEFAULTS
         window = self.open_browser()
         for value in ('[1]', '{"unexpected":true}', '[{"selector":1}]'):
             window.overview_preferences.settings.setValue(OverviewPreferences.KEY, value)
-            self.assertEqual(list(OVERVIEW_DEFAULTS), OverviewPreferences(window.overview_preferences.settings).fields)
+            self.assertEqual(list(PINNED_DEFAULTS), OverviewPreferences(window.overview_preferences.settings).fields)
 
     def test_pinned_technical_field_keeps_embedded_and_sidecar_roles_distinct(self):
         from kim_metadata_reader import MetadataRecord, MetadataEntry

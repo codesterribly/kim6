@@ -78,6 +78,8 @@ OVERVIEW_DEFAULTS = (
     OverviewField('GPSAltitude', 'GPS altitude', 'Location', ('GPSAltitude', 'GPSAltitudeRef')),
     OverviewField('Location', 'Location', 'Location', ('Location', 'City', 'State', 'Country', 'CountryName')),
 )
+PINNED_DEFAULTS = OVERVIEW_DEFAULTS[:6]
+
 OVERVIEW_CATALOG = OVERVIEW_DEFAULTS + tuple(OverviewField(tag, label) for tag, label in (
     ('Rating', 'Rating'), ('Software', 'Software'), ('WhiteBalance', 'White balance'),
     ('Flash', 'Flash'), ('ExposureProgram', 'Exposure program'), ('ColorSpace', 'Color space'),
@@ -104,7 +106,7 @@ class OverviewPreferences:
             self.validate(fields)
             self.fields = fields
         except (ValueError, TypeError, KeyError):
-            self.fields = list(OVERVIEW_DEFAULTS)
+            self.fields = list(PINNED_DEFAULTS)
         return self
 
     @staticmethod

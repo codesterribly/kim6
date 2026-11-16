@@ -33,7 +33,7 @@ except ModuleNotFoundError as exc:
 
 from kim_metadata_reader import MetadataEntry, MetadataRecord, read_metadata, value_text, associated_xmp_sidecars, _source_path, _select_fields
 from kim_metadata_sources import (MetadataSourcePreferences, preferred_entry, source_name,
-    OverviewPreferences, OverviewField, OVERVIEW_DEFAULTS, OVERVIEW_CATALOG)
+    OverviewPreferences, OverviewField, OVERVIEW_DEFAULTS, PINNED_DEFAULTS, OVERVIEW_CATALOG)
 from kim_metadata_compare import compare_records, compare_overview_records, _entry_display, is_difference
 from kim_photo_selection import read_thumbnail
 from kim_preview import identity
@@ -433,31 +433,57 @@ class ComparisonPreview(PreviewLabel):
             super().mouseMoveEvent(event)
 
 
+class _DraggablePins(QListWidget):
+    reordered = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDefaultDropAction(Qt.MoveAction)
+        self.setDragDropMode(QAbstractItemView.InternalMove)
+
+    def dropEvent(self, event):
+        super().dropEvent(event)
+        if event.isAccepted():
+            self.reordered.emit()
+
+
 class OverviewFieldsDialog(QDialog):
     """Edit the shared, ordered selection without extracting metadata."""
     def __init__(self, preferences, parent=None):
         super().__init__(parent)
         self.preferences = preferences
         self.fields = list(preferences.fields)
-        self.setWindowTitle('Overview fields')
+        self.setWindowTitle('Configure pinned fields')
         self.resize(680, 540)
         layout = QVBoxLayout(self)
         self.search = QLineEdit()
         self.search.setPlaceholderText('Search fields or enter a technical tag name')
         layout.addWidget(self.search)
+        explanation = QLabel(
+            "Pin a field to show it in the Browser and Editor. "
+            "Drag to reorder, or use Move up and Move down. "
+            "Pinning does not change image metadata."
+        )
+        explanation.setTextFormat(Qt.PlainText)
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
         self.catalog = QListWidget()
         layout.addWidget(self.catalog)
         add = QPushButton('Add field')
         add.setIcon(QIcon.fromTheme('list-add'))
         layout.addWidget(add)
-        self.selected = QListWidget()
-        layout.addWidget(QLabel('Shown in overview, in this order:'))
+        self.selected = _DraggablePins()
+        self.selected.reordered.connect(self._sync_drag_order)
+        layout.addWidget(QLabel('Pinned in Browser and Editor, in this order:'))
         layout.addWidget(self.selected)
         actions = QHBoxLayout()
         for text, icon, action in (
                 ('Move up', 'go-up', lambda: self.move(-1)),
                 ('Move down', 'go-down', lambda: self.move(1)),
-                ('Remove from overview', 'list-remove', self.remove),
+                ('Unpin field', 'list-remove', self.remove),
                 ('Restore defaults', 'edit-undo', self.defaults)):
             button = QPushButton(text)
             button.setIcon(QIcon.fromTheme(icon))
@@ -488,11 +514,28 @@ class OverviewFieldsDialog(QDialog):
         row = self.selected.currentRow()
         self.selected.clear()
         for field in self.fields:
-            item = QListWidgetItem(field.label)
-            item.setToolTip(field.selector + (f' · {field.source}' if field.source else ''))
+            item = QListWidgetItem("⋮⋮  " + field.label)
+            item.setData(Qt.UserRole, field)
+            item.setToolTip(
+                "Drag to reorder. "
+                + field.selector
+                + (f" · {field.source}" if field.source else "")
+                + (f" · {field.language}" if field.language else "")
+            )
             self.selected.addItem(item)
         self.selected.setCurrentRow(min(max(row, 0), len(self.fields) - 1))
         self.refresh_catalog()
+
+    def _sync_drag_order(self):
+        ordered = [
+            self.selected.item(i).data(Qt.UserRole)
+            for i in range(self.selected.count())
+        ]
+        if len(ordered) == len(self.fields) and {
+                field.key for field in ordered
+        } == {field.key for field in self.fields}:
+            self.fields = ordered
+            self.refresh_catalog()
 
     def add(self):
         item = self.catalog.currentItem()
@@ -522,11 +565,12 @@ class OverviewFieldsDialog(QDialog):
             self.selected.setCurrentRow(row + delta)
 
     def defaults(self):
-        self.fields = list(OVERVIEW_DEFAULTS)
+        self.fields = list(PINNED_DEFAULTS)
         self.refresh()
 
     def save(self):
         try:
+            self._sync_drag_order()
             self.preferences.save(self.fields)
             self.accept()
         except ValueError as exc:
