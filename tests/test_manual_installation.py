@@ -151,7 +151,7 @@ class ManualInstallationTests(unittest.TestCase):
             path.name.removesuffix(".in")
             for path in sorted((ROOT / "src").glob("kim_*.desktop.in"))
         )
-        self.assertEqual(11, len(menu_names))
+        self.assertEqual(12, len(menu_names))
 
         for name in menu_names:
             with self.subTest(menu=name):

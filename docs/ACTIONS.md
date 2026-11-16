@@ -1,7 +1,7 @@
 # KIM6 Dolphin Menu Actions
 
 KIM6 integrates image and video operations into KDE Dolphin.
-Its 12 service-menu definitions expose **89 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
+Its 12 service-menu definitions expose **91 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
 
 The action inventory below is derived directly from the current `.desktop.in` files in `src/`. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.
 
@@ -71,6 +71,10 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Set creator and copyright… | `kim_all copyright --interactive -- %F` |
 | Add watermark / overlay… | `kim_all overlay -- %F` |
 | Strip metadata | `kim_all stripmeta --interactive -- %F` |
+| View metadata… | `kim_all metadata-view -- %F` |
+| Edit metadata… | `kim_all metadata-edit -- %F` |
+
+View metadata opens the existing read-only Metadata Browser with all selected images in one window. Select exactly two images inside Browser to use its Compare view. Edit metadata opens the existing Metadata Editor with the complete selection; it retains drafts while navigating and only plans changes. Neither action writes image metadata or XMP sidecars.
 
 ### KIM6 - Recipes
 

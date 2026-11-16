@@ -829,6 +829,12 @@ msgstr ""
 msgid "Could not open the KIM6 license."
 msgstr ""
 
+#: src/bin/kim_all:9316
+msgid ""
+"Could not open the metadata application. Check the diagnostic below and "
+"reinstall KIM6 if an installed component is missing."
+msgstr ""
+
 #: /tmp/tmp.TpAcKFbuVd/menu_strings.py:31
 msgid "Create a PDF album…"
 msgstr ""
@@ -995,6 +1001,14 @@ msgstr ""
 
 #: src/bin/kim_all:7739
 msgid "EXIF timestamp preview"
+msgstr ""
+
+#: src/bin/kim_all:9291
+msgid "Edit metadata"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:39
+msgid "Edit metadata…"
 msgstr ""
 
 #: src/bin/kim_all:5369
@@ -1995,6 +2009,12 @@ msgstr ""
 msgid "Publishing completed output…"
 msgstr ""
 
+#: src/bin/kim_all:9310
+msgid ""
+"Python 3 with PySide6 is required. Install PySide6 for the python3 on PATH, "
+"then try again."
+msgstr ""
+
 #: src/bin/kim_all:7835
 msgid "RAW metadata editing is unsupported"
 msgstr ""
@@ -2166,6 +2186,10 @@ msgstr ""
 
 #: src/bin/kim_extensions_dialog.py:32
 msgid "Select an ordinary file with no symlinks or hardlink aliases"
+msgstr ""
+
+#: src/bin/kim_all:9296
+msgid "Select at least one image."
 msgstr ""
 
 #: src/bin/kim_all:11225
@@ -2498,6 +2522,11 @@ msgstr ""
 msgid "The installed license or xdg-open is unavailable."
 msgstr ""
 
+#: src/bin/kim_all:9305
+msgid ""
+"The installed metadata component is missing or unreadable. Reinstall KIM6:"
+msgstr ""
+
 #: src/bin/kim_all:345
 msgid "The same file was selected more than once. Nothing was changed."
 msgstr ""
@@ -2656,6 +2685,14 @@ msgstr ""
 
 #: src/bin/kim_all:10829
 msgid "Video validation"
+msgstr ""
+
+#: src/bin/kim_all:9290
+msgid "View metadata"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:34
+msgid "View metadata…"
 msgstr ""
 
 #: src/bin/kim_all:2287

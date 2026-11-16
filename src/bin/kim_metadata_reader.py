@@ -52,6 +52,79 @@ class MetadataReadError(RuntimeError):
     """ExifTool was unavailable or returned an unusable response."""
 
 
+_LOGICAL_FIELDS = {
+    "title": ("Title", "ObjectName"),
+    "description": ("Description", "Caption-Abstract", "ImageDescription"),
+    "keywords": ("Subject", "Keywords"),
+    "creator": ("Creator", "By-line", "Artist"),
+    "copyright": ("Rights", "CopyrightNotice", "Copyright"),
+    "usageterms": ("UsageTerms", "RightsUsageTerms"),
+}
+
+
+@dataclass(frozen=True)
+class _FieldSelection:
+    logical_names: frozenset[str]
+    qualified: tuple[tuple[str, ...], ...]
+    arguments: tuple[str, ...]
+
+    def includes(self, entry: MetadataEntry) -> bool:
+        identity = entry.qualified_name.casefold()
+        tag = identity.rsplit(":", 1)[-1]
+        if entry.name.casefold() in self.logical_names or tag in self.logical_names:
+            return True
+        groups = tuple(group.casefold() for group in entry.groups)
+        for parts in self.qualified:
+            if tag != parts[-1]:
+                continue
+            if len(parts) == 2:
+                if parts[0] == "all" or parts[0] in groups:
+                    return True
+            elif identity == ":".join(parts):
+                return True
+        return False
+
+
+def _select_fields(fields: Iterable[str] | None) -> _FieldSelection | None:
+    if fields is None:
+        return None
+    if isinstance(fields, (str, bytes)):
+        raise ValueError("fields must be an iterable of field names, not a string")
+    try:
+        requested = iter(fields)
+    except TypeError as exc:
+        raise ValueError("fields must be an iterable of field names") from exc
+    logical = set()
+    qualified = []
+    arguments = []
+    for index, name in enumerate(requested):
+        if index >= 64:
+            raise ValueError("At most 64 metadata fields may be requested")
+        if (not isinstance(name, str) or len(name) > 256 or
+                not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*(?::[A-Za-z0-9][A-Za-z0-9_-]*){0,7}", name)
+                or name.rsplit(":", 1)[-1].casefold() == "all"):
+            raise ValueError("Invalid metadata field selection: use ASCII tag/group names, "
+                             "without options, wildcards or assignments (at most 256 characters)")
+        parts = tuple(name.split(":"))
+        if len(parts) == 1:
+            aliases = _LOGICAL_FIELDS.get(name.casefold(), (name,))
+            logical.update(alias.casefold() for alias in aliases)
+            tags = [f"all:{alias}" for alias in aliases]
+        else:
+            qualified.append(tuple(part.casefold() for part in parts))
+            tags = [name]
+        for tag in tags:
+            # Always use qualified tag arguments, so even names such as "r"
+            # cannot become ExifTool options. Only this code supplies wildcards.
+            arguments.extend((f"-{tag}", f"-{tag}-*"))
+    if not arguments:
+        raise ValueError("Request at least one metadata field; use None for complete extraction")
+    unique_arguments = {}
+    for argument in arguments:
+        unique_arguments.setdefault(argument.casefold(), argument)
+    return _FieldSelection(frozenset(logical), tuple(qualified), tuple(unique_arguments.values()))
+
+
 def _tag_parts(key: str) -> tuple[tuple[str, ...], str]:
     # -G0:1:2:4 adds available group families before the tag name.
     parts = key.split(":")
@@ -165,13 +238,27 @@ def _source_identity(info: os.stat_result) -> tuple[int, ...]:
 
 
 def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
-                  timeout: float = 120.0) -> dict[str, MetadataRecord]:
+                  timeout: float = 120.0,
+                  fields: Iterable[str] | None = None) -> dict[str, MetadataRecord]:
     """Read images and adjacent XMP sidecars through inherited no-atime stdin.
 
     No binary extraction option is used. ExifTool therefore reports binary
     blocks as bounded descriptions instead of returning embedded thumbnails,
     previews or full image data. No write option is ever passed.
+
+    fields=None preserves complete extraction. A nonempty iterable of at most
+    64 ASCII tag names selects their logical properties, including languages.
+    Title, Description, Keywords, Creator, Copyright and UsageTerms also include
+    their source-specific aliases. GROUP:Tag selects that exact tag in a group;
+    longer qualified names must match MetadataEntry.qualified_name exactly.
+    Qualified requests do not expand aliases or return other languages.
+    Absent or unsupported names return no entries, without a read error.
+    Diagnostics remain in error/warnings. Empty or malformed selections raise
+    ValueError before any input is opened. Tag selectors contain no wildcards.
+    Names are limited to 256 characters and eight colon-separated components.
+    Scoped entry order may follow ExifTool's requested-tag order.
     """
+    selection = _select_fields(fields)
     images = [_source_path(path) for path in paths]
     if not images:
         return {}
@@ -197,8 +284,9 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
     # Opening /proc/self/fd/N creates a new open file description and drops
     # O_NOATIME. ExifTool's supported '-' input duplicates inherited stdin
     # instead. Each input needs its own invocation; share the timeout budget.
+    tags = ("-all:all", "-XMP:*") if selection is None else (*selection.arguments, "-Error", "-Warning")
     command = [tool, "-j", "-a", "-u", "-G0:1:2:4", "-D", "-struct",
-               "-charset", "filename=UTF8", "-all:all", "-XMP:*", "--", "-"]
+               "-charset", "filename=UTF8", *tags, "--", "-"]
     deadline = time.monotonic() + timeout
     records: dict[str, MetadataRecord] = {}
     input_errors: dict[str, str] = {}
@@ -247,9 +335,9 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
             raise MetadataReadError(detail or "ExifTool returned no metadata.")
         record = parse_exiftool_json(completed.stdout, [filename], {"-": filename})[filename]
         detail = completed.stderr.decode("utf-8", errors="replace").strip()
-        if not record.entries and not record.error:
+        if not record.entries and not record.error and (selection is None or completed.returncode):
             record.error = detail or "ExifTool could not read this image."
-        if record.entries:
+        if record.entries or (selection is not None and not record.error):
             # Stdin supplies the same stat and embedded metadata, but omits
             # these two pathname tags. Preserve their normal group provenance.
             for name, value in (("FileName", Path(filename).name),
@@ -258,6 +346,8 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
                            for entry in record.entries):
                     record.entries.append(MetadataEntry(name, ("File", "System", "Other"), name,
                                                         value, filename, f"File:System:Other:{name}"))
+        if selection is not None:
+            record.entries = [entry for entry in record.entries if selection.includes(entry)]
         # Keep partial ExifTool results and attach diagnostics to this input.
         if completed.returncode and detail:
             detail = "\n".join(line for line in detail.splitlines()
@@ -273,7 +363,7 @@ def read_metadata(paths: Iterable[str | Path], *, executable: str = "exiftool",
         record.sidecars = sidecars_by_image[image]
         if image in input_errors:
             record.error = input_errors[image]
-        elif not record.entries and not record.error:
+        elif not record.entries and not record.error and selection is None:
             record.error = "ExifTool could not read this image."
         for sidecar in record.sidecars:
             if sidecar in input_errors:

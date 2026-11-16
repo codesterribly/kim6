@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import deque
+from itertools import zip_longest
 import json
-from pathlib import Path
+import os
+import time
 from typing import Any
 
 from kim_metadata_reader import MetadataEntry, MetadataRecord, value_text
@@ -38,15 +41,16 @@ _FIELD_SECTIONS = {
     "fnumber": "Camera & capture", "aperture": "Camera & capture",
     "focallength": "Camera & capture",
 }
-SECTION_ORDER = ("Description", "Creator & rights", "Camera & capture", "Other metadata", "Technical metadata")
+SECTION_ORDER = ("Description", "Creator & rights", "Camera & capture", "Additional fields")
 
 
 def _source_kind(entry: MetadataEntry, record: MetadataRecord) -> str:
     """Treat source paths as provenance only, never as metadata values."""
-    try:
-        return "sidecar" if Path(entry.source).resolve(strict=False) != Path(record.path).resolve(strict=False) else "embedded"
-    except (OSError, ValueError):
-        return "embedded"
+    # Reader paths are canonical and protected against final symlinks. Their
+    # role is lexical provenance; resolving the same path per tag is redundant.
+    if entry.source == record.path:
+        return 'embedded'
+    return 'embedded' if os.path.abspath(entry.source) == os.path.abspath(record.path) else 'sidecar'
 
 
 def _identity(entry: MetadataEntry, record: MetadataRecord) -> tuple[Any, ...]:
@@ -60,6 +64,8 @@ def _identity(entry: MetadataEntry, record: MetadataRecord) -> tuple[Any, ...]:
 
 
 def _canonical(value: Any) -> str:
+    if type(value) is int:
+        return str(value)
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
@@ -77,10 +83,6 @@ def _state(reference: MetadataEntry | None, comparison: MetadataEntry | None) ->
 def _is_technical(entry: MetadataEntry) -> bool:
     groups = {str(group).casefold() for group in entry.groups}
     return "exiftool" in groups or "file" in groups
-
-
-def _canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _entry_label(entry: MetadataEntry, record: MetadataRecord) -> str:
@@ -111,9 +113,10 @@ def _entry_display(entry: MetadataEntry | None) -> str:
         return "Not present"
     if entry.value in ("", None, [], {}):
         return "Explicitly empty"
-    if isinstance(entry.value, list) and all(not isinstance(item, (dict, list)) for item in entry.value):
-        return " · ".join(value_text(item) for item in entry.value)
-    return value_text(entry.value)
+    if isinstance(entry.value, (dict, list)):
+        return f'Structured value ({len(entry.value)} elements)'
+    text = value_text(entry.value).replace('\n', ' ↵ ')
+    return text if len(text) <= 240 else text[:239] + '…'
 
 
 def entry_provenance(entry: MetadataEntry | None, record: MetadataRecord) -> str:
@@ -130,6 +133,13 @@ def compare_records(reference: MetadataRecord, comparison: MetadataRecord, *,
     metadata is requested. Entries match on qualified identity, group, ID,
     language and source role. Arrays and structures remain typed values.
     """
+    from kim_process import checkpoint
+    def cooperate():
+        checkpoint()
+        # Leave a scheduling window for Qt's Python model and paint callbacks.
+        # A zero-duration yield can immediately reacquire the GIL and stall them.
+        time.sleep(0.00025)
+    canonical = {}
     def collect(record):
         buckets = {}
         entries = list(record.entries)
@@ -140,10 +150,13 @@ def compare_records(reference: MetadataRecord, comparison: MetadataRecord, *,
             if record.warnings:
                 entries.append(MetadataEntry("Warnings", ("ExifTool", "Diagnostics"),
                     "Warning", list(record.warnings), record.path, "ExifTool:Diagnostics:Warning"))
-        for entry in entries:
+        for index, entry in enumerate(entries):
+            if index % 256 == 0:
+                cooperate()
             if _is_technical(entry) and not include_technical:
                 continue
             identity = _identity(entry, record)
+            canonical[id(entry)] = _canonical(entry.value)
             buckets.setdefault(identity, []).append(entry)
         return buckets
 
@@ -151,42 +164,45 @@ def compare_records(reference: MetadataRecord, comparison: MetadataRecord, *,
     rows = []
     identity_groups = {}
     for owner, buckets in ((reference, left), (comparison, right)):
-        for entries in buckets.values():
+        for index, entries in enumerate(buckets.values()):
+            if index % 256 == 0:
+                cooperate()
             for entry in entries:
                 key = (entry.name.casefold(), (entry.language or "").casefold(), _source_kind(entry, owner))
                 identity_groups.setdefault(key, set()).add((entry.qualified_name.casefold(),
                                                              tuple(g.casefold() for g in entry.groups),
                                                              str(entry.tag_id).casefold() if entry.tag_id is not None else None))
     identities = list(dict.fromkeys([*left.keys(), *right.keys()]))
-    for identity in identities:
+    for index, identity in enumerate(identities):
+        if index % 128 == 0:
+            cooperate()
         left_entries = list(left.get(identity, ()))
         right_entries = list(right.get(identity, ()))
-        # Repeated ExifTool entries are a multiset for comparison. Match equal
-        # values first so an unstable return order cannot manufacture changes.
-        right_by_value = {}
-        for item in right_entries:
-            right_by_value.setdefault(_canonical(item.value), []).append(item)
-        pairs = []
-        unmatched_left = []
-        for item in left_entries:
-            matches = right_by_value.get(_canonical(item.value))
-            if matches:
-                pairs.append((item, matches.pop(0)))
-            else:
-                unmatched_left.append(item)
-        unmatched_right = [item for values in right_by_value.values() for item in values]
-        unmatched_left.sort(key=lambda item: _canonical(item.value))
-        unmatched_right.sort(key=lambda item: _canonical(item.value))
-        while unmatched_left and unmatched_right:
-            pairs.append((unmatched_left.pop(0), unmatched_right.pop(0)))
-        pairs.extend((item, None) for item in unmatched_left)
-        pairs.extend((None, item) for item in unmatched_right)
+        if len(left_entries) <= 1 and len(right_entries) <= 1:
+            pairs = list(zip_longest(left_entries, right_entries))
+        else:
+            # Repeated ExifTool entries are a multiset for comparison. Match equal
+            # values first so an unstable return order cannot manufacture changes.
+            right_by_value = {}
+            for item in right_entries:
+                right_by_value.setdefault(canonical[id(item)], deque()).append(item)
+            pairs = []
+            unmatched_left = []
+            for item in left_entries:
+                matches = right_by_value.get(canonical[id(item)])
+                if matches:
+                    pairs.append((item, matches.popleft()))
+                else:
+                    unmatched_left.append(item)
+            unmatched_right = [item for values in right_by_value.values() for item in values]
+            unmatched_left.sort(key=lambda item: canonical[id(item)])
+            unmatched_right.sort(key=lambda item: canonical[id(item)])
+            pairs.extend(zip_longest(unmatched_left, unmatched_right))
         for occurrence, (a, b) in enumerate(pairs):
             exemplar = a or b
             if exemplar is None:
                 continue
-            section = ("Technical metadata" if _is_technical(exemplar) else
-                       _FIELD_SECTIONS.get(exemplar.name.casefold(), "Other metadata"))
+            section = _FIELD_SECTIONS.get(exemplar.name.casefold(), 'Additional fields')
             exemplar_record = reference if a else comparison
             label = _entry_label(exemplar, exemplar_record)
             disambiguator = (exemplar.name.casefold(), (exemplar.language or "").casefold(),
@@ -211,15 +227,59 @@ def compare_records(reference: MetadataRecord, comparison: MetadataRecord, *,
                 identity_text += f" · language {exemplar.language}"
             if _source_kind(exemplar, reference if a else comparison) == "sidecar":
                 identity_text += " · XMP sidecar"
-            rows.append(ComparisonRow(section, label, identity_text, a, b, _state(a, b),
+            state = (_state(a, b) if a is None or b is None else
+                     ('empty' if a.value in ('', None, [], {}) else 'identical')
+                     if canonical[id(a)] == canonical[id(b)] else 'different')
+            rows.append(ComparisonRow(section, label, identity_text, a, b, state,
                                       _is_technical(exemplar)))
     return sorted(rows, key=lambda row: (SECTION_ORDER.index(row.section), row.label.casefold(), row.identity.casefold()))
+
+
+def compare_overview_records(reference, comparison, fields, priority, locale):
+    """Compare preferred logical values; keep original entries for inspection."""
+    from kim_metadata_sources import preferred_entry, source_name
+    from kim_process import checkpoint
+    components = {
+        'Make': (('Make', 'Camera make'), ('Model', 'Camera model')),
+        'ImageSize': (('ImageWidth', 'Image width'), ('ImageHeight', 'Image height')),
+        'GPSPosition': (('GPSLatitude', 'Latitude'), ('GPSLongitude', 'Longitude'),
+                        ('GPSLatitudeRef', 'Latitude hemisphere'), ('GPSLongitudeRef', 'Longitude hemisphere')),
+        'GPSAltitude': (('GPSAltitude', 'GPS altitude'), ('GPSAltitudeRef', 'Altitude reference')),
+    }
+    rows = []
+    for field in fields:
+        checkpoint()
+        left, right = field.entries(reference), field.entries(comparison)
+        if ':' in field.selector:
+            rows.extend(compare_records(MetadataRecord(reference.path, left), MetadataRecord(comparison.path, right), include_technical=True))
+            continue
+        parts = components.get(field.selector, ())
+        if not any(entry.name in {name for name, _label in parts} for entry in left + right):
+            parts = ((None, field.label),)
+        for name, label in parts:
+            chosen = []
+            for entries, record in ((left, reference), (right, comparison)):
+                candidates = [entry for entry in entries if name is None or entry.name == name]
+                entry = preferred_entry(candidates, record, priority, language_alt=True, locale=locale) if candidates else None
+                if entry is None and candidates:
+                    entry = min(candidates, key=lambda entry: priority.index(source_name(entry, record)) if source_name(entry, record) in priority else len(priority))
+                chosen.append(entry)
+            a, b = chosen
+            rows.append(ComparisonRow(field.section, label, 'Overview field ' + field.selector, a, b,
+                                      _state(a, b) if a is not None or b is not None else 'identical'))
+    return rows
 
 
 def visible_rows(rows: list[ComparisonRow], mode: str) -> list[ComparisonRow]:
     """Apply the compare view's All fields or Differences only mode."""
     if mode == "Differences only":
-        return [row for row in rows if row.state != "identical"]
+        return [row for row in rows if is_difference(row)]
     if mode == "Technical metadata":
         return [row for row in rows if row.technical]
     return list(rows)
+
+
+def is_difference(row):
+    return row.state != 'identical' and not (
+        row.state == 'empty' and row.reference is not None and row.comparison is not None and
+        row.reference.value == row.comparison.value)

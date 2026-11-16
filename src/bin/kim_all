@@ -6929,6 +6929,7 @@ metadata_publish_one() {
   shift 5
   local tmp source_info output_info source_icc output_icc rc=0
   local verification_extension="${source##*.}" location_active=false
+  local verification_source="$source" location_snapshot_dir=''
   case "${cmd:-}" in
     location-gpx|location-copy|location-apply|location-reduce)
       [ "${location_plan:-}" = "$KIMDIR/preview.approved" ] || return 1
@@ -6936,7 +6937,19 @@ metadata_publish_one() {
   esac
   [ ! -L "$source" ] && [ "$(stat -c '%h' -- "$source" 2>/dev/null)" = 1 ] || return 1
   metadata_is_raw "$source" && return 1
-  source_info="$(metadata_image_fingerprint "$source")" || return 1
+  if [ "$location_active" = true ]; then
+    # Legacy pixel/ICC/container tools may reopen filenames. Give them only a
+    # protected private snapshot; all publication guards still use the original.
+    location_snapshot_dir="$(mktemp -d "$KIMDIR/location-source.XXXXXXXX")" || return 1
+    if ! register_stage_dir "$location_snapshot_dir"; then
+      rmdir -- "$location_snapshot_dir" 2>/dev/null || true
+      return 1
+    fi
+    verification_source="$location_snapshot_dir/source.${verification_extension}"
+    KIM_LOCATION_JOB=1 job_run_command python3 "$DISPATCHER_DIR/kim_location.py" \
+      snapshot "$location_plan" "$source" "$verification_source" || return 1
+  fi
+  source_info="$(metadata_image_fingerprint "$verification_source")" || return 1
   [ -n "$source_info" ] || return 1
   tmp="$(tmp_for_target "$target")" || return 1
   if progress_cancelled "$ref"; then
@@ -6953,7 +6966,7 @@ metadata_publish_one() {
   [ "$rc" -eq 0 ] && [ -s "$tmp" ] || { rm -f -- "$tmp"; return 1; }
   output_info="$(metadata_image_fingerprint "$tmp")" || rc=$?
   [ -n "$output_info" ] && [ "$output_info" = "$source_info" ] || rc=1
-  source_icc="$(metadata_icc_fingerprint "$source")" || rc=1
+  source_icc="$(metadata_icc_fingerprint "$verification_source")" || rc=1
   output_icc="$(metadata_icc_fingerprint "$tmp")" || rc=1
   [ "$source_icc" = "$output_icc" ] || rc=1
   # In normal JPEG/WebP selective operations, verify encoded
@@ -6976,7 +6989,7 @@ metadata_publish_one() {
 
       if [ ! -f "$integrity_engine" ] ||
          ! command -v "$integrity_python" >/dev/null 2>&1 ||
-         ! job_run_command "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$source"              --input "$tmp"; then
+         ! job_run_command "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$verification_source"              --input "$tmp"; then
         printf 'KIM6: Selective JPEG/WebP container verification failed: %s\n' "$source" >&2
         rc=1
       fi
@@ -6989,7 +7002,7 @@ metadata_publish_one() {
      { [ "${KIM_TIFF_VERIFY:-native}" != legacy ] || [ "$location_active" = true ]; }; then
     case "$verification_extension" in
       tif|tiff|TIF|TIFF|Tif|Tiff)
-        if ! metadata_tiff_encoded_equal "$source" "$tmp"; then
+        if ! metadata_tiff_encoded_equal "$verification_source" "$tmp"; then
           printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$source" >&2
           rc=1
         fi
@@ -7010,7 +7023,7 @@ metadata_publish_one() {
 
     if [ -n "$bmff_format" ] &&
        ! metadata_isobmff_equal \
-           "$source" "$tmp" "$bmff_format"; then
+           "$verification_source" "$tmp" "$bmff_format"; then
       printf 'KIM6: ISO-BMFF encoded-data verification failed: %s\n' "$source" >&2
       rc=1
     fi
@@ -7033,6 +7046,10 @@ metadata_publish_one() {
     commit_tmp_to_target "$tmp" "$target" "$publication_mode" || rc=$?
   fi
   rm -f -- "$tmp" >/dev/null 2>&1 || true
+  if [ -n "$location_snapshot_dir" ]; then
+    rm -f -- "$verification_source" "$location_snapshot_dir/.kim6-owner" >/dev/null 2>&1 || true
+    rmdir -- "$location_snapshot_dir" >/dev/null 2>&1 || true
+  fi
   [ "$rc" -eq 0 ]
 }
 
@@ -9281,6 +9298,44 @@ action_settings() {
   fi
 
   python3 "$dialog_script" "$about_file"
+}
+
+action_metadata_ui() {
+  local mode="$1" label script companion diagnostic status=0
+  shift
+  case "$mode" in
+    browser) label="$(gettext 'View metadata')"; script=kim_metadata_browser.py ;;
+    editor) label="$(gettext 'Edit metadata')"; script=kim_metadata_editor.py ;;
+    *) return 1 ;;
+  esac
+  if [ "${1:-}" = -- ]; then shift; fi
+  if [ "$#" -eq 0 ]; then
+    progress_error "$label: $(gettext 'Select at least one image.')"
+    return 1
+  fi
+  require_action_tools "$label" python3 exiftool || return 1
+  local -a companions=("$script" kim_metadata_reader.py kim_metadata_sources.py)
+  if [ "$mode" = browser ]; then companions+=(kim_metadata_compare.py); fi
+  for companion in "${companions[@]}"; do
+    if [ ! -f "$DISPATCHER_DIR/$companion" ] || [ ! -r "$DISPATCHER_DIR/$companion" ] ||
+       [ -L "$DISPATCHER_DIR/$companion" ]; then
+      progress_error "$label: $(gettext 'The installed metadata component is missing or unreadable. Reinstall KIM6:') $companion"
+      return 1
+    fi
+  done
+  if ! diagnostic="$(python3 -B -c 'from PySide6 import QtCore, QtGui, QtWidgets' 2>&1)"; then
+    progress_error "$label: $(gettext 'Python 3 with PySide6 is required. Install PySide6 for the python3 on PATH, then try again.')
+$diagnostic"
+    return 1
+  fi
+  diagnostic="$(python3 -B "$DISPATCHER_DIR/$script" "$@" 2>&1)" || status=$?
+  if [ "$status" -ne 0 ]; then
+    progress_error "$label: $(gettext 'Could not open the metadata application. Check the diagnostic below and reinstall KIM6 if an installed component is missing.')
+$diagnostic"
+    return "$status"
+  fi
+  if [ -n "$diagnostic" ]; then printf '%s\n' "$diagnostic" >&2; fi
+  return 0
 }
 
 action_license() {
@@ -11574,6 +11629,13 @@ Commands:
   flipflop <flip|flop> -- <files...>
       Flip or flop images.
 
+  metadata-view -- <files...>
+      Open the Metadata Browser with all selected images. Read-only.
+
+  metadata-edit -- <files...>
+      Open the Metadata Editor change planner with all selected images.
+      Plans changes only; does not write metadata.
+
   gallery -- <files...>
       Create an offline, responsive HTML gallery (Dark Portfolio by default).
       Prompts for title, author, columns, theme, image size, and output directory.
@@ -11793,6 +11855,8 @@ main() {
   case "$cmd" in
     crop|overlay)    python3 "$DISPATCHER_DIR/kim_image_ops_dialog.py" "$cmd" "$@" ;;
     recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
+    metadata-view)   action_metadata_ui browser "$@" ;;
+    metadata-edit)   action_metadata_ui editor "$@" ;;
     album)           mk_workdir; action_album "$@" ;;
     animate)         mk_workdir; action_animate "$@" ;;
     compress)        mk_workdir; action_compress "$@" ;;

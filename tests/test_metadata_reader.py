@@ -17,6 +17,35 @@ from kim_metadata_reader import (MetadataReadError, associated_xmp_sidecars,
 
 
 class MetadataReaderTests(unittest.TestCase):
+    def test_invalid_field_requests_fail_before_opening_inputs(self):
+        invalid = [[], (), '', 'Title', b'Title', 3, [None], [''], ['-r'], ['--'],
+                   ['-config'], ['Title=changed'], ['Title>output'], ['@arguments'],
+                   ['XMP:*'], ['all'], ['all:all'], ['XMP:all'], ['Title#'], ['Title\n'],
+                   ['Title;touch'], ['Title$(command)'], ['Title/other'], ['Title::fr'],
+                   ['étiquette'], ['a' * 257], ['a:b:c:d:e:f:g:h:i'], ['Make'] * 65]
+        for fields in invalid:
+            with self.subTest(fields=fields):
+                with patch('kim_metadata_reader.os.open', side_effect=AssertionError('Input opened')):
+                    with self.assertRaises(ValueError):
+                        read_metadata(['/tmp/not-opened.jpg'], fields=fields)
+
+    def test_selective_timeout_startup_and_cancellation_close_source_descriptors(self):
+        from kim_process import ProcessError
+        with tempfile.TemporaryDirectory() as temporary:
+            image = Path(temporary) / 'source.jpg'
+            image.write_bytes(b'owned fixture')
+            before = (sha256_noatime(image), image.stat())
+            for error in (subprocess.TimeoutExpired('exiftool', 1), OSError('startup failure'),
+                          ProcessError('Image processing cancelled')):
+                with self.subTest(error=error):
+                    with patch('kim_metadata_reader.run_process', side_effect=error) as run:
+                        with self.assertRaises((MetadataReadError, ProcessError)):
+                            read_metadata([image], fields=['Make'])
+                    descriptor = run.call_args.kwargs['stdin']
+                    with self.assertRaises(OSError):
+                        os.fstat(descriptor)
+                    self.assertEqual(before, (sha256_noatime(image), image.stat()))
+
     def test_preserves_duplicate_groups_arrays_structures_unicode_and_ids(self):
         path = "/tmp/東京 - image.jpg"
         payload = json.dumps([{
@@ -257,6 +286,93 @@ class MetadataReaderIntegrationTests(unittest.TestCase):
         generator = Path(__file__).parent / "fixtures/metadata_browser/generate_fixtures.py"
         subprocess.run([sys.executable, str(generator), "--output-dir", cls.temporary.name],
                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_selective_logical_title_retains_sources_and_language_alternatives(self):
+        image = self.fixtures / 'complete.jpg'
+        complete = read_metadata([image])[str(image)]
+        selected = read_metadata([image], fields=['Title'])[str(image)]
+        expected = [entry for entry in complete.entries if entry.name in ('Title', 'ObjectName')]
+        self.assertCountEqual(expected, selected.entries)
+        self.assertEqual({'x-default', 'fr'},
+                         {entry.language for entry in selected.entries if entry.name == 'Title'})
+        self.assertTrue(any('IPTC' in entry.groups for entry in selected.entries))
+        self.assertIsNone(selected.error)
+
+    def test_selective_qualified_fields_and_structures_match_complete_entries(self):
+        image = self.fixtures / 'complete.jpg'
+        complete = read_metadata([image])[str(image)]
+        for fields, expected in (
+            (['XMP-dc:Title'], [entry for entry in complete.entries
+                              if entry.qualified_name.endswith(':Title') and 'XMP-dc' in entry.groups]),
+            (['XMP-dc:Title-fr'], [entry for entry in complete.entries
+                                 if entry.qualified_name.endswith(':Title-fr')]),
+            (['LocationCreated'], [entry for entry in complete.entries if entry.name == 'LocationCreated']),
+        ):
+            with self.subTest(fields=fields):
+                self.assertTrue(expected)
+                selected = read_metadata([image], fields=fields)[str(image)]
+                self.assertCountEqual(expected, selected.entries)
+                self.assertIsNone(selected.error)
+        self.assertEqual(complete, read_metadata([image], fields=None)[str(image)])
+
+    def test_selective_absent_and_option_like_tag_names_are_not_errors(self):
+        image = self.fixtures / 'missing_metadata.jpg'
+        for fields in (['NoSuchKIM6Field'], ['XMP-notreal:NotAField'], ['r', 'execute', 'o']):
+            with self.subTest(fields=fields):
+                selected = read_metadata([image], fields=fields)[str(image)]
+                self.assertEqual([], selected.entries)
+                self.assertIsNone(selected.error)
+        broken = self.fixtures / 'malformed.jpg'
+        self.assertIsNotNone(read_metadata([broken], fields=['Title'])[str(broken)].error)
+
+    def test_selective_duplicates_and_exact_qualified_identity_preserve_integrity(self):
+        with tempfile.TemporaryDirectory(prefix='kim6-selective-integrity-') as temporary:
+            image = Path(temporary) / '-雪 image.jpg'
+            sidecar = image.with_suffix('.XMP')
+            source = self.fixtures / 'complete.jpg'
+            with os.fdopen(os.open(source, os.O_RDONLY | os.O_NOATIME), 'rb') as stream:
+                content = stream.read()
+            start = content.index(b'Exif\x00\x00') - 4
+            length = int.from_bytes(content[start + 2:start + 4], 'big')
+            image.write_bytes(content[:2] + content[start:start + 2 + length] + content[2:])
+            with os.fdopen(os.open(self.fixtures / 'conflicting_sidecar.xmp',
+                                   os.O_RDONLY | os.O_NOATIME), 'rb') as stream:
+                sidecar.write_bytes(stream.read())
+
+            def signature(path):
+                info = path.stat()
+                return (sha256_noatime(path), info.st_size, info.st_atime_ns,
+                        info.st_mtime_ns, info.st_ctime_ns)
+
+            before = {path: signature(path) for path in (image, sidecar)}
+            complete = read_metadata([image])[str(image)]
+            makes = [entry for entry in complete.entries if entry.name == 'Make']
+            self.assertEqual(2, len(makes))
+            selected = read_metadata([image], fields=['Make', 'make', 'Make'])[str(image)]
+            self.assertCountEqual(makes, selected.entries)
+            self.assertEqual([str(sidecar)], selected.sidecars)
+            for entry in makes:
+                exact = read_metadata([image], fields=[entry.qualified_name])[str(image)]
+                self.assertEqual([entry], exact.entries)
+                self.assertIsNone(exact.error)
+            descriptions = read_metadata([image], fields=['Description'])[str(image)]
+            self.assertCountEqual([entry for entry in complete.entries
+                                   if entry.name in ('Description', 'Caption-Abstract', 'ImageDescription')],
+                                  descriptions.entries)
+            self.assertTrue(any(entry.source == str(sidecar) for entry in descriptions.entries))
+            names = read_metadata([image], fields=['FileName'])[str(image)]
+            self.assertEqual({image.name, sidecar.name}, {entry.value for entry in names.entries})
+            self.assertTrue(all(entry.name == 'FileName' for entry in names.entries))
+            launched = subprocess.run([
+                sys.executable, '-B', '-c',
+                'import sys; sys.path.insert(0, sys.argv[1]); '
+                'from kim_metadata_reader import read_metadata; '
+                'records=read_metadata([sys.argv[2]], fields=["FileName"]); '
+                'assert any(e.value == sys.argv[2] for r in records.values() for e in r.entries)',
+                str(Path(__file__).resolve().parents[1] / 'src/bin'), image.name,
+            ], cwd=temporary, capture_output=True, text=True, timeout=10)
+            self.assertEqual(0, launched.returncode, launched.stderr)
+            self.assertEqual(before, {path: signature(path) for path in before})
 
     def test_real_extraction_preserves_fresh_sources_and_rich_metadata(self):
         with tempfile.TemporaryDirectory(prefix="kim6-reader-integrity-") as temporary:

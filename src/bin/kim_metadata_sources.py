@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,144 @@ SOURCE_PRIORITY_DEFAULT = (
 )
 SOURCE_SETTING_KEY = "metadata/readingPriority"
 SYNC_SETTING_KEY = "metadata/syncIptcXmpDefault"
+
+
+def overview_source(entry, record):
+    """Keep file provenance even for tags outside the editable source families."""
+    known = source_name(entry, record)
+    if known:
+        return known
+    return 'Embedded image' if os.path.abspath(entry.source) == os.path.abspath(record.path) else 'Associated sidecar'
+
+
+@dataclass(frozen=True)
+class OverviewField:
+    selector: str
+    label: str
+    section: str = 'Additional fields'
+    aliases: tuple[str, ...] = ()
+    source: str = ''
+    language: str = ''
+
+    @property
+    def selectors(self):
+        return self.aliases or (self.selector,)
+
+    @property
+    def key(self):
+        return self.selector.casefold(), self.source, self.language.casefold()
+
+    def entries(self, record):
+        from kim_metadata_reader import _select_fields
+        selection = _select_fields(self.selectors)
+        return [entry for entry in record.entries if selection.includes(entry) and
+                (not self.source or overview_source(entry, record) == self.source) and
+                (not self.language or (entry.language or '').casefold() == self.language.casefold())]
+
+
+OVERVIEW_DEFAULTS = (
+    OverviewField('Title', 'Title', 'Description', ('Title', 'ObjectName')),
+    OverviewField('Description', 'Description', 'Description', ('Description', 'Caption-Abstract', 'ImageDescription')),
+    OverviewField('Keywords', 'Keywords', 'Description', ('Subject', 'Keywords')),
+    OverviewField('Creator', 'Creator', 'Creator & rights', ('Creator', 'By-line', 'Artist')),
+    OverviewField('Copyright', 'Copyright notice', 'Creator & rights', ('Rights', 'CopyrightNotice', 'Copyright')),
+    OverviewField('UsageTerms', 'Usage terms', 'Creator & rights', ('UsageTerms', 'RightsUsageTerms')),
+    OverviewField('Make', 'Camera', 'Camera & capture', ('Make', 'Model')),
+    OverviewField('LensModel', 'Lens', 'Camera & capture', ('LensModel', 'LensID')),
+    OverviewField('DateTimeOriginal', 'Capture date', 'Camera & capture', ('DateTimeOriginal', 'CreateDate')),
+    OverviewField('ImageSize', 'Image dimensions', 'Camera & capture', ('ImageSize', 'ImageWidth', 'ImageHeight')),
+    OverviewField('ExposureTime', 'Exposure', 'Camera & capture'),
+    OverviewField('FNumber', 'Aperture', 'Camera & capture', ('FNumber', 'Aperture')),
+    OverviewField('ISO', 'ISO', 'Camera & capture', ('ISO', 'PhotographicSensitivity')),
+    OverviewField('FocalLength', 'Focal length', 'Camera & capture'),
+    OverviewField('GPSPosition', 'GPS position', 'Location', ('GPSPosition', 'GPSCoordinates', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef')),
+    OverviewField('GPSAltitude', 'GPS altitude', 'Location', ('GPSAltitude', 'GPSAltitudeRef')),
+    OverviewField('Location', 'Location', 'Location', ('Location', 'City', 'State', 'Country', 'CountryName')),
+)
+OVERVIEW_CATALOG = OVERVIEW_DEFAULTS + tuple(OverviewField(tag, label) for tag, label in (
+    ('Rating', 'Rating'), ('Software', 'Software'), ('WhiteBalance', 'White balance'),
+    ('Flash', 'Flash'), ('ExposureProgram', 'Exposure program'), ('ColorSpace', 'Color space'),
+    ('Orientation', 'Orientation'), ('SerialNumber', 'Camera serial number'),
+    ('ImageUniqueID', 'Image identifier'), ('PersonInImage', 'People in image')))
+
+
+class OverviewPreferences:
+    """One ordered field selection shared by metadata inspection applications."""
+    KEY = 'metadata/overviewFieldsV1'
+
+    def __init__(self, settings=None):
+        self.settings = settings if settings is not None else QSettings('KIM6', 'MetadataTools')
+        self.reload()
+
+    def reload(self):
+        try:
+            self.settings.sync()
+            raw = self.settings.value(self.KEY, '')
+            decoded = json.loads(raw) if raw else None
+            if decoded is not None and (not isinstance(decoded, list) or any(not isinstance(value, dict) for value in decoded)):
+                raise ValueError('Invalid overview configuration.')
+            fields = [OverviewField(**dict(value, aliases=tuple(value.get('aliases', ())))) for value in decoded] if decoded is not None else list(OVERVIEW_DEFAULTS)
+            self.validate(fields)
+            self.fields = fields
+        except (ValueError, TypeError, KeyError):
+            self.fields = list(OVERVIEW_DEFAULTS)
+        return self
+
+    @staticmethod
+    def validate(fields):
+        from kim_metadata_reader import _select_fields
+        if any(not isinstance(field, OverviewField) or
+               any(not isinstance(getattr(field, name), str) for name in ('selector', 'label', 'section', 'source', 'language'))
+               for field in fields):
+            raise ValueError('Invalid overview field.')
+        if len(fields) > 64 or len({field.key for field in fields}) != len(fields):
+            raise ValueError('Choose at most 64 distinct overview fields.')
+        for field in fields:
+            if not field.label or len(field.label) > 256 or field.source not in ('', *SOURCE_PRIORITY_DEFAULT, 'Embedded image', 'Associated sidecar'):
+                raise ValueError('Invalid overview field.')
+            _select_fields((field.selector,))
+        selectors = tuple(dict.fromkeys(['FileType', 'ImageWidth', 'ImageHeight'] + [name for field in fields for name in field.selectors]))
+        _select_fields(selectors)
+        return selectors
+
+    @property
+    def selectors(self):
+        return self.validate(self.fields)
+
+    def save(self, fields):
+        from dataclasses import asdict
+        fields = list(fields)
+        self.validate(fields)
+        self.settings.setValue(self.KEY, json.dumps([asdict(field) for field in fields], ensure_ascii=False))
+        self.settings.sync()
+        self.fields = fields
+
+    @staticmethod
+    def _entry_field(entry, record):
+        return OverviewField(entry.qualified_name, entry.name + (f' ({entry.language})' if entry.language else '') + f' · {entry.group}',
+                             source=overview_source(entry, record), language=entry.language or '')
+
+    def is_pinned(self, entry, record):
+        key = self._entry_field(entry, record).key
+        return any(field.key == key for field in self.fields)
+
+    def toggle_entry(self, entry, record):
+        self.reload()
+        field = self._entry_field(entry, record)
+        existing = next((item for item in self.fields if item.key == field.key), None)
+        self.save([item for item in self.fields if item.key != field.key] if existing else [*self.fields, field])
+
+    def select_record(self, record):
+        from kim_metadata_reader import MetadataRecord, _select_fields
+        selection = _select_fields(self.selectors)
+        fields = [(field, _select_fields(field.selectors)) for field in self.fields]
+        entries = [entry for entry in record.entries if selection.includes(entry) and (
+            entry.name.casefold() == 'filetype' or any(chosen.includes(entry) and
+            (not field.source or overview_source(entry, record) == field.source) and
+            (not field.language or (entry.language or '').casefold() == field.language.casefold())
+            for field, chosen in fields))]
+        return MetadataRecord(record.path, entries,
+                              record.sidecars, record.error, record.warnings)
 
 
 def _valid_priority(value: Any) -> tuple[str, ...]:
@@ -120,7 +260,9 @@ def _entry_key(entry) -> str:
 def source_name(entry, record) -> str | None:
     """Return only a known, qualified metadata source category."""
     try:
-        sidecar = Path(entry.source).resolve(strict=False) != Path(record.path).resolve(strict=False)
+        # Extraction already canonicalizes paths and rejects final symlinks.
+        # Source classification must not repeat filesystem resolution per value.
+        sidecar = entry.source != record.path and os.path.abspath(entry.source) != os.path.abspath(record.path)
     except (OSError, ValueError):
         return None
     groups = tuple(str(group).casefold() for group in (entry.groups or ()))
@@ -166,15 +308,37 @@ def _typed_value(entries, multiple):
 
 def metadata_representations(record, spec) -> list[MetadataRepresentation]:
     """Group actual entries by source, qualified field and language."""
+    return _representations_from_entries(record, spec, record.entries)
+
+
+def index_metadata_representations(record, specs) -> dict[str, list[MetadataRepresentation]]:
+    """Select all requested fields in one pass, preserving entry order."""
+    specs = tuple(specs)
+    fields_by_name = {}
+    candidates = {spec.key: [] for spec in specs}
+    for spec in specs:
+        for name in {alias.casefold() for alias in spec.aliases}:
+            fields_by_name.setdefault(name, []).append(spec.key)
+    for entry in record.entries:
+        for key in fields_by_name.get(entry.name.casefold(), ()):
+            candidates[key].append(entry)
+    return {spec.key: _representations_from_entries(record, spec, candidates[spec.key])
+            for spec in specs}
+
+
+def _representations_from_entries(record, spec, entries):
     buckets = {}
     editability = {}
-    for entry in record.entries:
+    aliases = {name.casefold() for name in spec.aliases}
+    for entry in entries:
+        if entry.name.casefold() not in aliases:
+            continue
         source = source_name(entry, record)
         if not source:
             continue
         mapping = _source_mapping(spec, entry, source)
         editable = bool(mapping)
-        if not mapping and source == "EXIF" and entry.name.casefold() in {name.casefold() for name in spec.aliases}:
+        if not mapping and source == "EXIF":
             # Keep a qualified, inspectable provenance representation without
             # inventing a writable EXIF mapping for a registry field.
             mapping = entry.qualified_name
@@ -255,13 +419,16 @@ def preferred_entry(entries, record, priority=SOURCE_PRIORITY_DEFAULT,
     best_source, best, _order = candidates[0]
     same_target = [entry for source, entry, _ in candidates
                    if source == best_source and language_rank(entry) == language_rank(best)]
-    if not isinstance(best.value, list) and len({repr(entry.value) for entry in same_target}) > 1:
+    if len(same_target) > 1 and not isinstance(best.value, list) and len({repr(entry.value) for entry in same_target}) > 1:
         return None
     return best
 
 
-def preferred_representation(record, spec, priority=SOURCE_PRIORITY_DEFAULT, locale=""):
-    representations = metadata_representations(record, spec)
+def preferred_representation(record, spec, priority=SOURCE_PRIORITY_DEFAULT, locale="", *,
+                             representations=None):
+    """Rank stored representations using current source and language preferences."""
+    if representations is None:
+        representations = metadata_representations(record, spec)
     ordered = ordered_representations(representations, priority, locale)
     if not ordered:
         return None, representations

@@ -177,7 +177,7 @@ class DocumentationContractTests(unittest.TestCase):
                               for action_id, label, command in rows], menu.name)
             total += len(actual)
 
-        self.assertEqual(90, total)
+        self.assertEqual(91, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")

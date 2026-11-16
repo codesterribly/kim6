@@ -38,6 +38,102 @@ def planned_row(plan, field):
 
 
 class MetadataEditorPlannerTests(unittest.TestCase):
+    def test_refresh_that_removes_a_pinned_target_requires_new_authorization(self):
+        source = '/tmp/stale-target.jpg'
+        old = record(source, entries=[MetadataEntry('Title', ('XMP', 'XMP-dc'), 'title',
+                     'Old title', source, 'XMP-dc:Title', 'x-default')])
+        target = metadata_representations(old, FIELD_SPECS[0])[0].target
+        draft = Draft('Replace', 'Proposed', target=target)
+        updated = record(source)
+        plan = build_plan([source], {source: updated}, {source: {'title': draft}}, 'Individual')
+        title = planned_row(plan, 'Title')
+        self.assertEqual('blocked', title['status'])
+        self.assertIn('no longer present', title['warning'])
+
+    def test_representation_index_scans_once_and_keeps_typed_qualified_values(self):
+        from kim_metadata_sources import index_metadata_representations
+
+        class CountedEntries(list):
+            scans = 0
+
+            def __iter__(self):
+                self.scans += 1
+                return super().__iter__()
+
+        path = str(Path('/tmp/metadata-index.jpg').resolve())
+        sidecar = str(Path(path).with_suffix('.xmp'))
+        first = MetadataEntry('Description', ('XMP', 'XMP-dc', 'Copy0'), 'description',
+                              'First', path, 'XMP:XMP-dc:Copy0:Description')
+        second = MetadataEntry('Description', first.groups, first.tag_id, 'Second', path,
+                               first.qualified_name)
+        item = record(path, entries=[
+            first,
+            MetadataEntry('Title', ('XMP', 'XMP-dc'), 'title-fr', 'Matin', path,
+                          'XMP-dc:Title-fr', 'fr'),
+            MetadataEntry('Keywords', ('IPTC',), 25, ['one', 'one'], path, 'IPTC:Keywords'),
+            second,
+            MetadataEntry('Keywords', ('IPTC',), 25, 'two', path, 'IPTC:Keywords'),
+            MetadataEntry('Description', ('XMP', 'XMP-dc'), 'description', {'x-default': 'Sidecar'},
+                          sidecar, 'XMP-dc:Description'),
+            MetadataEntry('Artist', ('EXIF', 'IFD0'), 315, 'Photographer', path, 'EXIF:IFD0:Artist'),
+        ])
+        item.entries = CountedEntries(item.entries)
+        indexed = index_metadata_representations(item, FIELD_SPECS)
+        self.assertEqual(1, item.entries.scans)
+        self.assertEqual(('First', 'Second'), tuple(entry.value for entry in indexed['caption'][0].entries))
+        self.assertTrue(indexed['caption'][0].ambiguous)
+        self.assertEqual(first.groups, indexed['caption'][0].entries[0].groups)
+        self.assertEqual('XMP sidecar', indexed['caption'][1].source)
+        self.assertEqual({'x-default': 'Sidecar'}, indexed['caption'][1].value)
+        self.assertEqual('fr', indexed['title'][0].target.language)
+        self.assertEqual(['one', 'one', 'two'], indexed['keywords'][0].value)
+        self.assertFalse(indexed['creator'][0].editable)
+        self.assertEqual([], indexed['usage'])
+        self.assertEqual(1, item.entries.scans)
+
+    def test_unrelated_metadata_does_not_resolve_source_paths(self):
+        path = str(Path('/tmp/metadata-field-filter.jpg').resolve())
+        unrelated = '/tmp/unrelated-metadata-source'
+        item = record(path, entries=[
+            MetadataEntry('Unrelated', ('XMP', 'Other'), None, 'Ignored', unrelated,
+                          'XMP:Other:Unrelated'),
+            MetadataEntry('Description', ('XMP', 'XMP-dc'), None, 'Kept caption', path,
+                          'XMP-dc:Description'),
+        ])
+        resolve = Path.resolve
+
+        def resolve_relevant(source, *args, **kwargs):
+            self.assertNotEqual(unrelated, str(source),
+                                'An unrelated field must not inspect its source path')
+            return resolve(source, *args, **kwargs)
+
+        with patch.object(Path, 'resolve', resolve_relevant):
+            representations = metadata_representations(item, FIELD_SPECS[1])
+        self.assertEqual(['Kept caption'], [value.value for value in representations])
+
+    def test_indexed_representations_follow_current_priority_and_language(self):
+        from kim_metadata_sources import index_metadata_representations
+        path = str(Path('/tmp/indexed-priority.jpg').resolve())
+        item = record(path, entries=[
+            MetadataEntry('Title', ('XMP', 'XMP-dc'), 'title', 'Morning', path,
+                          'XMP-dc:Title', 'x-default'),
+            MetadataEntry('Title', ('XMP', 'XMP-dc'), 'title-fr', 'Matin', path,
+                          'XMP-dc:Title-fr', 'fr'),
+            MetadataEntry('ObjectName', ('IPTC',), 5, 'Legacy title', path, 'IPTC:ObjectName'),
+        ])
+        indexed = index_metadata_representations(item, FIELD_SPECS)
+        available = indexed['title']
+        for priority, locale, expected in (
+            (SOURCE_PRIORITY_DEFAULT, 'en_US', 'Morning'),
+            (SOURCE_PRIORITY_DEFAULT, 'fr', 'Matin'),
+            (('IPTC-IIM', 'Embedded XMP', 'XMP sidecar', 'EXIF'), 'fr', 'Legacy title'),
+        ):
+            with self.subTest(priority=priority, locale=locale):
+                preferred, alternatives = preferred_representation(
+                    item, FIELD_SPECS[0], priority, locale, representations=available)
+                self.assertEqual(expected, preferred.value)
+                self.assertEqual(3, len(alternatives))
+
     def test_source_priority_settings_round_trip_and_defaults(self):
         class MemorySettings:
             values = {}
@@ -481,6 +577,118 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.app.processEvents()
         return editor
 
+    def test_batch_cancel_preserves_individual_drafts_and_mixed_values(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QLabel
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        editor.field_controls['title']['edit'].setText('Individual proposal')
+        before = dict(editor.drafts[editor.paths[0]])
+        self.select_rows(editor, [0, 1])
+        errors = []
+        def cancel_batch():
+            dialog = self.app.activeModalWidget()
+            try:
+                self.assertIsInstance(dialog, BatchEditDialog)
+                self.assertTrue(any('Mixed' in label.text() for label in dialog.findChildren(QLabel)))
+                self.assertFalse(dialog.add_button.isEnabled())
+                self.assertTrue(all(control['operation'].currentText() == 'Leave unchanged'
+                                    for control in dialog.controls.values()))
+                dialog.controls['title']['operation'].setCurrentText('Replace')
+                dialog.controls['title']['edit'].setText('Canceled batch')
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                dialog.reject()
+        QTimer.singleShot(0, cancel_batch)
+        editor.batch_edit_selected()
+        if errors:
+            raise errors[0]
+        self.assertEqual(before, editor.drafts[editor.paths[0]])
+        self.assertFalse(editor.batch_sessions)
+        self.assertIn('1 change', editor.pending_label.text())
+
+    def test_batch_fill_populated_fields_is_noop_and_does_not_require_discard(self):
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        self.batch_edit(editor, [0, 1], {'title': ('Fill empty', 'Unused')})
+        self.assertFalse(editor.review_button.isEnabled())
+        self.assertEqual('Pending changes: 0', editor.pending_label.text())
+        with patch('kim_metadata_editor.ReviewDialog', side_effect=AssertionError('No-op review')):
+            editor.review_changes()
+        with patch('kim_metadata_editor.QMessageBox.question', side_effect=AssertionError('No-op discard prompt')):
+            editor.close()
+            self.app.processEvents()
+
+    def test_missing_target_authorization_remains_a_reviewable_blocked_proposal(self):
+        editor = self.make_editor(['missing_metadata.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        editor.field_controls['title']['edit'].setText('Proposed title')
+        self.assertTrue(editor.review_button.isEnabled())
+        self.assertIn('1 change', editor.pending_label.text())
+        self.assertIn('blocked', editor.pending_label.text())
+        plan = build_plan(editor.paths, editor.records, editor.drafts, 'Combined')
+        self.assertEqual('blocked', planned_row(plan, 'Title')['status'])
+        dialog = ReviewDialog(plan, editor)
+        self.assertTrue(dialog.has_proposals)
+        self.assertIn('blocked', dialog.summary.text())
+        dialog.close()
+
+    def test_review_counts_only_proposal_scope_and_single_selection_cannot_batch(self):
+        from PySide6.QtCore import QTimer
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg', 'missing_metadata.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        with patch('kim_metadata_editor.BatchEditDialog', side_effect=AssertionError('Single-image batch')):
+            editor.batch_edit_selected()
+        editor.field_controls['title']['edit'].setText('Actual proposal')
+        summaries = []
+        def close_review():
+            dialog = self.app.activeModalWidget()
+            summaries.append(dialog.summary.text())
+            dialog.reject()
+        QTimer.singleShot(0, close_review)
+        editor.review_changes()
+        self.assertIn('1 selected image', summaries[0])
+        self.assertNotIn('3 selected images', summaries[0])
+
+    def test_discarding_existing_batch_keeps_individual_proposals(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QPushButton
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        editor.field_controls['title']['edit'].setText('Individual title')
+        individual = editor.drafts[editor.paths[0]]['title']
+        self.batch_edit(editor, [0, 1], {'caption': ('Replace', 'Batch caption')})
+        self.assertTrue(editor.batch_sessions)
+        def discard():
+            dialog = self.app.activeModalWidget()
+            button = next(button for button in dialog.findChildren(QPushButton)
+                          if button.text() == 'Discard batch changes')
+            button.click()
+        QTimer.singleShot(0, discard)
+        editor.batch_edit_selected()
+        self.assertFalse(editor.batch_sessions)
+        self.assertEqual(individual, editor.drafts[editor.paths[0]]['title'])
+        self.assertIn('1 change', editor.pending_label.text())
+        self.assertTrue(editor.review_button.isEnabled())
+
+    def test_missing_refreshed_target_is_blocked_until_explicit_new_target_consent(self):
+        editor = self.make_editor(['complete.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        path = editor.paths[0]
+        title = editor.field_controls['title']
+        title['edit'].setText('Retained proposal')
+        editor._scan_complete({path: record(path)}, {})
+        before = planned_row(build_plan([path], editor.records, editor.drafts, 'Individual'), 'Title')
+        self.assertEqual('blocked', before['status'])
+        editor.tabs.setCurrentIndex(3)
+        self.assertTrue(title['create_target'].isVisible())
+        title['create_target'].click()
+        after = planned_row(build_plan([path], editor.records, editor.drafts, 'Individual'), 'Title')
+        self.assertEqual('valid', after['status'])
+        self.assertTrue(editor.drafts[path]['title'].target.is_new)
+        self.assertTrue(editor.drafts[path]['title'].authorize_new_target)
+
     def settings_preferences(self, path):
         from PySide6.QtCore import QSettings
         return MetadataSourcePreferences(QSettings(str(path), QSettings.IniFormat))
@@ -525,7 +733,6 @@ class MetadataEditorQtTests(unittest.TestCase):
                 dialog.target_policy.setChecked(True)
                 for key, (operation, value) in changes.items():
                     control = dialog.controls[key]
-                    control["apply"].click()
                     control["new_target"].setChecked(True)
                     control["operation"].setCurrentText(operation)
                     if operation != "Clear":
@@ -584,6 +791,8 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.assertEqual(Qt.Vertical, editor.image_splitter.orientation())
         self.assertEqual(2, editor.splitter.count())
         self.assertEqual(2, editor.image_splitter.count())
+        self.assertIs(editor.image_splitter.widget(0), editor.preview_panel)
+        self.assertIs(editor.image_splitter.widget(1), editor.image_list_panel)
         self.assertGreater(editor.splitter.handleWidth(), 0)
         self.assertGreater(editor.image_splitter.handleWidth(), 0)
 
@@ -609,7 +818,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         wait.exec()
         stored = self.settings_preferences(settings_path).settings
         self.assertEqual(moved_horizontal, [int(x) for x in stored.value(editor.HORIZONTAL_SPLITTER_KEY)])
-        self.assertEqual(moved_vertical, [int(x) for x in stored.value(editor.IMAGE_SPLITTER_KEY)])
+        self.assertEqual(moved_vertical, [int(x) for x in stored.value(f'{editor.IMAGE_SPLITTER_KEY}/preview-first')])
         self.close_editor(editor)
 
         reopened = self.make_editor(["complete.jpg"], self.settings_preferences(settings_path))
@@ -653,33 +862,47 @@ class MetadataEditorQtTests(unittest.TestCase):
             cached = editor.previews[editor.paths[0]]
             cache_key = cached.cacheKey()
             try:
-                with patch("kim_metadata_editor.read_thumbnail", side_effect=AssertionError("resize reread image")) as read:
+                with patch("kim_metadata_browser.read_thumbnail", side_effect=AssertionError("resize reread image")) as read:
                     for dimensions in ((1000, 700), (1400, 900)):
                         editor.resize(*dimensions)
                         self.assert_preview_fits_cached_image(editor)
 
                     # A tall preview makes width the limiting dimension.
-                    editor.image_splitter.moveSplitter(120, 1)
+                    max_preview = editor.image_splitter.getRange(1)[1]
+                    editor.image_splitter.moveSplitter(max_preview, 1)
                     editor.splitter.moveSplitter(220, 1)
+                    self.app.processEvents()
                     before = self.assert_preview_fits_cached_image(editor)
+
                     for position in (320, 220):
                         editor.splitter.moveSplitter(position, 1)
+                        self.app.processEvents()
                         after = self.assert_preview_fits_cached_image(editor)
                         self.assertNotEqual(before, after)
                         before = after
 
-                    # A wide preview makes height the limiting dimension.
+                    # A short preview makes height the limiting dimension.
                     editor.splitter.moveSplitter(600, 1)
-                    bottom = editor.image_splitter.getRange(1)[1]
-                    editor.image_splitter.moveSplitter(bottom, 1)
+                    min_preview = editor.image_splitter.getRange(1)[0]
+                    editor.image_splitter.moveSplitter(min_preview, 1)
+                    self.app.processEvents()
                     before = self.assert_preview_fits_cached_image(editor)
-                    for position in (bottom - 80, bottom):
+
+                    for position in (min_preview + 80, min_preview):
                         editor.image_splitter.moveSplitter(position, 1)
+                        self.app.processEvents()
                         after = self.assert_preview_fits_cached_image(editor)
                         self.assertNotEqual(before, after)
                         before = after
+
+                    # With height limiting, additional width changes
+                    # must not change the rendered image dimensions.
                     editor.splitter.moveSplitter(700, 1)
-                    self.assertEqual(before, self.assert_preview_fits_cached_image(editor))
+                    self.app.processEvents()
+                    self.assertEqual(
+                        before,
+                        self.assert_preview_fits_cached_image(editor)
+                    )
 
                     for splitter in (editor.splitter, editor.image_splitter):
                         for position in (0, 10000):
@@ -687,8 +910,8 @@ class MetadataEditorQtTests(unittest.TestCase):
                             self.assert_preview_fits_cached_image(editor)
                             self.assertGreaterEqual(editor.splitter.sizes()[0], 220)
                             self.assertGreaterEqual(editor.splitter.sizes()[1], 640)
-                            self.assertGreaterEqual(editor.image_splitter.sizes()[0], 120)
-                            self.assertGreaterEqual(editor.image_splitter.sizes()[1], 155)
+                            self.assertGreaterEqual(editor.image_splitter.sizes()[0], 155)
+                            self.assertGreaterEqual(editor.image_splitter.sizes()[1], 120)
                     read.assert_not_called()
                     self.assertIs(cached, editor.previews[editor.paths[0]])
                     self.assertEqual(cache_key, cached.cacheKey())
@@ -719,7 +942,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         editor = self.make_editor(["missing_metadata.jpg"])
         title = editor.field_controls["title"]["edit"]
         self.assertIsInstance(title, QLineEdit)
-        self.assertIn("New destination:", editor.field_controls["title"]["state"].text())
+        self.assertIn("Target:", editor.field_controls["title"]["state"].text())
         title.setText("New title")
         self.assertEqual("Fill empty", editor.drafts[editor.paths[0]]["title"].operation)
         row = planned_row(build_plan(editor.paths, editor.records, editor.drafts, "Combined"), "Title")
@@ -737,7 +960,8 @@ class MetadataEditorQtTests(unittest.TestCase):
         control = editor.field_controls["caption"]
         self.assertIn("Editing: Embedded XMP", control["state"].text())
         self.assertFalse(control["conflict"].isVisible())
-        self.assertIn("Other metadata sources (", control["details"].text())
+        self.assertEqual("Sources…", control["details"].text())
+        self.assertIn("metadata representations", control["details"].toolTip())
         self.assertTrue(control["details"].isEnabled())
         self.close_editor(editor)
 
@@ -761,6 +985,48 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.assertEqual("IPTC-IIM", editor._active_representation(path, spec).source)
         self.assertEqual("Harbor at dawn", editor.field_controls[spec.key]["edit"].text())
         self.close_editor(editor)
+
+    def test_record_replacement_and_refresh_update_cached_values(self):
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        path = editor.paths[0]
+        title = editor.field_controls['title']['edit']
+        replacement = record(path, entries=[MetadataEntry(
+            'Title', ('XMP', 'XMP-dc'), 'title', 'Replacement', path,
+            'XMP-dc:Title', 'x-default')])
+        editor.records[path] = replacement
+        editor.next_button.click()
+        editor.previous_button.click()
+        self.assertEqual('Replacement', title.text())
+        replacement.entries[-1] = MetadataEntry(
+            'Title', ('XMP', 'XMP-dc'), 'title', 'Refreshed snapshot', path,
+            'XMP-dc:Title', 'x-default')
+        editor._scan_complete({path: replacement}, {})
+        self.assertEqual('Refreshed snapshot', title.text())
+
+    def test_priority_change_and_navigation_keep_draft_target_pinned(self):
+        temporary = tempfile.TemporaryDirectory(prefix='kim6-editor-priority-')
+        self.addCleanup(temporary.cleanup)
+        editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        path = editor.paths[0]
+        title = editor.field_controls['title']['edit']
+        title.setText('Pinned draft')
+        draft = editor.drafts[path]['title']
+        target = draft.target
+        self.assertEqual('Embedded XMP', target.source)
+        self.assertEqual('x-default', target.language)
+        editor.preferences = self.settings_preferences(Path(temporary.name) / 'preferences.ini')
+        editor.preferences.save(('IPTC-IIM', 'Embedded XMP', 'XMP sidecar', 'EXIF'))
+        editor.next_button.click()
+        editor.previous_button.click()
+        self.assertEqual('Pinned draft', title.text())
+        self.assertEqual(target, editor.drafts[path]['title'].target)
+        plan = build_plan(editor.paths, editor.records, editor.drafts, 'Combined',
+                          editor.batch_sessions, editor.source_drafts, editor.preferences.priority)
+        row = next(row for row in plan if row['path'] == path and row['field'] == 'Title')
+        self.assertEqual('Embedded XMP · x-default', row['sources'])
+        self.assertEqual('Pinned draft', row['after'])
 
     def test_source_switch_with_pending_draft_keeps_original_target_pinned(self):
         from PySide6.QtCore import QTimer
@@ -805,8 +1071,38 @@ class MetadataEditorQtTests(unittest.TestCase):
                          {row["sources"].split(" · ", 1)[0] for row in title_rows})
         self.close_editor(editor)
 
+    def test_discarding_draft_during_source_switch_updates_pending_count(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QPushButton
+        editor = self.make_editor(['complete.jpg'])
+        self.addCleanup(self.close_editor, editor)
+        path = editor.paths[0]
+        control = editor.field_controls['title']
+        control['edit'].setText('Draft to discard')
+        self.assertIn('1 change', editor.pending_label.text())
+        alternate = next(item for item in editor._representations(path, control['spec'])
+                         if item.source == 'IPTC-IIM')
+        def discard():
+            box = self.app.activeModalWidget()
+            next(button for button in box.findChildren(QPushButton)
+                 if button.text() == 'Discard and switch').click()
+        def choose():
+            dialog = self.app.activeModalWidget()
+            row = next(index for index in range(dialog.list.count())
+                       if dialog.list.item(index).data(256).target.key == alternate.target.key)
+            dialog.list.setCurrentRow(row)
+            QTimer.singleShot(0, discard)
+            next(button for button in dialog.findChildren(QPushButton)
+                 if button.text() == 'Edit this source').click()
+        editor.tabs.setCurrentIndex(3)
+        QTimer.singleShot(0, choose)
+        control['details'].click()
+        self.assertNotIn('title', editor.drafts[path])
+        self.assertEqual('Pending changes: 0', editor.pending_label.text())
+
     def test_individual_sync_override_requires_and_records_counterpart_consent(self):
         editor = self.make_editor(["xmp_only.jpg"])
+        editor.tabs.setCurrentIndex(3)
         title = editor.field_controls["title"]
         description = editor.field_controls["caption"]
         title["sync"].setChecked(True)
@@ -842,7 +1138,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         review.close()
         self.close_editor(editor)
 
-    def test_batch_checkbox_activates_only_selected_fields_and_reviews_valid_blocked_noops(self):
+    def test_batch_operations_activate_only_selected_fields_and_reviews_valid_blocked_noops(self):
         from PySide6.QtWidgets import QPushButton
         editor = self.make_editor(["complete.jpg", "missing_metadata.jpg", "malformed.jpg"])
         self.batch_edit(editor, [0, 1, 2], {

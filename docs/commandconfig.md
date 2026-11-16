@@ -29,7 +29,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Output and File Handling](#output-and-file-handling)
 - [Recipes](#recipes)
 - [Configuration and Defaults](#configuration-and-defaults)
-- [Still-image actions](#still-image-actions): album, animate, capturedate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport
+- [Still-image actions](#still-image-actions): album, animate, capturedate, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery, metadata-view, metadata-edit, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport
 - [Video actions](#video-actions): slideshow, video, videoaudio, videoframes, videogif
 - [Information actions](#information-actions): about, license, manual, settings
 
@@ -315,6 +315,22 @@ kim_all gallery -- IMAGE...
 ```
 
 Prompts for title, author, layout/columns, and an output location. Builds an HTML gallery with resized images and thumbnails from mixed source directories. The complete directory is staged and published as a new directory; occupied directories are not recursively overwritten. Opens the resulting `index.html` with `xdg-open` when available.
+
+### `metadata-view`
+
+```sh
+kim_all metadata-view -- IMAGE...
+```
+
+Opens one read-only Metadata Browser window containing the entire selection in order, including images from different directories. Select exactly two images inside Browser to compare their metadata. Requires Python 3 with PySide6 and ExifTool. Does not prompt for output policy or publish files.
+
+### `metadata-edit`
+
+```sh
+kim_all metadata-edit -- IMAGE...
+```
+
+Opens one Metadata Editor window containing the entire selection. This is a read-only change planner: drafts are retained when navigating images, and review does not write image metadata or XMP sidecars. Requires Python 3 with PySide6 and ExifTool. Does not prompt for output policy or publish files.
 
 ### `print`
 

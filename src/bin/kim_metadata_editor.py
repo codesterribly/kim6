@@ -13,15 +13,15 @@ import signal
 import sys
 
 try:
-    from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QLocale, QSignalBlocker
-    from PySide6.QtGui import QImage, QPixmap
+    from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QLocale, QSignalBlocker, QEvent, QItemSelectionModel
+    from PySide6.QtGui import QImage, QPixmap, QIcon, QAction
     from PySide6.QtWidgets import (
         QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
         QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
         QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
         QScrollArea, QVBoxLayout, QWidget, QTreeWidget, QTreeWidgetItem,
         QGroupBox, QToolButton, QFrame, QCheckBox, QAbstractItemView,
-        QSizePolicy,
+        QSizePolicy, QTabWidget, QTableView, QHeaderView, QProgressBar, QStyle,
     )
 except ModuleNotFoundError as exc:
     if exc.name and exc.name.startswith("PySide6"):
@@ -29,14 +29,18 @@ except ModuleNotFoundError as exc:
         raise SystemExit(2) from exc
     raise
 
-from kim_metadata_reader import MetadataEntry, MetadataRecord, read_metadata, value_text
+from kim_metadata_reader import MetadataEntry, MetadataRecord, read_metadata, value_text, _source_path, _select_fields
 from kim_photo_selection import read_thumbnail
 from kim_process import inspection_context
 from kim_metadata_sources import (
     MetadataSourcePreferences, MetadataRepresentation, TargetIdentity,
-    SOURCE_PRIORITY_DEFAULT, metadata_representations, ordered_representations,
-    preferred_entry, preferred_representation,
+    SOURCE_PRIORITY_DEFAULT, metadata_representations, index_metadata_representations,
+    ordered_representations, preferred_entry, preferred_representation, OverviewPreferences,
 )
+
+from kim_metadata_browser import (MetadataWorker as InspectionWorker, PreviewWorker, InspectionCache,
+    _file_stamp, _record_stamp, _record_bytes, TagModel, TagFilterWorker, OverviewFieldsDialog,
+    MetadataBrowser, PinDelegate, MetadataDetailsDialog, metadata_alternatives, MetadataOverview, ListThumbnails)
 
 
 @dataclass(frozen=True)
@@ -270,6 +274,8 @@ def _targeted_plan_row(path, record, spec, draft, priority):
     destinations = [target]
     if target.is_new and not draft.authorize_new_target:
         issue = f"New destination {target.source}: {target.qualified_tag} requires explicit authorization"
+    if not target.is_new and exact is None and draft.operation not in ('Clear', 'Remove keywords'):
+        issue = 'The selected source representation is no longer present. Choose and authorize a new target in Sources & targets.'
     if target.source == "EXIF":
         issue = "EXIF is available for inspection but has no approved editable mapping for this field"
     if draft.sync:
@@ -529,31 +535,82 @@ def build_plan(paths: list[str], records: dict[str, MetadataRecord],
     return plan
 
 
-class MetadataWorker(QThread):
-    completed = Signal(object, object)
+EDITOR_FIELDS = tuple(dict.fromkeys(['FileType', 'ImageWidth', 'ImageHeight'] +
+                                       [alias for spec in FIELD_SPECS for alias in spec.aliases]))
 
-    def __init__(self, paths, parent=None):
-        super().__init__(parent)
-        self.paths = list(paths)
+
+class MetadataWorker(InspectionWorker):
+    prepared = Signal(object, object, object)
+
+    def __init__(self, paths, parent=None, fields=EDITOR_FIELDS):
+        super().__init__(paths, parent, fields=fields)
+        self.cached_record = None
+        self.scope = "edit"
+        self.previous_overview = None
+        self.previous_stamp = None
+        self.previous_coverage = frozenset()
+        self.overview_coverage = frozenset()
+        self.overview_selectors = ()
+        self.completed.connect(self._prepare_records, Qt.DirectConnection)
+
+    def _prepare_records(self, records, previews, error):
+        # Run on the extraction thread; even one pinned structure can be large.
+        if self.scope == "overview" and self.previous_overview is not None:
+            previous = self.previous_overview
+            selection = _select_fields(self.fields)
+            editing = _select_fields(EDITOR_FIELDS)
+            overview = _select_fields(self.overview_selectors)
+            for path, record in tuple(records.items()):
+                if record.error or previous.error:
+                    self.overview_coverage = frozenset(self.fields)
+                    continue
+                if self.previous_stamp != self.stamps.get(path):
+                    # The extraction is newer than its base. Retry from a fresh
+                    # snapshot instead of labeling mixed versions as current.
+                    return
+                entries = []
+                for index, entry in enumerate(previous.entries):
+                    if index % 256 == 0 and self.isInterruptionRequested():
+                        return
+                    if not selection.includes(entry) and (editing.includes(entry) or overview.includes(entry)):
+                        entries.append(entry)
+                merged = MetadataRecord(path, entries + record.entries, record.sidecars, None,
+                                        list(dict.fromkeys(previous.warnings + record.warnings)))
+                records[path] = merged
+                self.weights[path] = _record_bytes(merged)
+                retained = frozenset(EDITOR_FIELDS) | frozenset(self.overview_selectors)
+                self.overview_coverage = (self.previous_coverage & retained) | frozenset(self.fields)
+        if not self.isInterruptionRequested():
+            self.prepared.emit(records, previews, error)
 
     def run(self):
-        try:
-            with inspection_context(cancelled=self.isInterruptionRequested):
-                records = read_metadata(self.paths)
-        except Exception as exc:
-            records = {str(Path(path).resolve(strict=False)): MetadataRecord(
-                path=str(Path(path).resolve(strict=False)), error=str(exc)) for path in self.paths}
-        previews = {}
-        for path in self.paths:
-            if self.isInterruptionRequested():
-                break
-            key = str(Path(path).resolve(strict=False))
-            try:
-                image, _stamp = read_thumbnail(path, QSize(480, 360))
-                previews[key] = image
-            except Exception:
-                previews[key] = QImage()
-        self.completed.emit(records, previews)
+        if self.cached_record is None:
+            return super().run()
+        full = self.cached_record
+        selection = _select_fields(self.fields)
+        entries = []
+        for index, entry in enumerate(full.entries):
+            if index % 256 == 0 and self.isInterruptionRequested():
+                return
+            if selection.includes(entry):
+                entries.append(entry)
+        record = MetadataRecord(full.path, entries, full.sidecars, full.error, full.warnings)
+        self.stamps[full.path] = self.cached_stamp
+        self.weights[full.path] = _record_bytes(record)
+        if not self.isInterruptionRequested():
+            self.completed.emit({full.path: record}, {}, None)
+
+
+class PreviewImages(InspectionCache):
+    """Preserve Editor's image mapping while sharing validated preview caching."""
+    def __init__(self):
+        super().__init__(16, 16 * 1024 * 1024, preview=True)
+
+    def __getitem__(self, key):
+        return super().__getitem__(key)[0]
+
+    def __setitem__(self, key, image):
+        self.store(key, (image, ''), _file_stamp(key), image.sizeInBytes())
 
 
 class FieldDetailsDialog(QDialog):
@@ -764,6 +821,9 @@ class ReviewDialog(QDialog):
     def __init__(self, plan, parent=None, selected_count=None):
         super().__init__(parent)
         self.plan = list(plan)
+        self.has_proposals = any(row.get("status") in ("valid", "blocked") for row in self.plan)
+        if not self.has_proposals:
+            return
         self.setWindowTitle("Review changes")
         self.resize(1080, 700)
         self.setMinimumSize(760, 520)
@@ -789,7 +849,7 @@ class ReviewDialog(QDialog):
         self.summary.setWordWrap(True)
         self.summary.setStyleSheet("padding: 8px; border: 1px solid palette(mid); border-radius: 4px;")
         layout.addWidget(self.summary)
-        self.copy_notice = QLabel("Planned save: Create copies · Beside each source")
+        self.copy_notice = QLabel("Read-only plan. No images, copies, or sidecars will be created.")
         layout.addWidget(self.copy_notice)
 
         self.splitter = QSplitter(Qt.Vertical)
@@ -885,6 +945,19 @@ class ReviewDialog(QDialog):
         buttons.rejected.connect(self.reject)
         buttons.button(QDialogButtonBox.Close).setDefault(True)
         layout.addWidget(buttons)
+
+    def exec(self):
+        if not self.has_proposals:
+            return QDialog.DialogCode.Rejected
+        return super().exec()
+
+    def open(self):
+        if self.has_proposals:
+            super().open()
+
+    def show(self):
+        if self.has_proposals:
+            super().show()
 
     @staticmethod
     def _value_view():
@@ -1038,12 +1111,12 @@ class BatchEditDialog(QDialog):
         self.priority = priority
         self.sync_default = sync_default
         self.controls = {}
-        self.setWindowTitle("Batch edit selected images")
+        self.setWindowTitle("Batch edit images")
         self.resize(820, 560)
         self.setMinimumSize(680, 480)
         layout = QVBoxLayout(self)
 
-        heading = QLabel(f"Batch edit {len(self.paths)} selected images")
+        heading = QLabel(f"Batch edit {len(self.paths)} images")
         heading.setStyleSheet("font-weight: bold; font-size: 15px;")
         layout.addWidget(heading)
         self.image_list = QListWidget()
@@ -1095,9 +1168,6 @@ class BatchEditDialog(QDialog):
             details = QPushButton("Details…")
             details.clicked.connect(lambda _checked=False, s=spec: self.show_values(s))
             header.addWidget(details)
-            apply_check = QCheckBox("Apply")
-            apply_check.setObjectName(f"batch_apply_{spec.key}")
-            header.addWidget(apply_check)
             box.addLayout(header)
 
             controls = QWidget()
@@ -1105,12 +1175,10 @@ class BatchEditDialog(QDialog):
             control_layout.setContentsMargins(0, 2, 0, 0)
             operation = QComboBox()
             operation.setObjectName(f"batch_operation_{spec.key}")
-            operation.addItems(
-                ["Replace keywords", "Fill empty", "Add keywords", "Remove keywords", "Clear"]
-                if spec.key == "keywords" else ["Replace", "Fill empty", "Clear"])
+            operation.addItems(["Leave unchanged", "Fill empty", "Replace", "Clear"])
             edit = _input_widget(spec, f"batch_value_{spec.key}")
             sync = QCheckBox("Sync IPTC and XMP")
-            sync.setChecked(self.sync_default and bool(spec.iim))
+            sync.setChecked(False)
             sync.setEnabled(bool(spec.iim))
             counterpart = QCheckBox("Create missing counterparts")
             counterpart.hide()
@@ -1128,35 +1196,33 @@ class BatchEditDialog(QDialog):
             control_layout.addWidget(new_target)
             control_layout.addWidget(clear_note)
             control_layout.addWidget(byte_status)
-            controls.hide()
             box.addWidget(controls)
             fields.addWidget(card)
 
             previous = self.existing.get(spec.key)
             if previous:
-                apply_check.setChecked(True)
+                if previous.operation not in [operation.itemText(i) for i in range(operation.count())]:
+                    operation.addItem(previous.operation)
                 operation.setCurrentText(previous.operation)
                 _set_editor_text(edit, previous.value)
                 sync.setChecked(previous.sync)
                 counterpart.setChecked(previous.create_counterpart)
                 new_target.setChecked(previous.authorize_new_target)
-            def update_operation(value, edit=edit, clear_note=clear_note, check=apply_check):
-                clear = value == "Clear"
-                edit.setEnabled(check.isChecked() and not clear)
-                clear_note.setVisible(check.isChecked() and clear)
-            def update_apply(checked, controls=controls, operation=operation, edit=edit,
-                             clear_note=clear_note, check=apply_check, update=update_operation):
-                controls.setVisible(checked)
-                update(operation.currentText(), edit, clear_note, check)
-            apply_check.toggled.connect(update_apply)
+            def update_operation(value, edit=edit, clear_note=clear_note, sync=sync,
+                                 counterpart=counterpart, new_target=new_target):
+                active = value != "Leave unchanged"
+                edit.setEnabled(active and value != "Clear")
+                clear_note.setVisible(value == "Clear")
+                for control in (sync, counterpart, new_target):
+                    control.setVisible(active and (control is not counterpart or sync.isChecked()))
+                self._update_batch_action()
             operation.currentTextChanged.connect(update_operation)
             edit.textChanged.connect(lambda *_args, s=spec, w=edit, label=byte_status:
                                      self.update_bytes(s, _editor_text(w), label))
+            edit.textChanged.connect(self._update_batch_action)
             update_operation(operation.currentText())
-            if previous:
-                controls.show()
             self.controls[spec.key] = {
-                "spec": spec, "apply": apply_check, "controls": controls,
+                "spec": spec, "controls": controls,
                 "operation": operation, "edit": edit, "byte_status": byte_status,
                 "sync": sync, "counterpart": counterpart,
                 "new_target": new_target,
@@ -1171,7 +1237,33 @@ class BatchEditDialog(QDialog):
         add.setDefault(True)
         add.clicked.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        add.setIcon(QIcon.fromTheme("list-add", self.style().standardIcon(QStyle.SP_ArrowForward)))
+        buttons.button(QDialogButtonBox.Cancel).setIcon(QIcon.fromTheme("dialog-cancel", self.style().standardIcon(QStyle.SP_DialogCancelButton)))
         layout.addWidget(buttons)
+        self.scope_summary = QLabel()
+        layout.addWidget(self.scope_summary)
+        self.discard_requested = False
+        if self.existing:
+            discard = buttons.addButton("Discard batch changes", QDialogButtonBox.DestructiveRole)
+            discard.setIcon(QIcon.fromTheme("edit-delete"))
+            discard.clicked.connect(self.discard_changes)
+        self._update_batch_action()
+
+    def discard_changes(self):
+        self.discard_requested = True
+        QDialog.accept(self)
+
+    def _update_batch_action(self):
+        if not hasattr(self, "add_button"):
+            return
+        fields = self.selected_fields()
+        self.add_button.setEnabled(bool(fields) and len(set(self.paths)) >= 2)
+        self.scope_summary.setText(f"Selected images: {len(set(self.paths))} · Proposed fields: {len(fields)}")
+
+    def accept(self):
+        if not self.selected_fields() or len(set(self.paths)) < 2:
+            return
+        super().accept()
 
     def update_bytes(self, spec, value, label):
         if spec.iim_limit is None:
@@ -1199,9 +1291,9 @@ class BatchEditDialog(QDialog):
         result = {}
         for spec in FIELD_SPECS:
             control = self.controls[spec.key]
-            if not control["apply"].isChecked():
-                continue
             operation = control["operation"].currentText()
+            if operation == "Leave unchanged":
+                continue
             value = "" if operation == "Clear" else _editor_text(control["edit"])
             result[spec.key] = Draft(operation, value, sync=control["sync"].isChecked(),
                                       create_counterpart=control["counterpart"].isChecked(),
@@ -1210,16 +1302,82 @@ class BatchEditDialog(QDialog):
         return result
 
 
-class MetadataEditor(QMainWindow):
+class EditorImageList(QListWidget):
+    """Native selection keeps its focus/anchor, independently of the edited image."""
+    editingRowChanged = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.editing_row = -1
+        self._selecting = False
+        self.currentRowChanged.connect(self._current_changed)
+
+    def set_editing_row(self, row):
+        if row != self.editing_row:
+            self.editing_row = row
+            self.editingRowChanged.emit(row)
+
+    def _current_changed(self, row):
+        if not self._selecting:
+            self.set_editing_row(row)
+
+    def mousePressEvent(self, event):
+        self._selecting = bool(event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
+        try:
+            super().mousePressEvent(event)
+            if not self._selecting and self.indexAt(event.position().toPoint()).isValid():
+                self.set_editing_row(self.currentRow())
+        finally:
+            self._selecting = False
+
+    def keyPressEvent(self, event):
+        self._selecting = bool(event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
+        try:
+            super().keyPressEvent(event)
+            if not self._selecting:
+                self.set_editing_row(self.currentRow())
+        finally:
+            self._selecting = False
+
+
+class MetadataEditor(QMainWindow, ListThumbnails):
     HORIZONTAL_SPLITTER_KEY = "metadata/editorHorizontalSplitterSizes"
     IMAGE_SPLITTER_KEY = "metadata/editorImagePanelSplitterSizes"
+    EDIT_TAB, OVERVIEW_TAB, ALL_TAB, ADVANCED_TAB = range(4)
 
     def __init__(self, paths, preferences=None):
         super().__init__()
-        self.paths = [str(Path(path).expanduser().resolve(strict=False)) for path in paths]
-        self.records = {}
-        self.previews = {}
+        self.paths = list(dict.fromkeys(_source_path(Path(path).expanduser()) for path in paths))
+        self.records = InspectionCache(32, 32 * 1024 * 1024)
+        self._representation_indexes = {}
+        self.previews = PreviewImages()
+        self.thumbnails = InspectionCache(128, 4 * 1024 * 1024, preview=True)
+        self.thumbnail_worker = None
+        self._thumbnail_seen = {}
+        self._thumbnail_cursor = 0
+        self._icon_paths = set()
+        self._path_rows = {path: row for row, path in enumerate(self.paths)}
         self.preferences = preferences or MetadataSourcePreferences()
+        self.overview_preferences = OverviewPreferences(self.preferences.settings)
+        self.full_records = InspectionCache(4, 64 * 1024 * 1024)
+        self.overview_cache = InspectionCache(32, 16 * 1024 * 1024)
+        self._overview_scopes = {}
+        self._active_overview = None
+        self._displayed_overview = None
+        self.preview_workers = set()
+        self._preview_failures = {}
+        self._active_preview = None
+        self._active_record = None
+        self._active_full = None
+        self._load_generation = 0
+        self._closing = False
+        self._all_requested = None
+        self._inspection_record = None
+        self._inspection_filter = None
+        self._inspection_filter_pending = False
+        self._planning_records = {}
+        self._pending_action = None
+        self._load_paths = []
         self.source_targets = {}
         self.source_drafts = []
         self.sync_overrides = {}
@@ -1246,7 +1404,7 @@ class MetadataEditor(QMainWindow):
         self.image_heading = QLabel("Loading images…")
         self.image_heading.setStyleSheet("font-weight: bold; font-size: 15px;")
         top.addWidget(self.image_heading, 1)
-        self.batch_button = QPushButton("Batch edit selected (0)…")
+        self.batch_button = QPushButton("Edit selected images…")
         self.batch_button.setEnabled(False)
         self.batch_button.clicked.connect(self.batch_edit_selected)
         top.addWidget(self.batch_button)
@@ -1265,13 +1423,25 @@ class MetadataEditor(QMainWindow):
         image_list_layout = QVBoxLayout(self.image_list_panel)
         image_list_layout.setContentsMargins(0, 0, 0, 0)
         image_list_layout.addWidget(QLabel("Images"))
-        self.file_list = QListWidget()
+        self.file_list = EditorImageList()
+        self.image_list = self.file_list
+        self.file_list.setIconSize(QSize(48, 36))
+        self.file_list.setUniformItemSizes(True)
+        self.file_list.verticalScrollBar().valueChanged.connect(lambda: self._pump_thumbnails())
         self.file_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.file_list.currentRowChanged.connect(self._image_changed)
+        self.file_list.editingRowChanged.connect(self._image_changed)
         self.file_list.itemSelectionChanged.connect(self._selection_changed)
         image_list_layout.addWidget(self.file_list, 1)
+        selection_actions = QHBoxLayout()
+        for text, callback in (("Select all", self.file_list.selectAll),
+                               ("Clear selection", self.file_list.clearSelection)):
+            button = QPushButton(text)
+            button.clicked.connect(callback)
+            selection_actions.addWidget(button)
+        image_list_layout.addLayout(selection_actions)
+        self.selection_summary = QLabel()
+        image_list_layout.addWidget(self.selection_summary)
         self.image_list_panel.setMinimumHeight(120)
-        self.image_splitter.addWidget(self.image_list_panel)
 
         self.preview_panel = QWidget()
         preview_layout = QVBoxLayout(self.preview_panel)
@@ -1296,9 +1466,10 @@ class MetadataEditor(QMainWindow):
         preview_layout.addWidget(self.image_info)
         self.preview_panel.setMinimumHeight(155)
         self.image_splitter.addWidget(self.preview_panel)
-        self.image_splitter.setStretchFactor(0, 1)
-        self.image_splitter.setStretchFactor(1, 1)
-        self.image_splitter.setSizes([250, 220])
+        self.image_splitter.addWidget(self.image_list_panel)
+        self.image_splitter.setStretchFactor(0, 3)
+        self.image_splitter.setStretchFactor(1, 2)
+        self.image_splitter.setSizes([360, 220])
         left.addWidget(self.image_splitter, 1)
         self.splitter.addWidget(self.left_panel)
 
@@ -1311,10 +1482,43 @@ class MetadataEditor(QMainWindow):
         self.fields_layout.setContentsMargins(4, 1, 4, 4)
         self.fields_layout.setSpacing(5)
         self.field_controls = {}
+        self.advanced_scroll = QScrollArea()
+        self.advanced_scroll.setWidgetResizable(True)
+        advanced = QWidget()
+        self.advanced_layout = QVBoxLayout(advanced)
+        self.sources_targets_help = QLabel("")
+        self.sources_targets_help.setTextFormat(Qt.PlainText)
+        self.sources_targets_help.setWordWrap(True)
+        self.sources_targets_help.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+        self.advanced_layout.addWidget(self.sources_targets_help)
+        self.advanced_scroll.setWidget(advanced)
+        self.loading_label = QLabel('Loading metadata…')
+        self.loading_label.setTextFormat(Qt.PlainText)
+        self.fields_layout.addWidget(self.loading_label)
+        self.retry_metadata = QPushButton('Retry metadata')
+        self.retry_metadata.setIcon(QIcon.fromTheme('view-refresh'))
+        self.retry_metadata.clicked.connect(self._retry_metadata)
+        self.retry_metadata.hide()
+        self.fields_layout.addWidget(self.retry_metadata)
+        self.target_notice = QLabel('Planning only. Your image files will not be changed.')
+        self.target_notice.setWordWrap(True)
+        self.fields_layout.addWidget(self.target_notice)
         self._build_fields()
+        self.advanced_layout.addStretch(1)
         self.fields_layout.addStretch(1)
         self.form_scroll.setWidget(self.form_content)
-        self.splitter.addWidget(self.form_scroll)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.form_scroll, 'Edit metadata')
+        self.overview = MetadataOverview(self.preferences, self.overview_preferences, self)
+        self.overview.configuration_changed.connect(self._reload_overview_preferences)
+        self.overview.retry.connect(self._retry_overview)
+        self.tabs.addTab(self.overview, 'Overview')
+        self._build_all_fields()
+        self.tabs.addTab(self.advanced_scroll, 'Sources && targets')
+        self.tabs.currentChanged.connect(self._editor_tab_changed)
+        self.splitter.addWidget(self.tabs)
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setHandleWidth(7)
@@ -1333,24 +1537,25 @@ class MetadataEditor(QMainWindow):
         footer = QHBoxLayout()
         self.pending_label = QLabel("Pending changes: 0")
         footer.addWidget(self.pending_label, 1)
-        self.review_button = QPushButton("Review changes")
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        self.buttons.button(QDialogButtonBox.Cancel).setIcon(QIcon.fromTheme('dialog-cancel', self.style().standardIcon(QStyle.SP_DialogCancelButton)))
+        self.review_button = self.buttons.addButton('Review changes', QDialogButtonBox.AcceptRole)
+        self.review_button.setIcon(QIcon.fromTheme('go-next', self.style().standardIcon(QStyle.SP_ArrowForward)))
         self.review_button.setDefault(True)
         self.review_button.clicked.connect(self.review_changes)
-        footer.addWidget(self.review_button)
+        self.buttons.rejected.connect(self.close)
+        footer.addWidget(self.buttons)
         layout.addLayout(footer)
-        self.statusBar().showMessage("Metadata writing is unavailable in this development phase.")
+        self.statusBar().showMessage("Read-only change planner. No metadata will be written.")
 
         if self.paths:
             for path in self.paths:
                 item = QListWidgetItem(Path(path).name)
                 item.setData(Qt.UserRole, path)
+                item.setSizeHint(QSize(0, 40))
                 item.setToolTip(path)
                 self.file_list.addItem(item)
             self.file_list.setCurrentRow(0)
-            self.worker = MetadataWorker(self.paths, self)
-            self.worker.completed.connect(self._scan_complete)
-            self.worker.finished.connect(self._worker_finished)
-            self.worker.start()
         else:
             self.image_heading.setText("No images selected")
             self.review_button.setEnabled(False)
@@ -1359,6 +1564,489 @@ class MetadataEditor(QMainWindow):
         self._selection_changed()
         self._refresh_pending()
         QTimer.singleShot(0, self._restore_splitter_sizes)
+
+    def _build_all_fields(self):
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        self.all_status = QLabel('Open All fields to inspect complete metadata.')
+        self.all_status.setTextFormat(Qt.PlainText)
+        layout.addWidget(self.all_status)
+        controls = QHBoxLayout()
+        self.all_search = QLineEdit()
+        self.all_search.setPlaceholderText('Search all tag names, values, groups or identifiers')
+        self.all_search.textChanged.connect(self._search_all_fields)
+        controls.addWidget(self.all_search, 1)
+        self.all_progress = QProgressBar()
+        self.all_progress.setRange(0, 0)
+        self.all_progress.setMaximumWidth(100)
+        self.all_progress.hide()
+        controls.addWidget(self.all_progress)
+        self.all_cancel = QPushButton('Cancel loading')
+        self.all_cancel.clicked.connect(self._cancel_all_fields)
+        controls.addWidget(self.all_cancel)
+        self.all_retry = QPushButton('Load all fields')
+        self.all_retry.clicked.connect(lambda: self._editor_tab_changed(self.ALL_TAB))
+        self.all_retry.hide()
+        controls.addWidget(self.all_retry)
+        layout.addLayout(controls)
+        self.all_model = TagModel(False, self)
+        self.all_table = QTableView()
+        self.all_table.setModel(self.all_model)
+        self.all_table.setWordWrap(False)
+        self.all_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.all_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.all_table.verticalHeader().setDefaultSectionSize(26)
+        self.all_table.verticalHeader().hide()
+        self.all_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.all_table.selectionModel().currentChanged.connect(self._inspect_entry)
+        layout.addWidget(self.all_table, 1)
+        self.all_details = QPlainTextEdit()
+        self.all_details.setReadOnly(True)
+        self.all_details.setMaximumHeight(160)
+        layout.addWidget(self.all_details)
+        self.all_pin = QAction('Show in Browser overview', self)
+        self.all_pin.setIcon(QIcon.fromTheme('list-add'))
+        self.all_pin.setEnabled(False)
+        self.all_pin.triggered.connect(self._pin_entry)
+        self.all_model.pin_preferences = self.overview_preferences
+        self.all_model.pin_destination = 'Browser overview'
+        delegate = PinDelegate(self.all_table, self.overview_preferences, 'Browser overview')
+        delegate.toggled.connect(lambda index: self._pin_entry(index.data(Qt.UserRole)))
+        details = QPushButton('Details')
+        details.setIcon(QIcon.fromTheme('dialog-information'))
+        details.clicked.connect(lambda: MetadataDetailsDialog(metadata_alternatives(self._inspected_entry, self._inspection_record), self).exec()
+                                if getattr(self, '_inspected_entry', None) else None)
+        layout.addWidget(details, 0, Qt.AlignRight)
+        configure = QPushButton('Configure overview fields…')
+        configure.clicked.connect(lambda: OverviewFieldsDialog(self.overview_preferences, self).exec())
+        layout.addWidget(configure, 0, Qt.AlignLeft)
+        self.tabs.addTab(panel, 'All fields')
+
+    def _inspect_entry(self, current, _previous=None):
+        entry = current.data(Qt.UserRole) if current.isValid() else None
+        self._inspected_entry = entry
+        self.all_pin.setEnabled(entry is not None)
+        text = (f'Structured value ({len(entry.value)} elements)' if isinstance(entry.value, (dict, list)) else value_text(entry.value)) if entry else ''
+        if len(text) > 1000:
+            text = text[:999] + '…'
+        self.all_details.setPlainText((f'{entry.name}\nSource: {entry.source}\n{entry.group} · {entry.language or "No language qualification"}\n' + text) if entry else '')
+        pinned = entry is not None and self.overview_preferences.is_pinned(entry, self._inspection_record)
+        self.all_pin.setText('Remove from Browser overview' if pinned else 'Show in Browser overview')
+
+    def _pin_entry(self, entry=None):
+        entry = entry if isinstance(entry, MetadataEntry) else getattr(self, '_inspected_entry', None)
+        if entry is not None and self._inspection_record is not None:
+            try:
+                self.overview_preferences.reload()
+                pinned = self.overview_preferences.is_pinned(entry, self._inspection_record)
+                self.overview_preferences.toggle_entry(entry, self._inspection_record)
+                self._inspect_entry(self.all_table.currentIndex())
+                self.all_table.viewport().update()
+                self._update_overview()
+                self.statusBar().showMessage('Removed from Browser overview' if pinned else 'Added to Browser overview', 3500)
+            except ValueError as exc:
+                QMessageBox.warning(self, 'Cannot change overview fields', str(exc))
+
+    def _editor_tab_changed(self, index):
+        self._reload_overview_preferences()
+        if index == self.ALL_TAB:
+            current = self._full_record(self._active_path())
+            if current is not None and current.error:
+                self.full_records.pop(self._active_path(), None)
+                self._active_full = None
+            self._all_requested = self._active_path()
+            if self.worker is not None and (self.worker.fields is not None or self.worker.paths != [self._active_path()]):
+                self.worker.requestInterruption()
+                self._load_generation += 1
+            self._update_all_fields()
+            if self._inspection_record is not None and self._inspection_filter is None:
+                self._search_all_fields()
+        else:
+            self._all_requested = None
+            if self._inspection_filter is not None:
+                self._inspection_filter.requestInterruption()
+                self._inspection_filter_pending = False
+            if self.worker is not None and self.worker.fields is None:
+                self.worker.requestInterruption()
+                self._load_generation += 1
+        self._pump_load()
+
+    def _reload_overview_preferences(self):
+        if self._closing:
+            return
+        self.overview_preferences.reload()
+        previous_priority = tuple(self.preferences.priority)
+        self.preferences.reload()
+        if tuple(self.preferences.priority) != previous_priority:
+            self._refresh_individual(self._active_path())
+            self._refresh_pending()
+        self._inspect_entry(self.all_table.currentIndex())
+        self.all_table.viewport().update()
+        self._update_overview()
+        self._pump_load()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange and self.isActiveWindow() and hasattr(self, 'all_table'):
+            QTimer.singleShot(0, self._reload_overview_preferences)
+
+    def _cancel_all_fields(self):
+        self._all_requested = None
+        if self.worker is not None and self.worker.fields is None:
+            self.worker.requestInterruption()
+            self._load_generation += 1
+        self.all_status.setText('Complete metadata loading canceled.')
+        self.all_progress.hide()
+        self.all_cancel.hide()
+        self.all_retry.show()
+
+    def _overview_snapshot(self, path):
+        record = self.overview_cache.get(path)
+        if record is None and self._active_overview and self._active_overview[1].path == path:
+            stamp, active = self._active_overview
+            if stamp == _record_stamp(path, active.sidecars):
+                record = active
+        scope = self._overview_scopes.get(path)
+        if record is not None and scope and scope[0] is record:
+            return record, scope[1]
+        record = self._record(path)
+        return record, frozenset(EDITOR_FIELDS) if record is not None else frozenset()
+
+    def _overview_missing(self, path):
+        record, covered = self._overview_snapshot(path)
+        if record is not None and record.error:
+            return ()
+        logical = set()
+        qualified = set()
+        for selector in covered:
+            selection = _select_fields((selector,))
+            logical.update(selection.logical_names)
+            qualified.update(selection.qualified)
+        missing = []
+        for selector in self.overview_preferences.selectors:
+            selection = _select_fields((selector,))
+            if selection.logical_names:
+                present = selection.logical_names <= logical
+            else:
+                languages = [field.language.casefold() for field in self.overview_preferences.fields
+                             if field.selector.casefold() == selector.casefold() and field.language]
+                present = all(parts in qualified or parts[-1] in logical or any(
+                    parts[-1].endswith("-" + language) and
+                    parts[-1][:-(len(language) + 1)] in logical for language in languages)
+                    for parts in selection.qualified)
+            if not present:
+                missing.append(selector)
+        return tuple(missing)
+
+    def _store_overview(self, path, record, coverage, stamp, weight):
+        self.overview_cache.store(path, record, stamp, weight)
+        self._active_overview = (stamp, record)
+        wanted = frozenset(EDITOR_FIELDS) | frozenset(self.overview_preferences.selectors)
+        self._overview_scopes[path] = (record, frozenset(coverage) & wanted)
+        keep = set(self.overview_cache) | {path}
+        self._overview_scopes = {key: value for key, value in self._overview_scopes.items() if key in keep}
+
+    def _update_overview(self):
+        if self.tabs.currentIndex() != self.OVERVIEW_TAB:
+            return
+        path = self._active_path()
+        record, _covered = self._overview_snapshot(path)
+        if self._overview_missing(path):
+            record = None
+        key = (path, id(record), tuple(self.overview_preferences.fields), tuple(self.preferences.priority))
+        if key != self._displayed_overview:
+            self._displayed_overview = key
+            self.overview.set_record(record)
+
+    def _retry_overview(self):
+        path = self._active_path()
+        self.overview_cache.pop(path, None)
+        self._overview_scopes.pop(path, None)
+        self._active_overview = None
+        if self._record(path) is not None and self._record(path).error:
+            self._retry_metadata()
+        self._displayed_overview = None
+        self._update_overview()
+        self._pump_load()
+
+    def _full_record(self, path):
+        record = self.full_records.get(path)
+        if record is not None:
+            return record
+        if self._active_full and self._active_full[1].path == path:
+            stamp, record = self._active_full
+            if stamp == _record_stamp(path, record.sidecars):
+                return record
+        return None
+
+    def _update_all_fields(self):
+        if self.tabs.currentIndex() != self.ALL_TAB:
+            return
+        record = self._full_record(self._active_path())
+        if record is None:
+            if self._inspection_record is not None:
+                self.all_model.set_record(None)
+                self._inspection_record = None
+            if self._all_requested:
+                self.all_status.setText('Loading all metadata…')
+                self.all_progress.show()
+                self.all_cancel.show()
+                self.all_retry.hide()
+            return
+        self.all_progress.hide()
+        self.all_cancel.hide()
+        self.all_retry.setVisible(bool(record.error))
+        self.all_status.setText(record.error or f'{len(record.entries)} complete metadata entries')
+        if record is not self._inspection_record:
+            self._inspection_record = record
+            self.all_model.set_record(record)
+            self._search_all_fields()
+
+    def _search_all_fields(self, *_args):
+        if self._inspection_record is None:
+            return
+        if self._inspection_filter is not None:
+            self._inspection_filter.requestInterruption()
+            self._inspection_filter_pending = True
+            return
+        self._inspection_filter_pending = False
+        if not self.all_search.text().strip():
+            self.all_model.set_record(self._inspection_record)
+            return
+        worker = TagFilterWorker(self._inspection_record, self.all_search.text(), None, False, self)
+        self._inspection_filter = worker
+        worker.completed.connect(lambda record, rows: self._inspection_matches(worker, record, rows), Qt.QueuedConnection)
+        worker.finished.connect(lambda: self._inspection_finished(worker), Qt.QueuedConnection)
+        worker.start()
+
+    def _inspection_matches(self, worker, record, rows):
+        if not self._closing and self.tabs.currentIndex() == self.ALL_TAB and not worker.isInterruptionRequested() and record is self._inspection_record:
+            self.all_model.set_record(record, rows)
+            self.all_status.setText(f'{len(rows)} of {len(record.entries)} metadata entries')
+
+    def _inspection_finished(self, worker):
+        self._inspection_filter = None
+        worker.deleteLater()
+        if self._closing:
+            self._finish_close()
+        elif self._inspection_filter_pending:
+            self._search_all_fields()
+
+    def _record(self, path):
+        if path is None:
+            return None
+        record = self.records.get(path)
+        if record is not None:
+            return record
+        if self._active_record and self._active_record[1].path == path:
+            stamp, record = self._active_record
+            if stamp == _record_stamp(path, record.sidecars):
+                return record
+        if path in self._planning_records:
+            stamp, record = self._planning_records[path]
+            if stamp == _record_stamp(path, record.sidecars):
+                return record
+            del self._planning_records[path]
+        full = self._full_record(path)
+        if full is not None:
+            if full.error:
+                return full
+            selection = _select_fields(EDITOR_FIELDS)
+            record = MetadataRecord(path, [entry for entry in full.entries if selection.includes(entry)],
+                                    full.sidecars, full.error, full.warnings)
+            stamp = _record_stamp(path, record.sidecars)
+            weight = self.full_records._items[path][2] if path in self.full_records._items else self.records.budget + 1
+            self.records.store(path, record, stamp, weight)
+            self._active_record = (stamp, record)
+            return record
+        return None
+
+    def _retry_metadata(self):
+        path = self._active_path()
+        self.records.pop(path, None)
+        self._planning_records.pop(path, None)
+        self._representation_indexes.pop(path, None)
+        self._active_record = None
+        full = self._full_record(path)
+        if full is not None and full.error:
+            self.full_records.pop(path, None)
+            self._active_full = None
+        self._load_generation += 1
+        if self.worker is not None:
+            self.worker.requestInterruption()
+        self._image_changed(self.file_list.editing_row)
+
+    def _preview_image(self, path):
+        image = self.previews.get(path)
+        if image is not None:
+            return image
+        if self._active_preview and self._active_preview[0] == path:
+            _path, stamp, image = self._active_preview
+            if stamp == _file_stamp(path):
+                return image
+        return None
+
+    def _wanted_previews(self):
+        return (self._active_path(),) if self._active_path() else ()
+
+    def _preview_for(self, path):
+        image = self._preview_image(path)
+        return (image, "") if image is not None else None
+
+    def _preview_failure(self, path):
+        return self._preview_failures.get(path)
+
+    def _ensure_preview(self):
+        path = self._active_path()
+        if self._closing or not path or self._preview_image(path) is not None or path in self._preview_failures:
+            return
+        if len(self.preview_workers) >= 2 or any(job.path == path and not job.isInterruptionRequested() for job in self.preview_workers):
+            return
+        worker = PreviewWorker(path, self)
+        self.preview_workers.add(worker)
+        worker.completed.connect(self._preview_ready, Qt.QueuedConnection)
+        worker.finished.connect(lambda: self._preview_finished(worker), Qt.QueuedConnection)
+        worker.start()
+
+    def _preview_ready(self, path, value, stamp):
+        if self._closing or path != self._active_path() or stamp != _file_stamp(path):
+            return
+        image, error = value
+        if error:
+            self._preview_failures[path] = error
+            self.preview.setText(error)
+            return
+        self.previews.store(path, value, stamp, image.sizeInBytes())
+        self._active_preview = (path, stamp, image)
+        self._store_thumbnail(path, image, stamp)
+        self._refresh_preview()
+        self._pump_thumbnails()
+
+    def _preview_finished(self, worker):
+        self.preview_workers.discard(worker)
+        worker.deleteLater()
+        if self._closing:
+            self._finish_close()
+        else:
+            self._ensure_preview()
+            self._pump_thumbnails()
+
+    def _next_load(self):
+        path = self._active_path()
+        if self.tabs.currentIndex() == self.ALL_TAB and self._all_requested == path and self._full_record(path) is None:
+            return path, None
+        if path and self._record(path) is None:
+            return path, EDITOR_FIELDS
+        if path and self.tabs.currentIndex() == self.OVERVIEW_TAB:
+            missing = self._overview_missing(path)
+            if missing:
+                return path, missing
+        for candidate in self._load_paths:
+            if self._record(candidate) is None:
+                return candidate, EDITOR_FIELDS
+        return None
+
+    def _pump_load(self):
+        if self._closing or self.worker is not None:
+            return
+        desired = self._next_load()
+        if desired is None:
+            if self._pending_action:
+                action = self._pending_action
+                self._pending_action = None
+                self._load_paths = []
+                QTimer.singleShot(0, self.batch_edit_selected if action == 'batch' else self.review_changes)
+            return
+        path, fields = desired
+        generation = self._load_generation
+        worker = MetadataWorker([path], self, fields=fields)
+        if fields is not None and fields != EDITOR_FIELDS:
+            worker.scope = "overview"
+            previous, coverage = self._overview_snapshot(path)
+            stamp = _record_stamp(path, previous.sidecars) if previous is not None else None
+            if previous is None or self._overview_snapshot(path)[0] is not previous:
+                worker.deleteLater()
+                QTimer.singleShot(0, lambda: self._image_changed(self.file_list.editing_row))
+                return
+            worker.previous_overview = previous
+            worker.previous_stamp = stamp
+            worker.previous_coverage = coverage
+            worker.overview_selectors = self.overview_preferences.selectors
+            full = self._full_record(path)
+            if full is not None and not full.error:
+                worker.cached_record = full
+                worker.cached_stamp = _record_stamp(path, full.sidecars)
+        if fields is None:
+            worker.derived_fields = EDITOR_FIELDS
+        self.worker = worker
+        worker.prepared.connect(lambda records, _previews, _error: self._receive_load(worker, generation, records), Qt.QueuedConnection)
+        worker.finished.connect(lambda: self._worker_finished(worker), Qt.QueuedConnection)
+        worker.start()
+
+    def _receive_load(self, worker, generation, records):
+        if self._closing or generation != self._load_generation:
+            return
+        for path, record in records.items():
+            stamp = worker.stamps.get(path)
+            if not record.error and stamp != _record_stamp(path, record.sidecars):
+                continue
+            if record.error:
+                stamp = _record_stamp(path, record.sidecars)
+            if worker.scope == "overview":
+                self._store_overview(path, record, worker.overview_coverage, stamp, worker.weights[path])
+                continue
+            if worker.fields is None:
+                existing = self._record(path)
+                self.full_records.store(path, record, stamp, worker.weights[path])
+                self._active_full = (stamp, record)
+                if path in worker.derived_records and (existing is None or existing.error):
+                    subset = worker.derived_records[path]
+                    self.records.store(path, subset, stamp, worker.derived_weights[path])
+                    self._active_record = (stamp, subset)
+                    self._representation_indexes.pop(path, None)
+            else:
+                self.records.store(path, record, stamp, worker.weights[path])
+                self._representation_indexes.pop(path, None)
+                if path == self._active_path():
+                    self._active_record = (stamp, record)
+                if path in self._load_paths or path in self._proposal_paths():
+                    self._planning_records[path] = (stamp, record)
+        self._image_changed(self.file_list.editing_row)
+        self._selection_changed()
+        self._update_all_fields()
+
+    def _proposal_paths(self):
+        paths = {path for path, fields in self.drafts.items() if any(draft.operation != 'Leave unchanged' for draft in fields.values())}
+        paths.update(path for path, _key, draft in self.source_drafts if draft.operation != 'Leave unchanged')
+        paths.update(path for session in self.batch_sessions if session['fields'] for path in session['paths'])
+        return [path for path in self.paths if path in paths]
+
+    def _plan_records(self, paths):
+        return {path: record for path in paths if (record := self._record(path)) is not None}
+
+    def _prune_record_working_set(self):
+        keep = set(self._load_paths) | set(self._proposal_paths())
+        for path in tuple(self._planning_records):
+            if path not in keep:
+                del self._planning_records[path]
+        indexed = set(self.records) | {self._active_path()}
+        for path in tuple(self._representation_indexes):
+            if path not in indexed:
+                del self._representation_indexes[path]
+
+    def _request_paths(self, paths, action):
+        missing = [path for path in paths if self._record(path) is None]
+        if not missing:
+            return False
+        self._pending_action = action
+        self._load_paths = list(paths)
+        for path in paths:
+            record = self._record(path)
+            if record is not None:
+                self._planning_records[path] = (_record_stamp(path, record.sidecars), record)
+        self.statusBar().showMessage('Loading metadata for the selected operation…')
+        self._pump_load()
+        return True
 
     def _build_fields(self):
         for spec in FIELD_SPECS:
@@ -1373,26 +2061,33 @@ class MetadataEditor(QMainWindow):
             heading.addWidget(title)
             state = QLabel()
             state.setWordWrap(True)
-            heading.addWidget(state, 1)
+            heading.addStretch(1)
             sync = QCheckBox("Sync IPTC and XMP")
             sync.setChecked(self.preferences.sync_default and bool(spec.iim))
             sync.setEnabled(bool(spec.iim))
-            heading.addWidget(sync)
+
             clear = QPushButton("Clear…")
             clear.setMaximumWidth(82)
             clear.hide()
             heading.addWidget(clear)
             details = QPushButton("Other metadata sources (0)")
             details.setMaximumWidth(230)
+
             heading.addWidget(details)
             box.addLayout(heading)
+            advanced = QGroupBox(spec.label)
+            advanced_box = QVBoxLayout(advanced)
+            advanced_box.addWidget(state)
+            advanced_box.addWidget(sync)
+            self.advanced_layout.addWidget(advanced)
+            advanced.hide()
 
             conflict = QWidget()
             conflict_layout = QVBoxLayout(conflict)
             conflict_layout.setContentsMargins(0, 0, 0, 0)
             conflict_layout.setSpacing(2)
             conflict.hide()
-            box.addWidget(conflict)
+            advanced_box.addWidget(conflict)
 
             edit = _input_widget(spec, f"individual_{spec.key}")
             if isinstance(edit, QPlainTextEdit):
@@ -1403,23 +2098,23 @@ class MetadataEditor(QMainWindow):
             note = QLabel()
             note.setWordWrap(True)
             note.hide()
-            box.addWidget(note)
+            advanced_box.addWidget(note)
             byte_status = QLabel()
             byte_status.setWordWrap(True)
             byte_status.hide()
-            box.addWidget(byte_status)
+            advanced_box.addWidget(byte_status)
             create_target = QCheckBox("Create a new Embedded XMP value")
             create_target.hide()
-            box.addWidget(create_target)
+            advanced_box.addWidget(create_target)
             create_counterpart = QCheckBox("Create the missing IPTC or XMP counterpart")
             create_counterpart.hide()
-            box.addWidget(create_counterpart)
+            advanced_box.addWidget(create_counterpart)
             self.fields_layout.addWidget(card)
 
             control = {"spec": spec, "card": card, "state": state, "clear": clear,
                        "details": details, "conflict": conflict, "conflict_layout": conflict_layout,
                        "edit": edit, "note": note, "byte_status": byte_status,
-                       "sync": sync, "create_target": create_target,
+                       "advanced": advanced, "sync": sync, "create_target": create_target,
                        "create_counterpart": create_counterpart}
             self.field_controls[spec.key] = control
             clear.clicked.connect(lambda _checked=False, s=spec: self.clear_individual(s))
@@ -1433,7 +2128,7 @@ class MetadataEditor(QMainWindow):
                 edit.textChanged.connect(lambda value, s=spec: self.individual_changed(s, value))
 
     def _active_path(self):
-        row = self.file_list.currentRow()
+        row = self.file_list.editing_row
         return self.paths[row] if 0 <= row < len(self.paths) else None
 
     def _splitter_moved(self, *_args):
@@ -1444,7 +2139,7 @@ class MetadataEditor(QMainWindow):
         settings = self.preferences.settings
         for splitter, key, minimums, first_fraction in (
                 (self.splitter, self.HORIZONTAL_SPLITTER_KEY, (220, 640), 0.31),
-                (self.image_splitter, self.IMAGE_SPLITTER_KEY, (120, 155), 0.53)):
+                (self.image_splitter, f'{self.IMAGE_SPLITTER_KEY}/preview-first', (155, 120), 0.62)):
             total = sum(splitter.sizes())
             if total <= sum(minimums):
                 total = (splitter.width() if splitter.orientation() == Qt.Horizontal
@@ -1452,6 +2147,10 @@ class MetadataEditor(QMainWindow):
             if total <= sum(minimums):
                 continue
             saved = settings.value(key, None)
+            if splitter is self.image_splitter and saved is None:
+                previous = settings.value(self.IMAGE_SPLITTER_KEY, None)
+                if isinstance(previous, (list, tuple)) and len(previous) == 2:
+                    saved = [previous[1], previous[0]]
             sizes = _resized_splitter_sizes(saved, total, *minimums)
             if sizes is None:
                 first = max(minimums[0], min(round(total * first_fraction), total - minimums[1]))
@@ -1462,7 +2161,7 @@ class MetadataEditor(QMainWindow):
     def _persist_splitter_sizes(self):
         settings = self.preferences.settings
         for splitter, key in ((self.splitter, self.HORIZONTAL_SPLITTER_KEY),
-                              (self.image_splitter, self.IMAGE_SPLITTER_KEY)):
+                              (self.image_splitter, f'{self.IMAGE_SPLITTER_KEY}/preview-first')):
             sizes = splitter.sizes()
             if len(sizes) == 2 and all(size > 0 for size in sizes):
                 settings.setValue(key, list(sizes))
@@ -1475,7 +2174,10 @@ class MetadataEditor(QMainWindow):
 
     def _refresh_preview(self):
         path = self.current_preview_path
-        image = self.previews.get(path) if path else None
+        image = self._preview_image(path)
+        thumbnail = self.thumbnails.get(path) if path else None
+        if image is None and thumbnail is not None:
+            image = thumbnail[0]
         if image is None:
             return
         if image.isNull():
@@ -1485,30 +2187,48 @@ class MetadataEditor(QMainWindow):
         size = self.preview.contentsRect().size()
         if size.width() <= 0 or size.height() <= 0:
             return
+        key = (path, image.cacheKey(), size.width(), size.height())
+        if getattr(self, '_painted_preview', None) == key and self.preview.pixmap() and not self.preview.pixmap().isNull():
+            return
+        self._painted_preview = key
         scaled = image.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.preview.setText("")
         self.preview.setPixmap(QPixmap.fromImage(scaled))
 
     def navigate(self, direction):
-        row = self.file_list.currentRow()
+        row = self.file_list.editing_row
         target = row + direction
         if 0 <= target < len(self.paths):
-            self.file_list.setCurrentRow(target)
+            self.file_list.setCurrentRow(target, QItemSelectionModel.NoUpdate)
+            self.file_list.set_editing_row(target)
             self.file_list.scrollToItem(self.file_list.item(target))
 
     def _selection_changed(self, *_args):
         if not hasattr(self, "batch_button"):
             return
         count = len(self.file_list.selectedItems())
-        self.batch_button.setText(f"Batch edit selected ({count})…")
-        self.batch_button.setEnabled(count >= 2 and len(self.records) == len(self.paths))
+        if self._pending_action == 'batch':
+            selected = {item.data(Qt.UserRole) for item in self.file_list.selectedItems()}
+            if selected != set(self._load_paths):
+                self._pending_action = None
+                self._load_paths = []
+        self.selection_summary.setText(f"{count} images selected" if count != 1 else "1 image selected")
+        self.batch_button.setToolTip(f"Edit {count} selected images" if count >= 2 else
+                                     "Select two or more images with Ctrl+click or Shift+click")
+        self.batch_button.setEnabled(count >= 2)
 
     def _field_draft(self, path, spec):
         return self.drafts.get(path, {}).get(spec.key)
 
     def _representations(self, path, spec):
-        record = self.records.get(path)
-        return metadata_representations(record, spec) if record else []
+        record = self._record(path)
+        if record is None:
+            return []
+        cached = self._representation_indexes.get(path)
+        if cached is None or cached[0] is not record:
+            cached = (record, index_metadata_representations(record, FIELD_SPECS))
+            self._representation_indexes[path] = cached
+        return cached[1][spec.key]
 
     def _active_representation(self, path, spec):
         representations = self._representations(path, spec)
@@ -1522,8 +2242,12 @@ class MetadataEditor(QMainWindow):
             found = next((item for item in representations if item.target.key == draft.target.key), None)
             if found:
                 return found
+            if draft.operation != 'Leave unchanged':
+                return None
+        # Keep the index independent of priority and locale changes.
         preferred, _all = preferred_representation(
-            self.records[path], spec, self.preferences.priority, QLocale().name())
+            self._record(path), spec, self.preferences.priority, QLocale().name(),
+            representations=representations)
         if preferred:
             return preferred
         return None
@@ -1568,7 +2292,7 @@ class MetadataEditor(QMainWindow):
 
     def choose_source(self, spec):
         path = self._active_path()
-        record = self.records.get(path) if path else None
+        record = self._record(path) if path else None
         if not record:
             return
         representations = ordered_representations(
@@ -1603,6 +2327,7 @@ class MetadataEditor(QMainWindow):
         self._refresh_individual(path)
         self._refresh_pending()
 
+
     def individual_sync_changed(self, spec, checked):
         path = self._active_path()
         if not path:
@@ -1617,6 +2342,8 @@ class MetadataEditor(QMainWindow):
     def new_target_changed(self, spec, checked):
         path = self._active_path()
         draft = self._field_draft(path, spec) if path else None
+        if checked and draft and draft.target and not draft.target.is_new and not self._representations(path, spec):
+            draft.target = self._proposed_target(path, spec)
         target = (draft.target if draft and draft.target else
                   self._active_representation(path, spec).target if path and self._active_representation(path, spec)
                   else self._proposed_target(path, spec) if path else None)
@@ -1624,6 +2351,7 @@ class MetadataEditor(QMainWindow):
             self.creation_authorizations.setdefault(path, {}).setdefault(spec.key, {})[target.key] = bool(checked)
         if draft:
             draft.authorize_new_target = bool(checked)
+            self._refresh_individual(path)
             self._refresh_pending()
 
     def counterpart_changed(self, spec, checked):
@@ -1639,19 +2367,37 @@ class MetadataEditor(QMainWindow):
             self._refresh_pending()
 
     def _field_is_editable(self, path):
-        record = self.records.get(path)
+        record = self._record(path)
         return bool(record and not record.error and detected_file_type(record) == "JPEG")
 
     def _image_changed(self, row):
         path = self.paths[row] if 0 <= row < len(self.paths) else None
+        token = (path, _file_stamp(path) if path else None)
+        if token != getattr(self, '_selection_token', None):
+            self._selection_token = token
+            self._load_generation += 1
+            self._preview_failures.clear()
+            self._active_preview = None
+            self._active_record = None
+            self._active_full = None
+            for worker in self.preview_workers:
+                if worker.path != path:
+                    worker.requestInterruption()
+            if self.worker is not None:
+                self.worker.requestInterruption()
+            if self._inspection_filter is not None:
+                self._inspection_filter.requestInterruption()
+            self._inspection_record = None
+            self.all_model.set_record(None)
+            self._all_requested = path if self.tabs.currentIndex() == self.ALL_TAB else None
         self.current_preview_path = path
         if path:
-            if path not in self.previews:
+            if self._preview_image(path) is None and self.thumbnails.get(path) is None:
                 self.preview.setPixmap(QPixmap())
                 self.preview.setText("Loading preview…")
             else:
                 self._refresh_preview()
-            record = self.records.get(path)
+            record = self._record(path)
             if record is None:
                 self.image_info.setText(f"{Path(path).name}\nReading image information…")
                 fmt, dims = "Reading…", ""
@@ -1663,7 +2409,7 @@ class MetadataEditor(QMainWindow):
                 if record.error:
                     dims += " · Could not read metadata"
                 elif fmt != "JPEG":
-                    dims += " · Read only in Phase 1"
+                    dims += " · Read-only inspection"
                 self.image_info.setText(f"{Path(path).name}\n{fmt} · {dims}")
             self.image_heading.setText(f"Editing image {row + 1} of {len(self.paths)}")
             self.previous_button.setEnabled(row > 0)
@@ -1675,6 +2421,19 @@ class MetadataEditor(QMainWindow):
             self.preview.setText("Image preview")
         self._refresh_individual(path)
         self._refresh_pending()
+        record = self._record(path)
+        self.loading_label.setText(record.error if record and record.error else 'Loading metadata…')
+        self.loading_label.setVisible(record is None or bool(record.error))
+        self.retry_metadata.setVisible(bool(record and record.error))
+        for control in self.field_controls.values():
+            control['card'].setVisible(record is not None and not record.error)
+        self.target_notice.setVisible(bool(record and not record.error))
+        self._refresh_pending()
+        self._update_all_fields()
+        self._update_overview()
+        self._ensure_preview()
+        self._pump_thumbnails()
+        self._pump_load()
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -1720,7 +2479,7 @@ class MetadataEditor(QMainWindow):
 
     def _refresh_individual(self, path):
         self._refreshing = True
-        record = self.records.get(path) if path else None
+        record = self._record(path) if path else None
         editable = bool(path and self._field_is_editable(path))
         for spec in FIELD_SPECS:
             control = self.field_controls[spec.key]
@@ -1729,7 +2488,6 @@ class MetadataEditor(QMainWindow):
             target = representation.target if representation else (
                 self._proposed_target(path, spec) if path and not representations else None)
             if record:
-                state, _details, _sources = field_state(record, spec)
                 value = self._field_value(path, spec)
                 if record.error:
                     label = "Could not read"
@@ -1743,12 +2501,16 @@ class MetadataEditor(QMainWindow):
                 elif representations:
                     label = "Choose a metadata source with a single value"
                 else:
-                    label = f"New destination: {target.source}" if target else "Not present"
+                    label = f"Target: {target.source}" if target else "Not present"
             else:
-                state, value, label = "Scanning", "", "Loading…"
+                value, label = "", "Loading…"
             control["state"].setText(label)
-            control["details"].setText(f"Other metadata sources ({max(0, len(representations) - (1 if representation else 0))})")
+            control["details"].setText("Sources…")
+            control["details"].setToolTip(
+                f"Inspect or choose among {len(representations)} metadata representations"
+            )
             control["details"].setEnabled(bool(representations))
+            control["details"].setVisible(bool(representations))
             _set_editor_text(control["edit"], value)
             control["edit"].setEnabled(editable and
                                        ((bool(representation) and representation.editable) or not representations))
@@ -1761,7 +2523,7 @@ class MetadataEditor(QMainWindow):
             elif not representation and representations:
                 note = "The preferred source has multiple values. Inspect the alternatives before editing."
             elif not representation and record and not record.error:
-                note = f"Choose Create a new {target.source} value to authorize this destination."
+                note = "Choose where to store this field in Sources & targets before reviewing."
             elif value == "" and representation and representation.value not in ("", None, [], {}):
                 note = "A blank input will not clear metadata. Use Clear to remove it."
             elif record and not editable:
@@ -1789,7 +2551,7 @@ class MetadataEditor(QMainWindow):
             is_new = bool(draft and draft.target and draft.target.is_new) or (not representation and not representations)
             proposed_target = draft.target if draft and draft.target and draft.target.is_new else target
             control["create_target"].setText(
-                f"Create a new {proposed_target.source} value" if proposed_target else "Create a new value")
+                f"Allow new {proposed_target.source} target" if proposed_target else "Allow new target")
             control["create_target"].setVisible(editable and is_new)
             create_authorized = (draft.authorize_new_target if draft and draft.target and draft.target.key == proposed_target.key
                                  else self.creation_authorizations.get(path, {}).get(spec.key, {}).get(proposed_target.key, False)
@@ -1837,7 +2599,7 @@ class MetadataEditor(QMainWindow):
         if self._refreshing:
             return
         path = self._active_path()
-        record = self.records.get(path) if path else None
+        record = self._record(path) if path else None
         if not record or not self._field_is_editable(path):
             return
         representation = self._active_representation(path, spec)
@@ -1894,7 +2656,7 @@ class MetadataEditor(QMainWindow):
 
     def show_individual_details(self, spec):
         path = self._active_path()
-        record = self.records.get(path) if path else None
+        record = self._record(path) if path else None
         if not record:
             return
         state, details, sources = field_state(record, spec)
@@ -1904,18 +2666,23 @@ class MetadataEditor(QMainWindow):
         FieldDetailsDialog(spec.label, text, self).exec()
 
     def batch_edit_selected(self):
+        if self._closing:
+            return
         selected = {item.data(Qt.UserRole) for item in self.file_list.selectedItems()}
         paths = [path for path in self.paths if path in selected]
         if len(paths) < 2:
             return
+        if self._request_paths(paths, 'batch'):
+            return
         key = tuple(paths)
         existing = next((session for session in self.batch_sessions
                          if tuple(session["paths"]) == key), None)
-        dialog = BatchEditDialog(paths, self.records, existing["fields"] if existing else {}, self,
+        dialog = BatchEditDialog(paths, self._plan_records(paths), existing["fields"] if existing else {}, self,
                                  self.preferences.priority, self.preferences.sync_default)
         if dialog.exec() != QDialog.Accepted:
+            self._prune_record_working_set()
             return
-        fields = dialog.selected_fields()
+        fields = {} if getattr(dialog, "discard_requested", False) else dialog.selected_fields()
         if existing:
             self.batch_sessions.remove(existing)
         if fields:
@@ -1937,7 +2704,7 @@ class MetadataEditor(QMainWindow):
                     continue
                 per_image = {}
                 for path in paths:
-                    record = self.records.get(str(Path(path).resolve(strict=False)))
+                    record = self._record(str(Path(path).resolve(strict=False)))
                     if not record or record.error or detected_file_type(record) != "JPEG":
                         continue
                     preferred, available = preferred_representation(
@@ -1955,54 +2722,188 @@ class MetadataEditor(QMainWindow):
                                        "targets": pinned_targets})
         self._refresh_pending()
 
+    def _refresh_sources_targets(self):
+        """Present current sources and controls for proposed changes."""
+        if not hasattr(self, "sources_targets_help"):
+            return
+
+        path = self._active_path()
+        record = self._record(path) if path else None
+        changed = []
+        descriptions = []
+
+        for spec in FIELD_SPECS:
+            control = self.field_controls[spec.key]
+            draft = self._field_draft(path, spec) if path else None
+            pending = bool(
+                draft is not None
+                and draft.operation != "Leave unchanged"
+            )
+
+            control["advanced"].setVisible(pending)
+
+            if pending:
+                changed.append(spec.label)
+
+            if record is None or record.error:
+                continue
+
+            active = self._active_representation(path, spec)
+            available = self._representations(path, spec)
+
+            if active is not None:
+                description = active.source
+                if active.language:
+                    description += f" ({active.language})"
+                if not active.editable:
+                    description += " (read-only)"
+                if len(available) > 1:
+                    other = len(available) - 1
+                    description += (
+                        f", {other} other representation"
+                        + ("s" if other != 1 else "")
+                    )
+            elif available:
+                sources = ", ".join(sorted({
+                    item.source for item in available
+                }))
+                description = (
+                    f"Multiple values ({sources}), "
+                    "choose a source on Edit metadata"
+                )
+            else:
+                description = "Not present"
+
+            if pending:
+                if draft.target is not None:
+                    description += f" | Proposed target: {draft.target.source}"
+                    if draft.target.language:
+                        description += f" ({draft.target.language})"
+                    if draft.target.is_new and not draft.authorize_new_target:
+                        description += " (authorization required)"
+                else:
+                    description += " | Change proposed"
+
+            descriptions.append(f"{spec.label}: {description}")
+
+        lines = [
+            "Planning only. Your image files will not be changed.",
+            "",
+        ]
+
+        if path is None:
+            lines.append("Select an image to inspect its metadata sources.")
+        elif record is None:
+            lines.append("Loading metadata for this image…")
+        elif record.error:
+            lines.append("Metadata could not be read for this image.")
+        else:
+            priority = " > ".join(
+                str(item) for item in self.preferences.priority
+            )
+            lines.extend([
+                "Metadata reading priority",
+                priority or "Not configured",
+                "",
+                "Common metadata fields",
+                *descriptions,
+                "",
+                "Camera, GPS, and other technical metadata are "
+                "available in Overview and All fields.",
+            ])
+
+            if changed:
+                lines.extend([
+                    "",
+                    "Proposed changes: " + ", ".join(changed),
+                    "Review the storage targets and any required "
+                    "permissions below before opening Review changes.",
+                ])
+            elif path in self._proposal_paths():
+                lines.extend([
+                    "",
+                    "Additional changes are pending for this image.",
+                    "Their exact targets appear in Review changes.",
+                ])
+            else:
+                lines.extend([
+                    "",
+                    "No changes proposed for this image.",
+                    "Edit a field on Edit metadata to review its "
+                    "storage target here.",
+                ])
+
+        self.sources_targets_help.setText("\n".join(lines))
+
     def _refresh_pending(self):
         if not hasattr(self, "pending_label"):
             return
-        if len(self.records) != len(self.paths):
-            self.pending_label.setText("Pending changes: reading images…")
+        self._refresh_sources_targets()
+        self._prune_record_working_set()
+        paths = self._proposal_paths()
+        if not paths:
+            self.pending_label.setText('Pending changes: 0')
+            self.review_button.setEnabled(False)
             return
-        plan = build_plan(self.paths, self.records, self.drafts, "Combined", self.batch_sessions,
+        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
                           self.source_drafts, self.preferences.priority)
         valid = sum(row.get("status") == "valid" for row in plan)
         blocked = sum(row.get("status") == "blocked" for row in plan)
-        noops = sum(row.get("status") == "noop" for row in plan)
-        change_label = "change" if valid == 1 else "changes"
+        count = valid + blocked
+        self.review_button.setEnabled(count > 0)
+        if not count:
+            self.pending_label.setText("Pending changes: 0")
+            return
+        change_label = "change" if count == 1 else "changes"
         self.pending_label.setText(
-            f"Pending changes: {valid} {change_label}"
-            + (f" · {blocked} blocked" if blocked else "")
-            + (f" · {noops} no-op" if noops else ""))
+            f"Pending changes: {count} {change_label}"
+            + (f" · {blocked} blocked" if blocked else ""))
 
     def _scan_complete(self, records, previews):
+        # Records are extraction snapshots. A refresh can reuse an object, so
+        # invalidate its derived values even when its identity is unchanged.
+        for path in records:
+            self._representation_indexes.pop(path, None)
         self.records.update(records)
         self.previews.update(previews)
-        self._image_changed(self.file_list.currentRow())
+        self._image_changed(self.file_list.editing_row)
         self._selection_changed()
-        self.statusBar().showMessage("Metadata writing is unavailable in this development phase.")
+        self.statusBar().showMessage("Read-only change planner. No metadata will be written.")
 
-    def _worker_finished(self):
-        if self.close_after_worker:
-            self.close_after_worker = False
+    def _worker_finished(self, worker=None):
+        worker = worker or self.worker
+        if worker is not self.worker:
+            return
+        self.worker = None
+        worker.deleteLater()
+        if self._closing:
+            self._finish_close()
+        else:
+            self._image_changed(self.file_list.editing_row)
+            self._pump_load()
+
+    def _finish_close(self):
+        if self.worker is None and not self.preview_workers and self._inspection_filter is None and self.thumbnail_worker is None:
             self.close()
-        elif self.worker:
-            self.worker.deleteLater()
-            self.worker = None
 
     def review_changes(self):
-        plan = build_plan(self.paths, self.records, self.drafts, "Combined", self.batch_sessions,
+        if self._closing:
+            return
+        paths = self._proposal_paths()
+        if self._request_paths(paths, 'review'):
+            return
+        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
                           self.source_drafts, self.preferences.priority)
-        ReviewDialog(plan, self, len(self.paths)).exec()
+        if not any(row.get("status") in ("valid", "blocked") for row in plan):
+            self._refresh_pending()
+            return
+        ReviewDialog(plan, self, len(paths)).exec()
 
     def closeEvent(self, event):
-        if self.worker and self.worker.isRunning():
-            self.close_after_worker = True
-            self.worker.requestInterruption()
-            event.ignore()
-            return
-        individual_pending = (any(d.operation != "Leave unchanged"
-                                  for fields in self.drafts.values() for d in fields.values()) or
-                             any(d.operation != "Leave unchanged" for _path, _key, d in self.source_drafts))
-        batch_pending = any(session["fields"] for session in self.batch_sessions)
-        if individual_pending or batch_pending:
+        paths = self._proposal_paths()
+        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
+                          self.source_drafts, self.preferences.priority) if paths else []
+        if any(row.get("status") in ("valid", "blocked") for row in plan):
             answer = QMessageBox.question(
                 self, "Pending changes",
                 "Your proposed changes have not been written. Keep editing or discard them?",
@@ -2013,6 +2914,22 @@ class MetadataEditor(QMainWindow):
             self.drafts.clear()
             self.source_drafts.clear()
             self.batch_sessions.clear()
+        self._closing = True
+        self._pending_action = None
+        if self.thumbnail_worker is not None:
+            self.thumbnail_worker.requestInterruption()
+        for worker in self.preview_workers:
+            worker.requestInterruption()
+        if self._inspection_filter:
+            self._inspection_filter.requestInterruption()
+        if self.worker:
+            self.worker.requestInterruption()
+            if not self.worker.isRunning():
+                self.worker.deleteLater()
+                self.worker = None
+        if self.worker is not None or self.preview_workers or self._inspection_filter is not None or self.thumbnail_worker is not None:
+            event.ignore()
+            return
         self._persist_splitter_sizes()
         super().closeEvent(event)
 

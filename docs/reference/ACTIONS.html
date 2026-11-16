@@ -31,7 +31,7 @@
       <div class="reference-source">KIM6 DOCUMENTATION · docs/ACTIONS.md</div>
       <article class="markdown-body">
 <h1 id="kim6-dolphin-menu-actions">KIM6 Dolphin Menu Actions</h1>
-<p>KIM6 integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>89 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.</p>
+<p>KIM6 integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>91 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.</p>
 <p>The action inventory below is derived directly from the current <code>.desktop.in</code> files in <code>src/</code>. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.</p>
 <p>Saved recipes assigned to Root may also appear dynamically in the Recipes submenu. They are not part of the static service-menu definitions.</p>
 <h2 id="image-menus">Image menus</h2>
@@ -221,8 +221,17 @@
 <td>Strip metadata</td>
 <td><code>kim_all stripmeta --interactive -- %F</code></td>
 </tr>
+<tr>
+<td>View metadata…</td>
+<td><code>kim_all metadata-view -- %F</code></td>
+</tr>
+<tr>
+<td>Edit metadata…</td>
+<td><code>kim_all metadata-edit -- %F</code></td>
+</tr>
 </tbody>
 </table>
+<p>View metadata opens the existing read-only Metadata Browser with all selected images in one window. Select exactly two images inside Browser to use its Compare view. Edit metadata opens the existing Metadata Editor with the complete selection; it retains drafts while navigating and only plans changes. Neither action writes image metadata or XMP sidecars.</p>
 <h3 id="kim6---recipes">KIM6 - Recipes</h3>
 <p><a href="../images/screenshots/06-recipes.png">View submenu screenshot</a></p>
 <table>

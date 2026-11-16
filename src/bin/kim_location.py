@@ -10,7 +10,6 @@ an anonymity radius or a measurement of receiver accuracy.
 from __future__ import annotations
 
 import bisect
-import contextlib
 import datetime as dt
 from decimal import Decimal, InvalidOperation
 import hashlib
@@ -63,6 +62,16 @@ GPS_CLEAR = ['-GPS:all=', '-XMP:GPS*=']
 GPS_EXT_CLEAR = ['-XMP-iptcExt:' + p + 'GPS*=' for p in STRUCTURES]
 READ_TAGS = ['-EXIF:all', '-IPTC:all', '-XMP:all', '-MakerNotes:all',
              '-Location:all', '-GPS*', '-FileType', '-EncodingProcess', '-Warning', '-Error']
+# Match the existing location_kind categories, including vendor GPS records,
+# structured depicted locations and language-qualified place names. Unrelated
+# MakerNotes/descriptive fields are needed only for publication preservation.
+REPORT_TAGS = ['-GPS:all', '-Location:all', '-all:*GPS*', '-all:*Geotag*',
+               '-all:*Latitude*', '-all:*Longitude*', '-all:LocationISO6709',
+               '-all:LocationInformation', '-all:Geolocation', '-all:Position',
+               '-all:Coordinates', '-all:LocationAccuracyHorizontal',
+               *['-all:' + name + '*' for name in sorted(PLACE_NAMES | set(STRUCTURES))],
+               '-FileType', '-EncodingProcess', '-Warning', '-Error']
+
 
 
 def number(value, label='number', low=None, high=None):
@@ -100,14 +109,14 @@ def unique_object(pairs):
     return result
 
 
-def location_process(args, *, pass_fds=(), limit=MAX_METADATA, timeout=120):
+def location_process(args, *, stdin=None, limit=MAX_METADATA, timeout=120):
     """Cancellable ExifTool pipes with a hard aggregate output bound."""
     checkpoint()
     # During execution the dispatcher adapter owns the entire process group.
     # GUI inspection owns its own group so a cancelled worker can reap it.
     own_group = not os.environ.get('KIM_LOCATION_JOB')
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               pass_fds=pass_fds, start_new_session=own_group)
+    process = subprocess.Popen(args, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=own_group)
     outputs = [bytearray(), bytearray()]; started = time.monotonic()
     try:
         with selectors.DefaultSelector() as selector:
@@ -144,95 +153,62 @@ def location_process(args, *, pass_fds=(), limit=MAX_METADATA, timeout=120):
         process.stdout.close(); process.stderr.close()
 
 
-def read_many(paths):
-    """Bounded groups of descriptor-backed, no-atime ExifTool inspections.
+def read_many(paths, *, complete=True):
+    """Inspect each protected descriptor through ExifTool's supported stdin.
 
-    Family 4 retains duplicate fields; families 3 and 5 identify their actual
-    document and metadata path. Copy numbers are per-tag, not record IDs. Structured XMP is kept
-    structured so coordinates from different depicted locations never combine.
-    No synthetic Composite coordinates are treated as independent stored GPS.
+    Reopening /proc/self/fd loses O_NOATIME. A seekable inherited stdin keeps
+    the original open-file description, as in the shared Metadata Reader.
+    GPS's numeric values and group families remain unchanged.
     """
+    if not isinstance(complete, bool):
+        raise ValueError('Choose complete or GPS-only inspection')
     results = {}; total_bytes = 0
-    for start in range(0, len(paths), 12):
-        checkpoint(); batch = paths[start:start + 12]
-        with contextlib.ExitStack() as stack:
-            opened = []; before = {}
-            for path in batch:
-                try:
-                    before[path] = identity(path)
-                    name, fd = stack.enter_context(inspection_path(path))
-                    if descriptor_identity(fd) != before[path]: raise ValueError('Source changed while opening metadata inspection')
-                    opened.append((path, name, fd))
-                except (OSError, ValueError) as exc: results[path] = {'error': str(exc)}
-            if not opened: continue
-            args = ['exiftool', '-q', '-json', '-G1:2:3:4:5', '-a', '-n', '-struct', *READ_TAGS,
-                    '--', *[p[1] for p in opened]]
-            try:
-                response = location_process(args, pass_fds=tuple(p[2] for p in opened), limit=MAX_METADATA * len(opened))
-            except (OSError, ValueError) as exc:
-                checkpoint()
-                for path, _, _ in opened: results[path] = {'error': str(exc)}
-                continue
-            if len(response.stdout) > MAX_METADATA * len(opened):
-                raise ValueError('Location metadata exceeds the inspection limit.')
-            # A signal / unexpected exit is a process failure, not a file warning.
+    for path in paths:
+        checkpoint()
+        try:
+            before = identity(path)
+            with inspection_path(path) as (_, fd):
+                if descriptor_identity(fd) != before:
+                    raise ValueError('Source changed while opening metadata inspection')
+                atime = os.fstat(fd).st_atime_ns
+                args = ['exiftool', '-q', '-json', '-G1:2:3:4:5', '-a', '-n', '-struct',
+                        *(READ_TAGS if complete else REPORT_TAGS), '--', '-']
+                response = location_process(args, stdin=fd)
+                if (descriptor_identity(fd) != before or identity(path) != before or
+                        os.fstat(fd).st_atime_ns != atime):
+                    raise ValueError('Source changed during metadata inspection')
             if response.returncode not in (0, 1):
-                for path, _, _ in opened: results[path] = inspection_problem(response.stderr.splitlines(), response.returncode, batch_failure=True)
+                results[path] = inspection_problem(response.stderr.splitlines(), response.returncode)
                 continue
-            try: records = json.loads(response.stdout, object_pairs_hook=unique_object)
+            try:
+                records = json.loads(response.stdout, object_pairs_hook=unique_object)
             except (ValueError, TypeError):
-                for path, _, _ in opened:
-                    results[path] = inspection_problem(['ExifTool returned ambiguous or unreadable metadata', *response.stderr.splitlines()], response.returncode, batch_failure=len(opened) > 1)
+                results[path] = inspection_problem(
+                    ['ExifTool returned ambiguous or unreadable metadata', *response.stderr.splitlines()],
+                    response.returncode, names=('-',))
                 continue
-            if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
-                raise ValueError('Invalid ExifTool metadata response')
-            by_name = {r.get('SourceFile'): r for r in records}
-            if len(by_name) != len(records) or set(by_name) != {p[1] for p in opened}:
-                for path, _, _ in opened: results[path] = {'error': 'ExifTool returned duplicate, unexpected or incomplete source records'}
+            if (not isinstance(records, list) or len(records) != 1 or
+                    not isinstance(records[0], dict) or records[0].get('SourceFile') != '-'):
+                raise ValueError('ExifTool returned unexpected or incomplete source records')
+            record = records[0]
+            size = len(json.dumps(record)); total_bytes += size
+            if total_bytes > MAX_BATCH_METADATA:
+                raise ValueError('Batch metadata exceeds 64 MiB; select fewer images')
+            if size > MAX_METADATA:
+                results[path] = {'error': 'Metadata exceeds the per-image inspection limit.'}
                 continue
-            problems = {name: [k.split(':')[-1] + ': ' + str(v) for k, v in record.items() if k.split(':')[-1] in ('Warning', 'Error')]
-                        for name, record in by_name.items()}
-            unattributed = []
-            for line in response.stderr.splitlines():
-                if not line.strip() or processing_summary(line): continue
-                names = [name for name in by_name if line.endswith(' - ' + name)]
-                if len(names) == 1: problems[names[0]].append(line)
-                else: unattributed.append(line)
-            file_error = any(str(v) for record in records for k, v in record.items() if k.split(':')[-1] == 'Error')
-            file_error = file_error or any(line.lstrip().startswith('Error:') for lines in problems.values() for line in lines)
-            unexplained_exit = response.returncode and not file_error
-            if len(opened) > 1 and (unattributed or unexplained_exit):
-                # At most one individual retry per opened source. Reopening uses
-                # the same cancellation, pipe limits and O_NOATIME safeguards.
-                isolated = {}
-                for path, _, _ in opened:
-                    checkpoint(); isolated.update(read_many([path]))
-                observed = {d for result in isolated.values() for d in result.get('diagnostics', [])}
-                unresolved = [line for line in unattributed if diagnostic_text(line) not in observed]
-                explained = any(r.get('inspection_exit') == 1 and r.get('diagnostics') for r in isolated.values())
-                for path, name, _ in opened:
-                    result = isolated[path]
-                    if unresolved or (unexplained_exit and not explained):
-                        result = inspection_problem(unresolved or ['ExifTool failed without a per-file diagnostic'], response.returncode, batch_failure=True)
-                    elif problems[name]:
-                        result = inspection_problem(problems[name], response.returncode, names=(name,))
-                    if identity(path) != before[path]: result = {'error': 'Source changed during metadata inspection'}
-                    total_bytes += len(json.dumps(result))
-                    if total_bytes > MAX_BATCH_METADATA: raise ValueError('Batch metadata exceeds 64 MiB; select fewer images')
-                    results[path] = result
-                continue
-            for path, name, fd in opened:
-                record = by_name.get(name)
-                if record is None or identity(path) != before[path]:
-                    results[path] = {'error': 'Source changed or metadata inspection was incomplete.'}; continue
-                record_bytes = len(json.dumps(record)); total_bytes += record_bytes
-                if total_bytes > MAX_BATCH_METADATA: raise ValueError('Batch metadata exceeds 64 MiB; select fewer images')
-                if record_bytes > MAX_METADATA:
-                    results[path] = {'error': 'Metadata exceeds the per-image inspection limit.'}; continue
-                diagnostics = problems[name] + unattributed
-                if diagnostics or unexplained_exit:
-                    results[path] = inspection_problem(diagnostics or ['ExifTool failed without a per-file diagnostic'], response.returncode, names=(name,))
-                else: results[path] = {'raw': record, 'identity': before[path]}
+            problems = [key.split(':')[-1] + ': ' + str(value) for key, value in record.items()
+                        if key.split(':')[-1] in ('Warning', 'Error')]
+            problems.extend(line for line in response.stderr.splitlines() if line.strip() and not processing_summary(line))
+            if problems or response.returncode:
+                results[path] = inspection_problem(problems, response.returncode, names=('-',))
+            else:
+                results[path] = {'raw': record, 'identity': before, 'complete': complete}
+        except (OSError, ValueError) as exc:
+            checkpoint()
+            if total_bytes > MAX_BATCH_METADATA:
+                raise
+            results[path] = {'error': str(exc)}
     return results
 
 
@@ -764,11 +740,11 @@ def assignments(position, altitude=None, direction=None, direction_ref='T', alti
     return result
 
 
-def source_info(path, cache):
+def source_info(path, cache, *, complete=False):
     try: current = identity(path)
     except (OSError, ValueError): return None
     old = cache.get(path)
-    if old and old.get('identity') == current: return old
+    if old and old.get('identity') == current and (not complete or old.get('complete', True)): return old
     return None
 
 
@@ -810,10 +786,11 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
         paths = list(files)
         if kind == 'copy' and config.get('reference'): paths.append(absolute(config['reference']))
         paths = list(dict.fromkeys(paths))
-        missing = [p for p in paths if source_info(p, cache) is None]
+        complete = kind != 'report'
+        missing = [p for p in paths if source_info(p, cache, complete=complete) is None]
         if missing:
             progress(0, len(files), 'Reading location metadata in bounded batches…')
-            cache.update(read_many(missing))
+            cache.update(read_many(missing, complete=complete))
             if sum(len(json.dumps(r)) for r in cache.values()) > MAX_BATCH_METADATA:
                 cache.clear(); raise ValueError('Batch metadata exceeds the 64 MiB cache limit; use a smaller selection')
         # Keep the per-dialog read-only cache bounded.
@@ -1054,7 +1031,7 @@ def png_core(path):
     """Hash every non-text / non-EXIF PNG chunk, including ICC and presentation."""
     import zlib
     kept = []; ended = False
-    with open(path, 'rb') as stream:
+    with inspection_path(path) as (_, fd), os.fdopen(os.dup(fd), 'rb') as stream:
         if stream.read(8) != b'\x89PNG\r\n\x1a\n': raise ValueError('Invalid PNG signature')
         while True:
             checkpoint(); header = stream.read(8)
@@ -1115,16 +1092,55 @@ def verify_output(plan, source, output, *, entry=None):
     if Path(source).suffix.lower() == '.png' and png_core(source) != png_core(output): raise ValueError('PNG encoded pixels, ICC or presentation data changed')
 
 
+def copy_source_snapshot(source, output, expected):
+    """Copy one approved source into an unused private working file."""
+    created = False
+    try:
+        with inspection_path(source) as (_, fd):
+            atime = os.fstat(fd).st_atime_ns
+            if descriptor_identity(fd) != expected:
+                raise ValueError('Source changed before protected copying')
+            with open(output, 'xb') as stream:
+                created = True
+                copied = 0
+                while True:
+                    checkpoint()
+                    block = os.read(fd, 1024 * 1024)
+                    if not block:
+                        break
+                    stream.write(block)
+                    copied += len(block)
+            if (copied != expected[2] or descriptor_identity(fd) != expected or
+                    identity(source) != expected or os.fstat(fd).st_atime_ns != atime):
+                raise ValueError('Source changed while making a protected working copy')
+    except BaseException:
+        if created:
+            Path(output).unlink(missing_ok=True)
+        raise
+
+
 def main():
     command, plan_path, source, *rest = sys.argv[1:]
     plan = json.loads(Path(plan_path).read_text())
     if command in ('write', 'stage'):
         entry = approved_entry(plan, source)
-        result = location_process(['exiftool', *entry['args'], '-o', rest[0], '--', source], limit=1024*1024, timeout=150)
-        from kim_process import metadata_diagnostics
-        diagnostic = metadata_diagnostics(['exiftool'], result.returncode, result.stderr)
-        if result.returncode or diagnostic: raise ValueError('ExifTool GPS staging failed: ' + diagnostic.strip())
-        if command == 'stage': verify_output(plan, source, rest[0], entry=entry)
+        # Only an exclusively created staging copy is writable. ExifTool may
+        # reopen or replace that private copy, never the selected source.
+        copy_source_snapshot(source, rest[0], entry['identity'])
+        try:
+            result = location_process(['exiftool', '-overwrite_original', *entry['args'], '--', rest[0]],
+                                      limit=1024*1024, timeout=150)
+            from kim_process import metadata_diagnostics
+            diagnostic = metadata_diagnostics(['exiftool'], result.returncode, result.stderr)
+            if result.returncode or diagnostic:
+                raise ValueError('ExifTool GPS staging failed: ' + diagnostic.strip())
+            if command == 'stage': verify_output(plan, source, rest[0], entry=entry)
+        except BaseException:
+            Path(rest[0]).unlink(missing_ok=True)
+            raise
+    elif command == 'snapshot':
+        entry = approved_entry(plan, source)
+        copy_source_snapshot(source, rest[0], entry['identity'])
     elif command == 'verify': verify_output(plan, source, rest[0])
     else: raise ValueError('Unknown location engine command')
     return 0

@@ -161,288 +161,287 @@ class MetadataCompareTests(unittest.TestCase):
         self.assertEqual(["different"], [r.state for r in visible_rows(rows, "Differences only")])
         self.assertEqual(2, len(visible_rows(rows, "All fields")))
 
+    def test_equal_explicitly_empty_values_are_not_differences(self):
+        rows = self.rows([entry('Title', '')], [entry('Title', '', source='/other/comparison.jpg')])
+        self.assertEqual('empty', rows[0].state)
+        self.assertEqual([], visible_rows(rows, 'Differences only'))
+
 
 class MetadataCompareQtTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        from PySide6.QtWidgets import QApplication
-        cls.app = QApplication.instance() or QApplication([])
+    """Native interaction tests for independently assigned comparison slots."""
+    def setUp(self):
+        from test_metadata_browser import MetadataBrowserLoadingTests
+        MetadataBrowserLoadingTests.setUpClass()
+        self.driver = MetadataBrowserLoadingTests()
+        self.driver.setUp()
+        self.addCleanup(self.driver.doCleanups)
+        self.driver.configure(delay=0.1, entries=1000)
+        self.window = self.driver.open_browser()
+        self.app = self.driver.app
+        self.paths = list(map(str, self.driver.paths))
 
-    def make_browser(self, names=("a.jpg", "b.jpg", "c.jpg"), *, loaded=True):
+    def test_keyboard_accessible_selectors_assign_without_multiselection(self):
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.comparison_image_1_header.selector.setCurrentIndex(1)
+        window.comparison_image_2_header.selector.setCurrentIndex(2)
+        self.assertEqual(tuple(self.paths[:2]), window.compared_paths)
+        self.assertFalse(window.preview.isVisible())
+        self.driver.wait_for(lambda: not window.comparison_image_1_header.preview.image.isNull() and
+                             not window.comparison_image_2_header.preview.image.isNull())
+        self.assertEqual(self.driver.paths[0].name, window.comparison_image_1_header.filename.text())
+        self.assertEqual(self.driver.paths[1].name, window.comparison_image_2_header.filename.text())
+
+    def test_failed_slot_previews_show_errors_without_repeated_decoding(self):
         from unittest.mock import patch
-        from PySide6.QtWidgets import QListWidgetItem
-        from kim_metadata_browser import MetadataBrowser
+        from kim_metadata_browser import read_thumbnail
+        for path in self.driver.paths[1:]:
+            path.write_bytes(b'Owned undecodable image fixture')
+        window = self.window
+        with patch('kim_metadata_browser.read_thumbnail', wraps=read_thumbnail) as decode:
+            window.tabs.setCurrentIndex(2)
+            window.assign_comparison(0, self.paths[1])
+            window.assign_comparison(1, self.paths[2])
+            panels = (window.comparison_image_1_header, window.comparison_image_2_header)
+            self.driver.wait_for(lambda: all('Preview dimensions unavailable' in panel.preview.text()
+                                             for panel in panels))
+            self.driver.wait_for(lambda: not window.preview_workers)
+            attempts = [call for call in decode.call_args_list if call.args[0] in self.paths[1:]]
+            window._update_slot_headers()
+            window._ensure_preview()
+            self.app.processEvents()
+            self.assertEqual(attempts, [call for call in decode.call_args_list if call.args[0] in self.paths[1:]])
+            for path in self.paths[1:]:
+                self.assertEqual(1, sum(call.args[0] == path for call in attempts))
 
-        paths = tuple(f"/images/{name}" for name in names)
-        with patch.object(MetadataBrowser, "set_images"):
-            browser = MetadataBrowser(paths)
-        browser.paths = list(paths)
-        for name in names:
-            browser.image_list.addItem(QListWidgetItem(name))
-        browser.selection_count.setText(f"{len(paths)} images")
-        if loaded:
-            browser.records = {
-                path: record(path, [entry("Title", f"Title for {Path(path).stem}", source=path),
-                                    entry("Description", f"Description for {Path(path).stem}", source=path)])
-                for path in paths
-            }
-        browser.resize(1000, 700)
-        browser.show()
+    def test_pair_and_swap_survive_navigation_and_tab_changes(self):
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        window.swap_button.click()
+        for index in (0, 1, 2):
+            window.tabs.setCurrentIndex(index)
+            window.image_list.setCurrentRow(2)
+        self.assertEqual((self.paths[1], self.paths[0]), window.compared_paths)
+
+    def test_choose_image_placeholder_clears_only_its_slot(self):
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        self.driver.wait_for(lambda: not window.comparison_image_1_header.preview.image.isNull() and
+                             not window.comparison_image_2_header.preview.image.isNull())
+        window.comparison_image_1_header.selector.setCurrentIndex(0)
+        self.assertEqual([None, self.paths[1]], window.comparison_slots)
+        self.assertIsNone(window.compared_paths)
+        self.assertTrue(window.comparison_image_1_header.preview.image.isNull())
+        self.assertFalse(window.comparison_image_2_header.preview.image.isNull())
+        self.assertEqual('', window.comparison_image_1_header.filename.text())
+        self.assertEqual(0, window.comparison_model.rowCount())
+
+    def test_duplicate_selector_assignment_swaps_or_reports_conflict(self):
+        from PySide6.QtWidgets import QPushButton
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        window.comparison_image_1_header.selector.setCurrentIndex(2)
+        self.assertEqual((self.paths[1], self.paths[0]), window.compared_paths)
+        window.assign_comparison(1, None)
+        window.assign_comparison(1, self.paths[1])
+        self.assertEqual([self.paths[1], None], window.comparison_slots)
+        self.assertIn('different', window.comparison_summary.text())
+        self.assertFalse(any(button.text() == 'Use selected image' for button in window.findChildren(QPushButton)))
+
+    def test_three_selected_images_do_not_initialize_an_ambiguous_pair(self):
+        window = self.window
+        window.image_list.selectAll()
+        self.assertFalse(window.compare_images_button.isEnabled())
+        window.tabs.setCurrentIndex(2)
         self.app.processEvents()
-        self.addCleanup(self.close_browser, browser)
-        return browser
+        self.assertEqual([None, None], window.comparison_slots)
+        self.assertIn('Assign a left image', window.comparison_summary.text())
+        self.assertTrue(window.comparison_image_1_header.selector.isVisible())
 
-    def close_browser(self, browser):
-        from unittest.mock import Mock
-        if browser.worker and browser.worker.isRunning():
-            browser.worker.requestInterruption()
-            browser.worker.wait(1000)
-            browser.worker = None
-        browser.settings = Mock()
-        browser.close()
+    def test_exactly_two_images_can_initialize_the_slots(self):
+        window = self.window
+        window.image_list.clearSelection()
+        for row in (0, 2):
+            window.image_list.item(row).setSelected(True)
+        window.compare_images_button.click()
+        self.assertEqual((self.paths[0], self.paths[2]), window.compared_paths)
+
+    def test_dragging_loaded_images_assigns_and_slot_drags_swap(self):
+        from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+        from PySide6.QtGui import QDragEnterEvent, QDropEvent
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        def drop(widget, data):
+            enter = QDragEnterEvent(QPoint(10, 10), Qt.CopyAction, data, Qt.LeftButton, Qt.NoModifier)
+            self.app.sendEvent(widget, enter)
+            event = QDropEvent(QPointF(10, 10), Qt.CopyAction, data, Qt.LeftButton, Qt.NoModifier)
+            self.app.sendEvent(widget, event)
+        for side, path in enumerate(self.paths[:2]):
+            data = QMimeData()
+            data.setUrls([QUrl.fromLocalFile(path)])
+            panel = (window.comparison_image_1_header, window.comparison_image_2_header)[side]
+            drop(panel.preview, data)
+        self.assertEqual(tuple(self.paths[:2]), window.compared_paths)
+        data = QMimeData()
+        data.setData('application/x-kim6-slot', b'0')
+        drop(window.comparison_image_2_header.preview, data)
+        self.assertEqual((self.paths[1], self.paths[0]), window.compared_paths)
+        window.assign_comparison(0, '/not/a/loaded/image.jpg')
+        self.assertEqual((self.paths[1], self.paths[0]), window.compared_paths)
+
+    def test_compare_scope_and_filter_reuse_without_full_extraction(self):
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        self.driver.wait_for(lambda: window.comparison_model.rowCount() > 0)
+        self.assertEqual('Overview fields', window.compare_scope.currentText())
+        self.assertFalse(any(call['full'] for call in self.driver.calls()))
+        count = len(self.driver.calls())
+        data = window.comparison_data
+        window.compare_mode.setCurrentText('All values')
+        window.compare_mode.setCurrentText('Differences only')
+        self.assertIs(data, window.comparison_data)
+        self.assertEqual(count, len(self.driver.calls()))
+
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: window.comparison_data is not data and len(window.comparison_data.rows) >= 1000)
+        full = window.comparison_data
+        count = len(self.driver.calls())
+        window.compare_mode.setCurrentText('All values')
+        window.compare_mode.setCurrentText('Differences only')
+        self.assertIs(full, window.comparison_data)
+        self.assertEqual(count, len(self.driver.calls()))
+
+    def test_overview_compares_preferred_logical_fields_once_and_full_scope_keeps_alternates(self):
+        self.driver.configure(delay=0.01, entries=10, metadata={
+            'IPTC:IPTC:Image:ObjectName': {'id': 'ObjectName', 'val': 'Alternate title'},
+            'EXIF:ExifIFD:Time:DateTimeOriginal': {'id': 'DateTimeOriginal', 'val': '2026:01:02 03:04:05'},
+            'XMP:XMP-xmp:Time:CreateDate': {'id': 'CreateDate', 'val': '2025:01:02 03:04:05'}})
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        self.driver.wait_for(lambda: window.comparison_data is not None)
+        rows = window.comparison_data.rows
+        self.assertEqual(1, sum(row.label == 'Title' for row in rows))
+        self.assertFalse(any(row.label in ('Object name', 'Creation date') for row in rows))
+        self.assertEqual(1, sum(row.label == 'Capture date' for row in rows))
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: window._comparison_data_key[1] == 'All fields')
+        self.assertTrue(any(row.reference and row.reference.name == 'ObjectName' for row in window.comparison_data.rows))
+
+    def test_reading_priority_refreshes_an_open_comparison_without_extraction(self):
+        from kim_metadata_sources import MetadataSourcePreferences
+        self.driver.configure(delay=0.01, entries=0, metadata={
+            'IPTC:IPTC:Image:ObjectName': {'id': 'ObjectName', 'val': 'IPTC title'}})
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        self.driver.wait_for(lambda: window.comparison_data is not None)
+        calls = len(self.driver.calls())
+        prefs = MetadataSourcePreferences(window.metadata_preferences.settings)
+        prefs.save(('IPTC-IIM', 'Embedded XMP', 'XMP sidecar', 'EXIF'))
+        from PySide6.QtCore import QEvent
+        window.activateWindow()
         self.app.processEvents()
-
-    def click_row(self, browser, row, modifier=None):
-        from PySide6.QtCore import QEvent, QPointF, Qt
-        from PySide6.QtGui import QMouseEvent
-        from PySide6.QtWidgets import QApplication
-        item = browser.image_list.item(row)
-        point = browser.image_list.visualItemRect(item).center()
-        viewport = browser.image_list.viewport()
-        local = QPointF(point)
-        global_point = QPointF(viewport.mapToGlobal(point))
-        modifiers = modifier if modifier is not None else Qt.NoModifier
-        press = QMouseEvent(QEvent.MouseButtonPress, local, global_point, Qt.LeftButton,
-                            Qt.LeftButton, modifiers)
-        release = QMouseEvent(QEvent.MouseButtonRelease, local, global_point, Qt.LeftButton,
-                              Qt.NoButton, modifiers)
-        QApplication.sendEvent(viewport, press)
-        QApplication.sendEvent(viewport, release)
-        self.app.processEvents()
-
-    def selected_names(self, browser):
-        return [item.text() for item in browser.image_list.selectedItems()]
-
-    def test_exact_selection_cardinality_and_required_workflow(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser()
-        self.assertEqual(0, len(self.selected_names(browser)))
-        self.assertFalse(browser.compare_images_button.isEnabled())
-        self.assertIn("exactly two", browser.compare_images_button.toolTip())
-        self.click_row(browser, 0)
-        self.assertEqual(["a.jpg"], self.selected_names(browser))
-        self.assertFalse(browser.compare_images_button.isEnabled())
-        self.click_row(browser, 1, Qt.ControlModifier)
-        self.assertEqual(["a.jpg", "b.jpg"], self.selected_names(browser))
-        self.assertTrue(browser.compare_images_button.isEnabled())
-        browser.compare_images_button.click()
-        self.assertEqual(("/images/a.jpg", "/images/b.jpg"), browser.compared_paths)
-        self.assertEqual(2, browser.tabs.currentIndex())
-        self.assertEqual("a.jpg", browser.comparison_image_1_header.filename.text())
-        self.assertEqual("b.jpg", browser.comparison_image_2_header.filename.text())
-        self.assertEqual(["a.jpg", "b.jpg"], self.selected_names(browser))
-
-    def test_selection_and_comparison_persist_across_tabs_and_replace_explicitly(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser()
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        browser.tabs.setCurrentIndex(2)
-        self.app.processEvents()
-        original = browser.compared_paths
-        self.assertEqual(("/images/a.jpg", "/images/b.jpg"), original)
-        self.assertEqual(2, len(browser.image_list.selectedItems()))
-        browser.tabs.setCurrentIndex(0)
-        self.app.processEvents()
-        self.assertEqual(2, len(browser.image_list.selectedItems()))
-        browser.tabs.setCurrentIndex(1)
-        self.app.processEvents()
-        self.assertEqual(2, len(browser.image_list.selectedItems()))
-        browser.tabs.setCurrentIndex(2)
-        self.app.processEvents()
-        self.assertEqual(original, browser.compared_paths)
-        self.assertEqual("a.jpg", browser.comparison_image_1_header.filename.text())
-
-        self.click_row(browser, 1, Qt.ControlModifier)
-        self.assertEqual(["a.jpg"], self.selected_names(browser))
-        self.assertEqual(original, browser.compared_paths)
-        self.assertTrue(browser.comparison_content.isVisible())
-        self.assertFalse(browser.compare_images_button.isEnabled())
-        self.click_row(browser, 2, Qt.ControlModifier)
-        self.assertEqual(["a.jpg", "c.jpg"], self.selected_names(browser))
-        self.assertTrue(browser.compare_images_button.isEnabled())
-        browser.compare_images_button.click()
-        self.assertEqual(("/images/a.jpg", "/images/c.jpg"), browser.compared_paths)
-        self.assertEqual("c.jpg", browser.comparison_image_2_header.filename.text())
-
-    def test_three_selection_and_shift_range_show_instruction(self):
-        from PySide6.QtCore import QItemSelection, QItemSelectionModel, Qt
-        browser = self.make_browser()
-        self.click_row(browser, 0)
-        first = browser.image_list.model().index(0, 0)
-        last = browser.image_list.model().index(2, 0)
-        range_selection = QItemSelection(first, last)
-        browser.image_list.selectionModel().select(
-            range_selection, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
-        self.app.processEvents()
-        self.assertEqual(["a.jpg", "b.jpg", "c.jpg"], self.selected_names(browser))
-        self.assertFalse(browser.compare_images_button.isEnabled())
-        browser.tabs.setCurrentIndex(2)
-        self.app.processEvents()
-        self.assertIn("Select two images", browser.comparison_empty.text())
-        self.assertIn("Ctrl+click", browser.comparison_empty.text())
-        self.assertTrue(browser.comparison_tree.topLevelItemCount() <= 1)
-        self.assertFalse(browser.comparison_content.isVisible())
-
-    def test_list_navigation_preserves_multiselection_and_single_image_browsing(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser()
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        browser.next_button.click()
-        self.app.processEvents()
-        self.assertEqual(["a.jpg", "b.jpg"], self.selected_names(browser))
-        self.assertEqual("c.jpg", browser.filename.text())
-        self.click_row(browser, 0)
-        self.assertEqual(["a.jpg"], self.selected_names(browser))
-        browser.next_button.click()
-        self.app.processEvents()
-        self.assertEqual(["b.jpg"], self.selected_names(browser))
-        self.assertEqual("b.jpg", browser.filename.text())
-        browser.tabs.setCurrentIndex(0)
-        browser.tabs.setCurrentIndex(1)
-        browser.tabs.setCurrentIndex(0)
-        self.assertEqual(["b.jpg"], self.selected_names(browser))
-
-    def test_compare_tab_auto_compares_two_selected_images(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser()
-        self.click_row(browser, 1)
-        self.click_row(browser, 2, Qt.ControlModifier)
-        browser.tabs.setCurrentIndex(2)
-        self.app.processEvents()
-        self.assertEqual(("/images/b.jpg", "/images/c.jpg"), browser.compared_paths)
-        self.assertEqual("b.jpg", browser.comparison_image_1_header.filename.text())
-        self.assertEqual("c.jpg", browser.comparison_image_2_header.filename.text())
-
-    def test_selection_change_during_extraction_cannot_label_stale_results_as_new_pair(self):
-        from unittest.mock import Mock, patch
-        from PySide6.QtCore import Qt
-        browser = self.make_browser(loaded=False)
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        worker = Mock()
-        worker.isRunning.return_value = True
-        browser.worker = worker
-        with patch("kim_metadata_browser.MetadataWorker") as worker_type:
-            browser.compare_images_button.click()
-            self.assertEqual(("/images/a.jpg", "/images/b.jpg"), browser.pending_comparison_paths)
-            worker_type.assert_not_called()
-        self.click_row(browser, 1, Qt.ControlModifier)
-        self.click_row(browser, 2, Qt.ControlModifier)
-        self.assertIsNone(browser.pending_comparison_paths)
-        browser.worker_generation = 3
-        browser.receive_results(
-            {"/images/a.jpg": record("/images/a.jpg", [entry("Title", "Stale")])}, {}, None, 2)
-        self.assertNotIn("/images/a.jpg", browser.records)
-        browser.receive_results(
-            {"/images/a.jpg": record("/images/a.jpg", [entry("Title", "A")]),
-             "/images/b.jpg": record("/images/b.jpg", [entry("Title", "B")])}, {}, None, 3)
-        self.assertIsNone(browser.compared_paths)
-        self.assertFalse(browser.comparison_content.isVisible())
-        self.assertIn("Selection changed", browser.comparison_empty.text())
-        browser.worker = None
-
-    def test_loading_queues_missing_selected_image_after_existing_worker(self):
-        from unittest.mock import Mock, patch
-        from PySide6.QtCore import Qt
-        browser = self.make_browser(loaded=False)
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        worker = Mock()
-        worker.isRunning.return_value = True
-        browser.worker = worker
-        browser.compare_images_button.click()
-        self.click_row(browser, 1, Qt.ControlModifier)
-        self.click_row(browser, 2, Qt.ControlModifier)
-        browser.compare_images_button.click()
-        self.assertEqual(("/images/a.jpg", "/images/c.jpg"), browser.pending_comparison_paths)
-        browser.receive_results({"/images/a.jpg": record("/images/a.jpg", [entry("Title", "A")]),
-                                 "/images/b.jpg": record("/images/b.jpg", [entry("Title", "B")])}, {}, None)
-        self.assertIsNone(browser.compared_paths)
-        worker.isRunning.return_value = False
-        worker.wait.return_value = True
-        queued = Mock()
-        queued.completed = Mock()
-        queued.finished = Mock()
-        with patch("kim_metadata_browser.MetadataWorker", return_value=queued) as worker_type:
-            browser.worker_finished()
-        worker_type.assert_called_once_with(["/images/c.jpg"], browser)
-        queued.start.assert_called_once_with()
-        self.assertEqual(("/images/a.jpg", "/images/c.jpg"), browser.pending_comparison_paths)
-        browser.worker = None
-
-    def test_modes_show_match_state_and_sidecar_conflict_summary(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser(("reference.jpg", "comparison.jpg"))
-        browser.records = {
-            browser.paths[0]: record(browser.paths[0], [
-                entry("Description", "Same caption", tag_id="dc:Description", source=browser.paths[0]),
-                entry("Caption-Abstract", "Old IPTC caption", group="IPTC:Application2",
-                      tag_id="Caption-Abstract", source=browser.paths[0]),
-            ]),
-            browser.paths[1]: record(browser.paths[1], [
-                entry("Description", "Same caption", tag_id="dc:Description", source=browser.paths[1]),
-                entry("Description", "External caption", tag_id="dc:Description",
-                      source="/photos/comparison.xmp"),
-            ]),
-        }
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        browser.compare_images_button.click()
-        self.assertIn("1 matching", browser.comparison_summary.text())
-        self.assertIn("1 IPTC/XMP source conflict", browser.comparison_summary.text())
-        self.assertTrue(browser.comparison_empty.isHidden())
-        browser.compare_mode.setCurrentText("All fields")
-        self.assertGreater(browser.comparison_tree.topLevelItemCount(), 0)
-
-    def test_identical_metadata_reports_match_and_all_fields_can_be_shown(self):
-        from PySide6.QtCore import Qt
-        browser = self.make_browser(("reference.jpg", "comparison.jpg"))
-        same = [entry("Title", "Same title", source=browser.paths[0]),
-                entry("Description", "Same description", source=browser.paths[0])]
-        other = [entry("Title", "Same title", source=browser.paths[1]),
-                 entry("Description", "Same description", source=browser.paths[1])]
-        browser.records = {browser.paths[0]: record(browser.paths[0], same),
-                           browser.paths[1]: record(browser.paths[1], other)}
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        browser.compare_images_button.click()
-        self.assertEqual("Differences only", browser.compare_mode.currentText())
-        self.assertTrue(browser.comparison_tree.topLevelItem(0).text(0).startswith("The metadata matches"))
-        browser.compare_mode.setCurrentText("All fields")
-        self.assertEqual("Description (2)", browser.comparison_tree.topLevelItem(0).text(0))
-
-    def test_running_worker_still_allows_pair_request_and_shutdown_waits(self):
-        from unittest.mock import Mock
-        from PySide6.QtCore import Qt
-        browser = self.make_browser(loaded=False)
-        self.click_row(browser, 0)
-        self.click_row(browser, 1, Qt.ControlModifier)
-        browser.worker = Mock()
-        browser.worker.isRunning.return_value = True
-        self.assertTrue(browser.compare_images_button.isEnabled())
-        browser.compare_images_button.click()
-        self.assertEqual(("/images/a.jpg", "/images/b.jpg"), browser.pending_comparison_paths)
-        event = Mock()
-        browser.closeEvent(event)
-        browser.worker.requestInterruption.assert_called_once_with()
-        event.ignore.assert_called_once_with()
-        self.assertTrue(browser.close_after_worker)
-        browser.worker = None
-        browser.settings = Mock()
-        browser.close()
+        self.app.sendEvent(window, QEvent(QEvent.ActivationChange))
+        self.driver.wait_for(lambda: window.comparison_data is not None and any(
+            row.label == 'Title' and row.reference.value == 'IPTC title' for row in window.comparison_data.rows))
+        self.assertEqual(calls, len(self.driver.calls()))
 
 
-if __name__ == "__main__":
+    def test_structured_values_have_bounded_cells_and_complete_details(self):
+        from PySide6.QtCore import Qt, QTimer
+        from PySide6.QtWidgets import QPlainTextEdit
+        self.driver.configure(delay=0.01, entries=1000, structured=True)
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: window.comparison_data is not None and len(window.comparison_data.rows) > 1000)
+        window.compare_mode.setCurrentText('All values')
+        model = window.comparison_model
+        row = next(i for i, number in enumerate(model.rows) if window.comparison_data.rows[number].reference and
+                   window.comparison_data.rows[number].reference.name == 'Structure')
+        self.assertEqual('Structured value (2 elements)', model.index(row, 1).data())
+        self.assertIsNone(model.index(row, 1).data(Qt.BackgroundRole))
+        self.assertEqual(28, window.comparison_tree.rowHeight(row))
+        window.comparison_tree.setCurrentIndex(model.index(row, 1))
+        captured = []
+        def inspect():
+            dialog = self.app.activeModalWidget()
+            self.assertFalse(dialog.structure.isExpanded(dialog.structure.model().index(0, 0)))
+            self.assertEqual(list(range(3000)), dialog.structure.model().root.value['values'])
+            dialog.raw_copy.click()
+            captured.append(self.app.clipboard().text())
+            dialog.reject()
+        QTimer.singleShot(0, inspect)
+        window.show_comparison_details()
+        self.assertIn('needle-at-the-end', captured[0])
+        self.assertIn('2999', captured[0])
+        different = next(i for i, number in enumerate(model.rows) if window.comparison_data.rows[number].state == 'different')
+        self.assertIsNotNone(model.index(different, 1).data(Qt.BackgroundRole))
+        self.assertFalse(model.index(different, 1).data().startswith('Different'))
+
+    def test_complete_compare_cancellation_and_retry(self):
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        self.driver.wait_for(lambda: window.comparison_data is not None)
+        previous = window.comparison_data
+        self.driver.configure(delay=0.3, entries=1000)
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: any(call['full'] for call in self.driver.calls()))
+        window.compare_cancel.click()
+        self.driver.wait_for(lambda: window.worker is None and window._comparison_worker is None)
+        self.assertIn('canceled', window.comparison_summary.text())
+        window.compare_retry.click()
+        self.driver.wait_for(lambda: window.comparison_data is not previous)
+        self.assertGreaterEqual(sum(call['full'] for call in self.driver.calls()), 3)
+
+    def test_comparison_cache_accounts_for_retained_metadata_values(self):
+        window = self.window
+        window.comparison_cache_budget = 256 * 1024
+        self.driver.configure(delay=0.01, entries=10, metadata={
+            'XMP:XMP-test:Image:Blob': {'id': 'Blob', 'val': 'x' * (512 * 1024)}})
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: window.comparison_data is not None and any(
+            row.reference and row.reference.name == 'Blob' for row in window.comparison_data.rows))
+        self.assertGreater(window.comparison_data.bytes, window.comparison_cache_budget)
+        self.assertNotIn(window._comparison_data_key, window._comparison_cache)
+
+    def test_overview_derived_from_full_records_reuses_the_pair_working_set(self):
+        self.driver.configure(delay=0.01, entries=1000)
+        window = self.window
+        window.tabs.setCurrentIndex(2)
+        window.assign_comparison(0, self.paths[0])
+        window.assign_comparison(1, self.paths[1])
+        window.compare_scope.setCurrentText('All fields')
+        self.driver.wait_for(lambda: window.comparison_data is not None and len(window.comparison_data.rows) > 1000)
+        window.overview_records.clear()
+        window.overview_records.budget = 1
+        window._active_overview = None
+        window._comparison_overviews.clear()
+        window._comparison_overview_stamps.clear()
+        calls = len(self.driver.calls())
+        record = window._overview_record(self.paths[1])
+        self.assertIs(record, window._overview_record(self.paths[1]))
+        window._update_slot_headers()
+        self.assertEqual(calls, len(self.driver.calls()))
+
+
+if __name__ == '__main__':
     unittest.main()

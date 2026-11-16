@@ -48,6 +48,11 @@ src/bin/kim_location_map.py|bin/kim_location_map.py|0644
 src/bin/kim_job.py|bin/kim_job.py|0644
 src/bin/kim_job_process.py|bin/kim_job_process.py|0644
 src/bin/kim_action_dialog.py|bin/kim_action_dialog.py|0644
+src/bin/kim_metadata_browser.py|bin/kim_metadata_browser.py|0644
+src/bin/kim_metadata_compare.py|bin/kim_metadata_compare.py|0644
+src/bin/kim_metadata_editor.py|bin/kim_metadata_editor.py|0644
+src/bin/kim_metadata_reader.py|bin/kim_metadata_reader.py|0644
+src/bin/kim_metadata_sources.py|bin/kim_metadata_sources.py|0644
 src/bin/kim_recipe_menu.py|bin/kim_recipe_menu.py|0644
 src/bin/kim_desktop_exec.py|bin/kim_desktop_exec.py|0644
 src/bin/kim_recipe_run.py|bin/kim_recipe_run.py|0644
