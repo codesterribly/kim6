@@ -26,6 +26,60 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         self.window.source_drafts.clear()
         self.window.batch_sessions.clear()
 
+    def test_gps_view_preserves_pending_metadata_proposal(self):
+        from unittest.mock import patch
+
+        window = self.window
+        self.driver.wait_for(
+            lambda: window._record(window.paths[0]) is not None
+            and window.worker is None
+        )
+
+        path = window._active_path()
+        window.field_controls["title"]["edit"].setText(
+            "Draft retained after GPS inspection"
+        )
+
+        original_draft = window.drafts[path]["title"]
+        self.assertTrue(window.review_button.isEnabled())
+
+        from kim_metadata_sources import OVERVIEW_DEFAULTS
+        from PySide6.QtWidgets import QToolButton
+
+        window.overview_preferences.save([
+            field for field in OVERVIEW_DEFAULTS
+            if field.section == "Location"
+        ])
+        window.tabs.setCurrentIndex(window.OVERVIEW_TAB)
+        window.overview.show_empty.setChecked(True)
+
+        # Exercise the shared section renderer independently of the
+        # asynchronous selective metadata reader. The current image
+        # record is sufficient to render empty pinned Location fields.
+        window.overview.set_record(window._record(path))
+        globe = window.overview.overview_body.findChild(
+            QToolButton, "viewGpsOnMap"
+        )
+        self.assertIsNotNone(globe)
+
+        self.assertEqual("View on map", globe.accessibleName())
+
+        with patch("kim_location_dialog.LocationDialog") as dialog:
+            globe.click()
+            dialog.assert_called_once_with(
+                "report", [path], "create", None
+            )
+            dialog.return_value.exec.assert_called_once_with()
+
+        self.assertIs(
+            original_draft, window.drafts[path]["title"]
+        )
+        self.assertEqual(
+            "Draft retained after GPS inspection",
+            window.drafts[path]["title"].value
+        )
+        self.assertTrue(window.review_button.isEnabled())
+
     def test_review_requires_actual_proposals_and_reverting_restores_noop(self):
         from kim_metadata_editor import ReviewDialog
         window = self.window
@@ -110,6 +164,78 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         window.tabs.setCurrentIndex(1)
         self.driver.app.processEvents()
         self.assertEqual(calls, len(self.driver.calls()))
+
+    def test_readonly_camera_and_dimensions_match_overview(self):
+        from unittest.mock import patch
+        from kim_metadata_reader import MetadataEntry, MetadataRecord
+        from kim_metadata_sources import OverviewField
+
+        window = self.window
+        self.driver.wait_for(
+            lambda: window._record(window.paths[0]) is not None
+            and window.worker is None
+        )
+
+        path = window.paths[0]
+        entries = [
+            MetadataEntry(
+                "Make", ("EXIF", "IFD0"), 1,
+                "Google", path, "EXIF:Make"
+            ),
+            MetadataEntry(
+                "Model", ("EXIF", "IFD0"), 2,
+                "Pixel 10 Pro", path, "EXIF:Model"
+            ),
+            MetadataEntry(
+                "ImageWidth", ("File", "System"), 3,
+                4000, path, "File:ImageWidth"
+            ),
+            MetadataEntry(
+                "ImageHeight", ("File", "System"), 4,
+                3000, path, "File:ImageHeight"
+            ),
+        ]
+        record = MetadataRecord(path, entries)
+
+        camera = OverviewField(
+            "Make", "Camera", aliases=("Make", "Model")
+        )
+        dimensions = OverviewField(
+            "ImageSize", "Image dimensions",
+            aliases=("ImageSize", "ImageWidth", "ImageHeight")
+        )
+
+        window.overview_preferences.save([camera, dimensions])
+
+        with patch.object(
+            window, "_overview_snapshot",
+            return_value=(record, frozenset(
+                ("Make", "Model", "ImageWidth", "ImageHeight")
+            ))
+        ), patch.object(
+            window, "_overview_missing", return_value=()
+        ):
+            window._refresh_editor_pins()
+
+        camera_value = window._readonly_pins[
+            camera.key
+        ]["value"]
+        dimensions_value = window._readonly_pins[
+            dimensions.key
+        ]["value"]
+
+        self.assertEqual(
+            "Google Pixel 10 Pro",
+            camera_value.toPlainText()
+        )
+        self.assertEqual(
+            "4000 × 3000 pixels",
+            dimensions_value.toPlainText()
+        )
+        self.assertFalse(camera_value.isEnabled())
+        self.assertFalse(dimensions_value.isEnabled())
+        self.assertEqual({}, window.drafts)
+        self.assertFalse(window.review_button.isEnabled())
 
     def test_pinned_modify_date_uses_full_cache_without_changing_edit_targets(self):
         from PySide6.QtWidgets import QLabel

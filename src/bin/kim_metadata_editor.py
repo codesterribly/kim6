@@ -1516,6 +1516,15 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         configure.setIcon(QIcon.fromTheme("configure"))
         configure.clicked.connect(self._configure_editor_pins)
         pin_row.addWidget(configure)
+
+        self.view_gps_button = QPushButton('View on map…')
+        self.view_gps_button.setIcon(QIcon.fromTheme('globe'))
+        self.view_gps_button.setToolTip(
+            'Inspect this image in the existing read-only GPS viewer. '
+            'Pending metadata proposals are preserved.'
+        )
+        self.view_gps_button.clicked.connect(self.view_gps_on_map)
+        pin_row.addWidget(self.view_gps_button)
         self.fields_layout.addLayout(pin_row)
         self._pin_signature = None
         self._readonly_pins = {}
@@ -1528,6 +1537,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.form_scroll, 'Edit metadata')
         self.overview = MetadataOverview(self.preferences, self.overview_preferences, self)
+        self.overview.view_gps_on_map = self.view_gps_on_map
         self.overview.configuration_changed.connect(self._reload_overview_preferences)
         self.overview.retry.connect(self._retry_overview)
         self.tabs.addTab(self.overview, 'Overview')
@@ -2094,6 +2104,25 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             "usageterms": "usage",
         }.get(field.selector.casefold())
 
+    def view_gps_on_map(self):
+        """Inspect GPS without changing the Editor's pending drafts."""
+        path = self._active_path()
+        if not path:
+            QMessageBox.information(
+                self, "View on map", "Select an image first."
+            )
+            return
+
+        try:
+            from kim_location_dialog import LocationDialog
+            dialog = LocationDialog("report", [path], "create", None)
+            dialog.exec()
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(
+                self, "View on map",
+                "Could not open the GPS viewer: " + str(exc)
+            )
+
     def _configure_editor_pins(self):
         if OverviewFieldsDialog(
                 self.overview_preferences, self
@@ -2271,11 +2300,35 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             if chosen is None and len(entries) == 1:
                 chosen = entries[0]
 
-            text = (
-                _entry_value(chosen)
-                if chosen is not None
-                else "Multiple representations. See Details."
-            )
+            # Match Browser Overview for composite camera fields.
+            # Never combine a source- or language-qualified pin with
+            # values from another metadata representation.
+            if (
+                not field.source
+                and not field.language
+                and field.label in (
+                    "Camera",
+                    "Image dimensions",
+                    "GPS position",
+                    "GPS altitude",
+                )
+            ):
+                formatted = self.overview._camera_values(
+                    field.label, field.selectors, record
+                )
+                text = (
+                    " | ".join(formatted)
+                    if formatted
+                    else _entry_value(chosen)
+                    if chosen is not None
+                    else "Multiple representations. See Details."
+                )
+            else:
+                text = (
+                    _entry_value(chosen)
+                    if chosen is not None
+                    else "Multiple representations. See Details."
+                )
             text = str(text)
             value.setPlainText(
                 text[:500] + "…" if len(text) > 500 else text

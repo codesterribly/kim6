@@ -17,7 +17,7 @@ import sys
 
 try:
     from PySide6.QtCore import QSettings, Qt, QThread, Signal, QAbstractItemModel, QAbstractTableModel, QSize, QRect, QModelIndex, QTimer, QItemSelectionModel, QLocale, QMimeData, QUrl, QEvent, QPersistentModelIndex
-    from PySide6.QtGui import QIcon, QImage, QPalette, QPixmap, QFont, QDrag, QColor, QAction
+    from PySide6.QtGui import QIcon, QImage, QPalette, QPixmap, QFont, QDrag, QColor, QAction, QPainter, QPen
     from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
         QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QScrollArea,
         QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTableView, QVBoxLayout,
@@ -1155,7 +1155,57 @@ class OverviewPresentation:
         body.setVisible(expanded)
         heading.toggled.connect(lambda value, name=title, content=body, button=heading:
                                 self._set_section_expanded(name, value, content, button))
-        self.overview_layout.addWidget(heading, 0, Qt.AlignLeft)
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(6)
+        header_row.addWidget(heading)
+
+        if title == 'Location':
+            open_map = getattr(self, 'view_gps_on_map', None)
+            if open_map is None and self.parent() is not None:
+                open_map = getattr(
+                    self.parent(), 'view_gps_on_map', None
+                )
+
+            if callable(open_map):
+                globe = QToolButton()
+                globe.setObjectName('viewGpsOnMap')
+                globe_image = QPixmap(24, 24)
+                globe_image.fill(Qt.transparent)
+
+                painter = QPainter(globe_image)
+                painter.setRenderHint(QPainter.Antialiasing)
+
+                pen = QPen(
+                    self.palette().color(QPalette.WindowText)
+                )
+                pen.setWidthF(1.6)
+                painter.setPen(pen)
+
+                painter.drawEllipse(2, 2, 20, 20)
+                painter.drawEllipse(8, 2, 8, 20)
+                painter.drawLine(2, 12, 22, 12)
+                painter.drawLine(4, 7, 20, 7)
+                painter.drawLine(4, 17, 20, 17)
+                painter.end()
+
+                globe.setIcon(QIcon(globe_image))
+                globe.setIconSize(QSize(24, 24))
+                globe.setMinimumSize(QSize(30, 30))
+                globe.setAutoRaise(True)
+                globe.setToolTip(
+                    'View the selected image GPS location on the map'
+                )
+                globe.setAccessibleName('View on map')
+                globe.setFocusPolicy(Qt.StrongFocus)
+                globe.clicked.connect(
+                    lambda _checked=False, action=open_map:
+                    action()
+                )
+                header_row.addWidget(globe)
+
+        header_row.addStretch(1)
+        self.overview_layout.addLayout(header_row)
         self.overview_layout.addWidget(body)
         self._overview_section = body
 
@@ -1420,36 +1470,111 @@ class ListThumbnails:
                 self._icon_paths.discard(old)
 
     def _pump_thumbnails(self):
-        if self._closing or self.thumbnail_worker is not None or not self.paths:
+        """Fill at most four low-priority thumbnail decoder slots."""
+        if (
+            self._closing
+            or not self.paths
+            or len(self.thumbnail_workers) >= 4
+        ):
             return
-        if any(self._preview_for(path) is None and not self._preview_failure(path) for path in self._wanted_previews()):
+
+        # Never start background decoding ahead of selected-image
+        # or comparison preview work.
+        if any(
+            self._preview_for(path) is None
+            and not self._preview_failure(path)
+            for path in self._wanted_previews()
+        ):
             return
-        # The list itself owns the pending filenames; only one decode is queued.
-        visible = [self.image_list.row(self.image_list.itemAt(0, y))
-                   for y in range(0, self.image_list.viewport().height(), max(1, self.image_list.sizeHintForRow(0)))]
-        candidates = [self.paths[row] for row in dict.fromkeys(visible) if 0 <= row < len(self.paths)]
-        path = next((path for path in candidates if self.thumbnails.get(path) is None and
-                     self._thumbnail_seen.get(path) != ('failed', _file_stamp(path))), None)
-        while path is None and self._thumbnail_cursor < len(self.paths):
-            candidate = self.paths[self._thumbnail_cursor]
-            self._thumbnail_cursor += 1
-            seen = self._thumbnail_seen.get(candidate)
-            if isinstance(seen, tuple) and len(seen) == 2 and seen[0] == 'failed':
-                seen = seen[1]
-            if seen != _file_stamp(candidate):
-                path = candidate
-        if path is None:
-            return
-        cached = self._preview_for(path)
-        if cached is not None:
-            self._store_thumbnail(path, cached[0], _file_stamp(path))
-            QTimer.singleShot(0, self._pump_thumbnails)
-            return
-        worker = PreviewWorker(path, self, QSize(96, 72))
-        self.thumbnail_worker = worker
-        worker.completed.connect(self._thumbnail_ready, Qt.QueuedConnection)
-        worker.finished.connect(lambda: self._thumbnail_finished(worker), Qt.QueuedConnection)
-        worker.start(QThread.LowPriority)
+
+        visible = [
+            self.image_list.row(
+                self.image_list.itemAt(0, y)
+            )
+            for y in range(
+                0,
+                self.image_list.viewport().height(),
+                max(1, self.image_list.sizeHintForRow(0)),
+            )
+        ]
+
+        candidates = [
+            self.paths[row]
+            for row in dict.fromkeys(visible)
+            if 0 <= row < len(self.paths)
+        ]
+
+        active = {
+            worker.path for worker in self.thumbnail_workers
+        }
+
+        while len(self.thumbnail_workers) < 4:
+            path = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate not in active
+                    and self.thumbnails.get(candidate) is None
+                    and self._thumbnail_seen.get(candidate)
+                    != ('failed', _file_stamp(candidate))
+                ),
+                None,
+            )
+
+            while (
+                path is None
+                and self._thumbnail_cursor < len(self.paths)
+            ):
+                candidate = self.paths[self._thumbnail_cursor]
+                self._thumbnail_cursor += 1
+
+                if (
+                    candidate in active
+                    or self.thumbnails.get(candidate) is not None
+                ):
+                    continue
+
+                seen = self._thumbnail_seen.get(candidate)
+
+                if (
+                    isinstance(seen, tuple)
+                    and len(seen) == 2
+                    and seen[0] == 'failed'
+                ):
+                    seen = seen[1]
+
+                if seen != _file_stamp(candidate):
+                    path = candidate
+
+            if path is None:
+                return
+
+            cached = self._preview_for(path)
+
+            if cached is not None:
+                self._store_thumbnail(
+                    path, cached[0], _file_stamp(path)
+                )
+                active.add(path)
+                continue
+
+            worker = PreviewWorker(
+                path, self, QSize(96, 72)
+            )
+            self.thumbnail_workers.add(worker)
+            active.add(path)
+
+            worker.completed.connect(
+                self._thumbnail_ready,
+                Qt.QueuedConnection,
+            )
+            worker.finished.connect(
+                lambda job=worker:
+                self._thumbnail_finished(job),
+                Qt.QueuedConnection,
+            )
+
+            worker.start(QThread.LowPriority)
 
     def _thumbnail_ready(self, path, value, stamp):
         if self._closing or path not in self._path_rows or stamp != _file_stamp(path):
@@ -1460,7 +1585,7 @@ class ListThumbnails:
             self._store_thumbnail(path, value[0], stamp)
 
     def _thumbnail_finished(self, worker):
-        self.thumbnail_worker = None
+        self.thumbnail_workers.discard(worker)
         worker.deleteLater()
         if self._closing:
             self._finish_close()
@@ -1519,7 +1644,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.overview_records = InspectionCache(32, 16 * 1024 * 1024)
         self.previews = InspectionCache(16, 16 * 1024 * 1024, preview=True)
         self.thumbnails = InspectionCache(128, 4 * 1024 * 1024, preview=True)
-        self.thumbnail_worker = None
+        self.thumbnail_workers = set()
         self._thumbnail_seen = {}
         self._thumbnail_cursor = 0
         self.preview_workers = set()
@@ -1527,6 +1652,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.preview_generation = 0
         self._preview_error = None
         self._preview_failures = {}
+        self._gif_preview_retries = set()
         self._active_preview = None
         self._active_overview = None
         self._selection_path = None
@@ -1559,6 +1685,21 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self._closing = False
         self.worker = None
         self.worker_generation = 0
+        self._activity_hide_timer = QTimer(self)
+        self._activity_hide_timer.setSingleShot(True)
+        self._activity_hide_timer.timeout.connect(
+            self._hide_metadata_activity
+        )
+        self._metadata_prefetch_ready = False
+        self._metadata_prefetch_attempted = set()
+        self._metadata_scan_completed = set()
+        self._metadata_scan_finished_announced = False
+        self._metadata_prefetch_timer = QTimer(self)
+        self._metadata_prefetch_timer.setSingleShot(True)
+        self._metadata_prefetch_timer.setInterval(1000)
+        self._metadata_prefetch_timer.timeout.connect(
+            self._start_metadata_prefetch
+        )
         self.close_after_worker = False
         self.add_button = None
         self.setWindowTitle("KIM6 Metadata Browser")
@@ -1609,6 +1750,10 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         layout.setContentsMargins(12, 12, 10, 12)
         layout.setSpacing(6)
         self.image_list = LoadedImageList()
+        self.image_list.setMouseTracking(True)
+        self.image_list.itemEntered.connect(
+            self._metadata_item_hovered
+        )
         self.image_list.setDragEnabled(True)
         self.image_list.currentRowChanged.connect(self.select_image)
         self.image_list.itemSelectionChanged.connect(self._selection_changed)
@@ -1637,16 +1782,17 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.filename.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.format_label = QLabel("")
         self.format_label.setTextFormat(Qt.PlainText)
-        self.format_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.format_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.format_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.format_label.setFixedHeight(self.format_label.sizeHint().height())
         self.position_label = QLabel("0 of 0")
         self.position_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.position_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.filename)
+
         details = QHBoxLayout()
         details.setSpacing(8)
-        details.addWidget(self.filename, 1)
-        details.addWidget(self.format_label)
+        details.addWidget(self.format_label, 1)
         details.addWidget(self.position_label)
         layout.addLayout(details)
 
@@ -1687,6 +1833,19 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.add_button.clicked.connect(self.choose_files)
         selection_row.addWidget(self.add_button)
         layout.addLayout(selection_row)
+        self.metadata_activity = QLabel("")
+        self.metadata_activity.setObjectName("metadataActivity")
+        self.metadata_activity.setTextFormat(Qt.PlainText)
+        self.metadata_activity.hide()
+        layout.addWidget(self.metadata_activity)
+
+        self.metadata_progress = QProgressBar()
+        self.metadata_progress.setObjectName("metadataProgress")
+        self.metadata_progress.setTextVisible(False)
+        self.metadata_progress.setFixedHeight(7)
+        self.metadata_progress.hide()
+        layout.addWidget(self.metadata_progress)
+
         layout.addWidget(self.image_list, 2)
 
     def _build_right(self):
@@ -1716,8 +1875,12 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         overview_layout.addWidget(self.show_empty)
         self.configure_overview = QPushButton('Configure fields…')
         self.configure_overview.setIcon(QIcon.fromTheme('configure'))
-        self.configure_overview.clicked.connect(self.configure_overview_fields)
-        overview_layout.addWidget(self.configure_overview, 0, Qt.AlignLeft)
+        self.configure_overview.clicked.connect(
+            self.configure_overview_fields
+        )
+        overview_layout.addWidget(
+            self.configure_overview, 0, Qt.AlignLeft
+        )
         self.overview_loading = QLabel('Loading metadata…')
         self.overview_loading.setTextFormat(Qt.PlainText)
         overview_layout.addWidget(self.overview_loading)
@@ -2059,6 +2222,14 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self._update_compare_button()
 
     def _tab_changed(self, index):
+        if index != 0:
+            self._metadata_prefetch_timer.stop()
+            self._metadata_prefetch_ready = False
+            if (
+                self.worker is not None
+                and getattr(self.worker, '_kim_prefetch', False)
+            ):
+                self._cancel_metadata()
         self._reload_overview_preferences()
         if index == 2 and self._single_splitter_sizes is None:
             self._single_splitter_sizes = self.splitter.sizes()
@@ -2325,6 +2496,12 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         panel.info.setText(f'Source: {width} × {height} px' if width and height else 'Source dimensions pending')
 
     def set_images(self, paths):
+        self._gif_preview_retries.clear()
+        self._metadata_prefetch_timer.stop()
+        self._metadata_prefetch_ready = False
+        self._metadata_prefetch_attempted.clear()
+        self._metadata_scan_completed.clear()
+        self._metadata_scan_finished_announced = False
         current = self._current_path()
         self.paths = list(dict.fromkeys(_source_path(Path(path).expanduser()) for path in paths))
         self.image_list.blockSignals(True)
@@ -2342,8 +2519,9 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                 item.setIcon(QIcon(QPixmap.fromImage(cached[0]).scaled(QSize(48, 36), Qt.KeepAspectRatio, Qt.SmoothTransformation)))
         self._thumbnail_cursor = 0
         self._thumbnail_seen = {path: stamp for path, stamp in self._thumbnail_seen.items() if path in self.paths}
-        if self.thumbnail_worker is not None and self.thumbnail_worker.path not in self.paths:
-            self.thumbnail_worker.requestInterruption()
+        for worker in tuple(self.thumbnail_workers):
+            if worker.path not in self.paths:
+                worker.requestInterruption()
         self.selection_count.setText(f'{len(self.paths)} image' + ('s' if len(self.paths) != 1 else ''))
         if self.paths:
             self.image_list.setCurrentRow(self.paths.index(current) if current in self.paths else 0)
@@ -2360,6 +2538,25 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.update_current()
         self._update_compare_button()
         QTimer.singleShot(0, self._pump_thumbnails)
+
+    def view_gps_on_map(self):
+        """Open the existing read-only GPS report for the current image."""
+        path = self._current_path()
+        if not path:
+            QMessageBox.information(
+                self, "View on map", "Select an image first."
+            )
+            return
+
+        try:
+            from kim_location_dialog import LocationDialog
+            dialog = LocationDialog("report", [path], "create", None)
+            dialog.exec()
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(
+                self, "View on map",
+                "Could not open the GPS viewer: " + str(exc)
+            )
 
     def _current_path(self):
         row = self.image_list.currentRow() if hasattr(self, 'image_list') else -1
@@ -2465,8 +2662,21 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         if stamp != _file_stamp(path):
             return
         if value[0].isNull():
+            # A single transient GIF decoder error must not become a
+            # permanent failure for the current image.
+            retry_key = (path, stamp)
+            if (
+                Path(path).suffix.casefold() == '.gif'
+                and value[1] == 'No thumbnail decoder for this image'
+                and retry_key not in self._gif_preview_retries
+            ):
+                self._gif_preview_retries.add(retry_key)
+                # _preview_finished will start the one permitted retry.
+                return
+
             self._preview_failures[path] = (stamp, value[1])
-            self._thumbnail_seen[path] = ('failed', stamp)
+            if self.thumbnails.get(path) is None:
+                self._thumbnail_seen[path] = ('failed', stamp)
         else:
             self.previews.store(path, value, stamp, value[0].sizeInBytes())
             self._store_thumbnail(path, value[0], stamp)
@@ -2495,6 +2705,192 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self._ensure_preview()
             self._pump_thumbnails()
 
+    def _start_metadata_prefetch(self):
+        """Begin low-priority metadata work after an idle interval."""
+        if self._closing or self.tabs.currentIndex() != 0:
+            return
+        self._metadata_prefetch_ready = True
+        self._pump_metadata()
+
+    def _nearby_metadata_path(self):
+        """Choose the next uninspected image, nearest first."""
+        if self.tabs.currentIndex() != 0 or not self.paths:
+            return None
+
+        row = self.image_list.currentRow()
+        if not 0 <= row < len(self.paths):
+            return None
+
+        for distance in range(1, len(self.paths)):
+            for index in (row + distance, row - distance):
+                if not 0 <= index < len(self.paths):
+                    continue
+
+                path = self.paths[index]
+
+                if path in self._metadata_scan_completed:
+                    continue
+
+                if path in self._metadata_prefetch_attempted:
+                    continue
+
+                record = self._overview_record(path)
+
+                if record is not None:
+                    self._metadata_scan_completed.add(path)
+                    continue
+
+                return path
+
+        return None
+
+    def _activity_neighbors(self):
+        row = self.image_list.currentRow()
+        if row < 0 or row >= len(self.paths):
+            return ()
+        return tuple(
+            self.paths[index]
+            for offset in (1, 2, -1)
+            for index in (row + offset,)
+            if 0 <= index < len(self.paths)
+        )
+
+    def _metadata_item_tooltip(self, path):
+        worker = self.worker
+        if (
+            worker is not None
+            and path in worker.paths
+            and not worker.isInterruptionRequested()
+        ):
+            status = "Reading metadata"
+        else:
+            record = self._overview_record(path)
+            if record is None:
+                status = (
+                    "Previously inspected; not cached"
+                    if path in self._metadata_scan_completed
+                    else "Metadata not loaded"
+                )
+            elif record.error:
+                status = "Metadata unavailable"
+            else:
+                status = "Metadata cached"
+        return f"{path}\n{status}"
+
+    def _metadata_item_hovered(self, item):
+        path = item.data(Qt.UserRole)
+        if path in self._path_rows:
+            item.setToolTip(self._metadata_item_tooltip(path))
+
+    def _hide_metadata_activity(self):
+        self.metadata_activity.hide()
+        self.metadata_progress.hide()
+
+    def _update_metadata_activity(self):
+        """Display actual progress for the complete image list."""
+        if self._closing:
+            return
+
+        worker = self.worker
+        active = (
+            worker is not None
+            and not worker.isInterruptionRequested()
+        )
+
+        neighbors = self._activity_neighbors()
+        paths = (
+            self._current_path(),
+            *neighbors,
+            *(worker.paths if worker else ()),
+        )
+
+        for path in dict.fromkeys(paths):
+            row = self._path_rows.get(path) if path else None
+            if row is None:
+                continue
+            item = self.image_list.item(row)
+            if item is not None:
+                item.setToolTip(
+                    self._metadata_item_tooltip(path)
+                )
+
+        if self.tabs.currentIndex() != 0:
+            self._activity_hide_timer.stop()
+            self._hide_metadata_activity()
+            return
+
+        total = len(self.paths)
+        completed = len(
+            self._metadata_scan_completed.intersection(
+                self.paths
+            )
+        )
+
+        running = active
+        waiting = (
+            self._metadata_prefetch_timer.isActive()
+        )
+
+        finished = (
+            total > 0
+            and completed >= total
+            and self._metadata_prefetch_ready
+            and not running
+        )
+
+        if finished:
+            if (
+                self._metadata_scan_finished_announced
+                and not self.metadata_activity.isVisible()
+            ):
+                return
+
+            message = (
+                f"Metadata inspected: {completed} of {total}"
+            )
+
+        elif running or waiting or (
+            self._metadata_prefetch_ready
+            and completed < total
+        ):
+            message = (
+                f"Inspecting metadata: {completed} of {total}"
+            )
+
+        else:
+            self._activity_hide_timer.stop()
+            self._hide_metadata_activity()
+            return
+
+        self.metadata_activity.setText(message)
+
+        if running and worker.paths:
+            kind = (
+                "Background"
+                if getattr(worker, "_kim_prefetch", False)
+                else "Selected image"
+            )
+            self.metadata_activity.setToolTip(
+                f"{kind}: {Path(worker.paths[0]).name}"
+            )
+        else:
+            self.metadata_activity.setToolTip("")
+
+        self.metadata_activity.show()
+
+        self.metadata_progress.setRange(
+            0, max(1, total)
+        )
+        self.metadata_progress.setValue(completed)
+        self.metadata_progress.show()
+
+        if finished:
+            if not self._metadata_scan_finished_announced:
+                self._metadata_scan_finished_announced = True
+                self._activity_hide_timer.start(2500)
+        else:
+            self._activity_hide_timer.stop()
+
     def _desired_metadata(self):
         path = self._current_path()
         if self._closing or not path:
@@ -2508,22 +2904,61 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             return None
         if self.tabs.currentIndex() == 1 and self._all_requested_path == path and self._full_record(path) is None:
             return ('full', path)
-        if self._overview_record(path) is None:
+        selected_record = self._overview_record(path)
+
+        if selected_record is None:
+            if path in self._metadata_scan_completed:
+                self._metadata_scan_completed.discard(path)
+                self._metadata_scan_finished_announced = False
+            self._metadata_prefetch_attempted.discard(path)
             return ('overview', path)
+
+        self._metadata_scan_completed.add(path)
+
+        if (
+            self.tabs.currentIndex() == 0
+            and self._metadata_prefetch_ready
+        ):
+            candidate = self._nearby_metadata_path()
+            if candidate is not None:
+                return ('prefetch', candidate)
+
         return None
 
     def _pump_metadata(self):
         if self.worker is not None or self._closing:
+            if not self._closing:
+                self._update_metadata_activity()
             return
         desired = self._desired_metadata()
         if desired is None:
+            if (
+                self.tabs.currentIndex() == 0
+                and not self._metadata_prefetch_ready
+                and not self._metadata_prefetch_timer.isActive()
+                and len(self._metadata_scan_completed) < len(self.paths)
+            ):
+                current = self._current_path()
+                selected = (
+                    self._overview_record(current)
+                    if current else None
+                )
+                if selected is not None and not selected.error:
+                    self._metadata_prefetch_timer.start()
+
             self._comparison_ready()
+            self._update_metadata_activity()
             return
+
         mode, path = desired
-        fields = self.overview_preferences.selectors if mode == 'overview' else None
+        fields = self.overview_preferences.selectors if mode in ('overview', 'prefetch') else None
         self.worker_generation += 1
         generation = self.worker_generation
         worker = MetadataWorker([path], self, fields=fields)
+        worker._kim_prefetch = mode == 'prefetch'
+        if worker._kim_prefetch:
+            self._metadata_prefetch_attempted.add(path)
+
         if fields is None:
             worker.derived_fields = self.overview_preferences.selectors
         self.worker = worker
@@ -2533,7 +2968,11 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             derived=worker.derived_records if worker.derived_fields == self.overview_preferences.selectors else {},
             derived_weights=worker.derived_weights), Qt.QueuedConnection)
         worker.finished.connect(lambda: self.worker_finished(worker, generation), Qt.QueuedConnection)
-        worker.start()
+        if worker._kim_prefetch:
+            worker.start(QThread.LowPriority)
+        else:
+            worker.start()
+        self._update_metadata_activity()
 
     def _cancel_metadata(self):
         if self.worker is not None:
@@ -2550,6 +2989,8 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             stamp = (stamps or {}).get(path, _record_stamp(path, record.sidecars))
             if stamps is not None and not record.error and stamp != _record_stamp(path, record.sidecars):
                 continue
+            if path in self._path_rows:
+                self._metadata_scan_completed.add(path)
             if record.error:
                 self._metadata_errors[(mode, path)] = record
             else:
@@ -2579,12 +3020,19 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                     self._comparison_records[path] = record
                     self._comparison_stamps[path] = stamp
         self.update_current()
+        self._update_metadata_activity()
         self._comparison_ready()
 
     def worker_finished(self, worker=None, generation=None):
         worker = worker or self.worker
         if worker is not self.worker:
             return
+
+        if getattr(worker, "_kim_prefetch", False):
+            for path in worker.paths:
+                if path not in self._metadata_scan_completed:
+                    self._metadata_prefetch_attempted.discard(path)
+
         self.worker = None
         worker.deleteLater()
         if self._closing:
@@ -2649,11 +3097,14 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         row = self.image_list.currentRow()
         stamp = _file_stamp(path)
         if path != self._selection_path or stamp != self._selection_stamp:
+            self._metadata_prefetch_timer.stop()
+            self._metadata_prefetch_ready = False
             self._selection_path = path
             self._selection_stamp = stamp
             self.preview_generation += 1
             self._preview_error = None
             self._active_preview = None
+            self._gif_preview_retries.clear()
             self._active_overview = None
             if self.tabs.currentIndex() != 2:
                 for worker in self.preview_workers:
@@ -2680,19 +3131,45 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self.preview.set_image(preview[0])
             self.preview.setToolTip('')
         elif self._preview_error:
-            self.preview.set_image(QImage())
-            self.preview.setText(self._preview_error[1])
+            thumbnail = self.thumbnails.get(path)
+            if thumbnail is not None:
+                self.preview.set_image(thumbnail[0])
+                self.preview.setToolTip(
+                    'Full preview unavailable: '
+                    + self._preview_error[1]
+                )
+            else:
+                self.preview.set_image(QImage())
+                self.preview.setText(self._preview_error[1])
+                self.preview.setToolTip('')
         else:
             self.preview.set_image(QImage())
             self.preview.setText('Loading preview…')
+            self.preview.setToolTip('')
             thumbnail = self.thumbnails.get(path)
             if thumbnail is not None:
                 self.preview.set_image(thumbnail[0])
         record = self._overview_record(path) if preview is not None or self._preview_error else None
-        fmt = next((entry.value for entry in (record.entries if record else [])
-                    if entry.name.casefold() == 'filetype'), 'Unknown format')
-        dimensions = f'Preview: {preview[0].width()} × {preview[0].height()} px' if preview else 'Preview dimensions unavailable'
-        self.format_label.setText(f'{fmt}  ·  {dimensions}')
+        fmt = next(
+            (
+                entry.value
+                for entry in (record.entries if record else [])
+                if entry.name.casefold() == 'filetype'
+            ),
+            None,
+        )
+        if not fmt:
+            # Filename hint only, never treated as verified metadata.
+            extension = Path(path).suffix.lstrip('.').upper()
+            extension = {
+                'JPG': 'JPEG',
+                'TIF': 'TIFF',
+            }.get(extension, extension)
+            fmt = (
+                f'{extension} (unverified)'
+                if extension else 'Reading format…'
+            )
+        self.format_label.setText(str(fmt))
         messages = ([record.error] if record and record.error else []) + (record.warnings if record else [])
         self.notice.setText('\n'.join(messages))
         self.notice.setVisible(bool(messages))
@@ -3022,6 +3499,11 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         MetadataDetailsDialog(entries, self, field_name).exec()
 
     def overview_configuration_changed(self):
+        self._metadata_prefetch_timer.stop()
+        self._metadata_prefetch_ready = False
+        self._metadata_prefetch_attempted.clear()
+        self._metadata_scan_completed.clear()
+        self._metadata_scan_finished_announced = False
         for path in self.paths:
             self._metadata_errors.pop(('overview', path), None)
         self.overview_records.clear()
@@ -3110,13 +3592,15 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             QApplication.clipboard().setText(raw_metadata_value(self.selected_entry.value))
 
     def _finish_close(self):
-        if self.worker is None and not self.preview_workers and self._tag_filter_worker is None and self._comparison_worker is None and self.thumbnail_worker is None:
+        if self.worker is None and not self.preview_workers and self._tag_filter_worker is None and self._comparison_worker is None and not self.thumbnail_workers:
             self.close()
 
     def closeEvent(self, event):
         self._closing = True
-        if self.thumbnail_worker is not None:
-            self.thumbnail_worker.requestInterruption()
+        self._activity_hide_timer.stop()
+        self._metadata_prefetch_timer.stop()
+        for worker in tuple(self.thumbnail_workers):
+            worker.requestInterruption()
         self._cancel_tag_filter()
         if self._comparison_worker is not None:
             self._comparison_worker.requestInterruption()
@@ -3124,7 +3608,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             worker.requestInterruption()
         if self.worker is not None:
             self.worker.requestInterruption()
-        if self.worker is not None or self.preview_workers or self._tag_filter_worker is not None or self._comparison_worker is not None or self.thumbnail_worker is not None:
+        if self.worker is not None or self.preview_workers or self._tag_filter_worker is not None or self._comparison_worker is not None or self.thumbnail_workers:
             self.close_after_worker = True
             event.ignore()
             return

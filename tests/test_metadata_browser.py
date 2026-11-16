@@ -98,12 +98,353 @@ print(json.dumps([doc]))
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
 
+    def test_view_on_map_uses_existing_readonly_gps_report(self):
+        from unittest.mock import patch
+
+        window = self.open_browser()
+        current = window._current_path()
+        self.assertEqual(str(self.paths[0]), current)
+
+        from kim_metadata_sources import OVERVIEW_DEFAULTS
+        from PySide6.QtWidgets import QToolButton
+
+        window.overview_preferences.save([
+            field for field in OVERVIEW_DEFAULTS
+            if field.section == "Location"
+        ])
+        window.overview_configuration_changed()
+        window.show_empty.setChecked(True)
+
+        self.wait_for(
+            lambda: window.overview_body.findChild(
+                QToolButton, "viewGpsOnMap"
+            ) is not None
+        )
+        globe = window.overview_body.findChild(
+            QToolButton, "viewGpsOnMap"
+        )
+
+        self.assertEqual("View on map", globe.accessibleName())
+        self.assertTrue(globe.isEnabled())
+        icon_image = globe.icon().pixmap(24, 24).toImage()
+        self.assertFalse(icon_image.isNull())
+        self.assertTrue(
+            any(
+                icon_image.pixelColor(x, y).alpha() > 0
+                for y in range(icon_image.height())
+                for x in range(icon_image.width())
+            ),
+            "Location globe artwork is transparent",
+        )
+        self.assertFalse(hasattr(window, "view_gps_button"))
+
+        with patch("kim_location_dialog.LocationDialog") as dialog:
+            globe.click()
+            dialog.assert_called_once_with(
+                "report", [current], "create", None
+            )
+            dialog.return_value.exec.assert_called_once_with()
+
+    def test_filename_has_its_own_row_without_preview_dimensions(self):
+        window = self.open_browser()
+
+        layout = window.left_panel.layout()
+        filename_row = layout.indexOf(window.filename)
+        self.assertGreaterEqual(filename_row, 0)
+
+        second_row = layout.itemAt(filename_row + 1).layout()
+        self.assertIsNotNone(second_row)
+        self.assertIs(
+            second_row.itemAt(0).widget(),
+            window.format_label,
+        )
+        self.assertIs(
+            second_row.itemAt(1).widget(),
+            window.position_label,
+        )
+
+        self.assertTrue(
+            window.format_label.text().startswith("JPEG")
+        )
+        self.assertNotIn(
+            "Preview", window.format_label.text()
+        )
+        self.assertNotIn(
+            "Unknown format", window.format_label.text()
+        )
+
     def test_preview_is_visible_while_metadata_is_still_loading(self):
         window = self.open_browser()
         self.wait_for(lambda: not window.preview.image.isNull())
         self.assertFalse(window.records)
         self.assertIn('Loading metadata', window.status_summary.text())
+        self.assertIn('JPEG', window.format_label.text())
+        self.assertNotIn('Unknown format', window.format_label.text())
         self.assertLessEqual(len(self.calls()), 1)
+
+    def test_idle_metadata_prefetches_neighbors_and_reuses_cache(self):
+        self.configure(delay=0.02, entries=0)
+        window = self.open_browser()
+
+        paths = list(map(str, self.paths))
+        self.wait_for(
+            lambda: window._overview_record(paths[0]) is not None,
+            timeout=8,
+        )
+
+        self.wait_for(
+            lambda: all(
+                window._overview_record(path) is not None
+                for path in paths
+            ) and window.worker is None,
+            timeout=12,
+        )
+
+        calls = self.calls()
+        self.assertEqual(
+            [path.stat().st_ino for path in self.paths],
+            [call['inode'] for call in calls],
+        )
+        self.assertFalse(any(call['full'] for call in calls))
+
+        # Selecting a prefetched image must not launch another
+        # metadata extraction.
+        window.image_list.setCurrentRow(1)
+        self.app.processEvents()
+        self.assertIsNotNone(
+            window._overview_record(paths[1])
+        )
+        self.assertEqual(len(calls), len(self.calls()))
+
+    def test_navigation_interrupts_background_metadata_prefetch(self):
+        self.configure(delay=0.4, entries=0)
+        window = self.open_browser()
+
+        first = str(self.paths[0])
+        third = str(self.paths[2])
+
+        self.wait_for(
+            lambda: window._overview_record(first) is not None,
+            timeout=8,
+        )
+
+        self.wait_for(
+            lambda: (
+                window.worker is not None
+                and getattr(
+                    window.worker, '_kim_prefetch', False
+                )
+            ),
+            timeout=8,
+        )
+
+        background = window.worker
+        self.assertEqual(
+            [str(self.paths[1])],
+            background.paths,
+        )
+
+        window.image_list.setCurrentRow(2)
+        self.assertTrue(
+            background.isInterruptionRequested()
+        )
+
+        self.wait_for(
+            lambda: window._overview_record(third) is not None,
+            timeout=10,
+        )
+        self.assertEqual(third, window._current_path())
+
+    def test_background_thumbnail_decoders_use_four_bounded_workers(self):
+        from PySide6.QtCore import QSize
+        from kim_metadata_browser import (
+            MetadataBrowser,
+            read_thumbnail as actual_read_thumbnail,
+        )
+
+        self.configure(delay=0.01, entries=0)
+
+        paths = [
+            *self.paths,
+            *[
+                self.workspace.jpeg(
+                    f"photos/thumbnail-pool-{number}.jpg"
+                )
+                for number in range(6)
+            ],
+        ]
+
+        def delayed_decode(path, size, auto_orient=True):
+            if size == QSize(96, 72):
+                time.sleep(0.30)
+            return actual_read_thumbnail(
+                path, size, auto_orient=auto_orient
+            )
+
+        with patch(
+            "kim_metadata_browser.read_thumbnail",
+            side_effect=delayed_decode,
+        ):
+            window = MetadataBrowser(list(map(str, paths)))
+            self.windows.append(window)
+            window.show()
+
+            self.wait_for(
+                lambda: len(window.thumbnail_workers) == 4,
+                timeout=10,
+            )
+
+            workers = tuple(window.thumbnail_workers)
+
+            self.assertEqual(4, len(workers))
+            self.assertEqual(
+                4, len({worker.path for worker in workers})
+            )
+            self.assertTrue(
+                all(
+                    worker.size == QSize(96, 72)
+                    for worker in workers
+                )
+            )
+
+            self.wait_for(
+                lambda: (
+                    not window.thumbnail_workers
+                    and all(
+                        window.thumbnails.get(str(path)) is not None
+                        for path in paths
+                    )
+                ),
+                timeout=15,
+            )
+
+    def test_metadata_activity_reports_actual_prefetch_progress(self):
+        self.configure(delay=0.15, entries=0)
+        window = self.open_browser()
+        paths = list(map(str, self.paths))
+
+        self.wait_for(
+            lambda: window.worker is not None
+            and not getattr(window.worker, "_kim_prefetch", False),
+            timeout=5,
+        )
+        self.assertEqual(
+            "Inspecting metadata: 0 of 3",
+            window.metadata_activity.text(),
+        )
+
+        self.wait_for(
+            lambda: window.worker is not None
+            and getattr(window.worker, "_kim_prefetch", False),
+            timeout=8,
+        )
+        self.assertIn(
+            "Inspecting metadata", window.metadata_activity.text()
+        )
+
+        self.wait_for(
+            lambda: all(
+                window._overview_record(path) is not None
+                for path in paths
+            ),
+            timeout=12,
+        )
+        self.wait_for(
+            lambda: window.worker is None
+            and "Metadata inspected"
+            in window.metadata_activity.text(),
+            timeout=12,
+        )
+        self.assertIn(
+            "Metadata cached",
+            window._metadata_item_tooltip(paths[1]),
+        )
+        self.assertFalse(
+            any(call["full"] for call in self.calls())
+        )
+        self.wait_for(
+            lambda: not window.metadata_activity.isVisible(),
+            timeout=6,
+        )
+
+    def test_metadata_scan_inspects_entire_loaded_list(self):
+        self.configure(delay=0.02, entries=0)
+
+        images = [
+            *self.paths,
+            *[
+                self.workspace.jpeg(
+                    f"photos/metadata-scan-{number}.jpg"
+                )
+                for number in range(6)
+            ],
+        ]
+
+        paths = list(map(str, images))
+        window = MetadataBrowser(paths)
+        self.windows.append(window)
+        window.show()
+
+        self.wait_for(
+            lambda: (
+                len(window._metadata_scan_completed) == len(paths)
+                and window.worker is None
+                and "Metadata inspected"
+                in window.metadata_activity.text()
+            ),
+            timeout=20,
+        )
+
+        self.assertEqual(len(paths), len(self.calls()))
+        self.assertFalse(
+            any(call["full"] for call in self.calls())
+        )
+        self.assertEqual(
+            f"Metadata inspected: {len(paths)} of {len(paths)}",
+            window.metadata_activity.text(),
+        )
+
+    def test_metadata_scan_prioritizes_around_selection(self):
+        self.configure(delay=0.3, entries=0)
+
+        images = [
+            *self.paths,
+            *[
+                self.workspace.jpeg(
+                    f"photos/metadata-neighbor-{number}.jpg"
+                )
+                for number in range(6)
+            ],
+        ]
+
+        paths = list(map(str, images))
+        window = MetadataBrowser(paths)
+        self.windows.append(window)
+        window.show()
+
+        window.image_list.blockSignals(True)
+        window.image_list.setCurrentRow(4)
+        window.image_list.blockSignals(False)
+
+        window._metadata_scan_completed.clear()
+        window._metadata_prefetch_attempted.clear()
+
+        with patch.object(
+            window, "_overview_record", return_value=None
+        ):
+            self.assertEqual(
+                paths[5], window._nearby_metadata_path()
+            )
+            window._metadata_prefetch_attempted.add(paths[5])
+
+            self.assertEqual(
+                paths[3], window._nearby_metadata_path()
+            )
+            window._metadata_prefetch_attempted.add(paths[3])
+
+            self.assertEqual(
+                paths[6], window._nearby_metadata_path()
+            )
 
     def test_list_thumbnails_arrive_without_selection_and_do_not_repeat(self):
         self.configure(delay=0.01, entries=0)
@@ -114,12 +455,80 @@ print(json.dumps([doc]))
         self.assertEqual(0, window.image_list.currentRow())
         self.assertEqual(1, len(self.calls()))
         self.assertEqual(heights, [window.image_list.sizeHintForRow(row) for row in range(len(self.paths))])
-        self.wait_for(lambda: window.thumbnail_worker is None)
+        self.wait_for(lambda: not window.thumbnail_workers)
         with patch('kim_metadata_browser.read_thumbnail', side_effect=AssertionError('Cached thumbnail reread')):
             window._pump_thumbnails()
             self.app.processEvents()
         for path in self.paths:
             self.assertIsNotNone(window.thumbnails.get(str(path)))
+
+    def test_gif_preview_retry_is_bounded_and_keeps_cached_thumbnail(self):
+        import base64
+        from PySide6.QtGui import QImage
+        from kim_metadata_browser import MetadataBrowser, _file_stamp
+
+        self.configure(delay=0.01, entries=0)
+
+        gif = self.paths[0].with_name("preview-retry.gif")
+        gif.write_bytes(base64.b64decode(
+            "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        ))
+
+        path = str(gif)
+        window = MetadataBrowser([path])
+        self.windows.append(window)
+        window.show()
+
+        self.wait_for(
+            lambda: (
+                window._preview_for(path) is not None
+                and not window.preview_workers
+                and window.thumbnails.get(path) is not None
+            ),
+            timeout=8,
+        )
+
+        stamp = _file_stamp(path)
+        window.previews.pop(path, None)
+        window._active_preview = None
+
+        failure = (
+            QImage(),
+            "No thumbnail decoder for this image",
+        )
+
+        # Simulate the actual decoder error from a background worker.
+        # Avoid starting another worker while inspecting recovery state.
+        with patch.object(window, "_ensure_preview"):
+            window._preview_ready(
+                window.preview_generation,
+                path, failure, stamp,
+            )
+
+            self.assertIsNone(window._preview_failure(path))
+            self.assertIn(
+                (path, stamp), window._gif_preview_retries
+            )
+
+            # A second failure must not trigger an infinite retry.
+            window._preview_ready(
+                window.preview_generation,
+                path, failure, stamp,
+            )
+
+            self.assertEqual(
+                failure[1], window._preview_failure(path)
+            )
+            self.assertIsNotNone(
+                window.thumbnails.get(path)
+            )
+
+            window.update_current()
+            self.assertFalse(window.preview.image.isNull())
+            self.assertIn(
+                "Full preview unavailable",
+                window.preview.toolTip(),
+            )
 
     def test_thumbnail_queue_preserves_jpeg_png_and_gif_sources(self):
         import base64
@@ -147,7 +556,7 @@ print(json.dumps([doc]))
         self.windows.append(window)
         window.show()
         self.wait_for(lambda: window._overview_record(str(self.paths[0])) is not None and
-                      not window.preview_workers and window.thumbnail_worker is None)
+                      not window.preview_workers and not window.thumbnail_workers)
         calls = len(self.calls())
         window.set_images(list(map(str, self.paths)))
         self.wait_for(lambda: all(not window.image_list.item(row).icon().isNull() for row in range(3)))
