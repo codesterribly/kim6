@@ -1,5 +1,6 @@
 """Animated APNG must not be silently flattened by resize or web export."""
 
+from pathlib import Path
 import shutil
 import sys
 import subprocess
@@ -43,6 +44,17 @@ class APNGFailClosedTests(unittest.TestCase):
         # Simulate only the Qt review boundaries exercised by this suite.
         # Real processing helpers still run through the test adapters.
         python_shim = self.w.bin / "python3"
+
+        # Workspace installs a symlink to the real Python interpreter.
+        # Replace only the symlink in this private test workspace.
+        # Never write through it to the system interpreter.
+        if not python_shim.is_symlink():
+            raise RuntimeError("Expected test-local Python symlink")
+
+        if python_shim.resolve() != Path(sys.executable).resolve():
+            raise RuntimeError("Unexpected test-local Python target")
+
+        python_shim.unlink()
         python_shim.write_text(
             f"#!{sys.executable}\n" + """
 import os
@@ -58,7 +70,7 @@ if helper == "kim_action_dialog.py":
     if kind == "resize":
         if sys.argv[4:6] != ["--preset", "8x8"]:
             sys.exit(97)
-        Path(sys.argv[3]).write_bytes(b"8x8" + nul)
+        Path(sys.argv[3]).write_bytes(b"8x8" + nul + b"auto" + nul)
         sys.exit(0)
 
     if kind == "resize-output-review":

@@ -24,10 +24,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ShellCheck
+      - name: Install ShellCheck, ExifTool and FFmpeg
         run: |
-          # Video tests are not part of the fast-check workflow.
-          sudo apt-get install -y --no-install-recommends shellcheck
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck libimage-exiftool-perl ffmpeg
+          command -v shellcheck
+          command -v exiftool
+          exiftool -ver
+          command -v ffmpeg
+          ffmpeg -version
 
       - name: Bash syntax and ShellCheck
         run: |

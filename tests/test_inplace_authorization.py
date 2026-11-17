@@ -20,20 +20,6 @@ class InPlaceAuthorizationTests(unittest.TestCase):
             self.assertIsNotNone(shutil.which(tool), tool)
         self.w.use_real_transform()
 
-        # This suite tests publication authorization, not Qt rendering.
-        # Approve only the required preliminary flip review.
-        # Unexpected Python helpers must fail closed.
-        preview = self.w.bin / 'python3'
-        import shlex
-        import sys
-        preview.write_text(
-            "#!/bin/sh\n"
-            'if [ "$2" = "flipreview" ]; then\n'
-            "  exit 0\n"
-            "fi\n"
-            f'exec {shlex.quote(sys.executable)} "$@"\n'
-        )
-        preview.chmod(0o700)
 
     def dispatch(self, command, *options):
         result = self.w.dispatch(
@@ -142,19 +128,16 @@ class InPlaceAuthorizationTests(unittest.TestCase):
         self.assert_created(result, self.w.path("input/original_rotated_2.ppm"),
                             [3, 0, 4, 1, 5, 2])
 
-    def test_default_prompt_cancellation_refuses_flip(self):
-        # No policy variable means prompt, but the adapter's unscripted radio
-        # response selects Create; cancellation must be injected explicitly.
+    def test_default_prompt_cancellation_refuses_rotation(self):
         self.w.respond_to("kdialog", "--radiolist", {
             "status": 1, "stdout": "review\n",
         })
-        self.w.respond_to("kdialog", "--warningyesno", {"status": 0})
 
-        result = self.dispatch(
-            "flipflop", "flip"
+        result = self.dispatch("rotate", "--angle", "90")
+
+        self.assert_cancelled_before_processing(
+            result, ["--radiolist"]
         )
-
-        self.assert_cancelled_before_processing(result, ["--radiolist"])
 
     def test_legacy_overwrite_cannot_bypass_confirmation(self):
         self.w.env["KIM_POLICY"] = "overwrite"
@@ -172,22 +155,38 @@ class InPlaceAuthorizationTests(unittest.TestCase):
 
     def test_prompt_can_explicitly_select_derivatives(self):
         self.w.env["KIM_POLICY"] = "prompt"
-        self.w.respond_to("kdialog", "--radiolist", {"stdout": "create\n"})
-        self.w.respond_to("kdialog", "--warningyesno", {"status": 0})
+        self.w.respond_to(
+            "kdialog", "--radiolist", {"stdout": "create\n"}
+        )
 
-        result = self.dispatch("flipflop", "flop")
+        result = self.dispatch("rotate", "--angle", "90")
 
         self.assert_dialogs(result, ["--radiolist"])
-        self.assert_created(result, self.w.path("input/original_flipped_horizontal.ppm"),
-                            [2, 1, 0, 5, 4, 3])
+        self.assert_created(
+            result,
+            self.w.path("input/original_rotated.ppm"),
+            [3, 0, 4, 1, 5, 2],
+        )
 
     def test_warning_approval_alone_cannot_authorize_processing(self):
-        self.w.respond_to("kdialog", "--warningyesno", {"status": 0})
+        self.w.respond_to(
+            "kdialog", "--warningyesno", {"status": 0}
+        )
+
         for choice in ("", "cancel\n", "overwrite\n"):
             with self.subTest(choice=choice):
-                self.w.respond_to("kdialog", "--radiolist", {"stdout": choice})
-                result = self.dispatch("flipflop", "flip")
-                self.assert_cancelled_before_processing(result, ["--radiolist"])
+                self.w.respond_to(
+                    "kdialog", "--radiolist",
+                    {"stdout": choice},
+                )
+
+                result = self.dispatch(
+                    "rotate", "--angle", "90"
+                )
+
+                self.assert_cancelled_before_processing(
+                    result, ["--radiolist"]
+                )
 
     def test_unsupported_policies_require_both_approval_stages(self):
         for policy in ("overwrite", "unsupported"):
@@ -203,16 +202,14 @@ class InPlaceAuthorizationTests(unittest.TestCase):
     def test_refusing_final_confirmation_preserves_source(self):
         self.w.respond_to(
             "kdialog", "--radiolist",
-            {"stdout": "review\n"}
+            {"stdout": "review\n"},
         )
         self.w.respond_to(
             "kdialog", "--warningyesno",
-            {"status": 1}
+            {"status": 1},
         )
 
-        result = self.dispatch(
-            "flipflop", "flop"
-        )
+        result = self.dispatch("rotate", "--angle", "90")
 
         self.assert_cancelled_before_processing(
             result, ["--radiolist", "--warningyesno"]
@@ -220,75 +217,151 @@ class InPlaceAuthorizationTests(unittest.TestCase):
 
     def test_confirmation_occurs_once_for_batch(self):
         second = self.w.ppm("input/second.ppm")
-
-        self.w.respond_to(
-            "kdialog", "--radiolist",
-            {"stdout": "review\n"}
-        )
-        self.w.respond_to(
-            "kdialog", "--warningyesno",
-            {"status": 0}
-        )
+        second_before = self.w.observe(second)
+        self.w.approve_overwrite()
 
         result = self.w.dispatch(
-            "flipflop", "flip", "--",
-            self.source, second
+            "rotate", "--angle", "90", "--",
+            self.source, second,
         )
+
         self.assertEqual(result.returncode, 0, result.events)
-        self.assert_dialogs(result, ["--radiolist", "--warningyesno"])
+        self.assert_dialogs(
+            result, ["--radiolist", "--warningyesno"]
+        )
         self.assert_rendered(result, count=2)
-        warning_index = next(i for i, c in enumerate(result.calls)
-                             if "--warningyesno" in c["argv"])
-        processing_index = next(i for i, c in enumerate(result.calls)
-                                if c["tool"] == "identify")
+
+        warning_index = next(
+            i for i, call in enumerate(result.calls)
+            if "--warningyesno" in call["argv"]
+        )
+        processing_index = next(
+            i for i, call in enumerate(result.calls)
+            if call["tool"] == "identify"
+        )
         self.assertLess(warning_index, processing_index)
-        for path in (self.source, second):
-            self.assertEqual(self.pixels(path), [3, 4, 5, 0, 1, 2])
-            name = str(path.relative_to(self.w.root))
-            self.assertNotEqual(result.before_entries[name].inode,
-                                result.after_entries[name].inode)
-        self.assertEqual(set(result.outputs), {"input/original.ppm", "input/second.ppm"})
-        self.assertEqual(set(result.before_entries), set(result.after_entries))
-        replacements = [e for e in result.events if e["tool"] == "mv"
-                        and e["argv"][:2] == ["--no-copy", "-fT"]]
-        self.assertEqual([e["status"] for e in replacements], [0, 0], result.events)
-        self.assertFalse(any(c["tool"] in ("ln", "cp") for c in result.calls))
+
+        for source, before in (
+            (self.source, self.before),
+            (second, second_before),
+        ):
+            self.assertEqual(
+                self.pixels(source), [3, 0, 4, 1, 5, 2]
+            )
+            self.assertNotEqual(
+                self.w.observe(source).inode, before.inode
+            )
+
+        self.assertEqual(
+            set(result.outputs),
+            {"input/original.ppm", "input/second.ppm"},
+        )
+        self.assertEqual(
+            set(result.before_entries),
+            set(result.after_entries),
+        )
+
+        replacements = [
+            event for event in result.events
+            if event["tool"] == "mv"
+            and event["argv"][:2] == ["--no-copy", "-fT"]
+        ]
+        self.assertEqual(
+            [event["status"] for event in replacements],
+            [0, 0],
+            result.events,
+        )
+        self.assertFalse(
+            any(
+                call["tool"] in ("ln", "cp")
+                for call in result.calls
+            )
+        )
         self.assert_clean()
 
     def test_selected_links_cannot_bypass_explicitly_approved_replacement(self):
         self.w.approve_overwrite()
         alias = self.w.path("input/alias.ppm")
+
         for kind in ("symlink", "hardlink"):
             with self.subTest(kind=kind):
                 alias.unlink(missing_ok=True)
+
                 if kind == "symlink":
                     alias.symlink_to(self.source.name)
                 else:
                     alias.hardlink_to(self.source)
-                result = self.w.dispatch("flipflop", "flip", "--", alias)
-                self.assertNotEqual(result.returncode, 0, result.events)
-                self.assert_dialogs(result, ["--radiolist", "--warningyesno"])
-                self.assertFalse(any(
-                    c["tool"] in ("magick", "identify", "ln", "mv")
-                    for c in result.calls
-                ), result.calls)
+
+                before = {
+                    path: self.w.observe(path)
+                    for path in (self.source, alias)
+                }
+
+                result = self.w.dispatch(
+                    "rotate", "--angle", "90", "--", alias
+                )
+
+                self.assertNotEqual(
+                    result.returncode, 0, result.events
+                )
+                self.assertFalse(
+                    any(
+                        call["tool"] in (
+                            "magick", "identify", "ln", "mv"
+                        )
+                        for call in result.calls
+                    ),
+                    result.calls,
+                )
                 self.assertEqual(result.outputs, {})
+
+                for path, state in before.items():
+                    self.assertEqual(self.w.observe(path), state)
+
                 self.assert_preserved(result)
                 alias.unlink()
 
+        self.assertEqual(
+            self.w.observe(self.source), self.before
+        )
+
     def test_failed_render_preserves_approved_original_and_cleans_partial_output(self):
         self.w.approve_overwrite()
-        self.w.respond("magick", status=19, stdout="3 2\n",
-                       output_base64=base64.b64encode(b"partial image").decode())
+        self.w.respond(
+            "magick",
+            status=19,
+            stdout="2 3\n",
+            output_base64=base64.b64encode(
+                b"partial image"
+            ).decode(),
+        )
 
-        result = self.dispatch("flipflop", "flip")
+        result = self.dispatch("rotate", "--angle", "90")
 
-        self.assertNotEqual(result.returncode, 0, result.events)
-        self.assert_dialogs(result, ["--radiolist", "--warningyesno"])
-        renders = [e for e in result.events if e["tool"] == "magick"]
-        self.assertEqual([e["status"] for e in renders], [19], result.events)
+        self.assertNotEqual(
+            result.returncode, 0, result.events
+        )
+        self.assert_dialogs(
+            result, ["--radiolist", "--warningyesno"]
+        )
+
+        renders = [
+            event for event in result.events
+            if event["tool"] == "magick"
+        ]
+        self.assertEqual(
+            [event["status"] for event in renders],
+            [19],
+            result.events,
+        )
         self.assertIn("output", renders[0])
-        self.assertFalse(any(c["tool"] in ("ln", "mv", "cp") for c in result.calls))
+
+        self.assertFalse(
+            any(
+                call["tool"] in ("ln", "mv", "cp")
+                for call in result.calls
+            )
+        )
         self.assertEqual(result.outputs, {})
         self.assert_preserved(result)
 
