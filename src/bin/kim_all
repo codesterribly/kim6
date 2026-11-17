@@ -280,7 +280,7 @@ mk_workdir() {
 # ---------------------------------------------------------------------------
 
 # Persistent settings:
-#   ${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf
+#   ${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf
 #
 # Settings are parsed as validated data, not executed.
 # Explicit environment variables override saved preferences.
@@ -9456,7 +9456,7 @@ dispatcher_resource() {
 kim6_load_user_settings() {
   local config line key value
   local LC_ALL=C
-  config="${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf"
+  config="${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf"
 
   [ -f "$config" ] && [ ! -L "$config" ] || return 0
 

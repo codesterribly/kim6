@@ -136,7 +136,7 @@ class OutputFilenameTests(unittest.TestCase):
         config = settings()
 
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "kim6/settings.conf"
+            path = Path(directory) / "kimng/settings.conf"
             values = config["DEFAULTS"].copy()
             values["KIM_AFFIX_COMPRESSED"] = "com"
             values["KIM_AFFIX_AUDIO"] = "sound"

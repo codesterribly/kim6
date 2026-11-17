@@ -77,7 +77,7 @@ class RecipeContracts(unittest.TestCase):
     def test_settings_are_literal_and_environment_precedence(self):
         from kim_recipe_image import copyright_settings, SETTING_KEYS
         with tempfile.TemporaryDirectory() as tmp:
-            config = Path(tmp)/'kim6'; config.mkdir()
+            config = Path(tmp)/'kimng'; config.mkdir()
             sentinel = Path(tmp)/'must-not-exist'
             literal = '$(touch ' + str(sentinel) + ')'
             (config/'settings.conf').write_text('KIM_COPYRIGHT_CREATOR=' + literal + '\nKIM_COPYRIGHT_NOTICE=Copyright {YEAR}\nKIM_COPYRIGHT_USAGE_RIGHTS=Portfolio\n')
@@ -519,7 +519,7 @@ class RealRecipeTests(unittest.TestCase):
 
     def test_builtin_optional_rights_after_strip_and_logical_year(self):
         from kim_recipe_image import COPYRIGHT_TAGS, selected_metadata, SETTING_KEYS
-        config = self.base/'config'/'kim6'; config.mkdir(parents=True)
+        config = self.base/'config'/'kimng'; config.mkdir(parents=True)
         values = {'creator': 'Example Artist', 'notice': 'Copyright {YEAR} Example', 'rights': 'Portfolio only'}
         (config/'settings.conf').write_text(''.join(SETTING_KEYS[k] + '=' + v + '\n' for k, v in values.items()))
         env = {k: v for k, v in os.environ.items() if k not in SETTING_KEYS.values()}
@@ -560,7 +560,7 @@ class RealRecipeTests(unittest.TestCase):
 
     def test_blank_settings_fail_without_erasing_metadata(self):
         from kim_recipe_image import SETTING_KEYS
-        config = self.base/'config'/'kim6'; config.mkdir(parents=True)
+        config = self.base/'config'/'kimng'; config.mkdir(parents=True)
         (config/'settings.conf').write_text(''.join(key + '=\n' for key in SETTING_KEYS.values()))
         env = {k: v for k, v in os.environ.items() if k not in SETTING_KEYS.values()}
         env['XDG_CONFIG_HOME'] = str(config.parent)
@@ -594,7 +594,7 @@ class RealRecipeTests(unittest.TestCase):
 
     def test_saved_inheritance_and_overrides_follow_settings_without_private_metadata(self):
         from kim_recipe_image import selected_metadata, SETTING_KEYS
-        config = self.base/'config'/'kim6'; config.mkdir(parents=True)
+        config = self.base/'config'/'kimng'; config.mkdir(parents=True)
         settings = config/'settings.conf'
         env = {k: v for k, v in os.environ.items() if k not in SETTING_KEYS.values()}
         env['XDG_CONFIG_HOME'] = str(config.parent)
@@ -629,7 +629,7 @@ class RealRecipeTests(unittest.TestCase):
 
     def test_manual_rights_work_with_blank_settings_and_explicit_blank_is_distinct(self):
         from kim_recipe_image import selected_metadata, SETTING_KEYS
-        config = self.base/'config'/'kim6'; config.mkdir(parents=True)
+        config = self.base/'config'/'kimng'; config.mkdir(parents=True)
         settings = config/'settings.conf'; settings.write_text(''.join(key + '=\n' for key in SETTING_KEYS.values()))
         before = settings.read_bytes()
         env = {k: v for k, v in os.environ.items() if k not in SETTING_KEYS.values()}
@@ -692,7 +692,7 @@ class RecipePackagingTests(unittest.TestCase):
                 menu = helper.prefix/'kim_recipes.desktop'
                 self.assertIn('recipe --choose -- %F', menu.read_text())
                 self.assertIn('Actions=KIMRecipe0Run;KIMRecipe1Editor;', menu.read_text())
-                self.assertIn('X-KDE-Submenu=KIM6 - Recipes', menu.read_text())
+                self.assertIn('X-KDE-Submenu=KIMng - Recipes', menu.read_text())
                 self.assertNotIn('X-KDE-Priority', menu.read_text())
                 self.assertIn('Name=Choose saved recipe…', menu.read_text())
                 command = ['bash', str(helper.runtime/'bin/kim_all'), 'recipe', '--list']
@@ -1016,7 +1016,7 @@ for row, value in ((5, 'Sample Artist'), (6, 'Copyright {YEAR} Sample'), (7, 'Sa
     field = w.parameter_widgets['value']
     assert isinstance(field, QLineEdit) and field.isEnabled() and not field.isReadOnly()
     assert field.text() == value
-    assert w.parameter_modes['value'].text() == 'Inherited from KIM6 Settings'
+    assert w.parameter_modes['value'].text() == 'Inherited from KIMng Settings'
     assert not w.is_dirty()
     field.setText(value); field.textEdited.emit(value)
     assert w.recipe['steps'][row]['value'] == value and w.is_dirty()

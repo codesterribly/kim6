@@ -306,7 +306,7 @@ exit "$status"
         sidecar = source.with_suffix('.xmp')
         sidecar.write_text('<x:xmpmeta xmlns:x="adobe:ns:meta/"/>')
         before = {p: signature(p) for p in (source, sidecar)}
-        config = self.control/'config'/'kim6'
+        config = self.control/'config'/'kimng'
         config.mkdir(parents=True)
         (config/'settings.conf').write_text('KIM_LOCATION_ONLINE_MAPS=no\nKIM_LOCATION_UNITS=metric\n')
         def wait(condition):
@@ -358,7 +358,7 @@ exit "$status"
                     executable.unlink()
                     executable.symlink_to(shutil.which(name))
                 workspace.use_real_mv()
-                config = workspace.control/'config'/'kim6'
+                config = workspace.control/'config'/'kimng'
                 config.mkdir(exist_ok=True)
                 (config/'settings.conf').write_text('KIM_LOCATION_ONLINE_MAPS=no\nKIM_LOCATION_UNITS=metric\n')
                 # Automate native user choices in the real Qt dialogs. Reading,

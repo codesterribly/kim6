@@ -95,7 +95,7 @@ class FlipPublicationTests(unittest.TestCase):
         sources = [workspace.png(f'{directory}/photo.part 雪.png')
                    for directory in ('first', 'second')[:count]]
         if prefix:
-            settings = Path(workspace.env['XDG_CONFIG_HOME']) / 'kim6/settings.conf'
+            settings = Path(workspace.env['XDG_CONFIG_HOME']) / 'kimng/settings.conf'
             settings.parent.mkdir(parents=True, exist_ok=True)
             settings.write_text('KIM_NAME_AFFIX_POSITION=prefix\n'
                                 'KIM_AFFIX_FLIPPED_HORIZONTAL=mirror\n'

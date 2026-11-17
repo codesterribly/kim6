@@ -91,7 +91,7 @@ def config_path():
         os.environ.get("XDG_CONFIG_HOME")
         or str(Path.home() / ".config")
     )
-    return base / "kim6" / "settings.conf"
+    return base / "kimng" / "settings.conf"
 
 
 def load_settings(path):

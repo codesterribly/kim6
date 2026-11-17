@@ -162,7 +162,7 @@ def validate(recipe):
 
 
 def config_path():
-    return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kim6' / 'recipes.json'
+    return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kimng' / 'recipes.json'
 
 
 def folder_name(value, existing=False):

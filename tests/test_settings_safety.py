@@ -18,7 +18,7 @@ class SettingsSafetyTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix='kim6-settings-')
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.path = self.root / 'kim6/settings.conf'
+        self.path = self.root / 'kimng/settings.conf'
         self.path.parent.mkdir()
         env = patch.dict(os.environ, {'XDG_CONFIG_HOME': str(self.root)})
         env.start(); self.addCleanup(env.stop)
