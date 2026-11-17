@@ -5060,12 +5060,9 @@ action_resize() {
   [ "$nbfiles" -le 0 ] && return 0
 
 
-  local mode
-  mode="$(choose_output_mode \
-    "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
-
-  [ "$mode" = "cancel" ] && return 1
+  # Resize selects its output policy in Review changes.
+  # The default is derivative creation, never original replacement.
+  local mode=create
 
   if [ "$mode" = create ] && [ -n "$outdir" ] &&
      { [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; }; then
@@ -5081,6 +5078,7 @@ action_resize() {
   local resize_review_result resize_source resize_dir
   local resize_stem resize_ext resize_target
   local resize_status resize_note resize_number resize_newdir
+  local resize_policy_request
   local -A resize_reserved=() resize_targets=()
 
   while :; do
@@ -5091,7 +5089,7 @@ action_resize() {
 
     for resize_source in "${files[@]}"; do
       resize_status=Ready
-      resize_note='New derivative; original remains unchanged.'
+      resize_note='Will create a resized copy.'
       resize_target=''
 
       {
@@ -5151,6 +5149,29 @@ action_resize() {
       break
     else
       resize_review_result=$?
+    fi
+
+    if [ "$resize_review_result" -eq 132 ] &&
+       [ -s "$resize_request" ]; then
+      IFS= read -r -d '' resize_policy_request \
+        < "$resize_request" || return 1
+
+      case "$resize_policy_request" in
+        policy:create)
+          mode=create
+          ;;
+        policy:overwrite)
+          mode=overwrite
+          ;;
+        *)
+          progress_error 'Invalid Resize output-policy request.'
+          return 1
+          ;;
+      esac
+
+      # The next iteration rebuilds all targets under the new
+      # policy. No previous review can authorize processing.
+      continue
     fi
 
     if [ "$resize_review_result" -eq 131 ]; then

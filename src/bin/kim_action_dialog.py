@@ -2120,74 +2120,75 @@ def resize_output_review(
         )
 
     app = QApplication.instance() or QApplication(sys.argv)
+    from PySide6.QtWidgets import (
+        QRadioButton, QButtonGroup, QMessageBox
+    )
+
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Review changes")
+    dialog.setWindowTitle("KIMng - Review resize changes")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
-    layout.setSpacing(6)
+    layout.setSpacing(8)
 
     layout.addWidget(QLabel(
-        f"{len(records)} selected image(s) | "
+        f"Selected images: {len(records)} | "
         f"Resize geometry: {geometry} | "
         f"Resampling: {filter_labels[resize_filter]}"
     ))
 
-    destination_choice = QComboBox()
-    destination_choice.addItem(
-        "Beside each source", "beside"
+    layout.addWidget(QLabel("Save resized images:"))
+
+    policy_group = QButtonGroup(dialog)
+
+    create_radio = QRadioButton(
+        "Create new files (originals untouched)"
     )
-    destination_choice.addItem(
-        "Shared directory", "directory"
+    overwrite_radio = QRadioButton(
+        "Overwrite originals (confirmation required)"
     )
 
-    destination_choice.setCurrentIndex(
-        1 if destination else 0
-    )
+    policy_group.addButton(create_radio)
+    policy_group.addButton(overwrite_radio)
+
+    policy_row = QHBoxLayout()
+    policy_row.addWidget(create_radio)
+    policy_row.addSpacing(20)
+    policy_row.addWidget(overwrite_radio)
+    policy_row.addStretch(1)
+    layout.addLayout(policy_row)
+
+    create_radio.setChecked(policy == "create")
+    overwrite_radio.setChecked(policy == "overwrite")
 
     destination_row = QHBoxLayout()
-    destination_row.addWidget(
-        QLabel("Destination:")
-    )
-    destination_row.addWidget(
-        destination_choice, 1
-    )
 
     if policy == "create":
-        layout.addLayout(destination_row)
-    else:
-        layout.addWidget(
-            QLabel("Destination: Replace selected originals")
+        destination_text = (
+            f"Destination: {destination}"
+            if destination
+            else "Destination: Beside each source"
         )
+    else:
+        destination_text = "Destination: Replace selected originals"
 
-    directory_field = QLineEdit(destination)
-    directory_field.setPlaceholderText(
-        "Enter an existing destination directory"
+    destination_label = QLabel(destination_text)
+    destination_label.setWordWrap(True)
+    destination_label.setTextInteractionFlags(
+        Qt.TextSelectableByMouse
     )
-    directory_field.setAccessibleName(
-        "Output directory"
-    )
+
+    destination_row.addWidget(destination_label, 1)
 
     browse_button = QPushButton("Change destination…")
-    update_button = QPushButton("Update review")
-
-    directory_row = QHBoxLayout()
-    directory_row.addWidget(directory_field, 1)
-    directory_row.addWidget(browse_button)
-    directory_row.addWidget(update_button)
+    beside_button = QPushButton("Beside each source")
 
     if policy == "create":
-        layout.addLayout(directory_row)
+        destination_row.addWidget(browse_button)
+        if destination:
+            destination_row.addWidget(beside_button)
 
-    def show_directory_controls():
-        different = (
-            destination_choice.currentData() == "directory"
-        )
-        directory_field.setVisible(different)
-        browse_button.setVisible(different)
-        update_button.setVisible(different)
-
-    show_directory_controls()
+    layout.addLayout(destination_row)
 
     table = QTableWidget(len(records), 4)
     table.setHorizontalHeaderLabels([
@@ -2291,11 +2292,52 @@ def resize_output_review(
         ready > 0 and blocked == 0
     )
 
-    button_box.accepted.connect(dialog.accept)
+    def approve_changes():
+        if policy == "overwrite":
+            confirmation = QMessageBox.warning(
+                dialog,
+                "Confirm overwriting originals",
+                "Replace the selected original images?\n\n"
+                "This operation cannot be undone. "
+                "No backup copies will be created.",
+                QMessageBox.Yes | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if confirmation != QMessageBox.Yes:
+                return
+
+        dialog.accept()
+
+    button_box.accepted.connect(approve_changes)
     button_box.rejected.connect(dialog.reject)
     buttons.addWidget(button_box)
 
     layout.addLayout(buttons)
+
+    def request_policy(next_policy):
+        if next_policy == policy:
+            return
+
+        try:
+            request_path.write_bytes(
+                ("policy:" + next_policy).encode("ascii") + b"\0"
+            )
+        except OSError as error:
+            QMessageBox.critical(
+                dialog,
+                "Cannot change output policy",
+                str(error),
+            )
+            return
+
+        dialog.done(132)
+
+    create_radio.toggled.connect(
+        lambda checked: checked and request_policy("create")
+    )
+    overwrite_radio.toggled.connect(
+        lambda checked: checked and request_policy("overwrite")
+    )
 
     def request_destination(directory):
         try:
@@ -2311,71 +2353,40 @@ def resize_output_review(
         dialog.reject()
 
     def choose_directory():
-        entered = directory_field.text().strip()
         initial = (
-            entered if os.path.isdir(entered)
-            else destination
+            destination
             or os.path.dirname(records[0][0])
         )
         selected = QFileDialog.getExistingDirectory(
-            dialog, "Choose Resize destination", initial
+            dialog, "Choose resize destination", initial
         )
-        if selected:
-            directory_field.setText(selected)
-
-    def update_destination():
-        entered = directory_field.text().strip()
+        if not selected:
+            return
 
         if (
-            not entered
-            or not os.path.isabs(entered)
-            or not os.path.isdir(entered)
-            or os.path.islink(entered)
-            or not os.access(
-                entered, os.W_OK | os.X_OK
-            )
+            not os.path.isabs(selected)
+            or not os.path.isdir(selected)
+            or os.path.islink(selected)
+            or not os.access(selected, os.W_OK | os.X_OK)
         ):
-            from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
                 dialog,
                 "Invalid output directory",
-                "Enter an existing, writable, "
-                "absolute directory.",
+                "Choose an existing, writable directory.",
             )
             return
 
-        request_destination(os.path.realpath(entered))
+        request_destination(os.path.realpath(selected))
 
-    def selection_changed(*_):
-        if destination_choice.currentData() == "beside":
-            if destination:
-                request_destination("")
-            else:
-                show_directory_controls()
-        else:
-            show_directory_controls()
-            # The previous output plan remains visible until
-            # Update Preview explicitly recalculates it.
-            apply_button.setEnabled(False)
-
-    def directory_edited(*_):
-        # Never approve a plan based on an obsolete directory.
-        if (
-            policy == "create"
-            and destination_choice.currentData() == "directory"
-            and directory_field.text().strip() != destination
-        ):
-            apply_button.setEnabled(False)
+    def restore_beside_sources():
+        if destination:
+            request_destination("")
 
     if policy == "create":
-        destination_choice.currentIndexChanged.connect(
-            selection_changed
-        )
-        directory_field.textChanged.connect(
-            directory_edited
-        )
         browse_button.clicked.connect(choose_directory)
-        update_button.clicked.connect(update_destination)
+        beside_button.clicked.connect(
+            restore_beside_sources
+        )
 
     dialog.resize(
         1090,
