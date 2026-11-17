@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Learn to resize, convert, share, and organize photos and videos directly from KDE Dolphin with KIM6.">
-  <meta name="color-scheme" content="light dark">
-  <title>KIM6 User Guide</title>
+  <meta name="description" content="KIMng provides image and video tools directly in KDE Plasma 6 and Dolphin.">
+  <meta name="color-scheme" content="light">
+  <title>KIMng User Guide</title>
   <link rel="stylesheet" href="work.css">
 </head>
 <body>
@@ -13,15 +13,9 @@
 
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="#top" aria-label="KIM6 User Guide home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3.5" y="5" width="29" height="26" rx="6" stroke="currentColor" stroke-width="2.5"/>
-            <circle cx="12" cy="13" r="3" fill="currentColor"/>
-            <path d="M7.5 26L15.5 17.5L21 23L25 19L29 25" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="brand-name">KIM<span>6</span></span>
+      <a class="brand" href="#top" aria-label="KIMng User Guide home">
+        <span class="brand-mark" aria-hidden="true"><img src="images/kimng-brand-icon.png" alt="" width="30" height="30"></span>
+        <span class="brand-name">KIM<span>ng</span></span>
         <span class="brand-divider" aria-hidden="true"></span>
         <span class="brand-description">User Guide</span>
       </a>
@@ -37,8 +31,8 @@
     <div class="hero-inner page-width">
       <div class="hero-copy">
         <div class="hero-kicker"><span class="kicker-dot" aria-hidden="true"></span> Made for KDE Plasma 6 &amp; Dolphin</div>
-        <h1>Photo utilities,<br><em>at your fingertips.</em></h1>
-        <p class="hero-lede">Resize, convert, export, and organize your images and videos without having to open a full editor. This guide shows you where to start and how to use KIM6 to improve your workflow.</p>
+        <h1>Image tools,<br><em>right where you need them.</em></h1>
+        <p class="hero-lede">Resize, convert, export, and organize your images and videos without having to open a full editor. This guide shows you how to use KIMng directly from Dolphin.</p>
         <div class="hero-actions">
           <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
           <a class="hero-secondary" href="#recipes">Explore Recipes <span aria-hidden="true">↓</span></a>
@@ -102,15 +96,15 @@
       <section id="start" class="content-section" aria-labelledby="start-title">
         <p class="section-eyebrow"><span class="section-index">01</span> FIRST STEPS</p>
         <h2 id="start-title">Start with a single photo.</h2>
-        <p class="section-intro">No new application to learn. KIM6 adds actions to the context menu you already use in Dolphin.</p>
-        <div class="steps" aria-label="Three steps to use KIM6">
+        <p class="section-intro">No new application to learn. KIMng adds actions to the context menu you already use in Dolphin.</p>
+        <div class="steps" aria-label="Three steps to use KIMng">
           <div class="step"><span class="step-number">1</span><div><h3>Select</h3><p>Choose one or more local photos or videos in Dolphin.</p></div></div>
-          <div class="step"><span class="step-number">2</span><div><h3>Right-click</h3><p>Open a KIM6 submenu and choose the task you want.</p></div></div>
+          <div class="step"><span class="step-number">2</span><div><h3>Right-click</h3><p>Open a KIMng submenu and choose the task you want.</p></div></div>
           <div class="step"><span class="step-number">3</span><div><h3>Save</h3><p>For actions that offer a choice, select <strong>Create new</strong> to keep the original file.</p></div></div>
         </div>
         <div class="notice notice-info">
           <span class="notice-symbol" aria-hidden="true">i</span>
-          <p>KIM6 is designed to protect your originals. When an action offers a choice, <strong>Create new files (originals untouched)</strong> is selected by default. Replacing an original requires choosing Overwrite and confirming a separate warning. <a href="#file-handling">How file handling works</a>.</p>
+          <p>KIMng is designed to protect your originals. When an action offers a choice, <strong>Create new files (originals untouched)</strong> is selected by default. Replacing an original requires choosing Overwrite and confirming a separate warning. <a href="#file-handling">How file handling works</a>.</p>
         </div>
       </section>
 
@@ -118,7 +112,7 @@
       <section id="recipes" class="content-section" aria-labelledby="recipes-title">
         <p class="section-eyebrow"><span class="section-index">02</span> REUSABLE PHOTO WORKFLOWS</p>
         <h2 id="recipes-title">Your photo workflow, one recipe.</h2>
-        <p class="section-intro">KIM6 now has a dedicated <strong>KIM6 - Recipes</strong> menu in Dolphin. Instead of repeating several operations on the same images, combine them into a reusable recipe and run the entire workflow from the right-click menu.</p>
+        <p class="section-intro">KIMng now has a dedicated <strong>KIMng - Recipes</strong> menu in Dolphin. Instead of repeating several operations on the same images, combine them into a reusable recipe and run the entire workflow from the right-click menu.</p>
 
 <div class="kim6-doc-feature">
 <h3>Choose and run a recipe</h3>
@@ -159,7 +153,7 @@
             <span class="step-number">1</span>
             <div>
               <h3>Select your photos</h3>
-              <p>Select one or more images in Dolphin, right-click, and open <strong>KIM6 - Recipes</strong>.</p>
+              <p>Select one or more images in Dolphin, right-click, and open <strong>KIMng - Recipes</strong>.</p>
             </div>
           </div>
           <div class="step">
@@ -204,24 +198,24 @@
       </section>
 
       <section id="visual-guide" class="content-section" aria-labelledby="visual-guide-title">
-<p class="section-eyebrow">KIM6 IN DOLPHIN</p>
+<p class="section-eyebrow">KIMng IN DOLPHIN</p>
 <h2 id="visual-guide-title">Find the right tool.</h2>
-<p>Select supported images or videos in Dolphin, right-click, and open <strong>Actions</strong>. Choose the relevant KIM6 submenu for the operation you want to perform.</p>
+<p>Select supported images or videos in Dolphin, right-click, and open <strong>Actions</strong>. Choose the relevant KIMng submenu for the operation you want to perform.</p>
 
 <figure class="kim6-doc-shot" id="shot-01">
-  <a href="images/screenshots/01-main-menu.png" title="View full-size KIM6 in Dolphin screenshot">
+  <a href="images/screenshots/01-main-menu.png" title="View full-size KIMng in Dolphin screenshot">
     <img src="images/screenshots/01-main-menu.png"
-         alt="KIM6 in Dolphin: Access KIM6 tools through Dolphin&#x27;s Actions context menu."
+         alt="KIMng in Dolphin: Access KIMng tools through Dolphin&#x27;s Actions context menu."
          width="1110" height="610"
          loading="lazy" decoding="async">
   </a>
-  <figcaption><strong>KIM6 in Dolphin.</strong> Access KIM6 tools through Dolphin&#x27;s Actions context menu.</figcaption>
+  <figcaption><strong>KIMng in Dolphin.</strong> Access KIMng tools through Dolphin&#x27;s Actions context menu.</figcaption>
 </figure>
 </section>
 <section id="photos" class="content-section" aria-labelledby="photos-title">
         <p class="section-eyebrow"><span class="section-index">03</span> EVERYDAY EDITS</p>
         <h2 id="photos-title">Your most useful photo actions.</h2>
-        <p class="section-intro">These examples show common KIM6 actions and the filenames they produce using the default settings. Your originals remain untouched when <strong>Create new</strong> is selected.</p>
+        <p class="section-intro">These examples show common KIMng actions and the filenames they produce using the default settings. Your originals remain untouched when <strong>Create new</strong> is selected.</p>
         <div class="task-grid">
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-resize" aria-hidden="true">↗</span><span class="task-type">SIZE</span></div>
@@ -242,7 +236,7 @@
           <article class="task-card">
             <div class="task-card-top"><span class="task-icon icon-convert" aria-hidden="true">⇄</span><span class="task-type">FORMAT</span></div>
             <h3>Convert an image</h3>
-            <p>Convert images between formats such as JPEG, PNG, WebP, AVIF, TIFF, and more. KIM6 checks whether the necessary format support is available before creating the result.</p>
+            <p>Convert images between formats such as JPEG, PNG, WebP, AVIF, TIFF, and more. KIMng checks whether the necessary format support is available before creating the result.</p>
             <p class="menu-label">MENU PATH</p>
             <div class="menu-path">Convert/Compress <span aria-hidden="true">›</span> <strong>Convert to WebP</strong></div>
             <div class="output"><span>garden.png</span><span class="output-arrow" aria-hidden="true">→</span><strong>garden.webp</strong></div>
@@ -256,7 +250,7 @@
             <div class="output"><span>3 selected photos</span><span class="output-arrow" aria-hidden="true">→</span><strong>3 resized files</strong></div>
           </article>
         </div>
-        <p class="section-footnote">KIM6 adds a number when an output filename already exists, rather than replacing that file. <a href="#filenames">See how to customize your output filenames <span aria-hidden="true">↓</span></a>.</p>
+        <p class="section-footnote">KIMng adds a number when an output filename already exists, rather than replacing that file. <a href="#filenames">See how to customize your output filenames <span aria-hidden="true">↓</span></a>.</p>
 
 <div class="kim6-doc-feature">
 <h3>Resize, convert, and crop</h3>
@@ -297,7 +291,7 @@
       <section id="filenames" class="content-section" aria-labelledby="filenames-title">
         <p class="section-eyebrow"><span class="section-index">04</span> CUSTOM OUTPUT FILENAMES</p>
         <h2 id="filenames-title">Name your output files your way.</h2>
-        <p class="section-intro">KIM6 lets you customize the labels it automatically adds to image and video filenames. Keep the familiar defaults or choose names that better fit your workflow.</p>
+        <p class="section-intro">KIMng lets you customize the labels it automatically adds to image and video filenames. Keep the familiar defaults or choose names that better fit your workflow.</p>
 
         <div class="feature-pair">
           <article class="feature-block">
@@ -323,7 +317,7 @@
           </article>
         </div>
 
-        <p class="section-footnote">Open <strong>Actions → KIM6 - Settings/About → Settings → Output Filenames</strong> in Dolphin to customize all 21 labels or restore their defaults. Your originals remain protected, and filenames you explicitly choose yourself are unaffected. KIM6 also adds a number when necessary to avoid overwriting an existing file. <a href="#settings-screenshot">View the Settings screenshot</a>. <a href="reference/commandconfig.html#custom-output-filename-labels">See all available labels and settings <span aria-hidden="true">↗</span></a></p>
+        <p class="section-footnote">Open <strong>Actions → KIMng - Settings/About → Settings → Output Filenames</strong> in Dolphin to customize all 21 labels or restore their defaults. Your originals remain protected, and filenames you explicitly choose yourself are unaffected. KIMng also adds a number when necessary to avoid overwriting an existing file. <a href="#settings-screenshot">View the Settings screenshot</a>. <a href="reference/commandconfig.html#custom-output-filename-labels">See all available labels and settings <span aria-hidden="true">↗</span></a></p>
       </section>
 
       <section id="sharing" class="content-section" aria-labelledby="sharing-title">
@@ -332,7 +326,7 @@
         <p class="section-intro">Prepare smaller files for the web or email while leaving the selected images intact. Direct Web Export offers JPEG, PNG, WebP and AVIF at three maximum sizes, with separately configurable quality settings for the lossy formats. The built-in Web Export recipe has its own fixed JPEG quality 95 and Web-subfolder workflow.</p>
         <div class="feature-pair">
           <article class="feature-block"><div class="feature-symbol" aria-hidden="true">↗</div><h3>Web export</h3><p>Prepare images for websites or sharing. Choose JPEG, PNG, WebP, or AVIF, select the output size, and save the results in a folder of your choice without changing your originals.</p></article>
-          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare photos for email at their original size or resize them to make sharing easier. KIM6 prepares the attachments for your email application without changing your original images.</p></article>
+          <article class="feature-block"><div class="feature-symbol" aria-hidden="true">✉</div><h3>Email preparation</h3><p>Prepare photos for email at their original size or resize them to make sharing easier. KIMng prepares the attachments for your email application without changing your original images.</p></article>
         </div>
 
 <div class="kim6-doc-feature">
@@ -364,7 +358,7 @@
       <section id="metadata" class="content-section" aria-labelledby="metadata-title">
         <p class="section-eyebrow"><span class="section-index">06</span> INFORMATION INSIDE YOUR FILES</p>
         <h2 id="metadata-title">Control metadata and dates.</h2>
-        <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIM6 gives you targeted ways to work with it.</p>
+        <p class="section-intro">Photos can contain location, camera, author, and capture-date information. KIMng gives you targeted ways to work with it.</p>
         <div class="split-panel">
           <div>
             <h3>Remove GPS and AI metadata</h3>
@@ -372,7 +366,7 @@
             <p>Use <strong>Location/GPS</strong> to inspect location metadata, modify photo GPS coordinates, or approximate precise positions. <strong>Modify GPS on images…</strong> offers another image, map selection, manual coordinates, and GPX tracks as location sources.</p>
             <p>Select <strong>Organize/Metadata › Strip metadata</strong> to review available metadata-removal options, including recognized AI-generation information.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
-            <p class="minor">If there is no matching GPS metadata, KIM6 reports the file unchanged and creates no copy.</p>
+            <p class="minor">If there is no matching GPS metadata, KIMng reports the file unchanged and creates no copy.</p>
           </div>
           <div>
             <h3>Copyright and capture times</h3>
@@ -380,7 +374,7 @@
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
-        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>Privacy note:</strong> KIM6 removes recognized GPS coordinates and AI-generation metadata, but some information may remain. These tools cannot guarantee complete removal of location or AI-related information.</p></div>
+        <div class="notice notice-caution"><span class="notice-symbol" aria-hidden="true">!</span><p><strong>Privacy note:</strong> KIMng removes recognized GPS coordinates and AI-generation metadata, but some information may remain. These tools cannot guarantee complete removal of location or AI-related information.</p></div>
 
 <div class="kim6-doc-feature">
 <h3>Organize image files and dates</h3>
@@ -456,7 +450,7 @@
       <section id="collections" class="content-section" aria-labelledby="collections-title">
         <p class="section-eyebrow"><span class="section-index">07</span> MAKE SOMETHING NEW</p>
         <h2 id="collections-title">From pictures to collections.</h2>
-        <p class="section-intro">Turn your photos into galleries, collages, albums, animations, or slideshows. KIM6 saves the results separately, leaving your original images untouched.</p>
+        <p class="section-intro">Turn your photos into galleries, collages, albums, animations, or slideshows. KIMng saves the results separately, leaving your original images untouched.</p>
         <div class="collection-grid">
           <div><span class="collection-symbol" aria-hidden="true">▤</span><strong>HTML gallery</strong><span>A browsable photo gallery.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">▦</span><strong>Collage</strong><span>Several pictures in one image.</span></div>
@@ -496,10 +490,10 @@
       <section id="video" class="content-section" aria-labelledby="video-title">
   <p class="section-eyebrow"><span class="section-index">08</span> VIDEO WORKFLOWS</p>
   <h2 id="video-title">Video tools, directly in Dolphin.</h2>
-  <p class="section-intro">Right-click a supported video and open <strong>Actions</strong>. KIM6 provides three video conversion submenus, organized by codec, and a separate <strong>Video Utilities</strong> submenu. Settings/About remains accessible alongside them.</p>
+  <p class="section-intro">Right-click a supported video and open <strong>Actions</strong>. KIMng provides three video conversion submenus, organized by codec, and a separate <strong>Video Utilities</strong> submenu. Settings/About remains accessible alongside them.</p>
 
   <h3>Choose a video operation</h3>
-  <p>Use <strong>KIM6 - Convert Video: AV1</strong>, <strong>H.264</strong>, or <strong>H.265</strong> to create a re-encoded video. Use <strong>Video Utilities</strong> for extracting or publishing parts of an existing video.</p>
+  <p>Use <strong>KIMng - Convert Video: AV1</strong>, <strong>H.264</strong>, or <strong>H.265</strong> to create a re-encoded video. Use <strong>Video Utilities</strong> for extracting or publishing parts of an existing video.</p>
 
 <figure class="kim6-doc-shot">
   <a href="images/screenshots/21-video-menu-overview.png" title="View full-size Video actions in Dolphin screenshot">
@@ -549,25 +543,25 @@
   <figcaption><strong>Video Utilities.</strong> Extract audio or frames, remove audio, or create a contact sheet or animated GIF.</figcaption>
 </figure>
 
-  <p class="section-footnote"><strong>Output safety.</strong> Video utilities produce separate outputs. Video conversion supports the applicable create-new and explicitly authorized overwrite policies. KIM6 checks encoder and container compatibility, and a requested format may be unavailable if the installed FFmpeg build lacks the necessary encoder. <a href="reference/FORMATS.html">Read the format compatibility reference <span aria-hidden="true">↗</span></a>.</p>
+  <p class="section-footnote"><strong>Output safety.</strong> Video utilities produce separate outputs. Video conversion supports the applicable create-new and explicitly authorized overwrite policies. KIMng checks encoder and container compatibility, and a requested format may be unavailable if the installed FFmpeg build lacks the necessary encoder. <a href="reference/FORMATS.html">Read the format compatibility reference <span aria-hidden="true">↗</span></a>.</p>
 </section>
 
       <section id="file-handling" class="content-section" aria-labelledby="handling-title">
         <p class="section-eyebrow"><span class="section-index">09</span> BEFORE YOU CLICK</p>
         <h2 id="handling-title">Your originals stay protected.</h2>
-        <p class="section-intro">KIM6 protects your original files by default. When an action could replace an original, you must explicitly approve the change. Nothing is silently overwritten.</p>
+        <p class="section-intro">KIMng protects your original files by default. When an action could replace an original, you must explicitly approve the change. Nothing is silently overwritten.</p>
         <div class="policy-grid">
-          <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>KIM6 creates a separate file and leaves your original unchanged. When you are asked to choose, this is the default selection.</p></article>
+          <article class="policy policy-create"><span class="policy-mark" aria-hidden="true">+</span><h3>Create new</h3><p>KIMng creates a separate file and leaves your original unchanged. When you are asked to choose, this is the default selection.</p></article>
           <article class="policy policy-replace"><span class="policy-mark" aria-hidden="true">↻</span><h3>Overwrite protection</h3><p>Replacing an original requires deliberately choosing Overwrite and approving a separate confirmation warning. You can cancel without changing the file.</p></article>
           <article class="policy policy-inplace"><span class="policy-mark" aria-hidden="true">!</span><h3>Rotate and flip safely</h3><p>Rotate or flip images as separate copies, or choose to replace the originals after explicit confirmation. Automatic EXIF rotation has the same protection.</p></article>
         </div>
-        <p><strong>Choose your defaults in Settings.</strong> In Dolphin, right-click a supported image or video and open <strong>Actions → KIM6 - Settings/About → Settings</strong>. Choose whether supported operations should create separate files automatically or ask how to proceed. Save your preferences to use them for subsequent operations.</p>
+        <p><strong>Choose your defaults in Settings.</strong> In Dolphin, right-click a supported image or video and open <strong>Actions → KIMng - Settings/About → Settings</strong>. Choose whether supported operations should create separate files automatically or ask how to proceed. Save your preferences to use them for subsequent operations.</p>
 <p><strong>Actions that create separate files.</strong> Web export, email preparation, galleries, albums, slideshows, and video frame, audio, and GIF tools leave your originals untouched. Video transcoding can also replace an original, but only after explicit confirmation.</p>
-<p><strong>Existing filenames and processing failures.</strong> KIM6 avoids silently overwriting existing results. Where supported, it adds a number to resolve filename conflicts. It checks generated output before publishing it, and successfully completed results remain available if a later item in the batch fails. See <a href="reference/commandconfig.html#output-and-file-handling">file-handling and configuration details</a>.</p>
+<p><strong>Existing filenames and processing failures.</strong> KIMng avoids silently overwriting existing results. Where supported, it adds a number to resolve filename conflicts. It checks generated output before publishing it, and successfully completed results remain available if a later item in the batch fails. See <a href="reference/commandconfig.html#output-and-file-handling">file-handling and configuration details</a>.</p>
 
 <div class="kim6-doc-feature">
 <h3>Review changes before publication</h3>
-<p>Inspect the proposed results, filenames, directories, and per-file status. Resolve blocked items before proceeding. Different operations have different review controls, but KIM6 protects originals through their applicable output and overwrite rules.</p>
+<p>Inspect the proposed results, filenames, directories, and per-file status. Resolve blocked items before proceeding. Different operations have different review controls, but KIMng protects originals through their applicable output and overwrite rules.</p>
 
 <figure class="kim6-doc-shot" id="shot-13">
   <a href="images/screenshots/13-preview-changes.png" title="View full-size Preview changes screenshot">
@@ -595,13 +589,13 @@
 </figure>
 
 <figure class="kim6-doc-shot" id="shot-10">
-  <a href="images/screenshots/10-settings-menu.png" title="View full-size KIM6 Settings screenshot">
+  <a href="images/screenshots/10-settings-menu.png" title="View full-size KIMng Settings screenshot">
     <img src="images/screenshots/10-settings-menu.png"
-         alt="KIM6 Settings: Configure output policy, quality, rights information, and maps."
+         alt="KIMng Settings: Configure output policy, quality, rights information, and maps."
          width="875" height="755"
          loading="lazy" decoding="async">
   </a>
-  <figcaption><strong>KIM6 Settings.</strong> Configure output policy, quality, rights information, and maps.</figcaption>
+  <figcaption><strong>KIMng Settings.</strong> Configure output policy, quality, rights information, and maps.</figcaption>
 </figure>
 </div>
 </section>
@@ -611,8 +605,8 @@
         <h2 id="troubleshooting-title">Troubleshooting common problems.</h2>
         <p class="section-intro">If a menu is missing or an action fails, these common checks can help you identify and resolve the problem.</p>
         <div class="faq-list">
-          <details><summary>My KIM6 menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIM6 submenus as a workaround.</p><p><a href="reference/INSTALL.html">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
-          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIM6 reports unavailable codecs rather than silently switching to a different output format. Animated APNG conversion needs FFmpeg; Resize and Web Export deliberately refuse animated APNG to avoid losing frames. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>My KIMng menus are missing.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Restart Dolphin and verify the service menus were installed to a directory that Dolphin recognizes. A KDE Frameworks/KIO 6.29 regression affected submenu display; the fix is available in later Frameworks releases. Do not flatten KIMng submenus as a workaround.</p><p><a href="reference/INSTALL.html">Installation and troubleshooting guide <span aria-hidden="true">↗</span></a></p></div></details>
+          <details><summary>A format or encoder is unavailable.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>ImageMagick and FFmpeg support varies with the installed build and its delegates. KIMng reports unavailable codecs rather than silently switching to a different output format. Animated APNG conversion needs FFmpeg; Resize and Web Export deliberately refuse animated APNG to avoid losing frames. Check the format reference for inspection commands.</p><p><a href="reference/FORMATS.html">Supported formats and encoders <span aria-hidden="true">↗</span></a></p></div></details>
           <details><summary>An action failed partway through a batch.<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Read the final error report, confirm the source is readable and the destination is writable, and check that the requested encoder is available. Successfully completed outputs remain in place. Test uncertain inputs using copies.</p><p><a href="reference/commandconfig.html">Command reference and troubleshooting <span aria-hidden="true">↗</span></a></p></div></details>
           <details><summary>Where are my files, and what if a filename already exists?<span class="faq-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>Many Create new actions save a derivative beside the input and add a number when the requested filename is occupied. Other actions prompt for a destination, use a configured output folder, or place email attachments in a persistent directory. Read the action's result dialog for the exact location.</p><p><a href="reference/commandconfig.html">Output policies and naming <span aria-hidden="true">↗</span></a></p></div></details>
         </div>
@@ -623,7 +617,7 @@
         <h2 id="references-title">Everything is documented.</h2>
         <p class="section-intro">This page covers everyday use. For additional information about features, settings, installation, or development, please check the resources below.</p>
         <div class="reference-list">
-          <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIM6 does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
+          <a href="reference/README.html"><span><strong>Project overview &amp; Quick Start</strong><small>What KIMng does and how to begin.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/INSTALL.html"><span><strong>Installation guide</strong><small>Install, upgrade, uninstall, and resolve menu problems.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/RECIPES.html"><span><strong>Recipes</strong><small>Create, edit, preview, and run reusable photo workflows.</small></span><span aria-hidden="true">↗</span></a>
           <a href="reference/ACTIONS.html"><span><strong>All Dolphin menu actions</strong><small>Complete reference for the current Dolphin service-menu actions.</small></span><span aria-hidden="true">↗</span></a>
@@ -637,7 +631,7 @@
 
   <footer class="site-footer">
     <div class="page-width footer-inner">
-      <div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Image and video tools for KDE Dolphin.</p></div>
+      <div class="footer-brand"><span class="footer-logo">KIM<span>ng</span></span><p>Image and video tools for KDE Dolphin.</p></div>
       <div class="footer-meta"><p>Built on the original KIM project and the work of its contributors.</p><p><a href="reference/ABOUT.html">Credits</a><span aria-hidden="true">·</span><a href="reference/LICENSE.html">GPL-3.0-or-later</a><span aria-hidden="true">·</span><a href="https://github.com/codesterribly/kim6">Source on GitHub <span aria-hidden="true">↗</span></a></p></div>
     </div>
   </footer>

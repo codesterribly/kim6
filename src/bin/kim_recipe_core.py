@@ -343,7 +343,7 @@ def save_library(library, path=None):
             from kim_recipe_menu import sync_menu
             sync_menu()
         except (OSError, RecipeError) as exc:
-            return 'Recipe saved, but shortcuts could not be updated: ' + str(exc) + '\nRetry: kim_all recipe --sync-menu (from the active installation), or reinstall KIM6 to a writable user prefix.'
+            return 'Recipe saved, but shortcuts could not be updated: ' + str(exc) + '\nRetry: kim_all recipe --sync-menu (from the active installation), or reinstall KIMng to a writable user prefix.'
     return None
 
 
@@ -431,7 +431,7 @@ def plan(recipe, source, index=1, chosen=None, create=False):
             number += 1
             candidate = (directory / name).with_name(f'{Path(name).stem}_{number}{Path(name).suffix}')
         row.output = str(candidate)
-        row.certainty = 'That filename already exists. KIM6 plans to save this file as ' + candidate.name + '. The name is checked again when saving.'
+        row.certainty = 'That filename already exists. KIMng plans to save this file as ' + candidate.name + '. The name is checked again when saving.'
     return Plan(recipe, source, directory, name, state, row)
 
 
@@ -547,7 +547,7 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='KIM6 create-only media recipes')
+    parser = argparse.ArgumentParser(description='KIMng create-only media recipes')
     parser.add_argument('--recipe', help='Recipe id or JSON file containing one recipe')
     parser.add_argument('--destination')
     parser.add_argument('--sync-menu', action='store_true', help='Rebuild installed Root shortcuts from the saved library')

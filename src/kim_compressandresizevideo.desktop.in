@@ -1,12 +1,12 @@
 [Desktop Entry]
 Icon=video-x-generic
 Type=Service
-Name=KIM6
+Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=video/*;
 X-KDE-Protocol=file
 Actions=Videohd108017265mp4;Videohd108023265mp4;Videohd108029265mp4;Videohd72017265mp4;Videohd72023265mp4;Videohd72029265mp4;
-_X-KDE-Submenu=KIM6 - Convert Video: H.265
+_X-KDE-Submenu=KIMng - Convert Video: H.265
 X-KIM6-Managed=true
 
 [Desktop Action Videohd108017265mp4]

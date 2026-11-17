@@ -27,7 +27,7 @@ def unit_preference():
     if selected != stored:
         try: persist_units(selected)
         except (OSError, ValueError) as exc:
-            print('KIM6: measurement preference follows the system for this session; could not save migration: ' + str(exc), file=sys.stderr)
+            print('KIMng: measurement preference follows the system for this session; could not save migration: ' + str(exc), file=sys.stderr)
     return selected
 
 
@@ -161,7 +161,7 @@ def blocked_destination(entry, inspecting=False):
     if not info: return entry.get('error') or 'Blocked: inspection unavailable'
     fmt = str(info['format']).upper()
     if fmt == 'EXTENDED WEBP': fmt = 'WEBP'
-    if fmt == 'GIF': return 'Unsupported: KIM6 cannot add GPS coordinates to GIF images.'
+    if fmt == 'GIF': return 'Unsupported: KIMng cannot add GPS coordinates to GIF images.'
     if fmt not in FORMATS: return f'Unsupported: {fmt} GPS write'
     if Path(entry['source']).suffix.lower() not in FORMATS[fmt]:
         return 'Unsupported: format / extension mismatch'

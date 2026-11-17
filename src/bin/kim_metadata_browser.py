@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone, read-only KIM6 Metadata Browser."""
+"""Standalone, read-only KIMng Metadata Browser."""
 from __future__ import annotations
 
 import json
@@ -27,7 +27,7 @@ try:
         QStyledItemDelegate, QStyleOptionViewItem, QToolTip, QMenu)
 except ModuleNotFoundError as exc:
     if exc.name and exc.name.startswith("PySide6"):
-        print("KIM6 Metadata Browser requires PySide6. Install the KIM6 Qt runtime and try again.", file=sys.stderr)
+        print("KIMng Metadata Browser requires PySide6. Install the KIMng Qt runtime and try again.", file=sys.stderr)
         raise SystemExit(2) from exc
     raise
 
@@ -1702,14 +1702,14 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         )
         self.close_after_worker = False
         self.add_button = None
-        self.setWindowTitle("KIM6 Metadata Browser")
+        self.setWindowTitle("KIMng Metadata Browser")
         available = QApplication.primaryScreen().availableGeometry()
         minimum_width = min(900, max(620, available.width() - 24))
         minimum_height = min(560, max(480, available.height() - 48))
         self.setMinimumSize(minimum_width, minimum_height)
         self.resize(min(1160, max(minimum_width, available.width() - 24)),
                     min(740, max(minimum_height, available.height() - 60)))
-        self.settings = QSettings("KIM6", "MetadataBrowser")
+        self.settings = QSettings("KIMng", "MetadataBrowser")
         self.metadata_preferences = MetadataSourcePreferences()
         self.overview_preferences = OverviewPreferences(self.metadata_preferences.settings)
         self.section_expanded = {
@@ -3633,8 +3633,8 @@ def main(argv=None):
     # thread and allows the worker's normal cancellation path to finish.
     signal.signal(signal.SIGINT, request_shutdown)
     app = QApplication(sys.argv[:1])
-    app.setApplicationName("KIM6 Metadata Browser")
-    app.setOrganizationName("KIM6")
+    app.setApplicationName("KIMng Metadata Browser")
+    app.setOrganizationName("KIMng")
     window = MetadataBrowser(argv)
     window.show()
     shutdown_timer = QTimer()

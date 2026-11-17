@@ -558,7 +558,7 @@ def main():
 
     except (OSError, UnsafeBMFF) as exc:
         print(
-            f"KIM6 ISO-BMFF verification refused: {exc}",
+            f"KIMng ISO-BMFF verification refused: {exc}",
             file=sys.stderr,
         )
         return 1

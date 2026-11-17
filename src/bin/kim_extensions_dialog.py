@@ -150,7 +150,7 @@ def run_dialog(result_file, inputs):
     class Inspector(QDialog):
         def __init__(self):
             super().__init__(); self.worker = None; self.rows = []; self.closing = False
-            self.setWindowTitle(tr('KIM6 - Check and correct extensions')); self.resize(960, 540)
+            self.setWindowTitle(tr('KIMng - Check and correct extensions')); self.resize(960, 540)
             layout = QVBoxLayout(self)
             self.note = QLabel(tr('Read-only inspection. Unknown format does not mean corrupt. Folder scans are nonrecursive.'))
             self.note.setWordWrap(True); layout.addWidget(self.note)

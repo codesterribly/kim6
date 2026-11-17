@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 Contact Sheet configuration dialog for Qt 6."""
+"""KIMng Contact Sheet configuration dialog for Qt 6."""
 
 import os
 import sys
@@ -24,7 +24,7 @@ class ContactSheetDialog(OrderedImageDialog):
     def __init__(self, settings_file, images):
         super().__init__()
         self.settings_file = settings_file
-        self.setWindowTitle('KIM6 - Contact sheet')
+        self.setWindowTitle('KIMng - Contact sheet')
         self.setMinimumWidth(600)
         # KIM6_CONTACTSHEET_SCROLL_LAYOUT_V1
         # Bound the window height without shrinking its controls.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 persistent settings and About dialog."""
+"""KIMng persistent settings and About dialog."""
 
 import os
 import re
@@ -132,7 +132,7 @@ def save_settings(path, settings):
         raise ValueError("Refusing a symbolic-link settings file.")
 
     payload = (
-        "# KIM6 user preferences\n"
+        "# KIMng user preferences\n"
         "# Environment variables take precedence.\n"
         + "".join(
             f"{key}={settings[key]}\n"
@@ -167,7 +167,7 @@ def main():
     values = load_settings(path)
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Settings and about")
+    dialog.setWindowTitle("KIMng - Settings and about")
     dialog.setMinimumWidth(510)
 
     outer = QVBoxLayout(dialog)
@@ -254,7 +254,7 @@ def main():
     names_tab = QWidget()
     names_layout = QVBoxLayout(names_tab)
     names_intro = QLabel(
-        "Customize the labels KIM6 adds to filenames automatically. "
+        "Customize the labels KIMng adds to filenames automatically. "
         "Filenames you choose yourself are not changed."
     )
     names_intro.setWordWrap(True)
@@ -415,7 +415,7 @@ def main():
                     "The installed Markdown guide is unavailable."
                 )
             manual_status.setText(
-                "NOTE: Full HTML rendering is unavailable in this viewer session, so KIM6 is displaying the Markdown version of the README. Use Open in Browser for the complete illustrated User Guide."
+                "NOTE: Full HTML rendering is unavailable in this viewer session, so KIMng is displaying the Markdown version of the README. Use Open in Browser for the complete illustrated User Guide."
             )
 
         manual_layout.addWidget(manual_view, 1)
@@ -434,7 +434,7 @@ def main():
         ):
             QMessageBox.warning(
                 dialog,
-                "KIM6 User Guide",
+                "KIMng User Guide",
                 "Could not launch a browser.",
             )
 
@@ -442,10 +442,10 @@ def main():
     manual_controls.addWidget(open_browser)
     manual_layout.addLayout(manual_controls)
 
-    tabs.addTab(manual_tab, "KIM6 User Guide")
+    tabs.addTab(manual_tab, "KIMng User Guide")
 
     def resize_for_tab(index):
-        if tabs.tabText(index) in ("License", "KIM6 User Guide"):
+        if tabs.tabText(index) in ("License", "KIMng User Guide"):
             dialog.resize(max(dialog.width(), 1000), 740)
 
     tabs.currentChanged.connect(resize_for_tab)
@@ -514,7 +514,7 @@ def main():
             save_settings(path, updated)
         except (OSError, ValueError) as error:
             QMessageBox.critical(
-                dialog, "Unable to save KIM6 settings", str(error)
+                dialog, "Unable to save KIMng settings", str(error)
             )
             return
 

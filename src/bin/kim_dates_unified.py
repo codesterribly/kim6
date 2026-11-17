@@ -195,7 +195,7 @@ class SetDatesDialog(QDialog):
         self.cache = {}
         self._zones = {}
 
-        self.setWindowTitle('KIM6 - Set dates')
+        self.setWindowTitle('KIMng - Set dates')
         self.resize(1040, 650)
         self.setMinimumWidth(790)
 
@@ -1311,7 +1311,7 @@ class SetDatesDialog(QDialog):
 
         review = QDialog(self)
         review.setWindowTitle(
-            'KIM6 - Review date changes'
+            'KIMng - Review date changes'
         )
         review.resize(1120, 570)
         review.setMinimumWidth(850)
@@ -1448,7 +1448,7 @@ class SetDatesDialog(QDialog):
 
         layout.addWidget(QLabel(
             'Filenames and destinations come from the current '
-            'KIM6 preview plan, including collision handling.'
+            'KIMng preview plan, including collision handling.'
         ))
 
         excluded = [

@@ -86,6 +86,7 @@ docs/FORMATS.md|docs/FORMATS.md|0644
 docs/DEVELOPMENT.md|docs/DEVELOPMENT.md|0644
 docs/commandconfig.md|docs/commandconfig.md|0644
 docs/index.html|docs/index.html|0644
+docs/images/kimng-brand-icon.png|docs/images/kimng-brand-icon.png|0644
 docs/work.css|docs/work.css|0644
 docs/reference/ABOUT.html|docs/reference/ABOUT.html|0644
 docs/reference/ACTIONS.html|docs/reference/ACTIONS.html|0644
@@ -109,6 +110,30 @@ docs/images/kim6-metadata-menu.png|docs/images/kim6-metadata-menu.png|0644
 docs/images/kim6-settings-general.png|docs/images/kim6-settings-general.png|0644
 src/bin/kim_process.py|bin/kim_process.py|0644
 src/bin/kim_settings_file.py|bin/kim_settings_file.py|0644
+docs/images/screenshots/01-main-menu.png|docs/images/screenshots/01-main-menu.png|0644
+docs/images/screenshots/02-convert-compress.png|docs/images/screenshots/02-convert-compress.png|0644
+docs/images/screenshots/03-create-publish.png|docs/images/screenshots/03-create-publish.png|0644
+docs/images/screenshots/04-location-gps.png|docs/images/screenshots/04-location-gps.png|0644
+docs/images/screenshots/05-organize-metadata.png|docs/images/screenshots/05-organize-metadata.png|0644
+docs/images/screenshots/06-recipes.png|docs/images/screenshots/06-recipes.png|0644
+docs/images/screenshots/07-resize-crop-rotate.png|docs/images/screenshots/07-resize-crop-rotate.png|0644
+docs/images/screenshots/08-settings-about.png|docs/images/screenshots/08-settings-about.png|0644
+docs/images/screenshots/09-web-export.png|docs/images/screenshots/09-web-export.png|0644
+docs/images/screenshots/10-settings-menu.png|docs/images/screenshots/10-settings-menu.png|0644
+docs/images/screenshots/11-run-recipe.png|docs/images/screenshots/11-run-recipe.png|0644
+docs/images/screenshots/12-recipe-editor.png|docs/images/screenshots/12-recipe-editor.png|0644
+docs/images/screenshots/13-preview-changes.png|docs/images/screenshots/13-preview-changes.png|0644
+docs/images/screenshots/14-check-extensions.png|docs/images/screenshots/14-check-extensions.png|0644
+docs/images/screenshots/15-modify-gps.png|docs/images/screenshots/15-modify-gps.png|0644
+docs/images/screenshots/16-reduce-gps-precision.png|docs/images/screenshots/16-reduce-gps-precision.png|0644
+docs/images/screenshots/17-crop-image.png|docs/images/screenshots/17-crop-image.png|0644
+docs/images/screenshots/18-set-dates.png|docs/images/screenshots/18-set-dates.png|0644
+docs/images/screenshots/19-create-collage.png|docs/images/screenshots/19-create-collage.png|0644
+docs/images/screenshots/20-review-web-export.png|docs/images/screenshots/20-review-web-export.png|0644
+docs/images/screenshots/21-video-menu-overview.png|docs/images/screenshots/21-video-menu-overview.png|0644
+docs/images/screenshots/22-video-av1-presets.png|docs/images/screenshots/22-video-av1-presets.png|0644
+docs/images/screenshots/23-video-utilities.png|docs/images/screenshots/23-video-utilities.png|0644
+docs/reference/STEP2_IMPLEMENTATION.html|docs/reference/STEP2_IMPLEMENTATION.html|0644
 KIM6_RUNTIME_FILES
 
 # Phase 2: review-before-processing UI for video transcode presets.

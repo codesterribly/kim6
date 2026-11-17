@@ -22,7 +22,7 @@ class JobProgressDialog(QDialog):
 
     def __init__(self, text, cancel_text, minimum, maximum, parent=None):
         super().__init__(parent); self.finished_job=False; self.resize(640,200)
-        self.setWindowTitle('KIM6 - Job progress')
+        self.setWindowTitle('KIMng - Job progress')
         layout=QVBoxLayout(self); self.label=QLabel(text); self.label.setWordWrap(True); self.label.setTextFormat(Qt.PlainText)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard); layout.addWidget(self.label)
         self.bar=QProgressBar(); self.bar.setRange(minimum,maximum); layout.addWidget(self.bar)
@@ -312,7 +312,7 @@ class PreflightWorker(QThread):
                         number += 1
                         candidate = proposed.with_name(f'{proposed.stem}_{number}{proposed.suffix}')
                     if candidate != proposed:
-                        row.certainty = 'That filename already exists. KIM6 plans to save this file as ' + candidate.name + '. The name is checked again when saving.'
+                        row.certainty = 'That filename already exists. KIMng plans to save this file as ' + candidate.name + '. The name is checked again when saving.'
                     row.output = str(candidate)
                     outputs.add(row.output)
             except Exception as exc:
@@ -482,7 +482,7 @@ class RunRecipeDialog(QDialog):
         self.fix_recipe_button=QPushButton('Fix recipe…'); self.fix_recipe_button.setAccessibleName('Fix recipe: choose a Photoshop output format')
         self.fix_recipe_button.clicked.connect(self.fix_recipe); self.fix_recipe_button.hide(); layout.addWidget(self.fix_recipe_button)
         self.warning_view = WarningView(); layout.addWidget(self.warning_view)
-        safety = QLabel('Originals are never overwritten. KIM6 saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
+        safety = QLabel('Originals are never overwritten. KIMng saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
         safety.setWordWrap(True); layout.addWidget(safety)
         buttons = QHBoxLayout(); buttons.addStretch(1)
         self.run_button = QPushButton(

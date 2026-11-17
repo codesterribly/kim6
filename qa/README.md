@@ -1,4 +1,4 @@
-# KIM6 Human Acceptance Testing
+# KIMng Human Acceptance Testing
 
 This toolkit prepares disposable media and records a person testing the Dolphin menus. It never clicks menus for you. A technical validation or CLI run is not a GUI acceptance result.
 
@@ -40,7 +40,7 @@ For a specific case, add its stable ID after the command. `status --filter pendi
 
 `install-isolated` explicitly runs this checkout's installer with `--prefix qa/generated/gui-data/kio/servicemenus`, plus QA-only `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. It does not use sudo or write to normal per-user/system service-menu locations. It is still an installation command, so you choose when to run it. If it is interrupted, rerun it after checking the error; the installer is designed to be rerun. `check-install` compares the installed dispatcher, resources, permissions, menu IDs and argument contracts with this checkout. It also reports same-name service menus found in checked system XDG data roots. It does not prove that Dolphin displayed or launched an entry.
 
-The isolated Dolphin session may still show system-wide menus. If duplicate or unidentified KIM6 entries appear, stop rather than guessing. KDE Frameworks/KIO 6.29 can prevent Dolphin service submenus from appearing. Do not flatten or alter the menus to work around it. Actual GUI acceptance should be done on a KDE Plasma 6 machine with working submenus after confirming the target environment is suitable.
+The isolated Dolphin session may still show system-wide menus. If duplicate or unidentified KIMng entries appear, stop rather than guessing. KDE Frameworks/KIO 6.29 can prevent Dolphin service submenus from appearing. Do not flatten or alter the menus to work around it. Actual GUI acceptance should be done on a KDE Plasma 6 machine with working submenus after confirming the target environment is suitable.
 
 ## Test the first-run smoke sequence
 

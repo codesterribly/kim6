@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit review for KIM6 video transcode presets and output destination."""
+"""Explicit review for KIMng video transcode presets and output destination."""
 
 import os
 import sys
@@ -38,7 +38,7 @@ class VideoReview(QDialog):
     def __init__(self, plan, codec, limit, quality, mode, request_path, destination):
         super().__init__()
 
-        self.setWindowTitle("KIM6 - Review video conversion")
+        self.setWindowTitle("KIMng - Review video conversion")
         self.resize(1060, min(760, 300 + 52 * len(plan)))
         self.setMinimumWidth(850)
 
@@ -63,7 +63,7 @@ class VideoReview(QDialog):
         outer.addWidget(heading)
 
         audio_note = QLabel(
-            "KIM6 transcodes the first video stream and copies "
+            "KIMng transcodes the first video stream and copies "
             "available audio streams without re-encoding them. "
             "Aspect ratio is preserved. Smaller videos are not enlarged."
         )
@@ -196,7 +196,7 @@ class VideoReview(QDialog):
         note = QLabel(
             "Planned output names reflect current settings and "
             "filesystem state. If a new filename collision occurs, "
-            "KIM6 may add a number during safe publication. "
+            "KIMng may add a number during safe publication. "
             "No video has been modified."
         )
         note.setWordWrap(True)

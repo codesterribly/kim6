@@ -21,7 +21,7 @@ import tempfile
 import kim_process as process
 from kim_process import ProcessError as PSDError
 
-WARNING = ('PSD compatibility: KIM6 uses the saved composite or ImageMagick’s best-effort '
+WARNING = ('PSD compatibility: KIMng uses the saved composite or ImageMagick’s best-effort '
            'reconstruction. Masks, blend modes, adjustment layers, text and effects may look different. '
            'Composite provenance cannot be reliably detected.')
 LIMITS = ['-limit', 'memory', '256MiB', '-limit', 'map', '512MiB',
@@ -111,7 +111,7 @@ def normalize(path, directory, rgb=False):
         if has_icc and (rgb or mode in (1, 4) or colorspace.lower() not in ('srgb', 'rgb')):
             color_args = ['-profile', srgb()]
         elif not has_icc:
-            warning = 'Unprofiled RGB/grayscale source: KIM6 assumed sRGB for color interpretation.'
+            warning = 'Unprofiled RGB/grayscale source: KIMng assumed sRGB for color interpretation.'
             process.add_warning(warning)
             if mode == 1: color_args += ['-colorspace', 'sRGB']
             color_args += ['-profile', srgb()]
@@ -252,7 +252,7 @@ if __name__ == '__main__':
                 log.write(str(exc) + '\n')
             if os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'):
                 try:
-                    subprocess.run(['kdialog', '--title', 'KIM6 - PSD source', '--passivepopup', str(exc), '12'],
+                    subprocess.run(['kdialog', '--title', 'KIMng - PSD source', '--passivepopup', str(exc), '12'],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
                 except (OSError, subprocess.TimeoutExpired):
                     pass

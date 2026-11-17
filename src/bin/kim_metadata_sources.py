@@ -92,7 +92,7 @@ class OverviewPreferences:
     KEY = 'metadata/overviewFieldsV1'
 
     def __init__(self, settings=None):
-        self.settings = settings if settings is not None else QSettings('KIM6', 'MetadataTools')
+        self.settings = settings if settings is not None else QSettings('KIMng', 'MetadataTools')
         self.reload()
 
     def reload(self):
@@ -184,7 +184,7 @@ class MetadataSourcePreferences:
         if settings is None:
             if QSettings is None:
                 raise RuntimeError("PySide6 QSettings is required for metadata preferences")
-            settings = QSettings("KIM6", "MetadataTools")
+            settings = QSettings("KIMng", "MetadataTools")
         self.settings = settings
         self.reload()
 

@@ -337,11 +337,11 @@ class ActionDialog(QDialog):
                 'Compress received no selected files from Dolphin'
             )
         self.worker=None; self.headers={}; self.header_stamps={}; self.compress_eligible=[]; self.header_error=None; self.closing=False; self.geometry_cache={}
-        self.setWindowTitle('KIM6 - '+{'rotate':'Rotate','resize':'Resize images','percent':'Resize by percentage',
+        self.setWindowTitle('KIMng - '+{'rotate':'Rotate','resize':'Resize images','percent':'Resize by percentage',
             'convert':'Convert format','compress':'Compress custom','copyright':'Set creator and copyright','strip':'Remove metadata','rename':'Rename images'}[kind])
         self.layout=QVBoxLayout(self)
         if kind=='compress':
-            self.setWindowTitle('KIM6 - Compress '+preset.title())
+            self.setWindowTitle('KIMng - Compress '+preset.title())
             if preset!='custom':
                 notice=QLabel({'recommended':'Starting with Recommended settings. You can adjust the settings before applying.',
                               'maximum':'Starting with Maximum compression settings. You can adjust the settings before applying.'}[preset])
@@ -465,7 +465,7 @@ class ActionDialog(QDialog):
                 self.update_rotation_preview
             )
         elif kind == 'resize':
-            self.setWindowTitle('KIM6 - Resize images')
+            self.setWindowTitle('KIMng - Resize images')
             self.choice('method', 'Sizing', [
                 ('Resize to Fit', 'fit'),
                 ('Exact Dimensions', 'exact'),
@@ -1582,7 +1582,7 @@ class RotateBatchDialog(QDialog):
     def __init__(self, files, preset):
         super().__init__()
 
-        self.setWindowTitle('KIM6 - Rotate images')
+        self.setWindowTitle('KIMng - Rotate images')
         self.resize(970, 630)
         self.setMinimumWidth(790)
 
@@ -1994,7 +1994,7 @@ class FlipReviewDialog(QDialog):
         self.rows = []
         self.pending = []
 
-        self.setWindowTitle('KIM6 - Flip images')
+        self.setWindowTitle('KIMng - Flip images')
         # Match the initial height to the batch rather than
         # reserving a large, mostly empty scroll area.
         # Four or more images use a bounded scrolling window.
@@ -2559,7 +2559,7 @@ def email_options_review(output_path, initial_size, sources):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Prepare email images")
+    dialog.setWindowTitle("KIMng - Prepare email images")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2792,7 +2792,7 @@ def email_ready_review(plan_path, mail_client):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Review email attachments")
+    dialog.setWindowTitle("KIMng - Review email attachments")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -3006,7 +3006,7 @@ def flip_output_review(inputs_path, approved_path, policy, operation):
     pairs = list(zip(values[::2], values[1::2]))
 
     window = FlipReviewDialog([source for source, _ in pairs], operation, require_output_plan=True)
-    window.setWindowTitle('KIM6 - Review Flip changes')
+    window.setWindowTitle('KIMng - Review Flip changes')
     window.resize(960, min(740, window.height() + 90))
 
     layout = window.layout()

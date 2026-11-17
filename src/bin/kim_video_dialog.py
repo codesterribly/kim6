@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 single-window settings for video contact sheets and GIFs."""
+"""KIMng single-window settings for video contact sheets and GIFs."""
 
 import re
 import sys
@@ -51,7 +51,7 @@ def mute_review(plan_path, request_path, destination):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Review remove audio")
+    dialog.setWindowTitle("KIMng - Review remove audio")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -232,7 +232,7 @@ def frame_review(plan_path, request_path, destination):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Review video frames")
+    dialog.setWindowTitle("KIMng - Review video frames")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -426,9 +426,9 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
     dialog.setWindowTitle(
-        "KIM6 - Extract frame options"
+        "KIMng - Extract frame options"
         if mode == "single"
-        else "KIM6 - Thumbnail options"
+        else "KIMng - Thumbnail options"
     )
 
     layout = QVBoxLayout(dialog)
@@ -499,7 +499,7 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
 
     else:
         note = QLabel(
-            "KIM6 automatically selects the midpoint "
+            "KIMng automatically selects the midpoint "
             "of each video."
         )
         note.setWordWrap(True)
@@ -660,7 +660,7 @@ def main():
         return widget
 
     if mode == "contact":
-        dialog.setWindowTitle("KIM6 - Video contact sheet")
+        dialog.setWindowTitle("KIMng - Video contact sheet")
 
         grid = choice("Grid:", [
             ("3 × 3 (9 frames)", "3x3"),
@@ -678,7 +678,7 @@ def main():
         ))
 
     else:
-        dialog.setWindowTitle("KIM6 - Animated GIF")
+        dialog.setWindowTitle("KIMng - Animated GIF")
 
         start = QLineEdit(defaults[0])
         start.setPlaceholderText("00:00:00")

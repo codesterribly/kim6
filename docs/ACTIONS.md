@@ -1,6 +1,6 @@
-# KIM6 Dolphin Menu Actions
+# KIMng Dolphin Menu Actions
 
-KIM6 integrates image and video operations into KDE Dolphin.
+KIMng integrates image and video operations into KDE Dolphin.
 Its 12 service-menu definitions expose **91 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
 
 The action inventory below is derived directly from the current `.desktop.in` files in `src/`. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.
@@ -9,7 +9,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 ## Image menus
 
-### KIM6 - Convert/Compress
+### KIMng - Convert/Compress
 
 [View submenu screenshot](images/screenshots/02-convert-compress.png)
 
@@ -32,7 +32,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Compress maximum | `kim_all compress --maximum --interactive -- %F` |
 | Compress custom… | `kim_all compress --custom -- %F` |
 
-### KIM6 - Create/Publish
+### KIMng - Create/Publish
 
 [View submenu screenshot](images/screenshots/03-create-publish.png)
 
@@ -48,7 +48,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
 | Send via email… | `kim_all resizeandsend --size full -- %F` |
 
-### KIM6 - Location/GPS
+### KIMng - Location/GPS
 
 [View submenu screenshot](images/screenshots/04-location-gps.png)
 
@@ -59,7 +59,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
-### KIM6 - Organize/Metadata
+### KIMng - Organize/Metadata
 
 [View submenu screenshot](images/screenshots/05-organize-metadata.png)
 
@@ -76,7 +76,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 View metadata opens the existing read-only Metadata Browser with all selected images in one window. Select exactly two images inside Browser to use its Compare view. Edit metadata opens the existing Metadata Editor with the complete selection; it retains drafts while navigating and only plans changes. Neither action writes image metadata or XMP sidecars.
 
-### KIM6 - Recipes
+### KIMng - Recipes
 
 [View submenu screenshot](images/screenshots/06-recipes.png)
 
@@ -85,7 +85,7 @@ View metadata opens the existing read-only Metadata Browser with all selected im
 | Choose saved recipe… | `kim_all recipe --choose -- %F` |
 | Recipe editor… | `kim_all recipe --editor -- %F` |
 
-### KIM6 - Resize/Crop/Rotate
+### KIMng - Resize/Crop/Rotate
 
 [View submenu screenshot](images/screenshots/07-resize-crop-rotate.png)
 
@@ -104,18 +104,18 @@ View metadata opens the existing read-only Metadata Browser with all selected im
 | Flip horizontally | `kim_all flipflop flop -- %F` |
 | Flip vertically | `kim_all flipflop flip -- %F` |
 
-### KIM6 - Settings/About
+### KIMng - Settings/About
 
 [View submenu screenshot](images/screenshots/08-settings-about.png)
 
 | Menu action | Dispatcher command |
 |---|---|
 | Settings… | `kim_all settings -- %F` |
-| About KIM6 | `kim_all about -- %F` |
+| About KIMng | `kim_all about -- %F` |
 | License | `kim_all license -- %F` |
-| KIM6 User Guide | `kim_all manual -- %F` |
+| KIMng User Guide | `kim_all manual -- %F` |
 
-### KIM6 - Web Export
+### KIMng - Web Export
 
 [View submenu screenshot](images/screenshots/09-web-export.png)
 
@@ -136,7 +136,7 @@ View metadata opens the existing read-only Metadata Browser with all selected im
 
 ## Video menus
 
-KIM6 shows video-specific actions when a supported video is selected
+KIMng shows video-specific actions when a supported video is selected
 in Dolphin. The video menu set comprises three codec conversion
 submenus, **AV1**, **H.264**, and **H.265**, plus **Video Utilities**.
 The shared **Settings/About** submenu remains available.
@@ -175,7 +175,7 @@ commands and options.
 
 ## File handling and safety
 
-KIM6 distinguishes operations that create derivatives from operations that can replace selected originals. Where overwriting is supported, it requires explicit authorization.
+KIMng distinguishes operations that create derivatives from operations that can replace selected originals. Where overwriting is supported, it requires explicit authorization.
 
 Derivative-producing actions must use their applicable output review and filename collision protections. Canceled or blocked operations must not be reported as successful publication.
 

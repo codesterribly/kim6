@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone KIM6 metadata editor and read-only change planner.
+"""Standalone KIMng metadata editor and read-only change planner.
 
 Phase 1 deliberately has no metadata writer. It reads selected files through
 the browser's read-only metadata service, keeps edits in memory, and produces
@@ -25,7 +25,7 @@ try:
     )
 except ModuleNotFoundError as exc:
     if exc.name and exc.name.startswith("PySide6"):
-        print("KIM6 Metadata Editor requires PySide6. Install the KIM6 Qt runtime and try again.", file=sys.stderr)
+        print("KIMng Metadata Editor requires PySide6. Install the KIMng Qt runtime and try again.", file=sys.stderr)
         raise SystemExit(2) from exc
     raise
 
@@ -1388,7 +1388,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.worker = None
         self.close_after_worker = False
         self._refreshing = False
-        self.setWindowTitle("KIM6 Metadata Editor")
+        self.setWindowTitle("KIMng Metadata Editor")
         self.resize(1120, 780)
         self.setMinimumSize(760, 560)
         settings_menu = self.menuBar().addMenu("Settings")
@@ -3250,8 +3250,8 @@ def main(argv=None):
 
     signal.signal(signal.SIGINT, request_shutdown)
     app = QApplication(sys.argv[:1])
-    app.setApplicationName("KIM6 Metadata Editor")
-    app.setOrganizationName("KIM6")
+    app.setApplicationName("KIMng Metadata Editor")
+    app.setOrganizationName("KIMng")
     window = MetadataEditor(argv)
     window.show()
     shutdown_timer = QTimer()

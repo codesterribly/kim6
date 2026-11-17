@@ -30,7 +30,7 @@ except (ImportError, OSError, RuntimeError) as exc:
     NETWORK_IMPORT_ERROR = f'{type(exc).__name__}: {exc}'
 
 TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-USER_AGENT = b'KIM6-LocationTools/1.0 (+https://github.com/codesterribly/kim6)'
+USER_AGENT = b'KIMng-LocationTools/1.0 (+https://github.com/codesterribly/kim6)'
 MAX_LATITUDE = 85.05112878
 DEBUG_MAP = os.environ.get('KIM_LOCATION_DEBUG') == '1'
 MAP_FAILURE_TEXT = "Map imagery couldn't be loaded."
@@ -126,7 +126,7 @@ class TileStore(QObject):
             root.mkdir(parents=True, exist_ok=True)
             self.lock = QLockFile(str(root / 'cache.lock'))
             if not self.lock.tryLock(0):
-                raise OSError('Another KIM6 window owns the tile cache. Close it and choose Retry.')
+                raise OSError('Another KIMng window owns the tile cache. Close it and choose Retry.')
             # Verify actual access, rather than relying on os.access().
             from tempfile import TemporaryFile
             with TemporaryFile(dir=root): pass
@@ -457,7 +457,7 @@ class LocationMap(QWidget):
         outer_layout = QVBoxLayout(self); outer_layout.setContentsMargins(0, 0, 0, 0)
         self.online = QPushButton('Enable Maps')
         self.online.setCheckable(False); self.online.setAutoDefault(False)
-        self.online.setToolTip('Enable online maps and save this preference in KIM6 Settings. Visible map areas are requested from OpenStreetMap; image names stay local.')
+        self.online.setToolTip('Enable online maps and save this preference in KIMng Settings. Visible map areas are requested from OpenStreetMap; image names stay local.')
         outer_layout.addWidget(self.online)
         map_area = QWidget(); layout = QVBoxLayout(map_area); layout.setContentsMargins(0, 0, 0, 0)
         self.canvas = TileMap(self, interactive, units)
@@ -528,7 +528,7 @@ class LocationMap(QWidget):
         has_failure = bool(has_position and self.store.enabled and
                            (self.store.initialization_problem or self.store.problem or failures))
         if self.canvas.selected is None and not self.canvas.interactive: text = self.canvas.empty_text
-        elif not self.store.enabled: text = 'Online maps are off in KIM6 Settings. The coordinate marker remains available.'
+        elif not self.store.enabled: text = 'Online maps are off in KIMng Settings. The coordinate marker remains available.'
         elif has_failure: text = MAP_FAILURE_TEXT
         elif self.store.active: text = 'Loading geographic imagery…'
         else: text = 'Visible map areas are sent to OpenStreetMap. Drag or use arrow keys to pan.'

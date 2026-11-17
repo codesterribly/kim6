@@ -61,7 +61,7 @@ if [ -L "$PREFIX" ]; then
   exit 1
 fi
 if [ ! -d "$PREFIX" ]; then
-  [ "$quiet" = true ] || printf 'No KIM6 service-menu directory found at %s.\n' "$PREFIX"
+  [ "$quiet" = true ] || printf 'No KIMng service-menu directory found at %s.\n' "$PREFIX"
   exit 0
 fi
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
@@ -223,4 +223,4 @@ fi
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
-[ "$quiet" = true ] || printf 'Removed recognized KIM6 files from %s.\n' "$PREFIX"
+[ "$quiet" = true ] || printf 'Removed recognized KIMng files from %s.\n' "$PREFIX"

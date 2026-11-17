@@ -276,7 +276,7 @@ def main():
 
     except (OSError, ValueError, struct.error) as exc:
         print(
-            f"KIM6 TIFF verification refused: {exc}",
+            f"KIMng TIFF verification refused: {exc}",
             file=sys.stderr,
         )
         return 1

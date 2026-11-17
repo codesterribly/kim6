@@ -142,7 +142,7 @@ def main():
     except (OSError, UnsafeGIF) as exc:
         if created:
             args.output.unlink(missing_ok=True)
-        print(f"KIM6 GIF refused: {exc}", file=sys.stderr)
+        print(f"KIMng GIF refused: {exc}", file=sys.stderr)
         return 1
 
 

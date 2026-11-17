@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 PDF Album editor with ordered images, captions and page preview."""
+"""KIMng PDF Album editor with ordered images, captions and page preview."""
 
 import os
 import sys
@@ -42,7 +42,7 @@ class AlbumDialog(OrderedImageDialog):
         self.captions_by_path = {}
         self.displayed_target = None
 
-        self.setWindowTitle("KIM6 - Create a PDF album")
+        self.setWindowTitle("KIMng - Create a PDF album")
         self.setMinimumWidth(680)
         self.resize(780, 780)
 

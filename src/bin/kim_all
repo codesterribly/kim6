@@ -430,22 +430,22 @@ choose_output_mode() {
   case "$context" in
     originals)
       warning="$(gettext 'Overwrite the selected original files?')"
-      warning+="$(printf '\n\n%s' "$(gettext 'Selected original files will be replaced without backups. KIM6 cannot undo this operation.')")"
+      warning+="$(printf '\n\n%s' "$(gettext 'Selected original files will be replaced without backups. KIMng cannot undo this operation.')")"
       yes_label="$(gettext 'Yes, overwrite selected originals')"
       ;;
     rename)
       warning="$(gettext 'Rename selected originals and remove their old filenames?')"
-      warning+="$(printf '\n\n%s' "$(gettext 'After the renamed files have been published, the old selected filenames will be removed. KIM6 cannot undo this operation.')")"
+      warning+="$(printf '\n\n%s' "$(gettext 'After the renamed files have been published, the old selected filenames will be removed. KIMng cannot undo this operation.')")"
       yes_label="$(gettext 'Yes, rename selected originals')"
       ;;
     output)
       warning="$(gettext 'Replace existing derived output files?')"
-      warning+="$(printf '\n\n%s' "$(gettext 'Existing output files may be replaced without backups. KIM6 cannot undo this operation.')")"
+      warning+="$(printf '\n\n%s' "$(gettext 'Existing output files may be replaced without backups. KIMng cannot undo this operation.')")"
       yes_label="$(gettext 'Yes, replace existing outputs')"
       ;;
     mixed|*)
       warning="$(gettext 'Overwrite original images or existing output files?')"
-      warning+="$(printf '\n\n%s' "$(gettext 'Existing files may be replaced without backup. This cannot be undone by KIM6.')")"
+      warning+="$(printf '\n\n%s' "$(gettext 'Existing files may be replaced without backup. This cannot be undone by KIMng.')")"
       ;;
   esac
   if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
@@ -484,7 +484,7 @@ confirm_inplace_overwrite() {
   warning+="$(printf '\n\n%s %s\n%s %s\n\n%s' \
     "$(gettext 'Action:')" "$action" \
     "$(gettext 'Selected files:')" "$count" \
-    "$(gettext 'Original files will be replaced without backup. KIM6 cannot undo this operation.')")"
+    "$(gettext 'Original files will be replaced without backup. KIMng cannot undo this operation.')")"
 
   kdialog --title "$(gettext 'Kim')" --warningyesno "$warning" \
     --yes-label "$(gettext 'Yes, overwrite selected originals')" \
@@ -1457,7 +1457,7 @@ kim6_create_select_more() {
   [ -d "$initial_dir" ] || initial_dir="$PWD"
 
   kdialog \
-    --title "KIM6 - ${action_title}" \
+    --title "KIMng - ${action_title}" \
     --yes-label "Select More Images" \
     --no-label "Use One Image" \
     --yesnocancel \
@@ -1836,7 +1836,7 @@ action_album() {
 
   album_dialog="$(dirname -- "${BASH_SOURCE[0]}")/kim_album_dialog.py"
   if [ ! -r "$album_dialog" ]; then
-    kdialog --title "KIM6" --error       "The PDF Album settings dialog is not installed."
+    kdialog --title "KIMng" --error       "The PDF Album settings dialog is not installed."
     return 1
   fi
 
@@ -1919,7 +1919,7 @@ action_album() {
   capacity=$(( ${tile%x*} * ${tile#*x} ))
   # Open before source inspection: even identify -ping can invoke the shared
   # PSD decoder and color-managed staging path on the first use of a document.
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Preparing PDF album sources…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Preparing PDF album sources…')")" || return 1
   trap 'publication_stop_owned_child; exit 130' INT TERM HUP
   records="$KIMDIR/album-records"
   errors="$KIMDIR/album-errors"
@@ -3017,7 +3017,7 @@ action_convert() {
         fi
       elif [ "$FORMAT" = pdf ] && [ "$input_is_psd" = true ]; then
         if [ "$strip_metadata" != true ] && ! preview_active; then
-          if ! kdialog --title "$(gettext 'KIM6 - Photoshop to PDF')" --warningyesno \
+          if ! kdialog --title "$(gettext 'KIMng - Photoshop to PDF')" --warningyesno \
             "$(gettext 'Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged.')"; then
             rc=1
           fi
@@ -3269,7 +3269,7 @@ action_gallery() {
   dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_create_dialog.py"
 
   [ -r "$dialog_script" ] || {
-    kdialog --title "KIM6 - HTML gallery" --error       "The HTML Gallery settings dialog is not installed."
+    kdialog --title "KIMng - HTML gallery" --error       "The HTML Gallery settings dialog is not installed."
     return 1
   }
 
@@ -3736,7 +3736,7 @@ action_checkextensions() {
   if [ "${#interrupted_files[@]}" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Interrupted files:')"$'\n'"$(printf '%s\n' "${interrupted_files[@]}")"; fi
   if [ "$not_scheduled_count" -gt 0 ]; then summary+=$'\n\n'"$(gettext 'Files not scheduled:')"$'\n'"$(printf '%s\n' "${REPORT_SKIP_LIST[@]}")"; fi
   if [ -s "$PROGRESS_ERROR_FILE" ]; then summary+=$'\n\n'"$(cat -- "$PROGRESS_ERROR_FILE")"; fi
-  kdialog --title "$(gettext 'KIM6 - Correctly named copies')" "$result_option" "$summary" || true
+  kdialog --title "$(gettext 'KIMng - Correctly named copies')" "$result_option" "$summary" || true
   [ "$interrupted" = false ] && [ "$REPORT_OK" -eq "${#files[@]}" ] && [ ! -f "$KIMDIR/job.cancelled" ]
 }
 
@@ -5976,7 +5976,7 @@ action_resizeandsend() {
       email_client_detail="$(head -c 1600 -- "$KIMDIR/email-client.log")"
     fi
 
-    kdialog --title "KIM6 - Email handoff failed" --error       "Mail client: $client
+    kdialog --title "KIMng - Email handoff failed" --error       "Mail client: $client
 Exit status: $handoff
 ${email_client_detail:-No diagnostic output from the mail client.}
 
@@ -6106,7 +6106,7 @@ action_transform_in_place() {
   if [ "${KIM_FLIP_OUTPUT_REVIEW:-0}" = 1 ]; then
     mode=create
   else
-    mode="$(choose_output_mode     "$(gettext 'Kim')"     "$(gettext 'How should KIM6 save the results?')"     "${#files[@]}" originals)" || return 1
+    mode="$(choose_output_mode     "$(gettext 'Kim')"     "$(gettext 'How should KIMng save the results?')"     "${#files[@]}" originals)" || return 1
   fi
   case "$mode" in
     create|overwrite) ;;
@@ -6768,7 +6768,7 @@ action_stripmeta() {
       case "${ext,,}" in
         tif|tiff)
           if ! metadata_tiff_encoded_equal "$i" "$OUTTMP"; then
-            printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$i" >&2
+            printf 'KIMng: TIFF encoded-data verification failed: %s\n' "$i" >&2
             rc=1
           fi
           ;;
@@ -6781,13 +6781,13 @@ action_stripmeta() {
       case "${ext,,}" in
         heic|heif|hif)
           if ! metadata_isobmff_equal "$i" "$OUTTMP" heif; then
-            printf 'KIM6: HEIF encoded-data verification failed: %s\n' "$i" >&2
+            printf 'KIMng: HEIF encoded-data verification failed: %s\n' "$i" >&2
             rc=1
           fi
           ;;
         avif)
           if ! metadata_isobmff_equal "$i" "$OUTTMP" avif; then
-            printf 'KIM6: AVIF encoded-data verification failed: %s\n' "$i" >&2
+            printf 'KIMng: AVIF encoded-data verification failed: %s\n' "$i" >&2
             rc=1
           fi
           ;;
@@ -6894,7 +6894,7 @@ try:
         raise ValueError("embedded ICC chunk changed")
 
 except (OSError, ValueError) as exc:
-    print(f"KIM6 PNG ICC verification failed: {exc}", file=sys.stderr)
+    print(f"KIMng PNG ICC verification failed: {exc}", file=sys.stderr)
     sys.exit(1)
 PYICC
 }
@@ -6911,7 +6911,7 @@ metadata_png_publish_one() {
 
   METADATA_INTERRUPTED=false
   if [ ! -f "$engine" ] || ! command -v "$interpreter" >/dev/null 2>&1; then
-    printf 'KIM6: PNG metadata engine or Python 3 is unavailable.\n' >&2
+    printf 'KIMng: PNG metadata engine or Python 3 is unavailable.\n' >&2
     return 1
   fi
 
@@ -6989,7 +6989,7 @@ metadata_jpeg_webp_publish_all() {
 
   if [ ! -f "$engine" ] ||
      ! command -v "$interpreter" >/dev/null 2>&1; then
-    printf 'KIM6: JPEG/WebP reconstruction engine unavailable.\n' >&2
+    printf 'KIMng: JPEG/WebP reconstruction engine unavailable.\n' >&2
     return 1
   fi
 
@@ -7025,14 +7025,14 @@ metadata_jpeg_webp_publish_all() {
     after="$(metadata_image_fingerprint "$tmp")" || rc=1
 
     if [ -z "$after" ] || [ "$before" != "$after" ]; then
-      printf 'KIM6: JPEG/WebP image fingerprint changed.\n' >&2
+      printf 'KIMng: JPEG/WebP image fingerprint changed.\n' >&2
       rc=1
     fi
 
     icc_after="$(metadata_icc_fingerprint "$tmp")" || rc=1
 
     if [ "$icc_before" != "$icc_after" ]; then
-      printf 'KIM6: JPEG/WebP ICC profile changed.\n' >&2
+      printf 'KIMng: JPEG/WebP ICC profile changed.\n' >&2
       rc=1
     fi
   fi
@@ -7252,7 +7252,7 @@ metadata_publish_one() {
       if [ ! -f "$integrity_engine" ] ||
          ! command -v "$integrity_python" >/dev/null 2>&1 ||
          ! job_run_command "$integrity_python" -B "$integrity_engine"              --format "$integrity_format"              --verify-before "$verification_source"              --input "$tmp"; then
-        printf 'KIM6: Selective JPEG/WebP container verification failed: %s\n' "$source" >&2
+        printf 'KIMng: Selective JPEG/WebP container verification failed: %s\n' "$source" >&2
         rc=1
       fi
     fi
@@ -7265,7 +7265,7 @@ metadata_publish_one() {
     case "$verification_extension" in
       tif|tiff|TIF|TIFF|Tif|Tiff)
         if ! metadata_tiff_encoded_equal "$verification_source" "$tmp"; then
-          printf 'KIM6: TIFF encoded-data verification failed: %s\n' "$source" >&2
+          printf 'KIMng: TIFF encoded-data verification failed: %s\n' "$source" >&2
           rc=1
         fi
         ;;
@@ -7286,7 +7286,7 @@ metadata_publish_one() {
     if [ -n "$bmff_format" ] &&
        ! metadata_isobmff_equal \
            "$verification_source" "$tmp" "$bmff_format"; then
-      printf 'KIM6: ISO-BMFF encoded-data verification failed: %s\n' "$source" >&2
+      printf 'KIMng: ISO-BMFF encoded-data verification failed: %s\n' "$source" >&2
       rc=1
     fi
   fi
@@ -7530,7 +7530,7 @@ KIM6_LOCATION_INPUTS
     mapfile -d '' -t files < "$KIMDIR/location-inputs"
     datesync_collect_files files "${files[@]}" || { progress_error "$DATESYNC_SELECTION_ERROR"; return 1; }
   fi
-  policy="$(choose_output_mode 'KIM6 - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
+  policy="$(choose_output_mode 'KIMng - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   : > "$KIMDIR/location-seeds" || return 1
   for source in "${files[@]}"; do
@@ -7542,7 +7542,7 @@ KIM6_LOCATION_INPUTS
   # Preview acceptance never substitutes for choose_output_mode's explicit
   # replacement confirmation under KIM_POLICY=prompt.
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" 'KIM6 - Image location tools')" || return 1
+  ref="$(progress_open "${#files[@]}" 'KIMng - Image location tools')" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if ! progress_begin_item "$ref" "Location metadata: ${source##*/}"; then
@@ -7592,8 +7592,8 @@ KIM6_LOCATION_INPUTS
     printf '%s\0' 'Unchanged or unprocessed images:' "${REPORT_SKIP_LIST[@]}" >> "$location_result"
   fi
   python3 "$DISPATCHER_DIR/kim_location_dialog.py" --result "$location_result" "$location_plan" || {
-    report_finish_dialog 'KIM6 - Image location tools'
-    kdialog --title 'KIM6 - Image location tools' --error 'The location result summary could not be displayed. Any images already saved were kept.' || true
+    report_finish_dialog 'KIMng - Image location tools'
+    kdialog --title 'KIMng - Image location tools' --error 'The location result summary could not be displayed. Any images already saved were kept.' || true
   }
   [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
@@ -7620,7 +7620,7 @@ action_photo_date() {
   for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    policy="$(choose_output_mode "$(gettext 'KIM6 - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIMng - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
     # Pass the existing helper's exact affix seed alongside each source.
     : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
@@ -7646,7 +7646,7 @@ PYDATE
         progress_error "${source##*/}: $(cat "$KIMDIR/date-error")"; return 1
       fi
     done
-    policy="$(choose_output_mode "$(gettext 'KIM6 - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
+    policy="$(choose_output_mode "$(gettext 'KIMng - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
   local -A photo_date_eligible=()
@@ -7662,7 +7662,7 @@ PYDATE
   fi
 
   report_init; METADATA_INTERRUPTED=false
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Set dates')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Set dates')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter+1))
     if [ -L "$source" ] || [ "$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")" != "${photo_date_identities[$((counter-1))]}" ]; then
@@ -7708,7 +7708,7 @@ PYDATE
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'KIM6 - Set dates')"
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng - Set dates')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "$METADATA_INTERRUPTED" != true ]
 }
 
@@ -8098,14 +8098,14 @@ action_datesync() {
       return 1
     fi
     if [ "$direction" = exif-to-file ]; then
-      kdialog --title "$(gettext 'KIM6 - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
+      kdialog --title "$(gettext 'KIMng - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s\n%s %s\n\n%s' \
         "$(gettext 'Filesystem modification time preview')" "$(gettext 'Camera capture time:')" "${stamp:-$(gettext 'missing or invalid')}" \
         "$(gettext 'Proposed local filesystem time:')" "${proposed_date:-$(gettext 'missing or invalid')}" \
         "$(gettext 'Current file time:')" "$first_fs" \
         "$(gettext 'Camera offset:')" "${preview_offset:-$(gettext 'none; interpreted in system local time')}" \
         "$(gettext 'A timezone-less camera value is not assumed to be UTC.')")" || return 1
     else
-      kdialog --title "$(gettext 'KIM6 - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s' \
+      kdialog --title "$(gettext 'KIMng - Date synchronization')" --yesno "$(printf '%s\n\n%s %s\n%s %s\n%s %s' \
         "$(gettext 'EXIF timestamp preview')" "$(gettext 'Current file time:')" "$first_fs" \
         "$(gettext 'Proposed DateTimeOriginal:')" "$proposed_date" \
         "$(gettext 'Fields:')" "$fields")" || return 1
@@ -8128,10 +8128,10 @@ action_datesync() {
   if [ "$direction" = file-to-exif ]; then
     require_action_tools datesync magick identify || return 1
   fi
-  policy="$(choose_output_mode "$(gettext 'KIM6 - Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
+  policy="$(choose_output_mode "$(gettext 'KIMng - Date synchronization')" "$(gettext 'Create dated copies or update the selected files?')" "${#files[@]}" originals)"
   [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
-  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Synchronizing image capture dates…')")" || return 1
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Synchronizing image capture dates…')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
 
@@ -8362,7 +8362,7 @@ action_webexport() {
   [ "$nbfiles" -le 0 ] && return 0
 
   if [ "$custom" = true ]; then
-    fmt="$(kdialog --title "$(gettext 'KIM6 - Web Export')"       --menu "$(gettext 'Choose output format:')"       jpg JPEG       webp WebP       avif AVIF       png PNG       keep "$(gettext 'Original Format')")" || return 1
+    fmt="$(kdialog --title "$(gettext 'KIMng - Web Export')"       --menu "$(gettext 'Choose output format:')"       jpg JPEG       webp WebP       avif AVIF       png PNG       keep "$(gettext 'Original Format')")" || return 1
   fi
 
   if [ -z "$size" ]; then
@@ -9540,11 +9540,11 @@ action_about() {
   about_file="$(dispatcher_resource ABOUT)" || return 1
 
   if [ ! -r "$about_file" ]; then
-    kdialog --title "KIM6" --error       "The installed About resource is missing."
+    kdialog --title "KIMng" --error       "The installed About resource is missing."
     return 1
   fi
 
-  kdialog --title "About KIM6"     --msgbox "$(<"$about_file")"
+  kdialog --title "About KIMng"     --msgbox "$(<"$about_file")"
 }
 
 action_settings() {
@@ -9555,7 +9555,7 @@ action_settings() {
   dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_settings_dialog.py"
 
   if [ ! -r "$about_file" ] || [ ! -r "$dialog_script" ]; then
-    kdialog --title "KIM6" --error       "The installed Settings resources are missing."
+    kdialog --title "KIMng" --error       "The installed Settings resources are missing."
     return 1
   fi
 
@@ -9581,7 +9581,7 @@ action_metadata_ui() {
   for companion in "${companions[@]}"; do
     if [ ! -f "$DISPATCHER_DIR/$companion" ] || [ ! -r "$DISPATCHER_DIR/$companion" ] ||
        [ -L "$DISPATCHER_DIR/$companion" ]; then
-      progress_error "$label: $(gettext 'The installed metadata component is missing or unreadable. Reinstall KIM6:') $companion"
+      progress_error "$label: $(gettext 'The installed metadata component is missing or unreadable. Reinstall KIMng:') $companion"
       return 1
     fi
   done
@@ -9592,7 +9592,7 @@ $diagnostic"
   fi
   diagnostic="$(python3 -B "$DISPATCHER_DIR/$script" "$@" 2>&1)" || status=$?
   if [ "$status" -ne 0 ]; then
-    progress_error "$label: $(gettext 'Could not open the metadata application. Check the diagnostic below and reinstall KIM6 if an installed component is missing.')
+    progress_error "$label: $(gettext 'Could not open the metadata application. Check the diagnostic below and reinstall KIMng if an installed component is missing.')
 $diagnostic"
     return "$status"
   fi
@@ -9604,11 +9604,11 @@ action_license() {
   local license_file
   license_file="$(dispatcher_resource LICENSE.md)" || return 1
   if [ ! -r "$license_file" ] || ! command -v xdg-open >/dev/null 2>&1; then
-    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'The installed license or xdg-open is unavailable.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'The installed license or xdg-open is unavailable.')"
     return 1
   fi
   xdg-open "$license_file" >/dev/null 2>&1 || {
-    kdialog --title "$(gettext 'KIM6')" --error "$(gettext 'Could not open the KIM6 license.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Could not open the KIMng license.')"
     return 1
   }
 }
@@ -9619,8 +9619,8 @@ action_manual() {
   manual_file="$(dispatcher_resource docs/index.html)" || return 1
 
   if [ ! -r "$manual_file" ]; then
-    kdialog --title "KIM6 - User guide" --error \
-      "The installed KIM6 User Guide is missing."
+    kdialog --title "KIMng - User guide" --error \
+      "The installed KIMng User Guide is missing."
     return 1
   fi
 
@@ -9643,7 +9643,7 @@ action_manual() {
     return $?
   fi
 
-  kdialog --title "KIM6 - User guide" --error \
+  kdialog --title "KIMng - User guide" --error \
     "Unable to open the User Guide. Neither a working browser nor the internal viewer is available."
   return 1
 }
@@ -9997,7 +9997,7 @@ action_video() {
   if ! collect_publication_inputs files "${raw_files[@]}"; then
     progress_error "$(gettext 'Video selection is empty or contains an unsafe, aliased, linked or invalid source.')"; return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'KIM6 - Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
+  mode="$(choose_output_mode "$(gettext 'KIMng - Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
   [ "$mode" != cancel ] || return 1
   # Preflight every selected video before starting FFmpeg.
   # Use the same probe, container, and naming rules as execution.
@@ -10159,12 +10159,12 @@ action_video() {
   # collision handling, and ownership of published results.
 
   report_init
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Initializing video transcode…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initializing video transcode…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
 
   for source in "${files[@]}"; do
     index=$((index + 1))
-    label="$(gettext 'KIM6 - Transcoding video:') $index/${#files[@]}: ${source##*/}"
+    label="$(gettext 'KIMng - Transcoding video:') $index/${#files[@]}: ${source##*/}"
     if ! progress_begin_item "$ref" "$label"; then
       video_item_error "$source" "$(gettext 'interrupted before processing')"
       progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
@@ -10778,12 +10778,12 @@ action_videoframes() {
     }
   fi
 
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Extracting video frames…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Extracting video frames…')")" || return 1
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   report_init
   for source in "${files[@]}"; do
     index=$((index + 1))
-    progress_begin_item "$ref" "$(gettext 'KIM6 - Video frame:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIMng - Video frame:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -10922,7 +10922,7 @@ action_videoaudio() {
   video_utility_files files "${raw[@]}" || return 1
   if [ "$interactive" = true ]; then
     [ -n "$mode" ] || mode="$(kdialog --combobox "$(gettext 'Video audio operation:')" extract extract mute)" || return 1
-    [ "$mode" != extract ] || format="$(kdialog --title "$(gettext 'KIM6 - Extract audio')" --default "$format" --combobox "$(gettext 'Audio output format:')" m4a mp3 flac wav)" || return 1
+    [ "$mode" != extract ] || format="$(kdialog --title "$(gettext 'KIMng - Extract audio')" --default "$format" --combobox "$(gettext 'Audio output format:')" m4a mp3 flac wav)" || return 1
   fi
   case "$mode" in
     extract)
@@ -11084,12 +11084,12 @@ action_videoaudio() {
       }
     fi
   fi
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Processing video audio…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Processing video audio…')")" || return 1
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
     index=$((index+1))
-    progress_begin_item "$ref" "$(gettext 'KIM6 - Video audio:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIMng - Video audio:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -11349,12 +11349,12 @@ action_videogif() {
   esac
   awk -v d="$duration" -v f="$fps" 'BEGIN { exit !(d*f <= 360) }' || { progress_error "$(gettext 'GIF request exceeds 360 frames; shorten the duration or lower the frame rate.')"; return 2; }
   video_utility_init || return 1
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIM6 - Creating video GIFs…')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Creating video GIFs…')")" || return 1
   report_init
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
   for source in "${files[@]}"; do
     index=$((index+1))
-    progress_begin_item "$ref" "$(gettext 'KIM6 - Video GIF:') ${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIMng - Video GIF:') ${source##*/}" || {
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"
       return 1
@@ -11689,12 +11689,12 @@ action_slideshow() {
   done
   [ -n "$rec709_profile" ] || { progress_error "$(gettext 'An installed Rec. 709 ICC profile is required for slideshow color conversion.')"; return 1; }
   report_init
-  ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'KIM6 - Preparing slideshow…')")" || return 1
+  ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'KIMng - Preparing slideshow…')")" || return 1
   trap 'slideshow_stop_owned_magick; video_cleanup_owned_process; exit 130' INT TERM HUP
   stage="$(tmp_for_target "$target")" || { progress_close "$ref" || true; progress_error "$(gettext 'Slideshow staging failed.')"; return 1; }
   for source in "${ordered[@]}"; do
     index=$((index + 1))
-    if ! progress_begin_item "$ref" "$(gettext 'KIM6 - Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
       report_fail "$source: $(gettext 'interrupted before frame preparation')"
       progress_close "$ref" || true
       report_finish_dialog "$(gettext 'Kim')"

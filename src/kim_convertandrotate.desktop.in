@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Service
 Icon=image-x-generic
-Name=KIM6
+Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;image/jpeg;image/png;image/webp;image/avif;
 X-KDE-Protocol=file
 Actions=07ConvertJPG;10ConvertPNG;12ConvertWEBP;01ConvertAVIF;11ConvertTIFF;03ConvertGIF;04ConvertHEIC;09ConvertPDF;08ConvertJXL;05ConvertJP2Lossless;06ConvertJP2Lossy;02ConvertBMP;13ConvertCustom;_SEPARATOR_;2001CompressRecommended;2102CompressMaximum;2203CompressCustom;
-_X-KDE-Submenu=KIM6 - Convert/Compress
+_X-KDE-Submenu=KIMng - Convert/Compress
 X-KIM6-Managed=true
 
 [Desktop Action 01ConvertAVIF]

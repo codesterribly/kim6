@@ -1,6 +1,6 @@
-/* KIM6 User Guide · Offline-first, accessible, responsive. */
+/* KIMng User Guide · Offline-first, accessible, responsive. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --page: #f7f9fc;
   --surface: #ffffff;
   --surface-soft: #f0f5f9;
@@ -255,19 +255,7 @@ details[open] .faq-plus::after { transform: rotate(0); }
   .hero-button { width: 100%; justify-content: space-between; }
   .hero-secondary { margin-bottom: .1rem; }
 }
-@media (prefers-color-scheme: dark) {
-  :root { --page: #101a23; --surface: #182632; --surface-soft: #213342; --ink: #e9f2f7; --muted: #b4c3d0; --faint: #91a8b9; --line: #344756; --accent: #85d7f0; --accent-dark: #bbecfa; --shadow: 0 12px 32px rgb(0 0 0 / 10%); }
-  .brand-mark, .section-index, .step-number, .feature-symbol, .collection-symbol, .task-icon { background: #294858; color: #a7e8f8; }
-  .hero { background: radial-gradient(circle at 89% 0%, rgb(21 135 167 / 33%), transparent 34%), linear-gradient(118deg, #091c2a 5%, #073b55 100%); }
-  .notice-info { background: #1b3c4e; color: #d4ecf8; border-color: #355c70; }
-  .notice-info .notice-symbol { background: #2a586d; color: #d0effa; }
-  .notice-caution { background: #423321; color: #f5dfbf; border-color: #755632; }
-  .notice-caution .notice-symbol { background: #77562b; color: #fbe0b1; }
-  .notice code { background: rgb(0 0 0 / 20%); border-color: rgb(255 255 255 / 12%); }
-  .output strong { background: #22414c; border-color: #386c79; }
-  .policy-create .policy-mark, .policy-replace .policy-mark, .policy-inplace .policy-mark { color: var(--ink); }
-  .reference-list a:hover { border-color: #6ba2ba; }
-}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -386,5 +374,216 @@ details[open] .faq-plus::after { transform: rotate(0); }
 
   .kim6-doc-shot a {
     border-radius: 6px;
+  }
+}
+
+
+/* KIMng light website restoration */
+
+/* Compact navigation with the approved application icon. */
+:root {
+  color-scheme: light;
+  --page: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: #eff6fb;
+  --ink: #203040;
+  --muted: #566879;
+  --faint: #75899b;
+  --line: #dbe5ed;
+  --accent: #087fbe;
+  --accent-dark: #066292;
+  --shadow: 0 8px 28px rgb(29 63 93 / 6%);
+}
+
+body {
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #dce7ef;
+}
+
+.topbar-inner {
+  min-height: 70px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.brand-mark img {
+  display: block;
+  width: 39px;
+  height: 39px;
+  object-fit: contain;
+}
+
+.brand-name {
+  letter-spacing: -0.055em;
+}
+
+.brand-name span,
+.footer-logo span {
+  color: #168bf0;
+}
+
+/* Original two-column hero, now light and understated. */
+.hero {
+  color: #233648;
+  background:
+    radial-gradient(
+      circle at 89% 8%,
+      rgb(109 190 232 / 16%),
+      transparent 38%
+    ),
+    linear-gradient(
+      125deg,
+      #ffffff 0%,
+      #f2f9fd 100%
+    );
+  border-bottom: 1px solid #dbe8f0;
+}
+
+.hero-inner {
+  min-height: 430px;
+  padding-block: 3.75rem 4rem;
+}
+
+.hero-kicker {
+  color: #187cac;
+}
+
+.kicker-dot {
+  background: #2db49b;
+  box-shadow: 0 0 0 4px rgb(45 180 155 / 12%);
+}
+
+.hero h1 {
+  color: #1c3043;
+  letter-spacing: -0.057em;
+}
+
+.hero h1 em {
+  color: #128bbd;
+}
+
+.hero-lede {
+  color: #4e6576;
+}
+
+.hero-button {
+  background: #147fb7;
+  color: #ffffff;
+  box-shadow: 0 7px 20px rgb(20 127 183 / 16%);
+}
+
+.hero-button:hover {
+  background: #08699e;
+  color: #ffffff;
+}
+
+.hero-secondary {
+  color: #126d9b;
+}
+
+.hero-secondary:hover {
+  color: #084d75;
+}
+
+.hero-facts {
+  color: #526c7e;
+}
+
+.fact-check {
+  color: #18896d;
+}
+
+/* The illustrated image workflow remains recognizable. */
+.hero-art {
+  background: #ffffff;
+  border: 1px solid #d1e3ef;
+  box-shadow: 0 15px 40px rgb(32 78 110 / 8%);
+}
+
+.art-label {
+  color: #43809f;
+}
+
+.art-process {
+  color: #367b9d;
+}
+
+.art-arrow {
+  color: #147fb7;
+}
+
+.art-caption {
+  color: #57798e;
+}
+
+.art-file {
+  box-shadow: 0 5px 18px rgb(25 63 91 / 7%);
+}
+
+/* Main documentation stays bright and readable. */
+.layout {
+  background: #ffffff;
+}
+
+.side-nav {
+  border-right-color: #dfe9f0;
+}
+
+.site-footer {
+  background: #eef5fa;
+  color: #526779;
+  border-top: 1px solid #dce7ef;
+}
+
+.footer-logo {
+  color: #233648;
+}
+
+.footer-meta a {
+  color: #087fbe;
+}
+
+.footer-meta a:hover {
+  color: #055c8b;
+}
+
+/* Responsive behavior retains the original structure. */
+@media (max-width: 820px) {
+  .hero-inner {
+    min-height: auto;
+    padding-block: 3rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .brand-mark {
+    width: 35px;
+    height: 35px;
+  }
+
+  .brand-mark img {
+    width: 33px;
+    height: 33px;
+  }
+
+  .hero-inner {
+    padding-block: 2.5rem;
+  }
+}
+
+@media print {
+  .hero {
+    background: #ffffff;
+    color: #111111;
   }
 }

@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Service
 Icon=document-properties
-Name=KIM6
+Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;05StripMetadata;06ViewMetadata;07EditMetadata;
-_X-KDE-Submenu=KIM6 - Organize/Metadata
+_X-KDE-Submenu=KIMng - Organize/Metadata
 X-KIM6-Managed=true
 
 [Desktop Action 01Rename]

@@ -128,7 +128,7 @@ kim6_report_dependencies() {
 
   echo
   host_name="$(hostname -s 2>/dev/null || hostname)"
-  echo 'KIM6 | Dependency check'
+  echo 'KIMng | Dependency check'
   printf 'Host: %s\n' "$host_name"
   printf 'OS: %s\n' "$os_name"
   printf 'Package manager: %s\n' "$manager"
@@ -305,7 +305,7 @@ KIM6_DEPENDENCIES
 
     echo
     echo 'Package availability depends on enabled distribution repositories.'
-    echo 'Commands are suggestions only; KIM6 does not install packages.'
+    echo 'Commands are suggestions only; KIMng does not install packages.'
   fi
 
   echo
@@ -598,7 +598,7 @@ kim6_retire_obsolete_menus() {
 
     if menu_is_kim6 "$path"; then
       rm -f -- "$path" || return 1
-      echo "install.sh: retired obsolete KIM6 menu: $name"
+      echo "install.sh: retired obsolete KIMng menu: $name"
     fi
   done
 }
@@ -692,13 +692,13 @@ for relative in "${runtime_files[@]}"; do
 done
 
 echo
-echo "Bundled KIM6 User Guide installed."
+echo "Bundled KIMng User Guide installed."
 
 echo
 echo "======================================================================"
-echo " KIM6 INSTALLATION COMPLETE"
+echo " KIMng INSTALLATION COMPLETE"
 echo "======================================================================"
 echo
 printf 'Installed to: %s\n' "$PREFIX"
 echo
-echo "Please restart Dolphin to see the KIM6 menus."
+echo "Please restart Dolphin to see the KIMng menus."

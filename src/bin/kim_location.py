@@ -33,7 +33,7 @@ from kim_process import checkpoint, inspection_context
 
 TITLES = {'gpx': 'GPX Geotagging', 'copy': 'Copy GPS from Image…',
           'apply': 'Modify GPS on Images…', 'report': 'Inspect Location Metadata',
-          'reduce': 'Approximate GPS Location'}
+          'reduce': 'Reduce exact GPS location'}
 FORMATS = {'JPEG': {'.jpg', '.jpeg'}, 'PNG': {'.png'}, 'WEBP': {'.webp'},
            'TIFF': {'.tif', '.tiff'}, 'HEIC': {'.heic', '.heif', '.hif'},
            'HEIF': {'.heic', '.heif', '.hif'}, 'AVIF': {'.avif'}}

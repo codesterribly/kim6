@@ -22,7 +22,7 @@ _CANCELLED = contextvars.ContextVar('kim_image_cancelled', default=None)
 _WARNINGS = contextvars.ContextVar('kim_image_warnings', default=None)
 _SHELL_GROUP = contextvars.ContextVar('kim_shell_process_group', default=False)
 DIGEST_WARNING = ('Photoshop staging reported a stale IPTC digest; this does not establish conflicting IPTC/XMP values. '
-                  'KIM6 has not synchronized or repaired these fields. Metadata is kept unless a removal step is selected.')
+                  'KIMng has not synchronized or repaired these fields. Metadata is kept unless a removal step is selected.')
 
 
 @contextlib.contextmanager

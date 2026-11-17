@@ -1,4 +1,4 @@
-"""Shared, versioned crop geometry and literal raster overlays for KIM6.
+"""Shared, versioned crop geometry and literal raster overlays for KIMng.
 
 Standalone dialogs and Recipes use these same planners and renderers. Geometry
 is always measured after orientation normalization. No source is opened writable.
@@ -34,8 +34,8 @@ PLACEMENTS = [('Centered crop', 'center'), ('Top-left', 'top_left'), ('Top-right
               ('Bottom-left', 'bottom_left'), ('Bottom-right', 'bottom_right'), ('Manual selection', 'manual')]
 ANCHORS = [(v.replace('_', ' ').capitalize(), v) for v in
            ('top_left', 'top', 'top_right', 'left', 'center', 'right', 'bottom_left', 'bottom', 'bottom_right')]
-TEXT_SOURCES = [('Custom text', 'custom'), ('Creator / Artist from KIM6 Settings', 'creator'),
-                ('Copyright Notice from KIM6 Settings', 'notice'), ('Usage Rights from KIM6 Settings', 'rights')]
+TEXT_SOURCES = [('Custom text', 'custom'), ('Creator / Artist from KIMng Settings', 'creator'),
+                ('Copyright Notice from KIMng Settings', 'notice'), ('Usage Rights from KIMng Settings', 'rights')]
 TEXT_FIELDS = [('Creator / Artist', 'creator'), ('Copyright Notice', 'notice'),
                ('Usage Rights', 'rights'), ('Custom text', 'custom')]
 KINDS = [('Text watermark', 'text'), ('Image watermark / logo', 'image'),
@@ -129,7 +129,7 @@ def crop_plan(width, height, step):
         scale = min(tw / cw, th / ch)
         ow, oh = max(1, math.floor(cw * scale + .5)), max(1, math.floor(ch * scale + .5))
         if (ow, oh) != (tw, th):
-            raise RecipeError('Target pixels would change proportions. Match the target to the crop ratio; KIM6 will not stretch it.')
+            raise RecipeError('Target pixels would change proportions. Match the target to the crop ratio; KIMng will not stretch it.')
         if scale > 1 and not step['upscale']:
             raise RecipeError('Target pixels require enlargement. Enable Allow enlargement or choose smaller target dimensions.')
         args += ['-resize', f'{tw}x{th}']
@@ -271,7 +271,7 @@ def watermark_text(step, settings=None):
     value = '\n'.join(fields[key]['value'].strip() for _, key in TEXT_FIELDS
                       if fields[key]['selected'] and fields[key]['value'].strip())
     if not value:
-        raise RecipeError('Select at least one text watermark field with nonempty text. Enter a value or reset a field from KIM6 Settings.')
+        raise RecipeError('Select at least one text watermark field with nonempty text. Enter a value or reset a field from KIMng Settings.')
     return value
 
 

@@ -1,4 +1,4 @@
-# KIM6 first-run Dolphin smoke test
+# KIMng first-run Dolphin smoke test
 
 This quick check samples installation and representative menus. It is separate from the complete 108-action acceptance plan. A smoke-test pass is not a pass for the full plan.
 
@@ -24,10 +24,10 @@ For each operation below, run the `next` command to open the exact disposable ca
 
 After each action, inspect the result. If it was a real Dolphin interaction and it looks right, use the `pass --mode gui --policy …` command printed by `next` for that case. That command runs and displays the technical checks and records a pass only when they succeed. The six checks above do not automatically change statuses or cover the other menu actions.
 
-To remove only the isolated KIM6 installation after testing, first close its Dolphin windows, then run:
+To remove only the isolated KIMng installation after testing, first close its Dolphin windows, then run:
 
 ```sh
 ./uninstall.sh --prefix "$PWD/qa/generated/gui-data/kio/servicemenus"
 ```
 
-This uninstalls the QA copy only. It does not uninstall a normal user or system KIM6 installation. Confirm removal with `python3 -B qa/acceptance.py check-install` (it should report that the isolated copy is not installed). Keep `qa/state/` and `qa/generated/cases/` to retain acceptance progress and test results.
+This uninstalls the QA copy only. It does not uninstall a normal user or system KIMng installation. Confirm removal with `python3 -B qa/acceptance.py check-install` (it should report that the isolated copy is not installed). Keep `qa/state/` and `qa/generated/cases/` to retain acceptance progress and test results.

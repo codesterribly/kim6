@@ -1,11 +1,11 @@
 
-# KIM6 Development Guide
+# KIMng Development Guide
 
-KIM6 is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, `src/bin/kim_all`.
+KIMng is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, `src/bin/kim_all`.
 
 The original scripts are retained in the repository for historical reference. All current Dolphin menu actions use `kim_all`.
 
-This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIM6.
+This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIMng.
 
 ## Repository Structure
 
@@ -27,7 +27,7 @@ This document covers the project structure, development conventions, testing, an
 The `docs/` directory contains additional references:
 
 - `ACTIONS.md` - Complete Dolphin menu and action inventory.
-- `commandconfig.md` - detailed descriptions of KIM6 functionality, command-line options and configuration.
+- `commandconfig.md` - detailed descriptions of KIMng functionality, command-line options and configuration.
 - `FORMATS.md` - Supported image and video formats.
 - `RECIPES.md` - The Recipes submenu, editor, step definitions, preflight and derivative-only outputs.
 - `index.html` - HTML User Guide with CSS styling (`work.css`).
@@ -35,7 +35,7 @@ The `docs/` directory contains additional references:
 
 ## Recipe Architecture
 
-The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in `src/bin/` include `kim_recipe_core.py`, `kim_recipe_image.py`, `kim_recipe_dialog.py`, `kim_recipe_run.py`, and `kim_recipe_menu.py`; the shipped definitions are kept under `src/recipes/`.
+The Recipes subsystem extends KIMng's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in `src/bin/` include `kim_recipe_core.py`, `kim_recipe_image.py`, `kim_recipe_dialog.py`, `kim_recipe_run.py`, and `kim_recipe_menu.py`; the shipped definitions are kept under `src/recipes/`.
 
 The Recipes submenu has two static entries, Choose saved recipe… and Recipe editor…; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.
 
@@ -45,7 +45,7 @@ See [RECIPES.md](RECIPES.md) for user-facing behavior and [ACTIONS.md](ACTIONS.m
 
 ## Dolphin Service Menus
 
-KIM6 uses 12 KDE service-menu definitions in `src/`, representing eight image-related and four video-related submenu categories. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
+KIMng uses 12 KDE service-menu definitions in `src/`, representing eight image-related and four video-related submenu categories. These menus call the `kim_all` executable with an action name, optional arguments, and the files selected in Dolphin.
 
 For example:
 
@@ -74,7 +74,7 @@ See [ACTIONS.md](ACTIONS.md) for the complete menu definitions and [commandconfi
 
 `src/bin/kim_settings_dialog.py` embeds the installed
 `docs/index.html` using `PySide6.QtWebEngineWidgets.QWebEngineView`.
-The binding is optional for general KIM6 operation but required for
+The binding is optional for general KIMng operation but required for
 the full HTML guide inside Settings/About.
 
 For Ubuntu or Debian, the package is
@@ -95,7 +95,7 @@ has SSH environment variables.
 
 ### Service-menu executable permissions
 
-KIM6 installs its Dolphin service-menu `.desktop` files with
+KIMng installs its Dolphin service-menu `.desktop` files with
 permissions `0755`. Dolphin requires these files to be authorized
 for execution in the supported KDE environment. Changing them to
 `0644` causes authorization failures.
@@ -106,7 +106,7 @@ menus with ordinary nonexecutable desktop data files.
 
 ## Runtime Dependencies and Format Support
 
-KIM6 uses Bash and common command-line utilities, along with:
+KIMng uses Bash and common command-line utilities, along with:
 
 - **ImageMagick 7:** Image processing, format conversion, galleries, and related operations.
 - **ExifTool:** Metadata, timestamps, and copyright information.
@@ -115,7 +115,7 @@ KIM6 uses Bash and common command-line utilities, along with:
 
 Specific operations may also require optional image encoders, format delegates, ICC profiles, `xdg-open`, email clients, or `setsid`. Installation from source uses `intltool-merge`.
 
-KIM6 checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.
+KIMng checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.
 
 Missing encoders or unsupported formats should produce an error rather than silently substituting another format.
 
@@ -123,7 +123,7 @@ See [FORMATS.md](FORMATS.md) for details about supported formats and dependencie
 
 ## Configuration
 
-The user-facing entry point is **Actions → KIM6 - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
+The user-facing entry point is **Actions → KIMng - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
 
 `kim6_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
@@ -131,7 +131,7 @@ The user-facing entry point is **Actions → KIM6 - Settings/About → Settings*
 
 ## File Safety and Error Handling
 
-KIM6 processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:
+KIMng processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:
 
 1. **File paths:** Treat selected filenames as untrusted input. Use Bash arrays and `--` separators. Check symbolic links and file aliases where appropriate. Spaces and Unicode are supported; filenames containing carriage returns or line feeds are rejected by operations that cannot safely process them.
 
@@ -187,13 +187,13 @@ They manage the dialog's D-Bus service and object-path references.
 
 Video helpers inspect files using `ffprobe`, execute FFmpeg operations, monitor progress, and manage cancellation.
 
-Process cleanup is restricted to child processes started by the current KIM6 operation.
+Process cleanup is restricted to child processes started by the current KIMng operation.
 
 These shared functions affect multiple actions. Changes should be tested against the operations that depend on them.
 
 ## Action Behavior
 
-Different KIM6 actions have different file-handling requirements.
+Different KIMng actions have different file-handling requirements.
 
 ### Image transformations
 
@@ -231,7 +231,7 @@ Format-specific validation is important when modifying conversion and transforma
 
 ## Adding or Modifying Actions
 
-Most KIM6 functionality is implemented as action functions in `src/bin/kim_all`. Dolphin invokes these functions through the service-menu definitions in `src/`.
+Most KIMng functionality is implemented as action functions in `src/bin/kim_all`. Dolphin invokes these functions through the service-menu definitions in `src/`.
 
 When adding or changing an action:
 
@@ -249,7 +249,7 @@ See [ACTIONS.md](ACTIONS.md) for the menu-action inventory and [commandconfig.md
 
 For required tools and installation instructions, see [INSTALL.md](../INSTALL.md). Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.
 
-KIM6 uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
+KIMng uses Python's `unittest` framework, with a custom test runner in `tests/run.py`.
 
 Regression coverage includes processing functions, file preservation, error handling, cancellation, installation, output authorization, and source/destination aliases. Overwrite tests simulate both dialog confirmations using the isolated `Workspace`. The APNG validation cases use animated fixtures when FFmpeg is available.
 
@@ -285,9 +285,9 @@ Automated menu tests verify definitions and command arguments, but actual menu d
 
 The installation scripts support user, system-wide, and custom installation directories.
 
-The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.
+The installer copies the KIMng executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.
 
-The uninstaller removes recognized KIM6-owned files and leaves unrelated files in place.
+The uninstaller removes recognized KIMng-owned files and leaves unrelated files in place.
 
 Installation updates are performed one file at a time. An interrupted installation can be completed by running `install.sh` again.
 
@@ -319,7 +319,7 @@ For the project's origins and earlier contributors, see [Project history](../REA
 
 Generated media is first written to invocation-owned staging on the destination filesystem. The action checks the producer result and validates the staged artifact before publication. Create-new publication uses a no-clobber operation. Authorized replacement uses atomic replacement on supported local Linux filesystems. A failed rename is not followed by a destructive copy-over fallback.
 
-This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIM6’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.
+This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIMng’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.
 
 Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. Gallery publication uses a new directory name and does not recursively replace an occupied directory.
 
@@ -335,13 +335,13 @@ A KDE service-menu action accepts local files. Remote URL workflows are not sile
 
 ## Reporting a Bug
 
-Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.
+Include the KIMng version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.
 
 ## Installer Safety and Recovery
 
-The installer identifies KIM6 installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.
+The installer identifies KIMng installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.
 
-Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
+Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIMng path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
 
 ## Local Smoke Test
 
@@ -362,7 +362,7 @@ KIM_POLICY=create ./src/bin/kim_all webexport \
 find "$work/output" -maxdepth 1 -type f -print
 ```
 
-Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.
+Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIMng runtime dependencies.
 
 See [Command and Configuration Reference](commandconfig.md) for additional options.
 
@@ -374,7 +374,7 @@ stored in `docs/images/screenshots/`.
 The User Guide places these images alongside the relevant
 workflow instructions.
 
-Screenshots must accurately depict KDE Plasma/Dolphin and KIM6.
+Screenshots must accurately depict KDE Plasma/Dolphin and KIMng.
 Preserve actual application controls, image previews, and maps.
 Remove identifying usernames, hostnames, personal paths, and
 identifying filenames before publication.
@@ -449,7 +449,7 @@ The design must account for KDE service-menu MIME filtering, mixed-format batch 
 
 ### Translation infrastructure and localization
 
-KIM6 currently ships with English source strings only. The seven
+KIMng currently ships with English source strings only. The seven
 obsolete translation catalogs were retired after the English interface
 and Dolphin service menus changed substantially.
 

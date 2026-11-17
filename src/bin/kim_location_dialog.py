@@ -52,7 +52,7 @@ class LocationDialog(QDialog):
         self.apply_button = None; self.candidate_items = {}; self.thumbnail_stamps = {}; self.thumbnail_icons = {}
         self.visual_source = ''; self.usable_reference_paths = []
         self.pending_reference_choice = ''
-        self.setWindowTitle('KIM6 - ' + TITLES[kind].rstrip('…'))
+        self.setWindowTitle('KIMng - ' + TITLES[kind].rstrip('…'))
         available = self.screen().availableGeometry()
         self.resize(min(1120, available.width()*9//10), min(760, available.height()*9//10))
         layout = QVBoxLayout(self)
@@ -986,7 +986,7 @@ def show_location_result(result_path, plan_path):
     message, incomplete = location_result_message(plan, ok, failed, cancelled, skipped,
                                                  interrupted, fields[6:6 + count])
     dialog = QMessageBox()
-    dialog.setWindowTitle('KIM6 - Location results'); dialog.setTextFormat(Qt.PlainText)
+    dialog.setWindowTitle('KIMng - Location results'); dialog.setTextFormat(Qt.PlainText)
     dialog.setStandardButtons(QMessageBox.Close); dialog.setDefaultButton(QMessageBox.Close)
     dialog.setText(message)
     dialog.setIcon(QMessageBox.Warning if incomplete else QMessageBox.Information)
@@ -1010,12 +1010,12 @@ def show_location_result(result_path, plan_path):
 def main():
     check_graphical_session()
     if sys.argv[1:2] == ['--result']:
-        app = QApplication(sys.argv[:1]); app.setApplicationName('KIM6')
+        app = QApplication(sys.argv[:1]); app.setApplicationName('KIMng')
         show_location_result(*sys.argv[2:]); return 0
     kind, result, policy, seeds_path, *files = sys.argv[1:]
     if kind not in TITLES: raise ValueError('Unknown location operation')
     seeds = Path(seeds_path).read_bytes().decode().split('\0')[:-1] if seeds_path != '-' else None
-    app = QApplication(sys.argv[:1]); app.setApplicationName('KIM6')
+    app = QApplication(sys.argv[:1]); app.setApplicationName('KIMng')
     initial_path = os.environ.get('KIM_LOCATION_CONFIG')
     initial = json.loads(Path(initial_path).read_text()) if initial_path else None
     if kind == 'gpx' and not initial: initial = {'method': 'gpx'}

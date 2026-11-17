@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Display the installed KIM6 HTML User Guide in a standalone Qt window."""
+"""Display the installed KIMng HTML User Guide in a standalone Qt window."""
 
 import sys
 from pathlib import Path
@@ -23,7 +23,7 @@ def main():
 
     manual = Path(sys.argv[1]).resolve()
     if not manual.is_file():
-        print(f"KIM6 User Guide not found: {manual}", file=sys.stderr)
+        print(f"KIMng User Guide not found: {manual}", file=sys.stderr)
         return 1
 
     app = QApplication(sys.argv)
@@ -34,7 +34,7 @@ def main():
     except (ImportError, RuntimeError):
         choice = QMessageBox.question(
             None,
-            "KIM6 User Guide",
+            "KIMng User Guide",
             "The embedded HTML viewer requires PySide6 Qt WebEngine. "
             "Open the illustrated User Guide in your browser?",
             QMessageBox.Yes | QMessageBox.No,
@@ -45,7 +45,7 @@ def main():
         return 1
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - User Guide")
+    dialog.setWindowTitle("KIMng - User Guide")
     dialog.resize(1100, 800)
 
     layout = QVBoxLayout(dialog)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-window Qt 6 configuration for KIM6's existing collage renderer."""
+"""Single-window Qt 6 configuration for KIMng's existing collage renderer."""
 
 import os
 import re
@@ -30,7 +30,7 @@ def collision_message(filename):
     while number < 10000:
         candidate = path.with_name(f'{path.stem}_{number}{path.suffix}')
         if not os.path.lexists(candidate):
-            return f'{path.name} already exists. KIM6 plans to save this as {candidate.name}. The name is checked again when saving.'
+            return f'{path.name} already exists. KIMng plans to save this as {candidate.name}. The name is checked again when saving.'
         number += 1
     return 'Many matching names already exist. Choose a different filename.'
 
@@ -45,7 +45,7 @@ def main():
     app = QApplication.instance() or QApplication(sys.argv)
     # KIM6_COLLAGE_ORDERED_SELECTION_V1
     dialog = OrderedImageDialog()
-    dialog.setWindowTitle("KIM6 - Create collage")
+    dialog.setWindowTitle("KIMng - Create collage")
     dialog.setMinimumWidth(680)
     dialog.resize(780, 760)
 

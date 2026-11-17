@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>INSTALL · KIM6 Reference</title>
+  <meta name="color-scheme" content="light">
+  <title>INSTALL · KIMng Reference</title>
   <link rel="stylesheet" href="../work.css">
 </head>
 <body class="reference-page">
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
@@ -28,41 +28,41 @@
       <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
-      <div class="reference-source">KIM6 DOCUMENTATION · INSTALL.md</div>
+      <div class="reference-source">KIMng DOCUMENTATION · INSTALL.md</div>
       <article class="markdown-body">
-<h1 id="install-kim6">Install KIM6</h1>
-<p>KIM6 adds 12 image, recipe, and video service-menu files to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
+<h1 id="install-kimng">Install KIMng</h1>
+<p>KIMng adds image, recipe, and video service-menu actions to KDE Dolphin. This version is a substantial rewrite of the original project and is designed for KDE Plasma 6.</p>
 <h2 id="install-through-dolphin">Install through Dolphin</h2>
-<p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIM6.</p>
-<p>The rewritten KIM6 may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
+<p>Dolphin can install service menus from its online catalog. Open <strong>Settings → Configure Dolphin → Services</strong>, then choose <strong>Download New Services</strong> and search for KIMng. The existing catalog listing may still use the former KIM6 name.</p>
+<p>The KIMng rewrite may not yet be available through that catalog. The KDE Store may still offer an earlier version; check the release information if you specifically want this rewrite.</p>
 <h2 id="embedded-html-user-guide-prerequisite">Embedded HTML User Guide prerequisite</h2>
-<p>KIM6 includes an illustrated HTML User Guide in the <strong>Settings/About &gt; KIM6 User Guide</strong> tab. Rendering that guide inside the application requires the Python binding <code>PySide6.QtWebEngineWidgets</code>, not just the Qt WebEngine runtime libraries.</p>
+<p>KIMng includes an illustrated HTML User Guide in the <strong>Settings/About &gt; KIMng User Guide</strong> tab. Rendering that guide inside the application requires the Python binding <code>PySide6.QtWebEngineWidgets</code>, not just the Qt WebEngine runtime libraries.</p>
 <p>On Ubuntu or Debian, install the binding with:</p>
 <pre class="bash"><code>sudo apt install python3-pyside6.qtwebenginewidgets</code></pre>
-<p>Verify that the same system Python interpreter used by KIM6 can import it:</p>
+<p>Verify that the same system Python interpreter used by KIMng can import it:</p>
 <pre class="bash"><code>python3 -c &#39;from PySide6.QtWebEngineWidgets import QWebEngineView; print(&quot;WebEngine available&quot;)&#39;</code></pre>
-<p>The installer reports this dependency separately from required image-processing tools. It does not automatically install system packages. Without the binding, KIM6 can still operate and its guide can be opened in an external browser, but the embedded tab uses a limited Markdown fallback.</p>
-<p>The installed HTML guide and its local images must remain together under the KIM6 runtime <code>docs/</code> directory. Qt WebEngine uses those local files to display the guide offline.</p>
+<p>The installer reports this dependency separately from required image-processing tools. It does not automatically install system packages. Without the binding, KIMng can still operate and its guide can be opened in an external browser, but the embedded tab uses a limited Markdown fallback.</p>
+<p>The installed HTML guide and its local images must remain together under the KIMng runtime <code>docs/</code> directory. Qt WebEngine uses those local files to display the guide offline.</p>
 <h2 id="install-this-rewrite-manually">Install this rewrite manually</h2>
-<p>KIM6 requires KDE Plasma 6 and Dolphin.</p>
-<p>To install from a source checkout, you need <code>intltool-merge</code>, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIM6 currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with <code>msgfmt</code> when they become available. No translated catalogs are required for installation.</p>
-<p>KIM6 uses several common tools to process images and videos:</p>
+<p>KIMng requires KDE Plasma 6 and Dolphin.</p>
+<p>To install from a source checkout, you need <code>intltool-merge</code>, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIMng currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with <code>msgfmt</code> when they become available. No translated catalogs are required for installation.</p>
+<p>KIMng uses several common tools to process images and videos:</p>
 <ul>
 <li><strong>ImageMagick 7:</strong> Image resizing, compression, conversion, galleries, and other image operations.</li>
 <li><strong>ExifTool:</strong> Metadata management, photo dates, and copyright information.</li>
 <li><strong>FFmpeg and ffprobe:</strong> Video conversion, audio extraction, animations, and slideshows.</li>
 <li><strong>KDialog and qdbus:</strong> Dialogs, progress reporting, and interaction with KDE.</li>
-<li><strong>Email application (optional):</strong> Required only to open a draft automatically. KIM6 can still prepare attachment files and report their location for manual attachment.</li>
+<li><strong>Email application (optional):</strong> Required only to open a draft automatically. KIMng can still prepare attachment files and report their location for manual attachment.</li>
 </ul>
 <p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
-<p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIM6 - Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
-<p>Download or clone the KIM6 source code, then open a terminal in the project directory and run:</p>
+<p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIMng - Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
+<p>Download or clone the KIMng source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
-<p>The installer adds KIM6's program files and 12 service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIM6 actions available for that file type.</p>
+<p>The installer adds KIMng's program files and service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIMng actions available for that file type.</p>
 <p>The <code>kim_all</code> program is installed with the menus and does not need to be added to your shell's <code>PATH</code>.</p>
 <h2 id="dependency-packages-by-distribution">Dependency packages by distribution</h2>
-<p>The dependency report runs on the machine executing <code>install.sh</code>. Its hostname and operating system identify where any suggested installation command applies. Suggested packages appear after the dependency table <strong>only when a dependency is missing</strong>. KIM6 does not install system packages automatically.</p>
+<p>The dependency report runs on the machine executing <code>install.sh</code>. Its hostname and operating system identify where any suggested installation command applies. Suggested packages appear after the dependency table <strong>only when a dependency is missing</strong>. KIMng does not install system packages automatically.</p>
 <p>The following table describes the package mappings for Ubuntu, Fedora, and Arch used by the installer. Package availability may depend on the distribution release and enabled repositories.</p>
 <table>
 <thead>
@@ -160,27 +160,27 @@
 </tr>
 </tbody>
 </table>
-<p>The optional Qt WebEngine Python binding enables the full illustrated HTML User Guide within KIM6. The standalone guide uses an HTML viewer and offers an external-browser fallback when WebEngine is unavailable.</p>
+<p>The optional Qt WebEngine Python binding enables the full illustrated HTML User Guide within KIMng. The standalone guide uses an HTML viewer and offers an external-browser fallback when WebEngine is unavailable.</p>
 <p>Installed KDE service-menu <code>.desktop</code> files intentionally have mode <code>0755</code>. Do not change them to <code>0644</code>, which can produce Dolphin execution-authorization errors.</p>
-<p>After installation, open <strong>Settings/About → Settings…</strong> in Dolphin to configure KIM6's output preferences.</p>
-<p><a href="../images/screenshots/10-settings-menu.png">View KIM6 Settings</a></p>
+<p>After installation, open <strong>Settings/About → Settings…</strong> in Dolphin to configure KIMng's output preferences.</p>
+<p><a href="../images/screenshots/10-settings-menu.png">View KIMng Settings</a></p>
 <h2 id="what-installsh-does">What <code>install.sh</code> does</h2>
-<p>The installer prepares KIM6 for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
+<p>The installer prepares KIMng for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h3 id="dependency-checks">Dependency checks</h3>
 <p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, Pacman, and Zypper and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
-<p>Python 3 with PySide6 Qt Widgets and <code>intltool-merge</code> are mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIM6 actions check for the tools they need when invoked.</p>
+<p>Python 3 with PySide6 Qt Widgets and <code>intltool-merge</code> are mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
 <p>Optional tools include <code>msgfmt</code> for compiled translations, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache.</p>
 <h3 id="filesystem-and-source-validation">Filesystem and source validation</h3>
 <p>Before installing application files, <code>install.sh</code>:</p>
 <ul>
 <li>Checks that the destination service-menu directory is usable and not a symbolic link.</li>
-<li>Identifies existing KIM6 program files and service menus before replacing them.</li>
+<li>Identifies existing KIMng program files and service menus before replacing them.</li>
 <li>Rejects unsafe symbolic links, conflicting service-menu files, and unrecognized runtime directories.</li>
 <li>Checks the source checkout for required executables, graphical dialog helpers, resources, documentation, and menu templates.</li>
 <li>Protects unrelated files from replacement.</li>
 </ul>
 <p>A conflict or missing mandatory source file stops installation rather than proceeding with an unsafe or incomplete installation.</p>
-<h3 id="installing-kim6-components">Installing KIM6 components</h3>
+<h3 id="installing-kimng-components">Installing KIMng components</h3>
 <p>The installer places the unified <code>kim_all</code> dispatcher and its supporting files in a <code>kim6</code> directory beneath the selected service-menu directory.</p>
 <p>The installed components include:</p>
 <ul>
@@ -196,11 +196,11 @@
 <h3 id="safe-file-replacement">Safe file replacement</h3>
 <p>Each installed file is written to a temporary file beside its destination and then moved into place. This prevents an interrupted copy from leaving that individual destination file partially written.</p>
 <p>Installation is not a whole-tree transaction. An interruption can leave different installed files at different revision levels. Rerunning <code>./install.sh</code> completes or repairs the installation.</p>
-<p>The installer replaces recognized KIM6 program and menu files. Save any personal modifications to those files before upgrading.</p>
+<p>The installer replaces recognized existing program and menu files. Save any personal modifications to those files before upgrading.</p>
 <h3 id="post-installation-verification">Post-installation verification</h3>
 <p>After copying files, the installer:</p>
 <ul>
-<li>Confirms that all 11 installed Dolphin menus exist, carry KIM6's identification marker, and reference the installed dispatcher.</li>
+<li>Confirms that all 11 installed Dolphin menus exist, carry KIMng's identification marker, and reference the installed dispatcher.</li>
 <li>Confirms that the seven required Python helper files are present, are not symbolic links, and have valid Python syntax.</li>
 <li>Refreshes the KDE service cache with <code>kbuildsycoca6</code> when available.</li>
 <li>Prints the verified menu and helper inventories, installation path, and completion message.</li>
@@ -209,16 +209,16 @@
 <p>For additional implementation details, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <p>To check the installed program without opening Dolphin:</p>
 <pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all&quot; --help</code></pre>
-<p>If the menus do not appear, restart Dolphin and verify that KIM6 was installed in a service-menu directory recognized by KDE.</p>
+<p>If the menus do not appear, restart Dolphin and verify that KIMng was installed in a service-menu directory recognized by KDE.</p>
 <p><strong>KDE Frameworks 6.29 issue:</strong> Frameworks 6.29 introduced a regression that prevented some Dolphin service submenus from appearing. This was fixed in Frameworks 6.30. If you are using the affected version, update KDE Frameworks when a fixed package is available for your distribution.</p>
-<p>KIM6 retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>
+<p>KIMng retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>
 <h2 id="upgrade-or-reinstall">Upgrade or reinstall</h2>
 <p>Use the newer source checkout and run <code>./install.sh</code> again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.</p>
-<p>Known KIM6 files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIM6 menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIM6 image/video actions, not to the installer's replacement of its own known program files.</p>
+<p>Known KIMng files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIMng menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIMng image/video actions, not to the installer's replacement of its own known program files.</p>
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>
-<p>The uninstaller removes the 11 recognized KIM6 menus and the known KIM6 program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
+<p>The uninstaller removes the 11 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
 <h2 id="advanced-installation-locations">Advanced installation locations</h2>
 <p>To choose a service-menu folder explicitly, use <code>--prefix</code>:</p>
 <pre class="sh"><code>./install.sh --prefix &quot;$HOME/.local/share/kio/servicemenus&quot;</code></pre>
@@ -231,23 +231,23 @@
 <p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
 <h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
-<p>First verify that all 11 KIM6 service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIM6 keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
+<p>First verify that all 11 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
 <h3 id="installation-or-removal-reports-a-conflict">Installation or removal reports a conflict</h3>
-<p>The installer identifies existing KIM6 installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
+<p>The installer identifies existing KIMng installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>
-<p>Upgrades replace known KIM6 program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
+<p>Upgrades replace known KIMng program and menu files. Save any customizations before upgrading. Unknown files are preserved and may prevent their containing directory from being removed.</p>
 <p>For installer safeguards and recovery procedures, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <h2 id="offline-user-guide-and-documentation-updates">Offline User Guide and documentation updates</h2>
 <p>The installed User Guide includes a dedicated Recipes reference describing the Recipes submenu, editor, preview, and protected output behavior.</p>
-<p>KIM6 installs a complete offline User Guide, including its stylesheet, illustrations, and HTML reference pages. The User Guide is available through the KIM6 User Guide action in Dolphin.</p>
+<p>KIMng installs a complete offline User Guide, including its stylesheet, illustrations, and HTML reference pages. The User Guide is available through the KIMng User Guide action in Dolphin.</p>
 <p>When Python 3 and Pandoc are installed, running <code>./install.sh</code> from a writable, non-root development checkout automatically regenerates the HTML references from the project's Markdown documentation.</p>
 <p>For root installations or checkouts where the reference directory is not writable, the installer verifies the generated HTML rather than modifying the source files, provided both tools are available. If the generated pages are outdated, installation stops.</p>
-<p>Python 3 and Pandoc are not required to view the User Guide. If either build tool is unavailable during installation, KIM6 uses the prebuilt HTML pages supplied with the repository.</p>
+<p>Python 3 and Pandoc are not required to view the User Guide. If either build tool is unavailable during installation, KIMng uses the prebuilt HTML pages supplied with the repository.</p>
 <p>Contributors should commit regenerated HTML reference pages alongside their Markdown changes. The illustrated landing page is maintained separately and is not automatically generated.</p>
 
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>ng</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>

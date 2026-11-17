@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>DEVELOPMENT · KIM6 Reference</title>
+  <meta name="color-scheme" content="light">
+  <title>DEVELOPMENT · KIMng Reference</title>
   <link rel="stylesheet" href="../work.css">
 </head>
 <body class="reference-page">
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
@@ -28,12 +28,12 @@
       <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
-      <div class="reference-source">KIM6 DOCUMENTATION · docs/DEVELOPMENT.md</div>
+      <div class="reference-source">KIMng DOCUMENTATION · docs/DEVELOPMENT.md</div>
       <article class="markdown-body">
-<h1 id="kim6-development-guide">KIM6 Development Guide</h1>
-<p>KIM6 is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, <code>src/bin/kim_all</code>.</p>
+<h1 id="kimng-development-guide">KIMng Development Guide</h1>
+<p>KIMng is a KDE Plasma 6 Dolphin service-menu extension for image and video processing. The original collection of standalone Bash scripts has been consolidated into a single executable, <code>src/bin/kim_all</code>.</p>
 <p>The original scripts are retained in the repository for historical reference. All current Dolphin menu actions use <code>kim_all</code>.</p>
-<p>This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIM6.</p>
+<p>This document covers the project structure, development conventions, testing, and the behavior that should be preserved when modifying KIMng.</p>
 <h2 id="repository-structure">Repository Structure</h2>
 <table>
 <thead>
@@ -89,19 +89,19 @@
 <p>The <code>docs/</code> directory contains additional references:</p>
 <ul>
 <li><code>ACTIONS.md</code> - Complete Dolphin menu and action inventory.</li>
-<li><code>commandconfig.md</code> - detailed descriptions of KIM6 functionality, command-line options and configuration.</li>
+<li><code>commandconfig.md</code> - detailed descriptions of KIMng functionality, command-line options and configuration.</li>
 <li><code>FORMATS.md</code> - Supported image and video formats.</li>
 <li><code>RECIPES.md</code> - The Recipes submenu, editor, step definitions, preflight and derivative-only outputs.</li>
 <li><code>index.html</code> - HTML User Guide with CSS styling (<code>work.css</code>).</li>
 <li><code>reference/</code> - Generated HTML pages from the Markdown sources; never edit generated pages directly.</li>
 </ul>
 <h2 id="recipe-architecture">Recipe Architecture</h2>
-<p>The Recipes subsystem extends KIM6's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in <code>src/bin/</code> include <code>kim_recipe_core.py</code>, <code>kim_recipe_image.py</code>, <code>kim_recipe_dialog.py</code>, <code>kim_recipe_run.py</code>, and <code>kim_recipe_menu.py</code>; the shipped definitions are kept under <code>src/recipes/</code>.</p>
+<p>The Recipes subsystem extends KIMng's Dolphin photo workflows with ordered, versioned JSON definitions and a Qt editor and runner. Files in <code>src/bin/</code> include <code>kim_recipe_core.py</code>, <code>kim_recipe_image.py</code>, <code>kim_recipe_dialog.py</code>, <code>kim_recipe_run.py</code>, and <code>kim_recipe_menu.py</code>; the shipped definitions are kept under <code>src/recipes/</code>.</p>
 <p>The Recipes submenu has two static entries, Choose saved recipe… and Recipe editor…; only user recipes assigned to Root get direct runtime-generated Dolphin shortcuts. Built-in, Root, named folders and Unfiled are selection groups in the Qt runner/editor. The run dialog validates each selected input before allowing execution. Steps can be disabled without removing them. PSD inputs that cannot produce a valid output format raise a preflight problem instead of selecting an encoder implicitly.</p>
 <p><strong>Safety contract:</strong> Recipes publish derivatives only, never overwrite selected source images, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected images. Cancellation or failed publication must never be presented as success.</p>
 <p>See <a href="RECIPES.html">RECIPES.md</a> for user-facing behavior and <a href="ACTIONS.html">ACTIONS.md</a> for service-menu entry points.</p>
 <h2 id="dolphin-service-menus">Dolphin Service Menus</h2>
-<p>KIM6 uses 12 KDE service-menu definitions in <code>src/</code>, representing eight image-related and four video-related submenu categories. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
+<p>KIMng uses 12 KDE service-menu definitions in <code>src/</code>, representing eight image-related and four video-related submenu categories. These menus call the <code>kim_all</code> executable with an action name, optional arguments, and the files selected in Dolphin.</p>
 <p>For example:</p>
 <pre class="sh"><code>kim_all compress --recommended -- %F</code></pre>
 <p>The <code>%F</code> placeholder supplies the selected file paths. The <code>--</code> separator marks the end of command options so filenames beginning with a hyphen are handled correctly.</p>
@@ -117,15 +117,15 @@
 <p>The dispatcher's command-line help is maintained in <code>src/bin/kim_all</code> and should remain consistent with the documented options.</p>
 <p>See <a href="ACTIONS.html">ACTIONS.md</a> for the complete menu definitions and <a href="commandconfig.html">commandconfig.md</a> for command-line arguments.</p>
 <h2 id="embedded-user-guide-rendering">Embedded User Guide rendering</h2>
-<p><code>src/bin/kim_settings_dialog.py</code> embeds the installed <code>docs/index.html</code> using <code>PySide6.QtWebEngineWidgets.QWebEngineView</code>. The binding is optional for general KIM6 operation but required for the full HTML guide inside Settings/About.</p>
+<p><code>src/bin/kim_settings_dialog.py</code> embeds the installed <code>docs/index.html</code> using <code>PySide6.QtWebEngineWidgets.QWebEngineView</code>. The binding is optional for general KIMng operation but required for the full HTML guide inside Settings/About.</p>
 <p>For Ubuntu or Debian, the package is <code>python3-pyside6.qtwebenginewidgets</code>. The Qt WebEngine runtime libraries alone do not provide the Python import. <code>install.sh</code> checks <code>from PySide6.QtWebEngineWidgets import QWebEngineView</code> and reports the missing optional dependency.</p>
 <p>The guide opens from a local file URL, so installed CSS, illustrations, and reference pages must retain their relative paths. The application keeps an external-browser action and a limited Markdown fallback.</p>
 <p>When modifying this tab, keep the status label hidden during successful HTML rendering and give the WebEngine widget the available vertical space. Restore a status message only for fallback or missing-file conditions. Do not disable HTML rendering merely because the process has SSH environment variables.</p>
 <h3 id="service-menu-executable-permissions">Service-menu executable permissions</h3>
-<p>KIM6 installs its Dolphin service-menu <code>.desktop</code> files with permissions <code>0755</code>. Dolphin requires these files to be authorized for execution in the supported KDE environment. Changing them to <code>0644</code> causes authorization failures.</p>
+<p>KIMng installs its Dolphin service-menu <code>.desktop</code> files with permissions <code>0755</code>. Dolphin requires these files to be authorized for execution in the supported KDE environment. Changing them to <code>0644</code> causes authorization failures.</p>
 <p><code>install.sh</code> and dynamic recipe-menu generation must preserve the installed permissions. Do not confuse executable KDE service menus with ordinary nonexecutable desktop data files.</p>
 <h2 id="runtime-dependencies-and-format-support">Runtime Dependencies and Format Support</h2>
-<p>KIM6 uses Bash and common command-line utilities, along with:</p>
+<p>KIMng uses Bash and common command-line utilities, along with:</p>
 <ul>
 <li><strong>ImageMagick 7:</strong> Image processing, format conversion, galleries, and related operations.</li>
 <li><strong>ExifTool:</strong> Metadata, timestamps, and copyright information.</li>
@@ -133,15 +133,15 @@
 <li><strong>KDialog and qdbus:</strong> KDE dialogs, progress reporting, and cancellation.</li>
 </ul>
 <p>Specific operations may also require optional image encoders, format delegates, ICC profiles, <code>xdg-open</code>, email clients, or <code>setsid</code>. Installation from source uses <code>intltool-merge</code>.</p>
-<p>KIM6 checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.</p>
+<p>KIMng checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.</p>
 <p>Missing encoders or unsupported formats should produce an error rather than silently substituting another format.</p>
 <p>See <a href="FORMATS.html">FORMATS.md</a> for details about supported formats and dependencies.</p>
 <h2 id="configuration">Configuration</h2>
-<p>The user-facing entry point is <strong>Actions → KIM6 - Settings/About → Settings</strong> in Dolphin. <code>src/bin/kim_settings_dialog.py</code> validates and atomically writes preferences to <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code>.</p>
+<p>The user-facing entry point is <strong>Actions → KIMng - Settings/About → Settings</strong> in Dolphin. <code>src/bin/kim_settings_dialog.py</code> validates and atomically writes preferences to <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code>.</p>
 <p><code>kim6_load_user_settings()</code> in <code>src/bin/kim_all</code> reads supported <code>KEY=value</code> data without executing the file. Persisted settings include <code>KIM_POLICY</code>, <code>KIM_NAME_AFFIX_POSITION</code>, 21 allowlisted <code>KIM_AFFIX_*</code> labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. <code>affixed_filename()</code> resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. <code>KIM_WEB_FORMAT</code> and <code>KIM_WEB_COLOR_MODE</code> are environment-only, not saved by Settings.</p>
 <p><code>KIM_POLICY</code> accepts <code>create</code> or <code>prompt</code>. <code>choose_output_mode()</code> implements the Create/Overwrite choice and the second overwrite warning. <code>confirm_inplace_overwrite()</code> handles operations that require original-file modification. No setting silently authorizes replacement. See <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
 <h2 id="file-safety-and-error-handling">File Safety and Error Handling</h2>
-<p>KIM6 processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:</p>
+<p>KIMng processes files that may be irreplaceable. Changes to image and video actions must preserve the following behavior:</p>
 <ol type="1">
 <li><p><strong>File paths:</strong> Treat selected filenames as untrusted input. Use Bash arrays and <code>--</code> separators. Check symbolic links and file aliases where appropriate. Spaces and Unicode are supported; filenames containing carriage returns or line feeds are rejected by operations that cannot safely process them.</p></li>
 <li><p><strong>Temporary files:</strong> Never write generated output directly to an original or final destination. Use <code>tmp_for_target()</code> to create temporary output on the destination filesystem, and validate the result before moving it into place.</p></li>
@@ -175,10 +175,10 @@
 <p>They manage the dialog's D-Bus service and object-path references.</p>
 <h3 id="video-processing">Video processing</h3>
 <p>Video helpers inspect files using <code>ffprobe</code>, execute FFmpeg operations, monitor progress, and manage cancellation.</p>
-<p>Process cleanup is restricted to child processes started by the current KIM6 operation.</p>
+<p>Process cleanup is restricted to child processes started by the current KIMng operation.</p>
 <p>These shared functions affect multiple actions. Changes should be tested against the operations that depend on them.</p>
 <h2 id="action-behavior">Action Behavior</h2>
-<p>Different KIM6 actions have different file-handling requirements.</p>
+<p>Different KIMng actions have different file-handling requirements.</p>
 <h3 id="image-transformations">Image transformations</h3>
 <p>Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.</p>
 <p>Rotation, EXIF auto-orientation, flip, and flop select Create or Overwrite through <code>choose_output_mode()</code>. Create publishes validated transformed copies. Overwrite requires explicit two-stage authorization and replaces selected originals only after validation.</p>
@@ -197,7 +197,7 @@
 <p>Not every image is a single-frame RGB image. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.</p>
 <p>Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.</p>
 <h2 id="adding-or-modifying-actions">Adding or Modifying Actions</h2>
-<p>Most KIM6 functionality is implemented as action functions in <code>src/bin/kim_all</code>. Dolphin invokes these functions through the service-menu definitions in <code>src/</code>.</p>
+<p>Most KIMng functionality is implemented as action functions in <code>src/bin/kim_all</code>. Dolphin invokes these functions through the service-menu definitions in <code>src/</code>.</p>
 <p>When adding or changing an action:</p>
 <ol type="1">
 <li>Identify the relevant function and its command-line arguments.</li>
@@ -210,7 +210,7 @@
 <p>See <a href="ACTIONS.html">ACTIONS.md</a> for the menu-action inventory and <a href="commandconfig.html">commandconfig.md</a> for dispatcher arguments.</p>
 <h2 id="testing">Testing</h2>
 <p>For required tools and installation instructions, see <a href="INSTALL.html">INSTALL.md</a>. Tests requiring optional image formats or video codecs may be skipped when those capabilities are unavailable.</p>
-<p>KIM6 uses Python's <code>unittest</code> framework, with a custom test runner in <code>tests/run.py</code>.</p>
+<p>KIMng uses Python's <code>unittest</code> framework, with a custom test runner in <code>tests/run.py</code>.</p>
 <p>Regression coverage includes processing functions, file preservation, error handling, cancellation, installation, output authorization, and source/destination aliases. Overwrite tests simulate both dialog confirmations using the isolated <code>Workspace</code>. The APNG validation cases use animated fixtures when FFmpeg is available.</p>
 <p>Run an individual test module while developing:</p>
 <pre class="sh"><code>python3 -B tests/run.py --pattern test_resize.py</code></pre>
@@ -226,8 +226,8 @@ git --no-pager diff --check</code></pre>
 <p>Automated menu tests verify definitions and command arguments, but actual menu display and interaction should also be tested in Dolphin.</p>
 <h2 id="installation-and-release-testing">Installation and Release Testing</h2>
 <p>The installation scripts support user, system-wide, and custom installation directories.</p>
-<p>The installer copies the KIM6 executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.</p>
-<p>The uninstaller removes recognized KIM6-owned files and leaves unrelated files in place.</p>
+<p>The installer copies the KIMng executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.</p>
+<p>The uninstaller removes recognized KIMng-owned files and leaves unrelated files in place.</p>
 <p>Installation updates are performed one file at a time. An interrupted installation can be completed by running <code>install.sh</code> again.</p>
 <p>Before preparing a release:</p>
 <ol type="1">
@@ -247,7 +247,7 @@ git --no-pager diff --check</code></pre>
 <h2 id="file-publication-and-cancellation">File Publication and Cancellation</h2>
 <h3 id="staging-and-publication">Staging and publication</h3>
 <p>Generated media is first written to invocation-owned staging on the destination filesystem. The action checks the producer result and validates the staged artifact before publication. Create-new publication uses a no-clobber operation. Authorized replacement uses atomic replacement on supported local Linux filesystems. A failed rename is not followed by a destructive copy-over fallback.</p>
-<p>This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIM6’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.</p>
+<p>This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIMng’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.</p>
 <p>Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. Gallery publication uses a new directory name and does not recursively replace an occupied directory.</p>
 <p>Cleanup removes only staging files, directories and child processes owned by the current invocation. A producer failure, invalid result, cancellation or publication failure must not delete a pre-existing destination. Earlier completed batch results remain in place if a later item fails. Error and summary dialogs identify failed items rather than claiming a rejected output succeeded.</p>
 <h3 id="cancellation-and-process-ownership">Cancellation and process ownership</h3>
@@ -255,10 +255,10 @@ git --no-pager diff --check</code></pre>
 <p>Actions check for interruption before starting items and immediately before publishing staged output. Video producers run as invocation-owned FFmpeg processes; cancellation terminates only the owned producer, with bounded graceful termination and a forced stop if needed. Previously published batch outputs are retained.</p>
 <p>A KDE service-menu action accepts local files. Remote URL workflows are not silently treated as local pathnames; menu definitions restrict applicable selections to files. Newlines and certain ImageMagick filename metacharacters are rejected in actions whose current path or command syntax cannot represent them unambiguously. Spaces and Unicode are supported through quoted argument arrays and the selected-file argument boundary. Leading dashes are passed after <code>--</code> where the action supports that contract.</p>
 <h2 id="reporting-a-bug">Reporting a Bug</h2>
-<p>Include the KIM6 version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.</p>
+<p>Include the KIMng version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.</p>
 <h2 id="installer-safety-and-recovery">Installer Safety and Recovery</h2>
-<p>The installer identifies KIM6 installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.</p>
-<p>Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIM6 path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.</p>
+<p>The installer identifies KIMng installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.</p>
+<p>Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIMng path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.</p>
 <h2 id="local-smoke-test">Local Smoke Test</h2>
 <p>Test web export with a synthetic JPEG rather than a personal image. Run from the repository root:</p>
 <pre class="sh"><code>work=$(mktemp -d)
@@ -273,12 +273,12 @@ KIM_POLICY=create ./src/bin/kim_all webexport \
   -- &quot;$work/input.jpg&quot;
 
 find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
-<p>Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIM6 runtime dependencies.</p>
+<p>Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIMng runtime dependencies.</p>
 <p>See <a href="commandconfig.html">Command and Configuration Reference</a> for additional options.</p>
 <h2 id="documentation-screenshot-assets">Documentation screenshot assets</h2>
 <p>Approved, individually anonymized application screenshots are stored in <code>docs/images/screenshots/</code>.</p>
 <p>The User Guide places these images alongside the relevant workflow instructions.</p>
-<p>Screenshots must accurately depict KDE Plasma/Dolphin and KIM6. Preserve actual application controls, image previews, and maps. Remove identifying usernames, hostnames, personal paths, and identifying filenames before publication.</p>
+<p>Screenshots must accurately depict KDE Plasma/Dolphin and KIMng. Preserve actual application controls, image previews, and maps. Remove identifying usernames, hostnames, personal paths, and identifying filenames before publication.</p>
 <p>Do not replace real image or map content with generic placeholders, and do not combine individual dialogs into screenshot montages.</p>
 <p>Preserve approved screenshots without recompression or resizing. Use descriptive alt text, task-oriented captions, and links to the full-resolution images.</p>
 <p>The generated HTML reference pages are built from Markdown sources. Regenerate them after documentation changes.</p>
@@ -303,7 +303,7 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
 <p>Investigate hiding redundant or inapplicable conversion actions according to the selected image format. For example, <strong>Convert to JPEG</strong> would normally be unnecessary when only JPEG images are selected.</p>
 <p>The design must account for KDE service-menu MIME filtering, mixed-format batch selections, and situations where same-format re-encoding remains useful. Runtime format and encoder validation must remain in place regardless of menu visibility.</p>
 <h3 id="translation-infrastructure-and-localization">Translation infrastructure and localization</h3>
-<p>KIM6 currently ships with English source strings only. The seven obsolete translation catalogs were retired after the English interface and Dolphin service menus changed substantially.</p>
+<p>KIMng currently ships with English source strings only. The seven obsolete translation catalogs were retired after the English interface and Dolphin service menus changed substantially.</p>
 <p>The gettext infrastructure remains available for future localization. The current <code>po/kim6.pot</code> template was rebuilt from the active unified dispatcher, active Python source files, and all 12 Dolphin menu templates. Archived scripts and historical documents were excluded.</p>
 <p>To regenerate the template after additional English UI changes:</p>
 <ol type="1">
@@ -320,6 +320,6 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>ng</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>

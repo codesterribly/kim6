@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>RECIPES · KIM6 Reference</title>
+  <meta name="color-scheme" content="light">
+  <title>RECIPES · KIMng Reference</title>
   <link rel="stylesheet" href="../work.css">
 </head>
 <body class="reference-page">
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>6</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
@@ -28,15 +28,15 @@
       <a class="back-link" href="../index.html">← Back to User Guide</a>
     </aside>
     <main id="main" class="reference-content">
-      <div class="reference-source">KIM6 DOCUMENTATION · docs/RECIPES.md</div>
+      <div class="reference-source">KIMng DOCUMENTATION · docs/RECIPES.md</div>
       <article class="markdown-body">
 <h1 id="recipes-reusable-photo-workflows">Recipes: Reusable Photo Workflows</h1>
-<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIM6 - Recipes menu</strong>. A recipe can handle one image or a batch. KIM6 shows what it intends to produce before processing, and <strong>recipes never modify the source images</strong>.</p>
+<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIMng - Recipes menu</strong>. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and <strong>recipes never modify the source images</strong>.</p>
 <h2 id="start-in-dolphin">Start in Dolphin</h2>
-<p><img src="../images/screenshots/06-recipes.png" alt="KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…" /></p>
+<p><img src="../images/screenshots/06-recipes.png" alt="KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…" /></p>
 <ol type="1">
 <li>Select one or more supported images and right-click.</li>
-<li>Open <strong>KIM6 - Recipes → Choose saved recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
+<li>Open <strong>KIMng - Recipes → Choose saved recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
 <li>Review the selected images and the <strong>Run a Recipe</strong> window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.</li>
 <li>When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.</li>
 </ol>
@@ -63,15 +63,15 @@
 </tbody>
 </table>
 <h2 id="web-export-preset-submenu-versus-recipe">Web Export preset submenu versus recipe</h2>
-<p>KIM6 provides two distinct Web Export workflows:</p>
+<p>KIMng provides two distinct Web Export workflows:</p>
 <ul>
-<li><strong>KIM6 - Web Export</strong> offers twelve direct Dolphin presets, covering JPEG, PNG, WebP, and AVIF at three maximum image sizes (1600, 800, and 128 pixels).</li>
-<li><strong>KIM6 - Recipes → Choose saved recipe… → Web Export</strong> runs the built-in, multi-step recipe.</li>
+<li><strong>KIMng - Web Export</strong> offers twelve direct Dolphin presets, covering JPEG, PNG, WebP, and AVIF at three maximum image sizes (1600, 800, and 128 pixels).</li>
+<li><strong>KIMng - Recipes → Choose saved recipe… → Web Export</strong> runs the built-in, multi-step recipe.</li>
 </ul>
 <p>The built-in recipe auto-orients images, fits them within 1600 × 1600 without enlargement, applies sRGB handling, converts to JPEG at quality <strong>95</strong>, strips metadata, and writes <code>{filename}_web.jpg</code> into a <code>Web</code> subfolder.</p>
 <p>These workflows have different configuration and processing paths. Do not assume their output settings are identical.</p>
 <h2 id="create-and-edit-recipes">Create and edit recipes</h2>
-<p><img src="../images/screenshots/12-recipe-editor.png" alt="KIM6 Recipe Editor with ordered steps, destination choices, and live output preview" /></p>
+<p><img src="../images/screenshots/12-recipe-editor.png" alt="KIMng Recipe Editor with ordered steps, destination choices, and live output preview" /></p>
 <p>Open <strong>Recipe editor…</strong> from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.</p>
 <p>The editor can also <strong>Load Photos &amp; Run</strong>. When a run originates in the editor, returning to the editor retains the selected images and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.</p>
 <h3 id="processing-steps">Processing steps</h3>
@@ -223,13 +223,13 @@
 <p><strong>JPEG quality is not a separate operation.</strong> Configure quality through <strong>Convert Format</strong> or <strong>Compress Image</strong>. The final encoding options are applied during output creation. Step order matters, especially for orientation, metadata removal, date operations and naming. All operations can be enabled or disabled independently.</p>
 <h3 id="output-filename-patterns">Output filename patterns</h3>
 <p>In <strong>Rename Output File</strong>, <code>{filename}</code> means the original name without its extension. A pattern of <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.</p>
-<p>Previously saved patterns using <code>{stem}</code> continue to work. KIM6 determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. When a destination filename already exists, KIM6 assigns a collision-safe name rather than replacing that file.</p>
+<p>Previously saved patterns using <code>{stem}</code> continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. When a destination filename already exists, KIMng assigns a collision-safe name rather than replacing that file.</p>
 <h2 id="preflight-and-output-preview">Preflight and output preview</h2>
 <p><strong>Run a Recipe</strong> lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Problem</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
 <p>The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.</p>
 <p>Adding JPEG and PSD files does not require the interface to freeze until the batch is analyzed: pending filenames appear promptly and input inspection continues in background workers. A large PSD may still take time to decode, but the window remains usable.</p>
 <h2 id="photoshop-psd-inputs-and-fix-recipe">Photoshop PSD inputs and Fix Recipe</h2>
-<p>KIM6 can <strong>read</strong> PSD images in supported workflows but <strong>does not create PSD output files</strong>. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers <strong>Fix Recipe…</strong>. This opens the existing editor so you can add <strong>Convert Format</strong> and select a supported output type. KIM6 does not silently choose a format on your behalf.</p>
+<p>KIMng can <strong>read</strong> PSD images in supported workflows but <strong>does not create PSD output files</strong>. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers <strong>Fix Recipe…</strong>. This opens the existing editor so you can add <strong>Convert Format</strong> and select a supported output type. KIMng does not silently choose a format on your behalf.</p>
 <p>After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.</p>
 <p>PSD inputs are treated as rendered image sources rather than editable Photoshop documents with preserved layers. Color-profile and precision handling depend on the input and the selected output format. See <a href="FORMATS.html#photoshop-psd-inputs">Image and Video Format Support</a> for details.</p>
 <h2 id="destinations-safety-and-cancellation">Destinations, safety, and cancellation</h2>
@@ -244,6 +244,6 @@
       </article>
     </main>
   </div>
-  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>6</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
+  <footer class="site-footer"><div class="page-width footer-inner"><div class="footer-brand"><span class="footer-logo">KIM<span>ng</span></span><p>Reference generated from authoritative Markdown.</p></div><div class="footer-meta"><p><a href="../index.html">Back to User Guide</a></p></div></div></footer>
 </body>
 </html>

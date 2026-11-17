@@ -1,7 +1,7 @@
 
-# KIM6 Command and Configuration Reference
+# KIMng Command and Configuration Reference
 
-`kim_all` is KIM6's main executable. Dolphin normally runs it through the service menus, but it can also be called directly from a terminal.
+`kim_all` is KIMng's main executable. Dolphin normally runs it through the service menus, but it can also be called directly from a terminal.
 
 When working from the source directory, use:
 
@@ -54,7 +54,7 @@ The command blocks below show syntax patterns. Values separated by `|` are alter
 
 ## Output and File Handling
 
-KIM6 uses different file-handling rules depending on the operation.
+KIMng uses different file-handling rules depending on the operation.
 
 - **Create new:** Generates a separate file, normally using an action-specific filename suffix. Existing filenames are handled without silently replacing them.
 - **Overwrite:** Replaces an existing file only when the operation supports it and replacement is authorized.
@@ -79,7 +79,7 @@ For compression, conversion, resizing, metadata stripping and copyright editing,
 
 ## Configuration and Defaults
 
-**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIM6 - Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. The **Output Filenames** tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click **Save**. KIM6 reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
+**For normal use, open Settings in Dolphin:** Right-click a supported file and choose **Actions → KIMng - Settings/About → Settings**. Choose whether actions prompt about replacement or automatically create separate copies where supported. The **Output Filenames** tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click **Save**. KIMng reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.
 
 ### Settings
 
@@ -99,7 +99,7 @@ The graphical Settings dialog writes `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/set
 
 ### Custom output filename labels
 
-In **Settings → Output Filenames**, customize the descriptive labels KIM6 adds when it automatically names an output. Defaults are shown below. For example, the compression label can change from `compressed` to `com`, producing `photo_com.jpg` or `com_photo.jpg`, depending on prefix/suffix placement. The tab previews each filename and includes Restore Defaults.
+In **Settings → Output Filenames**, customize the descriptive labels KIMng adds when it automatically names an output. Defaults are shown below. For example, the compression label can change from `compressed` to `com`, producing `photo_com.jpg` or `com_photo.jpg`, depending on prefix/suffix placement. The tab previews each filename and includes Restore Defaults.
 
 | Operation | Configuration key | Default label |
 |---|---|---|
@@ -178,13 +178,13 @@ See [Output and File Handling](#output-and-file-handling), [copyright](#copyrigh
 
 ## Recipes
 
-The **KIM6 - Recipes** submenu in Dolphin provides **Choose saved recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+The **KIMng - Recipes** submenu in Dolphin provides **Choose saved recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
 
 Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides **Load Photos & Run**. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
 
 Recipes are derivative-only: originals are never replaced. They support output filename patterns such as `{filename}_recipe`, where `{filename}` is the input basename without its extension. Previously saved `{stem}` patterns remain valid. The final extension is set by the output format and occupied names are numbered to avoid collisions.
 
-PSD sources are readable in supported workflows, but KIM6 cannot publish PSD output. A missing required format causes a preflight problem and can be corrected through **Fix Recipe…** by adding **Convert Format** and choosing an available output type. KIM6 does not silently choose a fallback encoder.
+PSD sources are readable in supported workflows, but KIMng cannot publish PSD output. A missing required format causes a preflight problem and can be corrected through **Fix Recipe…** by adding **Convert Format** and choosing an available output type. KIMng does not silently choose a fallback encoder.
 
 The supplied **Web Export** recipe auto-orients the input, fits it within 1600 × 1600 pixels without upscaling, applies sRGB color handling, converts to JPEG at quality 95, strips all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each original. Set Creator / Artist, Set Copyright Notice, and Set Usage Rights are present but disabled in the shipped recipe. The destination is configured in the recipe; an output-directory picker appears only for recipes configured to ask on run.
 
@@ -269,7 +269,7 @@ Accepts JPEG image content only. Quality is a decimal integer 1–100. Custom mo
 kim_all contactsheet [--paper letter|a4] [--orientation portrait|landscape] [--grid 3x4|4x5|5x7] [--labels both|number|filename|none] [--fit fit|fill] [--background white|black] [--dpi 150|300] [--title TEXT] [--output PATH] [--interactive] -- IMAGE...
 ```
 
-Creates a validated multi-page PDF contact sheet from selected single-frame images. Defaults: US Letter, portrait, 4x5 grid, number-and-filename labels, fit without cropping, white background, and 300 DPI. Other options include A4, landscape, 3x4 or 5x7 grids, center cropping, alternative labels, black background, and 150 DPI. Interactive mode asks for the settings. KIM6 stages and validates the PDF before collision-safe creation or separately authorized replacement. The selected images are never overwritten.
+Creates a validated multi-page PDF contact sheet from selected single-frame images. Defaults: US Letter, portrait, 4x5 grid, number-and-filename labels, fit without cropping, white background, and 300 DPI. Other options include A4, landscape, 3x4 or 5x7 grids, center cropping, alternative labels, black background, and 150 DPI. Interactive mode asks for the settings. KIMng stages and validates the PDF before collision-safe creation or separately authorized replacement. The selected images are never overwritten.
 
 ### `convert`
 
@@ -367,7 +367,7 @@ EXIF-date formats include `YYYYMMDD_HHMMSS`, `YYYY-MM-DD_HH-MM-SS`, `YYYY-DD-MM_
 
 Sequential mode prompts for a base name, starting number, and minimum number width (1–18). Supported modes allow a separate output directory.
 
-KIM6 checks the complete batch for naming conflicts before making changes. Occupied paths are not overwritten. Cross-device moves copy and validate the bytes and metadata before publishing without clobbering and removing the unchanged source.
+KIMng checks the complete batch for naming conflicts before making changes. Occupied paths are not overwritten. Cross-device moves copy and validate the bytes and metadata before publishing without clobbering and removing the unchanged source.
 
 ### `resize`
 
@@ -388,7 +388,7 @@ kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 
 Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; `--size full` preserves the original animation by copying its bytes. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [File handling](#output-and-file-handling).
 
-KIM6 does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIM6 reports the directory so the files can be attached manually.
+KIMng does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIMng reports the directory so the files can be attached manually.
 
 ### `rotate`
 
@@ -462,7 +462,7 @@ kim_all video --size hd720|hd1080 --crf 17|23|29 --codec libx264|libx265 --conta
 kim_all video --size hd720|hd1080 --codec av1 --av1-quality high|balanced|smallest|custom --container orig|mp4 -- VIDEO...
 ```
 
-Dolphin exposes six MP4 presets for each of H.264 and H.265 (720p/1080p with three quality choices). Original-container output remains available through the CLI. For AV1 encoding, KIM6 uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, Smallest File CRF 42, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed through the CLI; the Dolphin AV1 menu offers six MP4 presets. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
+Dolphin exposes six MP4 presets for each of H.264 and H.265 (720p/1080p with three quality choices). Original-container output remains available through the CLI. For AV1 encoding, KIMng uses `libsvtav1` when available or `libaom-av1` otherwise. If neither encoder is available, the operation fails rather than substituting H.264 or H.265. AV1 High uses CRF 28, Balanced CRF 35, Smallest File CRF 42, with encoder-specific speed settings; those values are not comparable to the H.264/H.265 CRFs. `custom` prompts for AV1 quality and speed through the CLI; the Dolphin AV1 menu offers six MP4 presets. Original-container mode fails when codecs/streams are incompatible instead of forcing MP4. Aspect ratio and orientation are handled; no unnecessary upscaling.
 
 ### `videoaudio`
 
@@ -515,7 +515,7 @@ Opens the installed `LICENSE.md` using `xdg-open`.
 kim_all manual
 ```
 
-Opens the installed HTML User Guide using KIM6's standalone Qt viewer. If Qt WebEngine is unavailable, the viewer can offer to open the guide in the system browser.
+Opens the installed HTML User Guide using KIMng's standalone Qt viewer. If Qt WebEngine is unavailable, the viewer can offer to open the guide in the system browser.
 
 ### `settings`
 
@@ -523,7 +523,7 @@ Opens the installed HTML User Guide using KIM6's standalone Qt viewer. If Qt Web
 kim_all settings
 ```
 
-Opens the graphical KIM6 settings dialog. No selected files are required.
+Opens the graphical KIMng settings dialog. No selected files are required.
 
 ## Troubleshooting
 

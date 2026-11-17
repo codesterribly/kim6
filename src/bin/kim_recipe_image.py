@@ -115,7 +115,7 @@ def inherited_quality(fmt):
     if key is None: return 90  # Unused lossless controls, or an explicit-quality codec.
     value = literal_settings({key:'95'})[key]
     if not value.isascii() or not value.isdigit() or not 1 <= int(value) <= 100:
-        raise RecipeError(key + ' in KIM6 Settings must be 1–100. Correct Settings or enter a quality override.')
+        raise RecipeError(key + ' in KIMng Settings must be 1–100. Correct Settings or enter a quality override.')
     return int(value)
 
 
@@ -465,7 +465,7 @@ class ImageHandler:
                 definitions[op]['category'] = CATEGORIES[0] if op == 'image.crop' else CATEGORIES[2]
                 definitions[op]['description'] = ('Crop the oriented image, then optionally resize proportionally. Manual areas use relative coordinates on every image.' if op == 'image.crop' else 'Visible pixels, independent of embedded rights metadata. Place after all geometry and color steps; missing embedded fields are omitted.')
             if op == 'image.convert':
-                definitions[op]['description'] = 'One output per input. JPEG/BMP/PDF/HEIC use white backgrounds; GIF uses palette transparency. JPEG/WebP/AVIF quality can inherit KIM6 Web Export Settings or use an override.'
+                definitions[op]['description'] = 'One output per input. JPEG/BMP/PDF/HEIC use white backgrounds; GIF uses palette transparency. JPEG/WebP/AVIF quality can inherit KIMng Web Export Settings or use an override.'
                 definitions[op]['parameters']['quality'].update(settings_key='Web Export quality',settings_field='quality')
             if op == 'image.resize_exact': definitions[op]['description'] = 'Sets both dimensions exactly; the image may stretch.'
             descriptions = {
@@ -482,7 +482,7 @@ class ImageHandler:
                 definitions[op]['parameters'] = {'value': {
                     'type': 'text', 'default': None, 'settings_key': SETTING_KEYS[SETTING_FIELDS[op]], 'settings_field': SETTING_FIELDS[op],
                     'label': LABELS[op].removeprefix('Set ')}}
-                definitions[op]['description'] = 'Defaults to KIM6 Settings. Typing creates a recipe-specific override.'
+                definitions[op]['description'] = 'Defaults to KIMng Settings. Typing creates a recipe-specific override.'
             if op == 'metadata.copyright':
                 for key, spec in definitions[op]['parameters'].items():
                     spec.update(settings_key=SETTING_KEYS[key], settings_field=key)
@@ -542,7 +542,7 @@ class ImageHandler:
         settings = copyright_settings() if any(any(s.get(k) is None for k in self.operation_definitions()[s['op']]['parameters']) for s in active) else {}
         for step in active:
             if step['op'] in SETTING_FIELDS and step.get('value') is None and not self.parameter_value(step, 'value', settings).strip():
-                raise RecipeError(LABELS[step['op']] + ' has no inherited Settings value. Enter an override or set KIM6 Settings.')
+                raise RecipeError(LABELS[step['op']] + ' has no inherited Settings value. Enter an override or set KIMng Settings.')
             if step['op'] == 'metadata.copyright' and any(step.get(k) is None for k in COPYRIGHT_TAGS) and not any(self.parameter_value(step,k,settings).strip() for k in COPYRIGHT_TAGS):
                 raise RecipeError('Set Copyright requires at least one nonempty value from Settings or an override.')
         return settings
@@ -669,7 +669,7 @@ class ImageHandler:
                 raise RecipeError('Unsupported output format')
             if step['quality'] is not None: integer(step['quality'], 1, 100)
             elif step['format'] in ('heic','heif','jxl') or (step['format'] == 'jp2' and step.get('jp2_mode') == 'lossy'):
-                raise RecipeError('KIM6 Settings has no quality default for ' + step['format'].upper() + '. Enter a quality override.')
+                raise RecipeError('KIMng Settings has no quality default for ' + step['format'].upper() + '. Enter a quality override.')
             for key, choices in (('jp2_mode', ('lossless','lossy')), ('tiff_compression', ('zip','lzw','none')), ('depth', ('preserve','8','16'))):
                 if step.get(key, CONVERT_OPTIONS[key]) not in choices: raise RecipeError('Invalid conversion ' + key)
             if type(step.get('jpeg_progressive', False)) is not bool: raise RecipeError('jpeg_progressive must be boolean')
@@ -995,7 +995,7 @@ class ImageHandler:
         if fmt == 'psd' and conversion is None:
             raise OutputFormatRequired(
                 'This recipe needs an output format for Photoshop files. '
-                'KIM6 can read PSD files but cannot save new PSD files. '
+                'KIMng can read PSD files but cannot save new PSD files. '
                 'Add “Convert Format” and choose JPEG, PNG, TIFF or another supported output format. '
                 'Your original PSD will remain unchanged.')
         if not encode and fmt not in FORMATS:
@@ -1081,7 +1081,7 @@ class ImageHandler:
                           'GPS: ' + gps_state, 'AI fields: ' + ai_state,
                           'ICC: ' + color_state, 'Output timestamp: ' + timestamp_state]
         if conversion and conversion['quality'] is None and quality_setting(fmt) and not compression:
-            final_metadata.append('Quality source: KIM6 Settings - ' + quality_setting(fmt))
+            final_metadata.append('Quality source: KIMng Settings - ' + quality_setting(fmt))
         if capture and capture.tzinfo is None and any(s['op'] in ('metadata.set_capture','metadata.shift_capture') for s in steps):
             final_metadata.append('Image capture timezone: Unknown; EXIF/XMP have no offset. IPTC time is omitted to avoid an invented timezone.')
         output_depth = (conversion or {}).get('depth','preserve')

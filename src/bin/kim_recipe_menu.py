@@ -35,9 +35,9 @@ def render(library, dispatcher):
     if recipes: actions.append('_SEPARATOR_')
     actions += ['KIMRecipe0Run', 'KIMRecipe1Editor']
     command = exec_argument(str(dispatcher)) + ' recipe '
-    lines = ['[Desktop Entry]', 'Type=Service', 'Icon=view-list-details', 'Name=KIM6',
+    lines = ['[Desktop Entry]', 'Type=Service', 'Icon=view-list-details', 'Name=KIMng',
              'X-KDE-ServiceTypes=KonqPopupMenu/Plugin', 'MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;', 'X-KDE-Protocol=file',
-             'X-KDE-Submenu=KIM6 - Recipes', 'X-KIM6-Managed=true',
+             'X-KDE-Submenu=KIMng - Recipes', 'X-KIM6-Managed=true',
              'Actions=' + ';'.join(actions) + ';']
     for r in recipes:
         duplicate = sum(x['name'].casefold() == r['name'].casefold() for x in recipes) > 1
@@ -58,7 +58,7 @@ def render(library, dispatcher):
 def installed_paths():
     runtime = Path(__file__).absolute().parent.parent
     if runtime.name != 'kim6' or runtime.resolve() != runtime:
-        raise RecipeError('No active installed KIM6 runtime; run sync from an installed dispatcher')
+        raise RecipeError('No active installed KIMng runtime; run sync from an installed dispatcher')
     return runtime.parent / 'kim_recipes.desktop', runtime / 'bin' / 'kim_all'
 
 

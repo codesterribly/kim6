@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit pre-processing review for KIM6 Web Export."""
+"""Explicit pre-processing review for KIMng Web Export."""
 
 import os
 import sys
@@ -35,7 +35,7 @@ class WebExportReview(QDialog):
         self.errors = {}
         self.source_notices = {}
 
-        self.setWindowTitle("KIM6 - Review Web Export")
+        self.setWindowTitle("KIMng - Review Web Export")
         visible_rows = min(len(records), 8)
         self.resize(
             1050,
@@ -58,7 +58,7 @@ class WebExportReview(QDialog):
         )
         policy = QLabel(
             f"Color policy: {color_text}. "
-            "Source metadata is stripped. KIM6 may retain or install "
+            "Source metadata is stripped. KIMng may retain or install "
             "an ICC profile in the finished export. "
             "Original images are never modified."
         )
@@ -116,7 +116,7 @@ class WebExportReview(QDialog):
 
             if "unprofiled" in tags:
                 notices.append(
-                    "Unprofiled RGB/grayscale source: KIM6 assumed "
+                    "Unprofiled RGB/grayscale source: KIMng assumed "
                     "sRGB for color interpretation."
                 )
 

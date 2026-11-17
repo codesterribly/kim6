@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 conservative PNG/APNG metadata container filtering.
+"""KIMng conservative PNG/APNG metadata container filtering.
 
 Preserves encoded image and animation data without re-encoding.
 Unknown or unsupported metadata structures fail closed when their

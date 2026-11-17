@@ -18,7 +18,7 @@ class PhotoDateDialog(QDialog):
         super().__init__(parent); self.kind, self.files = kind,list(files); self.worker=None; self.pending=False; self.closing=False
         self.policy,self.seeds,self.plan=policy,seeds,None
         self.form=None
-        self.setWindowTitle('KIM6 - ' + TITLES[kind]); self.resize(1050,620)
+        self.setWindowTitle('KIMng - ' + TITLES[kind]); self.resize(1050,620)
         layout=QVBoxLayout(self); form=QFormLayout(); self.form=form; layout.addLayout(form)
         # Both capture-date sources use the same preview and publisher.
         self.source_choice = None
@@ -242,7 +242,7 @@ class PhotoDateDialog(QDialog):
     def use_set(self):
         if self.source_choice is not None:
             self.source_choice.setCurrentIndex(0)
-        self.kind='set'; self.setWindowTitle('KIM6 - '+TITLES['set']); self.form.setRowVisible(self.capture,True); self.form.setRowVisible(self.adjust,False); self.fix.hide()
+        self.kind='set'; self.setWindowTitle('KIMng - '+TITLES['set']); self.form.setRowVisible(self.capture,True); self.form.setRowVisible(self.adjust,False); self.fix.hide()
         self.advanced.set_zone('unknown'); self.fields.setEnabled(True); self.advanced.toggle.setChecked(False)
         embedded=self.zone.findData('embedded')
         if embedded >= 0: self.zone.model().item(embedded).setEnabled(False)

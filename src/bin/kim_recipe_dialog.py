@@ -563,7 +563,7 @@ class RecipeWidget(QWidget):
                 if step['op'] == 'image.convert':
                     from kim_recipe_image import quality_setting
                     source = ': ' + (quality_setting(step['format']) or 'quality not inherited for this format')
-                label.setText('Inherited from KIM6 Settings' + source + (': not set' if not value else ''))
+                label.setText('Inherited from KIMng Settings' + source + (': not set' if not value else ''))
             else:
                 label.setText('Custom override' if step[key] and key != 'quality' else '' if step[key] else 'Blank override: leave this field unchanged')
             label.setWordWrap(True)

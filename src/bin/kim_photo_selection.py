@@ -627,7 +627,7 @@ def main():
     import sys
     from PySide6.QtWidgets import QApplication
 
-    parser = argparse.ArgumentParser(description='KIM6 thumbnail image picker')
+    parser = argparse.ArgumentParser(description='KIMng thumbnail image picker')
     parser.add_argument('--title', default='Add images')
     parser.add_argument('--directory', default='')
     args = parser.parse_args()

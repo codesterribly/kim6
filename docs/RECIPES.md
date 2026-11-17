@@ -1,13 +1,13 @@
 # Recipes: Reusable Photo Workflows
 
-Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIM6 - Recipes menu**. A recipe can handle one image or a batch. KIM6 shows what it intends to produce before processing, and **recipes never modify the source images**.
+Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIMng - Recipes menu**. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and **recipes never modify the source images**.
 
 ## Start in Dolphin
 
-![KDE Dolphin KIM6 - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
+![KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
 
 1. Select one or more supported images and right-click.
-2. Open **KIM6 - Recipes → Choose saved recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
+2. Open **KIMng - Recipes → Choose saved recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
 3. Review the selected images and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
 4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
 
@@ -33,12 +33,12 @@ The following recipes are shipped with this checkout. You can duplicate a built-
 
 ## Web Export preset submenu versus recipe
 
-KIM6 provides two distinct Web Export workflows:
+KIMng provides two distinct Web Export workflows:
 
-- **KIM6 - Web Export** offers twelve direct Dolphin presets,
+- **KIMng - Web Export** offers twelve direct Dolphin presets,
   covering JPEG, PNG, WebP, and AVIF at three maximum
   image sizes (1600, 800, and 128 pixels).
-- **KIM6 - Recipes → Choose saved recipe… → Web Export**
+- **KIMng - Recipes → Choose saved recipe… → Web Export**
   runs the built-in, multi-step recipe.
 
 The built-in recipe auto-orients images, fits them within
@@ -51,7 +51,7 @@ paths. Do not assume their output settings are identical.
 
 ## Create and edit recipes
 
-![KIM6 Recipe Editor with ordered steps, destination choices, and live output preview](images/screenshots/12-recipe-editor.png)
+![KIMng Recipe Editor with ordered steps, destination choices, and live output preview](images/screenshots/12-recipe-editor.png)
 
 Open **Recipe editor…** from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.
 
@@ -112,7 +112,7 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 
 In **Rename Output File**, `{filename}` means the original name without its extension. A pattern of `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.
 
-Previously saved patterns using `{stem}` continue to work. KIM6 determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. When a destination filename already exists, KIM6 assigns a collision-safe name rather than replacing that file.
+Previously saved patterns using `{stem}` continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. When a destination filename already exists, KIMng assigns a collision-safe name rather than replacing that file.
 
 ## Preflight and output preview
 
@@ -124,7 +124,7 @@ Adding JPEG and PSD files does not require the interface to freeze until the bat
 
 ## Photoshop PSD inputs and Fix Recipe
 
-KIM6 can **read** PSD images in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix Recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIM6 does not silently choose a format on your behalf.
+KIMng can **read** PSD images in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix Recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIMng does not silently choose a format on your behalf.
 
 After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.
 

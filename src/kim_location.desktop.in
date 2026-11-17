@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Service
 Icon=mark-location
-Name=KIM6
+Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=04Report;03Apply;05Reduce;07StripGPS;
-_X-KDE-Submenu=KIM6 - Location/GPS
+_X-KDE-Submenu=KIMng - Location/GPS
 X-KIM6-Managed=true
 
 [Desktop Action 03Apply]

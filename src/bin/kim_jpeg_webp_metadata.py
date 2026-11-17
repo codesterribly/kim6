@@ -653,7 +653,7 @@ def main():
             args.output.unlink(missing_ok=True)
 
         print(
-            f'KIM6 reconstruction refused: {exc}',
+            f'KIMng reconstruction refused: {exc}',
             file=sys.stderr,
         )
         return 1

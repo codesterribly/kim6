@@ -1227,9 +1227,9 @@ def qt_classes():
                 self.default_convert_seeds = []
 
             self.setWindowTitle(
-                'KIM6 - Remove Metadata'
+                'KIMng - Remove Metadata'
                 if spec['operation'] == 'strip'
-                else 'Review changes'
+                else 'KIMng - Review Changes'
             )
 
             layout = QVBoxLayout(self)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 graphical creation settings and shared ordered image selection.
+"""KIMng graphical creation settings and shared ordered image selection.
 
 The dialogs collect approved source order and creation settings. The Bash
 dispatcher retains responsibility for source validation, rendering, safe staging,
@@ -81,7 +81,7 @@ class ImageSourceInspector(QThread):
                     break
                 try:
                     if '\n' in path or '\r' in path:
-                        raise ValueError('KIM6 publication does not support paths containing line breaks')
+                        raise ValueError('KIMng publication does not support paths containing line breaks')
                     if (self.mode == 'slideshow'
                             and Path(path).suffix.lower().lstrip('.') not in SLIDESHOW_EXTENSIONS):
                         raise ValueError('Unsupported format; remove this image')
@@ -170,7 +170,7 @@ class SourceAdvisoryNotice(QLabel):
         self.records = source_advisories(paths, self.cache)
         count = len(self.records)
         if count == 1:
-            text = ('Photoshop image (PSD): KIM6 uses the saved composite or a best-effort '
+            text = ('Photoshop image (PSD): KIMng uses the saved composite or a best-effort '
                     'reconstruction. Layers, masks, text, effects and adjustments may look '
                     'different in the output.')
         elif count:
@@ -529,7 +529,7 @@ class SlideshowDialog(OrderedImageDialog):
         self.destination = Path(destination)
         self.max_images = 200
 
-        self.setWindowTitle('KIM6 - Create video slideshow')
+        self.setWindowTitle('KIMng - Create video slideshow')
         self.resize(760, 400)
         self.setMinimumWidth(640)
 
@@ -901,7 +901,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         self.frame_index = 0
         self.completed_cycles = 0
         self.sequence = ()
-        self.setWindowTitle('KIM6 - Create animated image')
+        self.setWindowTitle('KIMng - Create animated image')
         self.setMinimumWidth(640)
         self.resize(720, 400)
         layout = QVBoxLayout(self)
@@ -1452,7 +1452,7 @@ class GalleryDialog(OrderedImageDialog):
         # KIM6_GALLERY_CAPTIONS_PREVIEW_V1
         self.captions_by_path = {}
         self.destination = destination
-        self.setWindowTitle('KIM6 - Create an HTML gallery')
+        self.setWindowTitle('KIMng - Create an HTML gallery')
         self.setMinimumWidth(600)
         self.resize(760, 820)
         self.setMaximumHeight(900)
@@ -1756,7 +1756,7 @@ class PrintLayoutDialog(OrderedImageDialog):
         self.tiff = tiff
         self.extensions = ('tiff', 'tif') if tiff else ('pdf',)
         title = 'Multi-page TIFF' if tiff else 'Print Layout PDF'
-        self.setWindowTitle('KIM6 - Create ' + title)
+        self.setWindowTitle('KIMng - Create ' + title)
         self.setMinimumWidth(600)
         layout = QVBoxLayout(self)
         self.ordered = CreationImages(self, title)

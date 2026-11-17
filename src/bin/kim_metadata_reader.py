@@ -1,4 +1,4 @@
-"""Read-only, structured metadata access for the standalone KIM6 browser.
+"""Read-only, structured metadata access for the standalone KIMng browser.
 
 ExifTool's JSON output is kept as typed Python values. Entries retain the
 group-qualified name, tag identifier, source file and duplicate instance so

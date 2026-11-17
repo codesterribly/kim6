@@ -290,7 +290,7 @@ class WatermarkImagePicker(QFileDialog):
         worker, self.preview_worker = self.preview_worker, None
         if not self.closing and worker.key == self.preview_key and not worker.cancelled:
             self.selected_preview.image = worker.image
-            self.selected_preview.message = THUMBNAIL_STATES[worker.state] + '.\nYou can still select this file; KIM6 validates it before execution.'
+            self.selected_preview.message = THUMBNAIL_STATES[worker.state] + '.\nYou can still select this file; KIMng validates it before execution.'
             info = worker.metadata
             details = f"{info['width']} × {info['height']} pixels · {info['format']}" if info else 'Dimensions / format unavailable'
             self.preview_info.setText(details + ('\n' + THUMBNAIL_STATES[worker.state] + ': ' + worker.error if worker.error else ''))
@@ -702,7 +702,7 @@ class ImageOperationDialog(QDialog):
             from kim_recipe_image import copyright_settings
             try:
                 value = copyright_settings()[key]
-                message = 'Inherited from KIM6 Settings' + ('' if value.strip() else ': not set')
+                message = 'Inherited from KIMng Settings' + ('' if value.strip() else ': not set')
             except (OSError, RecipeError) as exc:
                 value = ''; message = 'Settings unavailable: ' + str(exc)
         editor.blockSignals(True); editor.setPlainText(value); editor.blockSignals(False)
@@ -969,7 +969,7 @@ class ImageOperationDialog(QDialog):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='KIM6 crop and visible overlays (new derivatives only)')
+    parser = argparse.ArgumentParser(description='KIMng crop and visible overlays (new derivatives only)')
     parser.add_argument('operation', choices=('crop', 'overlay')); parser.add_argument('files', nargs='+')
     args = parser.parse_args()
     app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -986,7 +986,7 @@ def main():
         run.exec()
         return int(not run.execution_succeeded)
     except (OSError, RecipeError) as exc:
-        QMessageBox.critical(None, 'KIM6', str(exc)); return 1
+        QMessageBox.critical(None, 'KIMng', str(exc)); return 1
 
 
 if __name__ == '__main__':
