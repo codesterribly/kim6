@@ -59,6 +59,46 @@ jobs:
           python3 -B tests/run.py --pattern 'test_dolphin_ui_audit.py'
           python3 -B tests/run.py --pattern 'test_acceptance_toolkit.py'
 
+      - name: Install ImageMagick 7 for publication safety tests
+        run: |
+          set -euo pipefail
+
+          version=7.1.2-36
+          archive="ImageMagick-${version}-portable-Q16-linux-x64.tar.xz"
+          url="https://download.imagemagick.org/archive/binaries/${archive}"
+
+          mkdir -p "$RUNNER_TEMP/imagemagick7" "$RUNNER_TEMP/kimng-ci-bin"
+
+          curl --fail --location --retry 3 \
+            --output "$RUNNER_TEMP/$archive" "$url"
+
+          tar -xJf "$RUNNER_TEMP/$archive" \
+            -C "$RUNNER_TEMP/imagemagick7"
+
+          magick_binary="$(find "$RUNNER_TEMP/imagemagick7" \
+            -type f -name magick -perm /111 -print -quit)"
+
+          test -n "$magick_binary"
+
+          ln -s "$magick_binary" "$RUNNER_TEMP/kimng-ci-bin/magick"
+
+          cat > "$RUNNER_TEMP/kimng-ci-bin/identify" <<'IDENTIFY'
+          #!/bin/bash
+          exec "$(dirname "$0")/magick" identify "$@"
+          IDENTIFY
+          chmod +x "$RUNNER_TEMP/kimng-ci-bin/identify"
+
+          echo "$RUNNER_TEMP/kimng-ci-bin" >> "$GITHUB_PATH"
+
+          "$RUNNER_TEMP/kimng-ci-bin/magick" -version
+          "$RUNNER_TEMP/kimng-ci-bin/identify" -version
+
+          "$RUNNER_TEMP/kimng-ci-bin/magick" \
+            -size 4x4 xc:red "$RUNNER_TEMP/kimng-ci-image.png"
+
+          "$RUNNER_TEMP/kimng-ci-bin/identify" \
+            -format '%m %w %h' "$RUNNER_TEMP/kimng-ci-image.png"
+
       - name: Critical overwrite and APNG regressions
         run: |
           for test in test_policy_authorization.py test_policy_final_boundary.py test_inplace_authorization.py test_apng_chunk_detection.py test_apng_fail_closed.py; do
