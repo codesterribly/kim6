@@ -520,7 +520,7 @@ class ImageOperationDialog(QDialog):
         self.loading = True; self.worker = None; self.generation = 0; self.pending = False; self.closing = False
         self.dimensions = None; self.checked_generation = None
         self.fields = {}
-        self.setWindowTitle('KIMng - Crop images' if self.crop and self.standalone else 'Crop image' if self.crop else 'Add watermark / overlay'); self.resize(1160, 870)
+        self.setWindowTitle('KIMng - Crop images' if self.crop and self.standalone else 'Crop image' if self.crop else 'KIMng - Add watermark / overlay'); self.resize(1100, 820)
         layout = QVBoxLayout(self)
         note = QLabel('One crop configuration applies to all selected images. Preview each image before reviewing changes.' if self.crop else
                       'Visible overlays change image pixels independently of embedded rights metadata. Size and margins are percentages of each final image’s shorter edge; relative placement applies to every selected image.')
@@ -543,7 +543,10 @@ class ImageOperationDialog(QDialog):
         else: self.overlay_controls()
         if self.standalone: self.output_controls()
         self.geometry = QLabel(); self.geometry.setTextFormat(Qt.PlainText); self.geometry.setWordWrap(True); layout.addWidget(self.geometry)
-        self.table = QTableWidget(0, 4); self.table.setHorizontalHeaderLabels(['Image', 'Original dimensions', 'Crop / overlay plan', 'Planned output / issues'])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels([
+            'Image', 'Original', 'Planned', 'Status'
+        ])
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers); self.table.setWordWrap(True)
         header = self.table.horizontalHeader()
         header.setStretchLastSection(False)
@@ -553,7 +556,7 @@ class ImageOperationDialog(QDialog):
             0, QHeaderView.Stretch
         )
         header.setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
+            1, QHeaderView.Interactive
         )
         header.setSectionResizeMode(
             2, QHeaderView.Interactive
@@ -562,9 +565,11 @@ class ImageOperationDialog(QDialog):
             3, QHeaderView.Interactive
         )
 
-        self.table.setColumnWidth(2, 220)
-        self.table.setColumnWidth(3, 260)
-        self.table.setMinimumHeight(145)
+        self.table.setColumnWidth(1, 125)
+        self.table.setColumnWidth(2, 125)
+        self.table.setColumnWidth(3, 90)
+        self.table.setMinimumHeight(115)
+        self.table.setMaximumHeight(175)
         if self.crop:
             self.table.hide()
             self.batch_summary = QLabel()
@@ -585,7 +590,7 @@ class ImageOperationDialog(QDialog):
         self.apply.setText(
             'Review changes…'
             if self.standalone and self.crop
-            else 'Review outputs…'
+            else 'Review changes…'
             if self.standalone
             else 'Use settings'
         )
@@ -900,13 +905,25 @@ class ImageOperationDialog(QDialog):
             original = f"{p.get('original_display_width', '?')} × {p.get('original_display_height', '?')}"
             plan = '\n'.join(p.get('crops' if self.crop else 'overlays', []))
             result = '; '.join(row.problems) if row.problems else f"{p.get('display_width', '?')} × {p.get('display_height', '?')} → {row.output}"
+            planned = (
+                f"{p.get('display_width', '?')} × "
+                f"{p.get('display_height', '?')}"
+                if not row.problems else 'Unavailable'
+            )
+            state = 'Blocked' if row.problems else (
+                'Warning' if row.warnings else 'Ready'
+            )
+            tooltip = '\n'.join(
+                [row.source, 'Overlay: ' + (plan or 'None'),
+                 'Output: ' + str(row.output)]
+                + ['Problem: ' + str(v) for v in row.problems]
+                + ['Warning: ' + str(v) for v in row.warnings]
+            )
             for column, value in enumerate(
-                (Path(row.source).name, original, plan, result)
+                (Path(row.source).name, original, planned, state)
             ):
                 item = QTableWidgetItem(value)
-                item.setToolTip(
-                    row.source if column == 0 else value
-                )
+                item.setToolTip(tooltip)
                 self.table.setItem(index, column, item)
             problems += [row.source + ': ' + p for p in row.problems]; warnings += [row.source + ': ' + w for w in row.warnings]
         self.table.resizeRowsToContents()
@@ -980,6 +997,22 @@ class ImageOperationDialog(QDialog):
             if result == 131:
                 return
             self.crop_result = result
+        elif self.standalone:
+            from kim_recipe_run import RunRecipeDialog
+            runner = RunRecipeDialog(
+                self.result_recipe,
+                self.files,
+                operation_title=self.windowTitle(),
+                parent=self,
+            )
+            result = runner.exec()
+            if result == 131:
+                runner.deleteLater()
+                return
+            self.overlay_result = int(
+                not runner.execution_succeeded
+            )
+            runner.deleteLater()
 
         self.timer.stop(); self.closing = True
         super().accept()
@@ -1007,10 +1040,7 @@ def main():
         if dialog.exec() != QDialog.Accepted: return 1
         if args.operation == 'crop':
             return dialog.crop_result
-        from kim_recipe_run import RunRecipeDialog
-        run = RunRecipeDialog(dialog.result_recipe, files, operation_title=dialog.windowTitle())
-        run.exec()
-        return int(not run.execution_succeeded)
+        return dialog.overlay_result
     except (OSError, RecipeError) as exc:
         QMessageBox.critical(None, 'KIMng', str(exc)); return 1
 

@@ -104,6 +104,28 @@ class InputFilesView(QTreeWidget):
         else: event.ignore()
 
 
+def explain_review_failure(error):
+    """Explain known failures without weakening validation."""
+    message = str(error)
+
+    if (
+        "Incomplete extended XMP" in message
+        and "[minor]" in message
+    ):
+        return (
+            "ExifTool found incomplete extended XMP metadata. "
+            "KIMng could not verify that the metadata would be "
+            "preserved safely, so this output was blocked. "
+            "The original image remains unchanged."
+        )
+
+    return (
+        "KIMng could not safely complete this operation. "
+        "The affected output was not published. "
+        "See technical details for the reported error."
+    )
+
+
 def file_count(n):
     return f"{n} {'file' if n == 1 else 'files'}"
 
@@ -178,14 +200,35 @@ class RecipeWorker(QThread):
     item_finished = Signal(dict, int)
     stage_changed = Signal(str)
 
-    def __init__(self, recipe, files, chosen=None, parent=None):
+    def __init__(
+        self, recipe, files, chosen=None, parent=None,
+        omit_overlay_metadata=False,
+        auto_metadata_fallback=False,
+    ):
         super().__init__(parent)
-        self.recipe, self.files, self.chosen = copy.deepcopy(recipe), list(files), chosen
+        self.recipe, self.files, self.chosen = (
+            copy.deepcopy(recipe), list(files), chosen
+        )
         self.results, self.error, self.cancelled = [], None, False
+        self.omit_overlay_metadata = bool(omit_overlay_metadata)
+        self.auto_metadata_fallback = bool(auto_metadata_fallback)
 
     def run(self):
         from kim_image_ops import logo_inspections
-        with logo_inspections(): self.execute_files()
+        from kim_recipe_image import (
+            standalone_overlay_metadata_policy,
+            automatic_watermark_metadata_fallback,
+        )
+        with (
+            standalone_overlay_metadata_policy(
+                self.omit_overlay_metadata
+            ),
+            automatic_watermark_metadata_fallback(
+                self.auto_metadata_fallback
+            ),
+            logo_inspections(),
+        ):
+            self.execute_files()
 
     def execute_files(self):
         from kim_process import inspection_context
@@ -278,16 +321,30 @@ class PreflightWorker(QThread):
     inspected = Signal(object, int)
     stage_changed = Signal(str)
 
-    def __init__(self, recipe, files, chosen=None, binding_error=None, parent=None, checked_inputs=None):
+    def __init__(
+        self, recipe, files, chosen=None, binding_error=None,
+        parent=None, checked_inputs=None,
+        omit_overlay_metadata=False,
+    ):
         super().__init__(parent)
-        self.recipe, self.files, self.chosen = copy.deepcopy(recipe), list(files), chosen
+        self.recipe, self.files, self.chosen = (
+            copy.deepcopy(recipe), list(files), chosen
+        )
         self.binding_error = binding_error
         self.checked_inputs = copy.deepcopy(checked_inputs or {})
         self.cancelled = False
+        self.omit_overlay_metadata = bool(omit_overlay_metadata)
 
     def run(self):
         from kim_image_ops import logo_inspections
-        with logo_inspections(): self.inspect_files()
+        from kim_recipe_image import standalone_overlay_metadata_policy
+        with (
+            standalone_overlay_metadata_policy(
+                self.omit_overlay_metadata
+            ),
+            logo_inspections(),
+        ):
+            self.inspect_files()
 
     def inspect_files(self):
         outputs = set()
@@ -364,6 +421,7 @@ class RunRecipeDialog(QDialog):
         super().__init__(parent)
         self.recipe = copy.deepcopy(recipe)
         self.operation_title = operation_title
+        self.omit_overlay_metadata = False
         self.files = list(files)
         self.execution_recipe, self.binding_error = confirmation_snapshot(recipe) if recipe else (None, None)
         self.add_worker = None; self._addition_queue = []; self._addition_items = []; self.input_revision = 0
@@ -392,7 +450,14 @@ class RunRecipeDialog(QDialog):
         self.results = []
         self.execution_succeeded = False
         self.editor_dialog = None; self._close_after_editor = False
-        self.setWindowTitle(operation_title or 'Run a Recipe'); self.resize(1120, 820)
+        self.setWindowTitle(
+            operation_title + ' - Review Changes'
+            if operation_title else 'Run a Recipe'
+        )
+        self.resize(
+            1010 if operation_title else 1120,
+            635 if operation_title else 820
+        )
         layout = QVBoxLayout(self)
         selection = QHBoxLayout()
         label = QLabel('&Recipe:')
@@ -417,8 +482,7 @@ class RunRecipeDialog(QDialog):
         self.heading.setTextFormat(Qt.PlainText); self.heading.setWordWrap(True)
         if operation_title:
             self.heading.setText(
-                'Review Changes: '
-                + operation_title.split('@', 1)[0].strip()
+                'Review the exact planned outputs before applying.'
             )
         layout.addWidget(self.heading)
         self.count = QLabel('Inputs: ' + file_count(len(self.files))); layout.addWidget(self.count)
@@ -472,19 +536,75 @@ class RunRecipeDialog(QDialog):
         self.choose_destination.clicked.connect(self.select_destination)
         self.choose_destination.setVisible(bool(recipe and recipe['destination'].get('ask')))
         self.destination_label.setText('Destination: ' + self.destination_description() if recipe else 'Choose a recipe to inspect its destination.')
-        dest.addWidget(self.destination_label, 1); dest.addWidget(self.choose_destination); layout.addLayout(dest)
-        self.summary = QLabel(); self.summary.setTextFormat(Qt.PlainText); layout.addWidget(self.summary)
+        dest.addWidget(self.destination_label, 1)
+        dest.addWidget(self.choose_destination)
+        if not operation_title:
+            layout.addLayout(dest)
+        self.summary = QLabel()
+        self.summary.setTextFormat(Qt.PlainText)
+        layout.addWidget(self.summary)
+
+        self.metadata_policy_note = QLabel(
+            "Source metadata will be omitted from this "
+            "watermarked derivative. The original is unchanged."
+        )
+        self.metadata_policy_note.setWordWrap(True)
+        self.metadata_policy_note.hide()
+        layout.addWidget(self.metadata_policy_note)
         self.preflight_busy=QProgressBar(); self.preflight_busy.setRange(0,0)
         self.preflight_busy.setAccessibleName('Inspecting selected images'); self.preflight_busy.hide()
         layout.addWidget(self.preflight_busy)
-        self.diagnostics = QPlainTextEdit(); self.diagnostics.setReadOnly(True); self.diagnostics.setMaximumHeight(100)
+        self.problem_explanation = QLabel()
+        self.problem_explanation.setWordWrap(True)
+        self.problem_explanation.setTextFormat(Qt.PlainText)
+        self.problem_explanation.hide()
+        if operation_title:
+            layout.addWidget(self.problem_explanation)
+
+        self.technical_details_button = QPushButton(
+            "Show technical details"
+        )
+        self.technical_details_button.setCheckable(True)
+        self.technical_details_button.hide()
+        if operation_title:
+            layout.addWidget(self.technical_details_button)
+
+        self.diagnostics = QPlainTextEdit()
+        self.diagnostics.setReadOnly(True)
+        self.diagnostics.setMaximumHeight(150)
         layout.addWidget(self.diagnostics)
+
+        if operation_title:
+            self.diagnostics.hide()
+            self.technical_details_button.toggled.connect(
+                self.diagnostics.setVisible
+            )
         self.fix_recipe_button=QPushButton('Fix recipe…'); self.fix_recipe_button.setAccessibleName('Fix recipe: choose a Photoshop output format')
         self.fix_recipe_button.clicked.connect(self.fix_recipe); self.fix_recipe_button.hide(); layout.addWidget(self.fix_recipe_button)
-        self.warning_view = WarningView(); layout.addWidget(self.warning_view)
+        self.warning_view = WarningView()
+        layout.addWidget(self.warning_view)
+        if operation_title:
+            self.warning_view.expand.hide()
+            self.warning_view.details.hide()
+            self.warning_view.copy.hide()
+            if hasattr(self, 'technical_details_button'):
+                self.technical_details_button.hide()
+
+        if operation_title:
+            layout.addLayout(dest)
         safety = QLabel('Originals are never overwritten. KIMng saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
         safety.setWordWrap(True); layout.addWidget(safety)
-        buttons = QHBoxLayout(); buttons.addStretch(1)
+        from kim_dialog_buttons import style_button
+
+        buttons = QHBoxLayout()
+        if operation_title:
+            self.back_button = QPushButton('Back')
+            style_button(self.back_button, 'back')
+            self.back_button.clicked.connect(
+                self.return_to_settings
+            )
+            buttons.addWidget(self.back_button)
+        buttons.addStretch(1)
         self.run_button = QPushButton(
             ('Apply Changes to ' if operation_title
              else 'Run Recipe on ')
@@ -495,7 +615,6 @@ class RunRecipeDialog(QDialog):
         self.cancel_button = QPushButton('Cancel')
         self.cancel_button.clicked.connect(self.reject)
 
-        from kim_dialog_buttons import style_button
         style_button(self.run_button, 'apply')
         style_button(self.cancel_button, 'cancel')
 
@@ -505,6 +624,50 @@ class RunRecipeDialog(QDialog):
         if self.files: self.inputs.setCurrentItem(self.inputs.topLevelItem(0))
         self.update_file_actions()
         self.start_preflight()
+
+    def return_to_settings(self):
+        if not self.operation_title:
+            return
+        if (
+            self.worker is not None
+            or self.preflight_worker is not None
+            or self.add_worker is not None
+            or self.filters_worker is not None
+            or self._addition_queue
+        ):
+            self.summary.setText(
+                'Inspection or execution is still in progress.'
+            )
+            return
+        if self.results:
+            return
+        self.done(131)
+
+    def show_operation_problems(self, problems):
+        if not self.operation_title:
+            return
+
+        problems = [
+            str(problem)
+            for problem in problems
+            if str(problem).strip()
+        ]
+
+        if not problems:
+            self.problem_explanation.hide()
+            self.technical_details_button.hide()
+            self.diagnostics.hide()
+            return
+
+        self.problem_explanation.setText(
+            explain_review_failure(problems[0])
+        )
+        self.problem_explanation.show()
+
+        self.technical_details_button.show()
+        self.diagnostics.setVisible(
+            self.technical_details_button.isChecked()
+        )
 
     def update_file_actions(self):
         idle = self.worker is None and not self._closing
@@ -794,7 +957,15 @@ class RunRecipeDialog(QDialog):
         self.summary.setText(file_count(len(self.files)) + ' selected; inspecting…')
         if not self.files:
             self.summary.setText('0 files selected; use Add images or drop images here.'); return
-        worker = PreflightWorker(self.execution_recipe, self.files, self.chosen, self.binding_error, self,checked_inputs=self.checked_inputs)
+        worker = PreflightWorker(
+            self.execution_recipe,
+            self.files,
+            self.chosen,
+            self.binding_error,
+            self,
+            checked_inputs=self.checked_inputs,
+            omit_overlay_metadata=self.omit_overlay_metadata,
+        )
         worker.generation = self.generation
         self.preflight_worker = worker
         worker.file_started.connect(self.preflight_started)
@@ -844,10 +1015,20 @@ class RunRecipeDialog(QDialog):
             self.problem_messages[index] = [str(self.files[index]) + ': ' + issue for issue in row.problems]
             if ordered: self.diagnostics.appendPlainText('\n'.join(self.problem_messages[index]))
             else: self.diagnostics.setPlainText('\n'.join(message for i in sorted(self.problem_messages) for message in self.problem_messages[i]))
+            self.diagnostics.show()
         if previous is not None and previous.warnings:
             self.warning_view.set_rows(self.rows.values())
         else: self.warning_view.add_row(row)
         self.preflight_active=None
+
+        if self.operation_title:
+            problems = [
+                message
+                for index in sorted(self.problem_messages)
+                for message in self.problem_messages[index]
+            ]
+            self.show_operation_problems(problems)
+
         if not self._closing:
             self.update_summary()
             selected = self.inputs.currentItem()
@@ -915,6 +1096,8 @@ class RunRecipeDialog(QDialog):
                 self.selector.blockSignals(True); self.selector.setCurrentIndex(-1); self.selector.blockSignals(False)
                 self.summary.setText(str(exc)); return
         self.run_button.setEnabled(False); self.choose_destination.setEnabled(False)
+        if self.operation_title:
+            self.back_button.setEnabled(False)
         self.selector.setEnabled(False); self.search.setEnabled(False); self.create_button.setEnabled(False)
         self.add_photos.setEnabled(False); self.remove_selected.setEnabled(False); self.clear_list.setEnabled(False); self.inputs.setEnabled(False)
         recipe, files, chosen = self.validated_snapshot
@@ -931,7 +1114,17 @@ class RunRecipeDialog(QDialog):
         self.progress.setWindowModality(Qt.WindowModal); self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False); self.progress.setAutoReset(False)
         self.execution_succeeded = False
-        self.worker = RecipeWorker(recipe, files, chosen, self)
+        self.worker = RecipeWorker(
+            recipe, files, chosen, self,
+            omit_overlay_metadata=self.omit_overlay_metadata,
+            auto_metadata_fallback=(
+                bool(self.operation_title)
+                and 'watermark / overlay'
+                    in self.operation_title.casefold()
+                and len(files) == 1
+                and not self.omit_overlay_metadata
+            ),
+        )
         self.progress.canceled.connect(self.cancel_execution)
         self.worker.item_started.connect(self.execution_started)
         self.worker.item_finished.connect(self.execution_item)
@@ -977,8 +1170,71 @@ class RunRecipeDialog(QDialog):
         self.summary.setText(self.job_status.label().split('\n')[-1] + ('; cancelled before remaining files' if worker.cancelled else '') + ('; execution error' if worker.error else ''))
         report = [r['output'] if r['ok'] else r['source'] + ': ' + r['error'] for r in worker.results+skipped]
         if worker.error: report.append(worker.error)
-        self.diagnostics.setPlainText('\n'.join(report)); self.diagnostics.setMaximumHeight(200)
+        self.diagnostics.setPlainText('\n'.join(report))
+        self.diagnostics.setMaximumHeight(200)
+        if worker.error or not self.execution_succeeded:
+            self.diagnostics.show()
+        if self.operation_title:
+            failures = [
+                result.get('error', '')
+                for result in worker.results
+                if not result.get('ok')
+            ]
+            if worker.error:
+                failures.append(worker.error)
+
+            self.show_operation_problems(failures)
+
+            if failures:
+                succeeded = sum(
+                    bool(result.get('ok'))
+                    for result in worker.results
+                )
+                failed = len(failures)
+                self.summary.setText(
+                    f"{succeeded} succeeded, "
+                    f"{failed} failed. "
+                    "Failed outputs were not published."
+                )
+
+        metadata_warnings = [
+            result.get('warning', '')
+            for result in worker.results
+            if result.get('ok')
+            and result.get('warning')
+        ]
+
+        if self.operation_title and metadata_warnings:
+            self.summary.setText(metadata_warnings[0])
+
+            created = [
+                result['output']
+                for result in worker.results
+                if result.get('ok') and result.get('output')
+            ]
+
+            self.diagnostics.setPlainText(
+                'Created: ' + '\\n'.join(created)
+            )
+            self.diagnostics.setMaximumHeight(72)
+            self.diagnostics.show()
+
+            if hasattr(self, 'problem_explanation'):
+                self.problem_explanation.hide()
+            if hasattr(self, 'technical_details_button'):
+                self.technical_details_button.hide()
+
         self.cancel_button.setText('Close')
+
+        failures = [
+            item.get("error", "")
+            for item in worker.results
+            if not item.get("ok")
+        ]
+        if worker.error:
+            failures.append(worker.error)
+
+
         if not self._closing:
             for control in (self.selector,self.search,self.create_button,self.choose_destination): control.setEnabled(True)
             self.update_file_actions()

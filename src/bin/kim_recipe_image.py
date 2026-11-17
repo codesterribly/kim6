@@ -19,6 +19,41 @@ from kim_psd_source import prepared, PSDError, WARNING as PSD_WARNING, header as
 from kim_process import run_process, metadata_diagnostics, session_warnings, stage
 from kim_recipe_core import RecipeError, OutputFormatRequired, keys, text, enabled_steps, config_path, format_output_pattern, display_output_pattern
 
+_OMIT_STANDALONE_OVERLAY_METADATA = contextvars.ContextVar(
+    "kimng_omit_standalone_overlay_metadata",
+    default=False,
+)
+
+
+@contextlib.contextmanager
+def standalone_overlay_metadata_policy(enabled=False):
+    """Explicit transient output policy, scoped to one worker."""
+    token = _OMIT_STANDALONE_OVERLAY_METADATA.set(
+        bool(enabled)
+    )
+    try:
+        yield
+    finally:
+        _OMIT_STANDALONE_OVERLAY_METADATA.reset(token)
+
+
+_AUTO_WATERMARK_METADATA_FALLBACK = contextvars.ContextVar(
+    "kimng_auto_watermark_metadata_fallback",
+    default=False,
+)
+
+
+@contextlib.contextmanager
+def automatic_watermark_metadata_fallback(enabled=False):
+    token = _AUTO_WATERMARK_METADATA_FALLBACK.set(
+        bool(enabled)
+    )
+    try:
+        yield
+    finally:
+        _AUTO_WATERMARK_METADATA_FALLBACK.reset(token)
+
+
 FORMATS = {'jpeg': 'jpg', 'png': 'png', 'webp': 'webp', 'avif': 'avif',
            'bmp': 'bmp', 'gif': 'gif', 'heic': 'heic', 'heif': 'heif',
            'jp2': 'jp2', 'jxl': 'jxl', 'pdf': 'pdf', 'tiff': 'tiff'}
@@ -738,6 +773,24 @@ class ImageHandler:
         numbered_steps = [(number,step) for number,step in enumerate(steps,1) if step.get('enabled',True)]
         steps = [step for _,step in numbered_steps]
         settings = self.validate_context(steps)
+
+        omit_source_metadata = (
+            _OMIT_STANDALONE_OVERLAY_METADATA.get()
+        )
+        if omit_source_metadata:
+            active = [s["op"] for s in steps]
+            if (
+                active.count("image.overlay") != 1
+                or any(
+                    op.startswith("metadata.")
+                    for op in active
+                )
+            ):
+                raise RecipeError(
+                    "Metadata-free watermark mode requires "
+                    "one overlay and no metadata-editing steps."
+                )
+
         info, fmt, width, height = inspect(source)
         stage('Checking recipe operations')
         orientation_tag = info.get('Orientation')
@@ -1011,7 +1064,13 @@ class ImageHandler:
         stage('Checking metadata')
         descriptive = json.loads(run(['exiftool','-json','-EXIF:all','-XMP:all','-IPTC:all',str(source)]))[0]
         pixel_export = fmt in PIXEL_EXPORTS
-        strip_requested = any(s['op'] == 'metadata.strip_all' for s in steps)
+        strip_requested = (
+            omit_source_metadata
+            or any(
+                s['op'] == 'metadata.strip_all'
+                for s in steps
+            )
+        )
         descriptive_removed = any(s['op'] == 'metadata.strip_descriptive' for s in steps)
         # Photoshop's nonstandard Manifest list can be retained as a raw XMP
         # packet. Editing that packet would make ExifTool repair unrelated
@@ -1047,7 +1106,7 @@ class ImageHandler:
             color_state = 'sRGB pixels' + ('; profile removed' if strip_requested or fmt in ('bmp','pdf') else '; sRGB ICC')
         if fmt in ('png','bmp','gif','pdf','tiff') or (fmt == 'jp2' and (conversion or {}).get('jp2_mode','lossless') == 'lossless'): quality = None
         expected = {}
-        strip_all = strip_gps = False
+        strip_all = strip_gps = omit_source_metadata
         for edit in edits:
             if edit[:3] == ['-EXIF:all=','-IPTC:all=','-XMP:all=']:
                 expected.clear(); strip_gps = True
@@ -1091,6 +1150,14 @@ class ImageHandler:
                       str(source_depth) + '-bit samples retained' if output_depth == 'preserve' else output_depth + '-bit output')
         if fmt == 'gif': precision += '; palette colors and limited transparency'
         final_metadata.append('Sample precision: ' + precision)
+        if omit_source_metadata:
+            final_metadata = [
+                "Source metadata: omitted from this derivative",
+                "EXIF, IPTC, XMP, GPS: omitted",
+                "Color: converted to sRGB; embedded profile omitted",
+                "Original image: unchanged",
+            ]
+
         # Describe every final rights field, including fields removed before restoration.
         final_metadata.extend(tag + ': ' + (json.dumps(value, ensure_ascii=False) if value is not None else 'absent')
                               for tag, value in copyright_values.items())
@@ -1112,7 +1179,10 @@ class ImageHandler:
                 'warnings': ([PSD_WARNING] if info.get('FileType') == 'PSD' else []) + session_warnings() + date_warnings + [w for r in overlays for w in r['warnings']],
                 'compression': compression, 'compression_label': compression_label,
                 'conversion': conversion, 'pixel_export': pixel_export, 'force_srgb': force_srgb, 'profile_srgb': srgb_pixels,
-                'encode': encode, 'quality': quality, 'timestamp': timestamp, 'timestamp_ns': timestamp_ns, 'auto_oriented': auto_oriented}
+                'encode': encode, 'quality': quality, 'timestamp': timestamp, 'timestamp_ns': timestamp_ns, 'auto_oriented': auto_oriented,
+                'omit_source_metadata': omit_source_metadata,
+                '_recipe_index': index,
+                '_source_stem': stem}
 
     def execute(self, source, output, steps, state):
         stage('Encoding image' if state['encode'] else 'Copying source')
@@ -1164,21 +1234,104 @@ class ImageHandler:
                     profile_file.write_bytes(blob)
                     run(['exiftool','-overwrite_original','-ICC_Profile<='+str(profile_file),str(output)])
                 finally: profile_file.unlink(missing_ok=True)
-            if not state['pixel_export']:
+            try:
+                if (
+                    not state['pixel_export']
+                    and not state['omit_source_metadata']
+                ):
 
-                # Copy descriptive metadata without replacing the encoded color profile.
-                tags = json.loads(run(['exiftool', '-json', '-EXIF:all', '-XMP:all', '-IPTC:all', str(source)]))[0]
-                if len(tags) > 1 and not state['strip_all'] and not any(s['op'] == 'metadata.strip_descriptive' for s in steps):
-                    # Block-copy XMP verbatim. Rebuilding every XMP tag may
-                    # "repair" unrelated Photoshop structures (e.g. Manifest)
-                    # and change digest/provenance data the user did not edit.
-                    groups = ['-EXIF:all','-XMP'] + (['-IPTC'] if fmt not in NO_LEGACY_IPTC else [])
-                    run(['exiftool', '-overwrite_original', '-TagsFromFile', str(source)] + groups + [str(output)], allow_png_iptc=fmt == 'png')
-                run(['exiftool', '-overwrite_original',
-                     '-EXIF:ExifImageWidth=' + str(state['properties']['width']),
-                     '-EXIF:ExifImageHeight=' + str(state['properties']['height']), str(output)])
-                if state['auto_oriented']:
-                    run(['exiftool', '-overwrite_original', '-EXIF:Orientation#=1', '-XMP-tiff:Orientation#=1', str(output)])
+                    # Copy descriptive metadata without replacing the encoded color profile.
+                    tags = json.loads(run(['exiftool', '-json', '-EXIF:all', '-XMP:all', '-IPTC:all', str(source)]))[0]
+                    if len(tags) > 1 and not state['strip_all'] and not any(s['op'] == 'metadata.strip_descriptive' for s in steps):
+                        # Block-copy XMP verbatim. Rebuilding every XMP tag may
+                        # "repair" unrelated Photoshop structures (e.g. Manifest)
+                        # and change digest/provenance data the user did not edit.
+                        groups = ['-EXIF:all','-XMP'] + (['-IPTC'] if fmt not in NO_LEGACY_IPTC else [])
+                        run(['exiftool', '-overwrite_original', '-TagsFromFile', str(source)] + groups + [str(output)], allow_png_iptc=fmt == 'png')
+                    run(['exiftool', '-overwrite_original',
+                         '-EXIF:ExifImageWidth=' + str(state['properties']['width']),
+                         '-EXIF:ExifImageHeight=' + str(state['properties']['height']), str(output)])
+                    if state['auto_oriented']:
+                        run(['exiftool', '-overwrite_original', '-EXIF:Orientation#=1', '-XMP-tiff:Orientation#=1', str(output)])
+
+            except RecipeError:
+                # A standalone watermark can still produce a
+                # valid image when optional source metadata
+                # cannot be copied. Never apply this policy to
+                # ordinary Recipes or other image operations.
+                active = [
+                    step['op']
+                    for step in steps
+                    if step.get('enabled', True)
+                ]
+
+                eligible = (
+                    _AUTO_WATERMARK_METADATA_FALLBACK.get()
+                    and not state['omit_source_metadata']
+                    and active.count('image.overlay') == 1
+                    and not any(
+                        op.startswith('metadata.')
+                        for op in active
+                    )
+                )
+
+                if not eligible:
+                    raise
+
+                from kim_process import checkpoint
+                checkpoint()
+                stage(
+                    'Rebuilding watermark without source metadata'
+                )
+
+                # Re-plan from the same private source snapshot.
+                # Metadata removal and sRGB handling use the
+                # existing verified image-planning code.
+                with standalone_overlay_metadata_policy(True):
+                    clean_state = self.plan(
+                        source,
+                        steps,
+                        state['_recipe_index'],
+                        stem=state['_source_stem'],
+                    )
+
+                    if (
+                        clean_state['name'] != state['name']
+                        or clean_state['extension']
+                            != state['extension']
+                        or clean_state['format'] != state['format']
+                        or (
+                            clean_state['properties']['width'],
+                            clean_state['properties']['height'],
+                        ) != (
+                            state['properties']['width'],
+                            state['properties']['height'],
+                        )
+                    ):
+                        raise RecipeError(
+                            'Automatic watermark fallback changed '
+                            'the reviewed filename, format, or dimensions'
+                        )
+
+                    # Discard the partially modified staging output.
+                    # The original source is never touched.
+                    output.unlink(missing_ok=True)
+                    checkpoint()
+
+                    self.execute(
+                        source, output, steps, clean_state
+                    )
+
+                # The caller verifies the actual clean output
+                # against this new metadata-free state before
+                # publication.
+                state.clear()
+                state.update(clean_state)
+                state['optional_metadata_warning'] = (
+                    'Image created. Some metadata could not be '
+                    'preserved. Check the final image.'
+                )
+                return
         else:
             shutil.copyfile(source, output)
         if state['edits']: stage('Updating metadata')

@@ -536,7 +536,14 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1):
                         job_stage('Writing / publishing output')
                         checkpoint()
                         published = publish(output, fd, name)
-                        results.append({'source': str(source), 'output': str(directory / published), 'ok': True})
+                        results.append({
+                            'source': str(source),
+                            'output': str(directory / published),
+                            'ok': True,
+                            'warning': state.get(
+                                'optional_metadata_warning', ''
+                            ),
+                        })
                 finally:
                     os.close(fd)
             except (OSError, RecipeError, PSDError) as exc:
