@@ -321,7 +321,7 @@ class ConversionTests(unittest.TestCase):
         self.workspace.respond("magick", output_base64=base64.b64encode(payload).decode(), cancel=True)
         result = self.workspace.dispatch("convert", "png", self.source)
         self.assertFalse(self.source.with_suffix(".png").exists())
-        self.assertTrue(any("Failed: 1" in " ".join(c["argv"]) for c in result.calls))
+        self.assertTrue(any("Cancelled: 1" in " ".join(c["argv"]) for c in result.calls))
         self.assert_clean()
 
     def test_real_authorized_overwrite_keeps_mode_and_fresh_timestamp(self):
@@ -394,12 +394,18 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
-    def test_same_format_create_keeps_numbering(self):
+    def test_same_format_create_is_noop(self):
         before = self.workspace.observe(self.source)
         self.workspace.use_real_conversion()
         result = self.workspace.dispatch("convert", "ppm", self.source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_real_image(self.source.with_name("photo 雪_1.ppm"), "PPM")
+        self.assertEqual(result.outputs, {})
+        self.assertFalse(any(
+            call["tool"] == "magick" for call in result.calls
+        ))
+        self.assertFalse(
+            self.source.with_name("photo 雪_1.ppm").exists()
+        )
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 
@@ -478,70 +484,76 @@ class ConversionTests(unittest.TestCase):
         self.assertIn(b"acTL", output.read_bytes(), "success requires a real APNG animation")
         self.assertEqual(self.workspace.observe(source), before)
 
+        # Same-format APNG conversion without extra processing is a no-op.
+        apng_before = self.workspace.observe(output)
         roundtrip = self.workspace.dispatch("convert", "apng", output)
-        self.assertEqual(roundtrip.returncode, 0, (roundtrip.stderr, roundtrip.events))
-        second_output = output.with_name("two-frames_1.apng")
-        self.assertTrue(second_output.is_file())
-        second_probe = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-select_streams", "v:0",
-                                       "-count_frames", "-show_entries", "stream=codec_name,nb_read_frames",
-                                       "-of", "default=noprint_wrappers=1", str(second_output)], check=True,
-                                      capture_output=True, text=True, timeout=15).stdout
-        self.assertIn("codec_name=apng", second_probe)
-        self.assertIn("nb_read_frames=2", second_probe)
-        second_data = second_output.read_bytes()
-        second_offset = 8
-        second_animation_control = None
-        second_delays = []
-        while second_offset + 12 <= len(second_data):
-            length = struct.unpack_from(">I", second_data, second_offset)[0]
-            kind = second_data[second_offset + 4:second_offset + 8]
-            if kind == b'acTL':
-                second_animation_control = struct.unpack_from(">II", second_data, second_offset + 8)
-            elif kind == b'fcTL':
-                numerator, denominator = struct.unpack_from(">HH", second_data, second_offset + 28)
-                second_delays.append((numerator, denominator))
-            second_offset += length + 12
-        self.assertEqual(second_animation_control, animation_control)
-        self.assertEqual(second_delays, delays)
 
-        animated_gif = self.workspace.dispatch("convert", "gif", output)
-        self.assertFalse(output.with_name("two-frames_1.gif").exists())
-        self.assertFalse(any(call["tool"] == "magick" for call in animated_gif.calls))
-        self.assertTrue(any(call["tool"] == "kdialog" and "APNG" in " ".join(call["argv"])
-                            for call in animated_gif.calls))
-
-        flattened = self.workspace.dispatch("convert", "jpg", output)
-        self.assertFalse(output.with_suffix(".jpg").exists())
-        self.assertFalse(any(call["tool"] == "magick" for call in flattened.calls))
-        self.assertTrue(any(call["tool"] == "kdialog" and "APNG" in " ".join(call["argv"])
-                            for call in flattened.calls))
+        self.assertEqual(
+            roundtrip.returncode, 0,
+            (roundtrip.stderr, roundtrip.events),
+        )
+        self.assertEqual(roundtrip.outputs, {})
+        self.assertFalse(any(
+            call["tool"] == "magick"
+            for call in roundtrip.calls
+        ))
+        self.assertFalse(
+            output.with_name("two-frames_1.apng").exists()
+        )
+        self.assertEqual(self.workspace.observe(output), apng_before)
+        self.assertEqual(self.workspace.observe(source), before)
         self.assert_clean()
 
-    def test_real_gif_conversion_preserves_frame_delays_and_looping(self):
+    def test_real_gif_same_format_preserves_animation_without_reencoding(self):
         self.workspace.use_real_conversion()
         magick = shutil.which("magick")
         first = self.workspace.ppm("input/gif-first.ppm")
         second = self.workspace.path("input/gif-second.ppm")
-        second.write_bytes(b"P6\n3 2\n255\n" + bytes.fromhex(
-            "000000 000000 000000 000000 ffffff 000000"))
+        second.write_bytes(
+            b'P6\n3 2\n255\n'
+            + bytes.fromhex(
+                "000000 000000 000000 000000 ffffff 000000"
+            )
+        )
         source = self.workspace.path("input/timed.gif")
-        subprocess.run([magick, "-delay", "20", str(first), "-delay", "60", str(second),
-                        "-loop", "0", str(source)], check=True, capture_output=True, timeout=15)
+        subprocess.run(
+            [magick, "-delay", "20", str(first),
+             "-delay", "60", str(second),
+             "-loop", "0", str(source)],
+            check=True, capture_output=True, timeout=15
+        )
+
+        before = self.workspace.observe(source)
+        identify = shutil.which("identify")
+        exiftool = shutil.which("exiftool")
+
+        def animation_details():
+            delays = subprocess.run(
+                [identify, "-format", "%T\\n", str(source)],
+                check=True, capture_output=True, text=True,
+                timeout=10
+            ).stdout
+            looping = subprocess.run(
+                [exiftool, "-s", "-AnimationIterations", str(source)],
+                check=True, capture_output=True, text=True,
+                timeout=10
+            ).stdout
+            return delays, looping
+
+        original_details = animation_details()
+        self.assertEqual(original_details[0].splitlines(), ["20", "60"])
+        self.assertIn("Infinite", original_details[1])
+
         result = self.workspace.dispatch("convert", "gif", source)
-        self.assertEqual(result.returncode, 0, (result.stderr, result.events))
-        output = source.with_name("timed_1.gif")
-        source_delays = subprocess.run([shutil.which("identify"), "-format", "%T\n", str(source)],
-                                       check=True, capture_output=True, text=True, timeout=10).stdout
-        output_delays = subprocess.run([shutil.which("identify"), "-format", "%T\n", str(output)],
-                                       check=True, capture_output=True, text=True, timeout=10).stdout
-        self.assertEqual(output_delays, source_delays)
-        source_loop = subprocess.run([shutil.which("exiftool"), "-s", "-AnimationIterations", str(source)],
-                                     check=True, capture_output=True, text=True, timeout=10).stdout
-        output_loop = subprocess.run([shutil.which("exiftool"), "-s", "-AnimationIterations", str(output)],
-                                     check=True, capture_output=True, text=True, timeout=10).stdout
-        self.assertEqual(output_loop, source_loop)
-        self.assertEqual(output_delays.splitlines(), ["20", "60"])
-        self.assertIn("Infinite", output_loop)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.outputs, {})
+        self.assertFalse(any(
+            call["tool"] == "magick" for call in result.calls
+        ))
+        self.assertFalse(source.with_name("timed_1.gif").exists())
+        self.assertEqual(self.workspace.observe(source), before)
+        self.assertEqual(animation_details(), original_details)
         self.assert_clean()
 
     def test_real_optional_heic_jp2_and_jxl_decoders_are_used_when_available(self):
@@ -632,7 +644,7 @@ class ConversionTests(unittest.TestCase):
         self.assertFalse(source.with_suffix(".tiff").exists())
         self.assertFalse(any(call["tool"] == "magick" for call in result.calls))
         self.assertTrue(any(call["tool"] == "kdialog" and
-                            "animated playback" in " ".join(call["argv"])
+                            "Animated GIF playback is not verified" in " ".join(call["argv"])
                             for call in result.calls))
         self.assertEqual(self.workspace.observe(source), before)
         self.assert_clean()
