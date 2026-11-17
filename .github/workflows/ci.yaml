@@ -27,12 +27,26 @@ jobs:
       - name: Install ShellCheck, ExifTool and FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends shellcheck libimage-exiftool-perl ffmpeg
+          sudo apt-get install -y --no-install-recommends shellcheck libimage-exiftool-perl ffmpeg imagemagick-6.q16
           command -v shellcheck
           command -v exiftool
           exiftool -ver
           command -v ffmpeg
           ffmpeg -version
+          test -x /usr/bin/identify-im6.q16
+          if [ ! -e /usr/bin/identify ]; then
+            test ! -L /usr/bin/identify
+            sudo ln -s /usr/bin/identify-im6.q16 /usr/bin/identify
+          fi
+          python3 - <<'VERIFY_IDENTIFY'
+          import os
+          import shutil
+          import subprocess
+          executable = shutil.which("identify", path=os.defpath)
+          assert executable is not None, "System identify unavailable"
+          subprocess.run([executable, "-version"], check=True)
+          print("System image validator:", executable)
+          VERIFY_IDENTIFY
 
       - name: Bash syntax and ShellCheck
         run: |
