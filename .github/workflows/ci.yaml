@@ -1,4 +1,4 @@
-name: KIM6 fast checks
+name: KIMng fast checks
 
 on:
   push:

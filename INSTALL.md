@@ -44,7 +44,7 @@ local files to display the guide offline.
 
 KIMng requires KDE Plasma 6 and Dolphin.
 
-To install from a source checkout, you need `intltool-merge`, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIMng currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with `msgfmt` when they become available. No translated catalogs are required for installation.
+To install from a source checkout, you need Python 3 and PySide6 Qt Widgets (and Git if cloning the source). KIMng currently ships with an English interface. Older translation catalogs have been retired, and translated catalogs are not required for installation. The installer checks the required processing tools before installing.
 
 KIMng uses several common tools to process images and videos:
 

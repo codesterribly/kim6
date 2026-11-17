@@ -269,7 +269,7 @@ die() {
   printf 'ERROR: %s\n' "$message" >&2
   if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] &&
      command -v kdialog >/dev/null 2>&1; then
-    kdialog --title "$(gettext 'Kim')" --error "$message" >/dev/null 2>&1 || true
+    kdialog --title "$(gettext 'KIMng')" --error "$message" >/dev/null 2>&1 || true
   fi
   exit 1
 }
@@ -287,7 +287,7 @@ mk_workdir() {
 }
 
 # ---------------------------------------------------------------------------
-# KIM6 configuration
+# KIMng configuration
 # ---------------------------------------------------------------------------
 
 # Persistent settings:
@@ -479,12 +479,12 @@ confirm_inplace_overwrite() {
   [[ "$count" =~ ^[1-9][0-9]*$ ]] || return 1
 
   if [ "$(policy_mode)" = create ]; then
-    kdialog --title "$(gettext 'Kim')" --error \
+    kdialog --title "$(gettext 'KIMng')" --error \
       "$(gettext 'This action modifies original files. KIM_POLICY=create does not permit it; use KIM_POLICY=prompt to review the operation.')" 2>/dev/null || true
     return 1
   fi
 
-  choice="$(kdialog --title "$(gettext 'Kim')" --radiolist \
+  choice="$(kdialog --title "$(gettext 'KIMng')" --radiolist \
     "$(gettext 'This action replaces selected original images, not copies.')$(printf '\n%s %s\n%s %s' "$(gettext 'Action:')" "$action" "$(gettext 'Selected files:')" "$count")" \
     cancel "$(gettext 'Keep originals unchanged')" on \
     review "$(gettext 'Overwrite originals (confirmation required)')" off)" || return 1
@@ -497,7 +497,7 @@ confirm_inplace_overwrite() {
     "$(gettext 'Selected files:')" "$count" \
     "$(gettext 'Original files will be replaced without backup. KIMng cannot undo this operation.')")"
 
-  kdialog --title "$(gettext 'Kim')" --warningyesno "$warning" \
+  kdialog --title "$(gettext 'KIMng')" --warningyesno "$warning" \
     --yes-label "$(gettext 'Yes, overwrite selected originals')" \
     --no-label "$(gettext 'Cancel')"
 }
@@ -1202,7 +1202,7 @@ progress_error() {
 $(gettext 'Saved result retained:') $saved"; fi
     done < "$KIMDIR/published.outputs"
   fi
-  kdialog --title "$(gettext 'Kim')" --error "$message" 2>/dev/null || printf '%s\n' "$message" >&2
+  kdialog --title "$(gettext 'KIMng')" --error "$message" 2>/dev/null || printf '%s\n' "$message" >&2
 }
 
 # Fail before prompting or starting a batch when a required runtime command is
@@ -1263,11 +1263,11 @@ progress_cleanup() {
   local -a references=()
   [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/progress.refs" ] || return 0
   if ! mapfile -t references < "$KIMDIR/progress.refs"; then
-    printf 'Kim: cannot read owned progress dialog registry\n' >&2
+    printf 'KIMng: cannot read owned progress dialog registry\n' >&2
     return 0
   fi
   for ref in "${references[@]}"; do
-    progress_close "$ref" || printf 'Kim: could not close owned progress dialog %s\n' "$ref" >&2
+    progress_close "$ref" || printf 'KIMng: could not close owned progress dialog %s\n' "$ref" >&2
   done
 }
 
@@ -1831,7 +1831,7 @@ action_album() {
   dir="${1:-}"
   shift || true
   if ! collect_publication_inputs files "$@"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Album: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Album: select regular, unambiguous image files.')"
     return 1
   fi
   case "$dir" in
@@ -2212,14 +2212,14 @@ PYCHECK
   compress_stamps=()
   compress_reserved=()
 
-  local plan_source plan_dir plan_base plan_stem plan_ext
+  local plan_source plan_dir plan_stem plan_ext
   local plan_target plan_status plan_note plan_number
   local plan_stamp
 
   for plan_source in "${files[@]}"; do
     {
       IFS= read -r plan_dir
-      IFS= read -r plan_base
+      IFS= read -r
       IFS= read -r plan_stem
       IFS= read -r plan_ext
     } < <(split_path "$plan_source")
@@ -2344,7 +2344,7 @@ PYCHECK
   local format_settings progressive_setting optimize_setting
 
   local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Compressing images ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Compressing images ...')")"
 
   local counter=0
   local f dir base stem ext
@@ -2361,7 +2361,7 @@ PYCHECK
       IFS= read -r ext
     } < <(split_path "$f")
 
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Compressing file: ')$base"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Compressing file: ')$base"; then
       report_fail "$f"
       progress_close "$dbusRef" || true
       return 1
@@ -2626,17 +2626,17 @@ action_convert() {
     raw_files+=("$@")
   fi
   if [ -z "$FORMAT" ]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: missing format.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Convert: missing format.')"
     return 1
   fi
 
   # Keep format simple and safe as an extension.
   if ! [[ "$FORMAT" =~ ^[A-Za-z0-9]+$ ]]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: invalid format.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Convert: invalid format.')"
     return 1
   fi
   if [ "$bmp5" = true ] && [[ "${FORMAT,,}" != bmp ]]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: --bmp5 is valid only with BMP output.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Convert: --bmp5 is valid only with BMP output.')"
     return 1
   fi
   FORMAT="${FORMAT,,}"
@@ -2728,7 +2728,7 @@ action_convert() {
     fi
     # split_path uses newline records; refuse an ambiguous destination mapping.
     if [[ "$selected_path" == *$'\n'* ]]; then
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Convert: ambiguous filename.')"
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Convert: ambiguous filename.')"
       return 1
     fi
   done
@@ -2742,7 +2742,7 @@ action_convert() {
   else
     # Retain explicit authorization for non-preview CLI operations.
     mode="$(choose_output_mode \
-      "$(gettext 'Kim')" \
+      "$(gettext 'KIMng')" \
       "$(gettext 'Do you want to create new files?')" "${#files[@]}" mixed)"
   fi
 
@@ -2775,7 +2775,7 @@ action_convert() {
         outfile="$dir/$base"
       fi
       if [[ -n "${_convert_seen["$outfile"]+x}" ]]; then
-        kdialog --title "$(gettext 'Kim')" --error \
+        kdialog --title "$(gettext 'KIMng')" --error \
           "$(gettext 'Convert aborted. Two files would write the same destination:')\n\n$outfile"
         return 1
       fi
@@ -2789,7 +2789,7 @@ action_convert() {
       fi
       for selected in "${files[@]}"; do
         if [ "$outfile" -ef "$selected" ]; then
-          kdialog --title "$(gettext 'Kim')" --error \
+          kdialog --title "$(gettext 'KIMng')" --error \
             "$(gettext 'Convert aborted. Destination aliases a selected source:')\n\n$outfile"
           return 1
         fi
@@ -2820,7 +2820,7 @@ action_convert() {
   report_init
 
   local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Initialising ...')")"
 
   local counter=0
   local i dir base stem ext OUTFILE OUTTMP publication_mode n rc actual expected frame
@@ -2845,10 +2845,10 @@ action_convert() {
       IFS= read -r ext
     } < <(split_path "$i")
 
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Converting file: ')$base"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Converting file: ')$base"; then
       report_fail "$i"
       progress_close "$dbusRef"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
 
@@ -2922,7 +2922,7 @@ action_convert() {
       fi
     fi
     if [ "$rc" -ne 0 ]; then
-      kdialog --title "$(gettext 'Kim')" --error \
+      kdialog --title "$(gettext 'KIMng')" --error \
         "$(gettext 'Convert: APNG animation could not be safely inspected.')\n\n$base"
       report_fail "$i"; progress_value "$dbusRef" "$counter"; continue
     fi
@@ -3007,7 +3007,7 @@ action_convert() {
           -map 0:v:0 -an -sn -dn -fps_mode passthrough -c:v apng -plays "$apng_loop" \
           -final_delay "$apng_final_delay" -f apng "$OUTTMP")
         if [ "$rc" -eq 0 ]; then
-          if video_run_monitored "$dbusRef" "$(gettext 'Kim - Converting animated image: ')$base" \
+          if video_run_monitored "$dbusRef" "$(gettext 'KIMng - Converting animated image: ')$base" \
               "$apng_duration" "$apng_error" "${apng_args[@]}"; then
             rc=0
           else
@@ -3030,7 +3030,7 @@ action_convert() {
              "$apng_output_frames" -eq "$input_frames" ]] || rc=1
         fi
         if [ "$rc" -eq 0 ]; then
-          video_run_monitored "$dbusRef" "$(gettext 'Kim - Validating animated PNG: ')$base" \
+          video_run_monitored "$dbusRef" "$(gettext 'KIMng - Validating animated PNG: ')$base" \
             "$apng_duration" "$apng_error" -hide_banner -v error -xerror -nostdin -progress pipe:1 \
             -nostats -i "$OUTTMP" -map 0:v:0 -f null - || rc=$?
         fi
@@ -3211,7 +3211,7 @@ $output_diagnostic" ;;
   done
 
   progress_close "$dbusRef"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -3275,7 +3275,7 @@ action_gallery() {
   local -a files=() image_assets=() thumb_assets=()
   local -a kim6_selected_inputs=("$@")
   collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
     return 1
   }
   local nbfiles="${#files[@]}" TITLE AUTHOR COLUMNS
@@ -3349,7 +3349,7 @@ action_gallery() {
   esac
 
   if ! [[ "$COLUMNS" =~ ^[0-9]{1,4}$ ]] || [ "$COLUMNS" -le 0 ]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: columns must be a positive number.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Gallery: columns must be a positive number.')"
     return 1
   fi
   if [ -z "$start_dir" ] || [ ! -d "$start_dir" ]; then
@@ -3357,7 +3357,7 @@ action_gallery() {
   fi
   # The gallery parent directory was selected in the Qt dialog.
   base_dir="$(cd -P -- "$base_dir" && pwd -P)" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Gallery: selected output folder is unavailable.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Gallery: selected output folder is unavailable.')"
     return 1
   }
   [[ -n "$base_name" && "$base_name" != . && "$base_name" != .. && "$base_name" != */* &&
@@ -3375,7 +3375,7 @@ action_gallery() {
   fi
 
   local ref tmp='' stage_dir gallery_dir index_file script_dir resource_dir tpl1 tpl2
-  ref="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  ref="$(progress_open "$nbfiles" "$(gettext 'KIMng - Initialising ...')")"
   if progress_cancelled "$ref"; then
     progress_close "$ref"
     return 1
@@ -3455,10 +3455,10 @@ EOF
     counter=$((counter + 1))
     asset_name=''
     base="${file##*/}"
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')$base" || progress_cancelled "$ref"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Processing file: ')$base" || progress_cancelled "$ref"; then
       report_fail "$file"
       progress_close "$ref"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     info="$(identify -ping -format '%m|%w|%h|%n\n' -- "$file" 2>/dev/null)" || rc=1
@@ -3486,7 +3486,7 @@ EOF
     fi
     if progress_cancelled "$ref"; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       publication_fail "$ref" "$tmp" "$(gettext 'Gallery: publication interrupted; no gallery was published.')"
       return 1
     fi
@@ -3504,7 +3504,7 @@ EOF
     fi
     if progress_cancelled "$ref"; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       publication_fail "$ref" "$tmp" "$(gettext 'Gallery: publication interrupted; no gallery was published.')"
       return 1
     fi
@@ -3520,7 +3520,7 @@ EOF
     [ "$image_count" -eq 1 ] || rc=1
     if [ "$rc" -ne 0 ]; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       publication_fail "$ref" "$tmp" "$(gettext 'Gallery: an image or thumbnail could not be generated and validated.')"
       return 1
     fi
@@ -3539,7 +3539,7 @@ EOF
         "$escaped_name" "$caption_text"
     } >> "$index_file"; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot write the HTML gallery.')"
       return 1
     fi
@@ -3547,7 +3547,7 @@ EOF
     progress_value "$ref" "$counter"
     if progress_cancelled "$ref"; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       progress_close "$ref"
       return 1
     fi
@@ -3618,11 +3618,11 @@ KIM6_GALLERY_FALLBACK
   rm -f -- "$tmp" || { publication_fail "$ref" '' "$(gettext 'Gallery: cannot finalize the staged output.')"; return 1; }
   if progress_cancelled "$ref"; then
     progress_close "$ref"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   if ! publish_gallery_directory "$gallery_dir" "$target_dir"; then
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     publication_fail "$ref" '' "$(gettext 'Gallery: publication failed; existing directories were preserved.')"
     return 1
   fi
@@ -3630,7 +3630,7 @@ KIM6_GALLERY_FALLBACK
   progress_value "$ref" "$nbfiles"
   progress_close "$ref"
   xdg-open "$target_dir/index.html" >/dev/null 2>&1 || true
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   true
 }
 
@@ -3854,7 +3854,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
 
   local -a selected=()
   collect_publication_inputs selected "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Contact sheet: select regular, unambiguous image files.')"
     return 1
   }
   files=("${selected[@]}")
@@ -3865,7 +3865,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
   # Creation-only output; source images are never overwritten.
   mode=create
   prepare_derived_target "$requested" pdf "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Contact sheet: invalid or unsafe output destination.')"
     return 1
   }
   target="$DERIVED_TARGET"
@@ -3877,7 +3877,7 @@ case "$paper" in letter|a4) ;; *) die 'contactsheet: invalid paper' ;; esac
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
     frames="$(publication_input_frames "$file" "$KIMDIR/publication-records")" || return 1
     [ "$frames" -eq 1 ] || {
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Contact sheet: each source must be a single-frame image.')"
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Contact sheet: each source must be a single-frame image.')"
       return 1
     }
     if [ "$grid" = auto ]; then
@@ -4081,7 +4081,7 @@ action_print() {
   shift || true
   local -a kim6_selected_inputs=("$@")
   if ! collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
     return 1
   fi
   case "$dir" in ''|--*) dir="${files[0]%/*}" ;; esac
@@ -4112,7 +4112,7 @@ action_print() {
   mode=create
   [ -n "$outpdf" ] || return 1
   prepare_derived_target "$outpdf" pdf "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Print: invalid or unsafe output destination.')"
     return 1
   }
   outpdf="$DERIVED_TARGET"; mode="$DERIVED_MODE"
@@ -4120,7 +4120,7 @@ action_print() {
   for file in "${files[@]}"; do
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
     frame_count="$(publication_input_frames "$file" "$KIMDIR/publication-records")" || {
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Print: an input image could not be inspected.')"
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Print: an input image could not be inspected.')"
       return 1
     }
     frames=$((frames + frame_count))
@@ -4168,7 +4168,7 @@ action_tiffjoin() {
     esac
   done
   local -a kim6_selected_inputs=("$@")
-  collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
+  collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
   dir="${files[0]%/*}"
   if [ -z "$requested" ]; then
     local settings_file="$KIMDIR/tiffjoin-settings"
@@ -4187,7 +4187,7 @@ action_tiffjoin() {
   local extension=tiff
   [[ "${requested,,}" == *.tif ]] && extension=tif
   prepare_derived_target "$requested" "$extension" "$mode" "${files[@]}" || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: invalid or unsafe output destination.')"
     return 1
   }
   output="$DERIVED_TARGET"
@@ -4196,13 +4196,13 @@ action_tiffjoin() {
   for file in "${files[@]}"; do
     publication_prepare_source "$ref" "$file" "${#files[@]}" || return 1
     info="$(cat -- "$KIMDIR/publication-records")" || {
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: an input image could not be decoded.')"
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: an input image could not be decoded.')"
       return 1
     }
     while IFS= read -r record; do
       IFS='|' read -r format width height scenes <<< "$record"
       [[ "$format" =~ ^[A-Za-z0-9]+$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || {
-        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: an input frame has invalid dimensions or format.')"
+        kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: an input frame has invalid dimensions or format.')"
         return 1
       }
       source_geometry+=("$width|$height")
@@ -4210,7 +4210,7 @@ action_tiffjoin() {
     done <<< "$info"
   done
   [ "$frames" -gt 0 ] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'TIFF join: no image frames were found.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: no image frames were found.')"
     return 1
   }
   if progress_cancelled "$ref"; then
@@ -4673,7 +4673,7 @@ rename_source_stamp() {
 }
 
 rename_abort() {
-  kdialog --title "$(gettext 'Kim')" --error "$*" || true
+  kdialog --title "$(gettext 'KIMng')" --error "$*" || true
   die "$*"
 }
 
@@ -4838,7 +4838,7 @@ Would you like to choose another rename method?"; then
     read -r action_mode < "$KIMDIR/rename-policy"; rm -f -- "$KIMDIR/rename-policy"
     case "$action_mode" in create|overwrite) : ;; *) return 1 ;; esac
   else
-    action_mode="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
+    action_mode="$(choose_output_mode "$(gettext 'KIMng')" "$(gettext 'Do you want to create new files?')" "$#" rename)"
   fi
   [ "$action_mode" != cancel ] || return 1
   # Interactive renames go directly to the directory picker.
@@ -4895,7 +4895,7 @@ Would you like to choose another rename method?"; then
   done
   report_init
   local ref counter=0 index rc tmp source_device target_device interrupted=false published
-  ref="$(progress_open "${#sources[@]}" "$(gettext 'Kim - Planning renames ...')")"
+  ref="$(progress_open "${#sources[@]}" "$(gettext 'KIMng - Planning renames ...')")"
   # Complete preflight precedes the first copy/link/removal. EXIF failures are
   # accounted for individually and skipped; all other mapping conflicts abort.
   if preview_active; then
@@ -4905,7 +4905,7 @@ Would you like to choose another rename method?"; then
     if progress_cancelled "$ref"; then
       report_fail "$source"
       progress_close "$ref"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     { IFS= read -r parent; IFS= read -r base; IFS= read -r stem; IFS= read -r ext; } < <(split_path "$source")
@@ -4984,7 +4984,7 @@ Would you like to choose another rename method?"; then
       progress_value "$ref" "$counter"
       continue
     fi
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Renaming file: ')${source##*/}"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Renaming file: ')${source##*/}"; then
       report_fail "$source"
       break
     fi
@@ -5087,7 +5087,7 @@ Would you like to choose another rename method?"; then
     progress_value "$ref" "$counter"
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -5212,7 +5212,7 @@ action_resize() {
   esac
 
   if [ -z "$SCALE" ]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: missing scale.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Resize: missing scale.')"
     return 1
   fi
 
@@ -5228,7 +5228,7 @@ action_resize() {
 
   if [ "$mode" = create ] && [ -n "$outdir" ] &&
      { [ ! -d "$outdir" ] || [ ! -w "$outdir" ] || [ ! -x "$outdir" ]; }; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Resize: output directory is unavailable:') $outdir"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Resize: output directory is unavailable:') $outdir"
     return 1
   fi
 
@@ -5409,7 +5409,7 @@ action_resize() {
 
   report_init
   local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Initialising ...')")"
 
   local counter=0
   local i dir base stem ext OUTFILE OUTTMP n rc
@@ -5427,10 +5427,10 @@ action_resize() {
       IFS= read -r ext
     } < <(split_path "$i")
 
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Resizing file: ')$base"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Resizing file: ')$base"; then
       report_fail "$i"
       progress_close "$dbusRef"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
 
@@ -5617,7 +5617,7 @@ action_resize() {
   done
 
   progress_close "$dbusRef"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -5646,7 +5646,7 @@ action_resizeandsend() {
     case "$1" in
       --size)
         [ "$#" -ge 2 ] || {
-          kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: --size needs a value.')"
+          kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Email resize: --size needs a value.')"
           return 2
         }
         size="$2"
@@ -5658,7 +5658,7 @@ action_resizeandsend() {
         break
         ;;
       --*)
-        kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: unknown option.')"
+        kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Email resize: unknown option.')"
         return 2
         ;;
       *)
@@ -5668,7 +5668,7 @@ action_resizeandsend() {
     esac
   done
   if ! collect_publication_inputs files "${files[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Email resize: select regular, unambiguous image files.')"
     return 1
   fi
   local nbfiles="${#files[@]}"
@@ -5714,7 +5714,7 @@ action_resizeandsend() {
       ;;
   esac
   if [ "$size" != full ] && ! [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]]; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Email resize: size must be full or positive WIDTHxHEIGHT.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Email resize: size must be full or positive WIDTHxHEIGHT.')"
     return 1
   fi
   local max_width=0 max_height=0
@@ -5725,11 +5725,11 @@ action_resizeandsend() {
 
   report_init
   local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Initialising ...')")"
   local stage_index=0 out
   for i in "${files[@]}"; do
     counter=$((counter + 1))
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Preparing email image: ')${i##*/}"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Preparing email image: ')${i##*/}"; then
       interrupted=true
       break
     fi
@@ -5835,19 +5835,19 @@ action_resizeandsend() {
   # Present the measured results before the mail client is opened.
   if [ "$interrupted" = true ]; then
     progress_close "$dbusRef"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 130
   fi
 
   if [ "${REPORT_FAIL:-0}" -ne 0 ]; then
     progress_close "$dbusRef"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
 
   [ "${#prepared[@]}" -gt 0 ] || {
     progress_close "$dbusRef"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   }
 
@@ -5895,20 +5895,20 @@ action_resizeandsend() {
   local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments"
   if [ "${#prepared[@]}" -eq 0 ]; then
     progress_close "$dbusRef"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   if progress_cancelled "$dbusRef"; then interrupted=true; fi
   mkdir -p -- "$persistent_base" || {
     progress_close "$dbusRef"
     report_fail "$(gettext 'email attachment storage')"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   }
   persistent_dir="$(mktemp -d "$persistent_base/attachments.XXXXXX")" || {
     progress_close "$dbusRef"
     report_fail "$(gettext 'email attachment storage')"
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   }
   for out in "${prepared[@]}"; do
@@ -5916,7 +5916,7 @@ action_resizeandsend() {
       rm -rf -- "$persistent_dir"
       progress_close "$dbusRef"
       report_fail "$(gettext 'email attachment copy')"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     attach_paths+=("$persistent_dir/${out##*/}")
@@ -5924,8 +5924,8 @@ action_resizeandsend() {
   if progress_cancelled "$dbusRef"; then interrupted=true; fi
   progress_close "$dbusRef"
   if [ "$interrupted" = true ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Processing stopped. Completed attachments were kept here (not attached):') $persistent_dir"
-    report_finish_dialog "$(gettext 'Kim')"
+    kdialog --title "$(gettext 'KIMng')" --msgbox "$(gettext 'Processing stopped. Completed attachments were kept here (not attached):') $persistent_dir"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
 
@@ -5989,7 +5989,7 @@ action_resizeandsend() {
   esac
 
   if [ -z "$client" ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:") $persistent_dir"
+    kdialog --title "$(gettext 'KIMng')" --msgbox "$(gettext "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:") $persistent_dir"
   elif [ "$handoff" -ne 0 ]; then
     # A mail-client launch failure is not an image-processing failure.
     # Retain the prepared attachments for manual use.
@@ -6008,7 +6008,7 @@ $persistent_dir
 You can attach these files manually."
     return 1
   fi
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$interrupted" != true ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -6128,7 +6128,7 @@ action_transform_in_place() {
   if [ "${KIM_FLIP_OUTPUT_REVIEW:-0}" = 1 ]; then
     mode=create
   else
-    mode="$(choose_output_mode     "$(gettext 'Kim')"     "$(gettext 'How should KIMng save the results?')"     "${#files[@]}" originals)" || return 1
+    mode="$(choose_output_mode     "$(gettext 'KIMng')"     "$(gettext 'How should KIMng save the results?')"     "${#files[@]}" originals)" || return 1
   fi
   case "$mode" in
     create|overwrite) ;;
@@ -6143,7 +6143,7 @@ action_transform_in_place() {
       *) return 1 ;;
     esac
 
-    local flip_source flip_dir flip_base flip_stem flip_ext
+    local flip_source flip_dir flip_stem flip_ext
     local flip_tag flip_candidate
 
     : > "$KIMDIR/flip-output.inputs" || return 1
@@ -6154,7 +6154,7 @@ action_transform_in_place() {
       else
         {
           IFS= read -r flip_dir
-          IFS= read -r flip_base
+          IFS= read -r
           IFS= read -r flip_stem
           IFS= read -r flip_ext
         } < <(split_path "$flip_source")
@@ -6188,10 +6188,10 @@ action_transform_in_place() {
   local dimensions actual_dimensions identity source_icc actual_icc read_hint fixed_dimensions swap
   local target dir stem ext affix n effective_operation effective_angle
   local -A seen=()
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Transforming images ...')")"
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Transforming images ...')")"
   for i in "${files[@]}"; do
     counter=$((counter + 1))
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')${i##*/}"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Processing file: ')${i##*/}"; then
       report_fail "$i"
       break
     fi
@@ -6413,7 +6413,7 @@ action_transform_in_place() {
     progress_value "$ref" "$counter"
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -6603,7 +6603,7 @@ action_stripmeta() {
     return $?
   fi
   if [ "$remove_ai" = true ] && [ "$interactive" != true ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal.')" 2>/dev/null || true
+    kdialog --title "$(gettext 'KIMng')" --msgbox "$(gettext 'Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal.')" 2>/dev/null || true
   fi
 
   local mode
@@ -6611,7 +6611,7 @@ action_stripmeta() {
     mode="$approved_policy"
   else
     mode="$(choose_output_mode \
-      "$(gettext 'Kim')" \
+      "$(gettext 'KIMng')" \
       "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
   fi
   [ "$mode" != cancel ] || return 1
@@ -6619,7 +6619,7 @@ action_stripmeta() {
 
   report_init
   local dbusRef interrupted
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Initialising ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Initialising ...')")"
   local counter=0 i dir base stem ext OUTFILE OUTTMP n rc source_info actual frame read_hint
   # Compare decoded pixels as well as encoding, dimensions, frame order/count,
   # orientation, colorspace, gamma, frame canvas and timing/disposal.
@@ -6640,11 +6640,11 @@ action_stripmeta() {
       IFS= read -r ext
     } < <(split_path "$i")
 
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Stripping metadata from file: ')$base"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Stripping metadata from file: ')$base"; then
       # Preserve stripmeta failure accounting when the shared check stops early.
       report_fail "$i"
       progress_close "$dbusRef"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     if progress_cancelled "$dbusRef"; then
@@ -6840,7 +6840,7 @@ action_stripmeta() {
     progress_value "$dbusRef" "$counter"
   done
   progress_close "$dbusRef"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -7385,13 +7385,13 @@ action_stripmeta_selective() {
   [ "$strip_mode" = ai ] || [ "$remove_ai" != true ] || do_ai=true
   [ "$strip_mode" != ai ] || do_ai=true
   if [ "$interactive" != true ] && { [ "$strip_mode" = gps ] || [ "$do_ai" = true ]; }; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
+    kdialog --title "$(gettext 'KIMng')" --msgbox "$(gettext 'GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain.')" 2>/dev/null || true
   fi
   METADATA_INTERRUPTED=false
   if preview_active; then
     publication_mode="$(preview_value policy .)" || return 1
   else
-    publication_mode="$(choose_output_mode "$(gettext 'Kim')"       "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
+    publication_mode="$(choose_output_mode "$(gettext 'KIMng')"       "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"
     [ "$publication_mode" != cancel ] || return 1
   fi
   if [ "$interactive" = true ] && ! preview_active; then
@@ -7400,7 +7400,7 @@ action_stripmeta_selective() {
     preview_confirm strip "$publication_mode" "$preview_tag" mode "$strip_mode" remove_ai "$remove_ai" || return 1
   fi
   report_init
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
     # Metadata eligibility belongs to this file, never an earlier batch item.
     ai_remove=false
@@ -7408,7 +7408,7 @@ action_stripmeta_selective() {
     counter=$((counter + 1))
     tag="$strip_mode"
     [ "$remove_ai" != true ] || tag="${tag}_ai"
-    progress_begin_item "$ref" "$(gettext 'Kim - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
+    progress_begin_item "$ref" "$(gettext 'KIMng - Updating metadata: ')${source##*/}" || { report_fail "$source"; break; }
     if preview_active && [ "$(preview_value state "$source")" = skip ]; then
       report_skip "$source"
       progress_value "$ref" "$counter"
@@ -7512,7 +7512,7 @@ action_stripmeta_selective() {
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng')"
   [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -7793,7 +7793,7 @@ action_copyright() {
   fi
   if [ "$interactive" = true ] || { [ "$provided" != true ] && [ -z "$creator$notice$rights" ]; }; then
     interactive=true
-    policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+    policy="$(choose_output_mode "$(gettext 'KIMng')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
     action_options_dialog copyright "${files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
     [ "${#choices[@]}" -eq 3 ] || { progress_error 'The rights editor returned incomplete preview settings. No images were changed.'; return 1; }
@@ -7803,14 +7803,14 @@ action_copyright() {
   [ -z "$year" ] || [[ "$year" =~ ^[0-9]{4}$ ]] || die "copyright: year must be four digits"
   local counter=0 source ref target capture_year expected_value option rc
   if [ "$interactive" != true ]; then
-    policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+    policy="$(choose_output_mode "$(gettext 'KIMng')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
   fi
   if [ "$interactive" = true ]; then preview_confirm copyright "$policy" copyright creator "$creator" notice "$notice" rights "$rights" year "$year" || return 1; fi
   METADATA_INTERRUPTED=false
-  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
-    progress_begin_item "$ref" "$(gettext 'Kim - Setting rights: ')${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIMng - Setting rights: ')${source##*/}" || {
       report_fail "$source"
       break
     }
@@ -7857,7 +7857,7 @@ action_copyright() {
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 action_timeshift() {
@@ -7899,8 +7899,8 @@ action_timeshift() {
   fi
   if [ "$interactive" = true ] || [ -z "$offset" ]; then
     interactive=true
-    offset="$(kdialog --title "$(gettext 'Kim')" --inputbox "$(gettext 'Signed camera-time offset (±HH:MM:SS):')" '+00:00:00')" || return 1
-    fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Image capture, creation and modification dates')" capture "$(gettext 'Image capture time only')")" || return 1
+    offset="$(kdialog --title "$(gettext 'KIMng')" --inputbox "$(gettext 'Signed camera-time offset (±HH:MM:SS):')" '+00:00:00')" || return 1
+    fields="$(kdialog --title "$(gettext 'KIMng')" --menu "$(gettext 'Date fields to shift:')" all "$(gettext 'Image capture, creation and modification dates')" capture "$(gettext 'Image capture time only')")" || return 1
   fi
   [[ "$offset" =~ ^([+-])([0-9]{2,4}):([0-5][0-9]):([0-5][0-9])$ ]] || die "timeshift: offset must be signed HH:MM:SS"
   sign="${BASH_REMATCH[1]}"
@@ -7922,16 +7922,16 @@ action_timeshift() {
       "$(gettext 'Before:')" "${preview_before:-$(gettext 'no capture time')}" \
       "$(gettext 'After:')" "${preview_after:-$(gettext 'unavailable')}" \
       "$(gettext 'Apply this fixed local-clock offset? Timezone offsets are not converted.')")"
-    if ! kdialog --title "$(gettext 'Kim')" --yesno "$preview_message"; then
+    if ! kdialog --title "$(gettext 'KIMng')" --yesno "$preview_message"; then
       return 1
     fi
   fi
-  policy="$(choose_output_mode "$(gettext 'Kim')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+  policy="$(choose_output_mode "$(gettext 'KIMng')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
   METADATA_INTERRUPTED=false
-  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")" || return 1
+  report_init; ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initialising ...')")" || return 1
   for source in "${files[@]}"; do
     counter=$((counter + 1))
-    progress_begin_item "$ref" "$(gettext 'Kim - Shifting camera time: ')${source##*/}" || {
+    progress_begin_item "$ref" "$(gettext 'KIMng - Shifting camera time: ')${source##*/}" || {
       report_fail "$source"
       break
     }
@@ -7975,7 +7975,7 @@ action_timeshift() {
     progress_value "$ref" "$counter"
     [ "$METADATA_INTERRUPTED" != true ] || break
   done
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng')"; [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # A camera clock is not a filesystem instant without an explicit offset.
@@ -8113,11 +8113,11 @@ action_datesync() {
     return 1
   }
   if [ "$interactive" = true ] || [ -z "$direction" ]; then
-    direction="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'Choose date synchronization direction:')" \
+    direction="$(kdialog --title "$(gettext 'KIMng')" --menu "$(gettext 'Choose date synchronization direction:')" \
       exif-to-file "$(gettext 'Set file modification time from DateTimeOriginal')" \
       file-to-exif "$(gettext 'Set image capture time from file modification time')")" || return 1
     if [ "$direction" = file-to-exif ]; then
-      fields="$(kdialog --title "$(gettext 'Kim')" --menu "$(gettext 'EXIF fields to update:')" \
+      fields="$(kdialog --title "$(gettext 'KIMng')" --menu "$(gettext 'EXIF fields to update:')" \
         capture "$(gettext 'DateTimeOriginal only')" all "$(gettext 'DateTimeOriginal, CreateDate and ModifyDate')")" || return 1
     else
       fields=capture
@@ -8188,7 +8188,7 @@ action_datesync() {
 
     atime_sources+=("$source")
     atime_values+=("$(stat -c '%x' -- "$source" 2>/dev/null)")
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Synchronizing date: ')${source##*/}" || progress_cancelled "$ref"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Synchronizing date: ')${source##*/}" || progress_cancelled "$ref"; then
       report_fail "$source"; METADATA_INTERRUPTED=true; break
     fi
     if [ "$direction" = exif-to-file ]; then
@@ -8303,7 +8303,7 @@ action_datesync() {
     done
   fi
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -8377,7 +8377,7 @@ action_webexport() {
           shift
           ;;
         --size|--quality|--format|--output-dir|--color)
-          [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
+          [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: option value missing.')"; return 2; }
           case "$1" in
             --size) size="$2" ;; --quality) quality="$2" ;; --format) fmt="$2" ;;
             --output-dir) outdir="$2" ;;
@@ -8389,7 +8389,7 @@ action_webexport() {
           files+=("$@")
           break
           ;;
-        *) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: use -- before input files.')"; return 2 ;;
+        *) kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: use -- before input files.')"; return 2 ;;
       esac
     done
   elif [ "$#" -gt 0 ]; then
@@ -8399,7 +8399,7 @@ action_webexport() {
   fi
   if [ "${#files[@]}" -eq 0 ]; then files+=("$@"); fi
   if ! collect_publication_inputs files "${files[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: select regular, unambiguous image files.')"
     return 1
   fi
   local nbfiles="${#files[@]}"
@@ -8413,7 +8413,7 @@ action_webexport() {
     size="$(kdialog --inputbox "$(gettext 'Max image size (e.g. 1600x1600):')" "1600x1600")" || return 1
   fi
   [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: size must be positive WIDTHxHEIGHT.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: size must be positive WIDTHxHEIGHT.')"; return 1;
   }
   local max_width="${BASH_REMATCH[1]}" max_height="${BASH_REMATCH[2]}"
 
@@ -8439,7 +8439,7 @@ action_webexport() {
     esac
   fi
   [[ "$quality" =~ ^[0-9]{1,3}$ ]] && [ "$quality" -ge 1 ] && [ "$quality" -le 100 ] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: quality must be between 1 and 100.')"; return 1;
   }
 
   if { [ -n "$jpeg_scan" ] || [ "$jpeg_optimize" = true ]; } && [ "$fmt" != jpg ] && [ "$fmt" != keep ]; then
@@ -8448,7 +8448,7 @@ action_webexport() {
 
   color_mode="${color_mode:-${KIM_WEB_COLOR_MODE:-srgb}}"
   case "$color_mode" in srgb|preserve) ;; *)
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: --color must be srgb or preserve.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: --color must be srgb or preserve.')"
     return 2 ;;
   esac
 
@@ -8726,7 +8726,7 @@ KIM6_DISCLOSURE_CHECK
   report_init
 
   local dbusRef
-  dbusRef="$(progress_open "$nbfiles" "$(gettext 'Kim - Web exporting images ...')")"
+  dbusRef="$(progress_open "$nbfiles" "$(gettext 'KIMng - Web exporting images ...')")"
 
   local counter=0
   local i base stem ext out_ext OUTFILE OUTTMP n rc input_info input_format source_frames
@@ -8744,7 +8744,7 @@ KIM6_DISCLOSURE_CHECK
       if [ -s "$profile_path" ]; then srgb_profile="$profile_path"; break; fi
     done
     if [ -z "$srgb_profile" ]; then
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'webexport: an installed sRGB ICC profile is required for color-managed export.')"
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'webexport: an installed sRGB ICC profile is required for color-managed export.')"
       progress_close "$dbusRef" || true
       return 1
     fi
@@ -8760,9 +8760,9 @@ KIM6_DISCLOSURE_CHECK
       read -r ext
     } < <(split_path "$i")
 
-    if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Exporting file: ')$base"; then
+    if ! progress_begin_item "$dbusRef" "$(gettext 'KIMng - Exporting file: ')$base"; then
       progress_close "$dbusRef"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
 
@@ -8802,7 +8802,7 @@ KIM6_DISCLOSURE_CHECK
       profile_path=''
     fi
     if [ "$color_mode" = srgb ] && [ "$has_icc" != true ] && [[ "${colorspace,,}" == *cmyk* ]]; then
-      kdialog --title "$(gettext 'Kim')" --error \
+      kdialog --title "$(gettext 'KIMng')" --error \
         "$(gettext 'webexport: untagged CMYK has ambiguous color and was not converted.')\n\n$base"
       report_fail "$i"; failures=$((failures + 1)); progress_value "$dbusRef" "$counter"; continue
     fi
@@ -8980,7 +8980,7 @@ KIM6_DISCLOSURE_CHECK
   done
 
   progress_close "$dbusRef"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$interrupted" != true ] && [ "$failures" -eq 0 ]
 }
 
@@ -9001,7 +9001,7 @@ collage_render_layout() (
   local i j random_file
 
   [[ "$canvas" =~ ^([1-9][0-9]{2,3})x([1-9][0-9]{2,3})$ ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: canvas dimensions must be 100–8192 pixels.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: canvas dimensions must be 100–8192 pixels.')"
     return 2
   }
   width="${BASH_REMATCH[1]}"
@@ -9016,7 +9016,7 @@ collage_render_layout() (
   [[ "$color" != *$'\n'* && "$color" != *$'\r'* &&
      "$color" =~ ^[A-Za-z0-9#(),._%+[:blank:]-]{1,64}$ && "$color" != *'..'* ]] || return 2
   (( count >= 1 && count <= 100 )) || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select between 1 and 100 images.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: select between 1 and 100 images.')"
     return 2
   }
 
@@ -9035,12 +9035,12 @@ collage_render_layout() (
   # Creation-only output; source images are never overwritten.
   mode=create
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid or source-aliasing destination.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: invalid or source-aliasing destination.')"
     return 1
   fi
   output="$DERIVED_TARGET"
   mode="$DERIVED_MODE"
-  ref="$(progress_open "$count" "$(gettext 'Kim - Initialising ...')")"
+  ref="$(progress_open "$count" "$(gettext 'KIMng - Initialising ...')")"
   if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
   tmp="$(tmp_for_target "$output")" || {
     publication_fail "$ref" '' "$(gettext 'Collage: cannot create destination-local staging.')"
@@ -9087,9 +9087,9 @@ collage_render_layout() (
   esac
   report_init
   for file in "${files[@]}"; do
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
       report_fail "$file"
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"
       return 1
     fi
@@ -9213,7 +9213,7 @@ collage_render_layout() (
     return 1
   fi
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
 )
 
 action_collage() {
@@ -9226,7 +9226,7 @@ action_collage() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --size|--tile|--overlap|--background|--border|--rotation|--random-rotation|--seed|--output)
-        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: missing option value.')"; return 2; }
+        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: missing option value.')"; return 2; }
         case "$1" in
           --size) size="$2" ;; --tile) tile="$2" ;; --overlap) overlap_percent="$2" ;;
           --background) color="$2" ;; --border) border_ratio="$2" ;; --rotation) rotation="$2" ;;
@@ -9234,7 +9234,7 @@ action_collage() {
         esac
         shift 2 ;;
       --layout|--canvas|--fit|--gap|--frame)
-        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: missing layout option value.')"; return 2; }
+        [ "$#" -ge 2 ] || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: missing layout option value.')"; return 2; }
         case "$1" in
           --layout) layout="$2" ;;
           --canvas) canvas="$2" ;;
@@ -9247,7 +9247,7 @@ action_collage() {
       --shadow) shadow=true; shift ;;
       --no-shadow) shadow=false; shift ;;
       --) shift; files+=("$@"); break ;;
-      -*) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: unknown option.')"; return 2 ;;
+      -*) kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: unknown option.')"; return 2 ;;
       *) files+=("$@"); break ;;
     esac
   done
@@ -9260,7 +9260,7 @@ action_collage() {
   fi
 
   if ! collect_publication_inputs files "${files[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: select regular, unambiguous image files.')"
     return 1
   fi
   # Dolphin's bare invocation uses one Qt 6 settings window.
@@ -9366,7 +9366,7 @@ action_collage() {
         "${frame:-none}" "${color:-white}" "$shadow" "$requested" "$shuffle" "${files[@]}"
       return $?
       ;;
-    *) kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid layout.')"; return 2 ;;
+    *) kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: invalid layout.')"; return 2 ;;
   esac
   [ -n "$size" ] || size="$(kdialog --inputbox "$(gettext 'Size of small images:')" '400x400')" || return 1
   [ -n "$tile" ] || tile="$(kdialog --inputbox "$(gettext 'Number of rows and columns:')" '5x4')" || return 1
@@ -9374,34 +9374,34 @@ action_collage() {
   [ -n "$color" ] || color="$(kdialog --inputbox "$(gettext 'Background color:')" 'grey')" || return 1
   [ -n "$border_ratio" ] || border_ratio=2
   [[ "$size" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: size must be WIDTHxHEIGHT.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: size must be WIDTHxHEIGHT.')"; return 1;
   }
   width="${BASH_REMATCH[1]}"; height="${BASH_REMATCH[2]}"
   [[ "$tile" =~ ^([1-9][0-9]{0,8})x([1-9][0-9]{0,8})$ ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: tile layout must be COLUMNSxROWS.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: tile layout must be COLUMNSxROWS.')"; return 1;
   }
   columns="${BASH_REMATCH[1]}"; rows="${BASH_REMATCH[2]}"
   [[ "$overlap_percent" =~ ^[0-9]{1,2}$ && "$overlap_percent" -le 90 ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: overlap must be from 0 to 90 percent.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: overlap must be from 0 to 90 percent.')"; return 1;
   }
   [[ "$border_ratio" =~ ^[0-9]{1,2}$ && "$border_ratio" -le 50 ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: border must be from 0 to 50 percent.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: border must be from 0 to 50 percent.')"; return 1;
   }
   [[ "$random_rotation" =~ ^[0-9]{1,3}$ && "$random_rotation" -le 180 ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: random rotation must be from 0 to 180 degrees.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: random rotation must be from 0 to 180 degrees.')"; return 1;
   }
   if [ -n "$rotation" ]; then
     [[ "$rotation" =~ ^-?[0-9]{1,3}$ ]] && [ "$rotation" -ge -180 ] && [ "$rotation" -le 180 ] || {
-      kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: rotation must be from -180 to 180 degrees.')"; return 1;
+      kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: rotation must be from -180 to 180 degrees.')"; return 1;
     }
   fi
   if [ -n "$seed" ]; then
-    [[ "$seed" =~ ^[0-9]{1,9}$ ]] || { kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: seed must be an integer.')"; return 1; }
+    [[ "$seed" =~ ^[0-9]{1,9}$ ]] || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: seed must be an integer.')"; return 1; }
     RANDOM=$((seed % 32768))
   fi
   [[ "$color" != *$'\n'* && "$color" != *$'\r'* &&
      "$color" =~ ^[A-Za-z0-9#(),._%+[:blank:]-]{1,64}$ && "$color" != *'..'* ]] || {
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: invalid background color.')"; return 1;
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: invalid background color.')"; return 1;
   }
   if [ -z "$requested" ]; then
     requested="$(kdialog --getsavefilename "$HOME" '*.png')" || return 1
@@ -9410,11 +9410,11 @@ action_collage() {
   # Creation-only output; source images are never overwritten.
   mode=create
   if ! prepare_derived_target "$requested" png "$mode" "${files[@]}"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Collage: output destination is invalid or aliases a selected image.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Collage: output destination is invalid or aliases a selected image.')"
     return 1
   fi
   output="$DERIVED_TARGET"; mode="$DERIVED_MODE"
-  ref="$(progress_open "${#files[@]}" "$(gettext 'Kim - Initialising ...')")"
+  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initialising ...')")"
   if progress_cancelled "$ref"; then progress_close "$ref"; return 1; fi
   tmp="$(tmp_for_target "$output")" || { publication_fail "$ref" '' "$(gettext 'Collage: cannot create destination-local staging.')"; return 1; }
   tile_dir="${tmp%/*}/tiles"
@@ -9424,8 +9424,8 @@ action_collage() {
   border=$((width * border_ratio / 100))
   for file in "${files[@]}"; do
     index=$((index + 1))
-    if ! progress_begin_item "$ref" "$(gettext 'Kim - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
-      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+    if ! progress_begin_item "$ref" "$(gettext 'KIMng - Processing file: ')${file##*/}" || progress_cancelled "$ref"; then
+      report_fail "$file"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
     fi
     if [ -n "$rotation" ]; then angle="$rotation"
     else angle=$((RANDOM % (random_rotation * 2 + 1) - random_rotation)); fi
@@ -9441,7 +9441,7 @@ action_collage() {
         < "$file" >/dev/null 2>&1 || rc=$?
     fi
     if progress_cancelled "$ref"; then
-      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+      report_fail "$file"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
     fi
     local tile_records tile_frames=0 tile_format tile_width tile_height
     tile_records="$(publication_image_records "$tile_path" 2>/dev/null)" || rc=1
@@ -9452,14 +9452,14 @@ action_collage() {
     done <<< "$tile_records"
     [ "$tile_frames" -eq 1 ] || rc=1
     if [ "$rc" -ne 0 ]; then
-      report_fail "$file"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: ImageMagick failed or produced an invalid tile.')"; return 1
+      report_fail "$file"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: ImageMagick failed or produced an invalid tile.')"; return 1
     fi
     tiles+=("$tile_path")
     report_ok
     progress_value "$ref" "$index"
   done
   if progress_cancelled "$ref"; then
-    report_fail "${files[-1]}"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+    report_fail "${files[-1]}"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
   fi
   magick montage -background "$color" -tile "${columns}x${rows}" \
     -geometry "-${overlap}-${overlap}" -- "${tiles[@]}" "PNG:$tmp" >/dev/null 2>&1 || rc=$?
@@ -9472,16 +9472,16 @@ action_collage() {
   done <<< "$output_records"
   [ "$output_frames" -eq 1 ] && [ -s "$tmp" ] || rc=1
   if [ "$rc" -ne 0 ]; then
-    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: generated output failed validation.')"; return 1
+    report_fail "$output"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: generated output failed validation.')"; return 1
   fi
   if progress_cancelled "$ref"; then
-    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
+    report_fail "$output"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: interrupted before publication.')"; return 1
   fi
   if ! commit_tmp_to_target "$tmp" "$output" "$mode"; then
-    report_fail "$output"; report_finish_dialog "$(gettext 'Kim')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: publication failed; existing files were preserved.')"; return 1
+    report_fail "$output"; report_finish_dialog "$(gettext 'KIMng')"; publication_fail "$ref" "$tmp" "$(gettext 'Collage: publication failed; existing files were preserved.')"; return 1
   fi
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   true
 }
 
@@ -10230,11 +10230,11 @@ action_video() {
     label="$(gettext 'KIMng - Transcoding video:') $index/${#files[@]}: ${source##*/}"
     if ! progress_begin_item "$ref" "$label"; then
       video_item_error "$source" "$(gettext 'interrupted before processing')"
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     if ! video_probe "$source"; then
       video_item_error "$source" "$(gettext 'could not inspect a valid video stream and container')"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     source_width="$VIDEO_WIDTH" source_height="$VIDEO_HEIGHT" rotation="$VIDEO_ROTATION"
@@ -10253,7 +10253,7 @@ action_video() {
       else
         video_item_error "$source" "$(gettext 'the original container cannot be identified safely from the file extension')"
       fi
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     muxer="$VIDEO_MUXER"; ext="$VIDEO_EXTENSION"
@@ -10262,7 +10262,7 @@ action_video() {
       input_ext="${input_ext,,}"
       if [ "$input_ext" != mp4 ] && [ "$input_ext" != m4v ]; then
         video_item_error "$source" "$(gettext 'MP4 cannot replace a source with a different filename extension; choose Create new files')"
-        progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+        progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
         continue
       fi
     fi
@@ -10276,7 +10276,7 @@ action_video() {
         [ -w "$directory" ] && [ -x "$directory" ] || {
           video_item_error "$source" "$(gettext 'destination is no longer available')"
           progress_value "$ref" "$index" || {
-            report_finish_dialog "$(gettext 'Kim')"
+            report_finish_dialog "$(gettext 'KIMng')"
             return 1
           }
           continue
@@ -10299,13 +10299,13 @@ action_video() {
     fi
     stage="$(tmp_for_target "$target")" || {
       video_item_error "$source" "$(gettext 'could not create destination-local staging')"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     }
     error_file="${stage%/*}/ffmpeg.stderr"
     if progress_cancelled "$ref"; then
       video_item_error "$source" "$(gettext 'interrupted before encoding')"
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     ffmpeg_args=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats -i "$source" -map 0:v:0 -map '0:a?' \
       -map_metadata 0 -map_chapters 0 -vf "scale=w='min(iw,$max_width)':h='min(ih,$max_height)':force_original_aspect_ratio=decrease:force_divisible_by=2" \
@@ -10326,26 +10326,26 @@ action_video() {
     video_run_monitored "$ref" "$label" "$duration" "$error_file" "${ffmpeg_args[@]}" || rc=$?
     if [ "$rc" -eq 130 ]; then
       video_item_error "$source" "$(gettext 'interrupted during encoding; no output was published')"
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
       local ffmpeg_reason
       ffmpeg_reason="$(video_ffmpeg_error_summary "$error_file")"
       video_item_error "$source" "$(gettext 'FFmpeg failed or produced no complete output')${ffmpeg_reason:+: $ffmpeg_reason}"
       rm -f -- "$stage" "$error_file"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     if progress_cancelled "$ref"; then
       video_item_error "$source" "$(gettext 'interrupted after encoding; no output was published')"
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     if video_validate_output "$stage" "$muxer" "$codec" "$max_width" "$max_height" \
         "$display_width" "$display_height" "$rotation" "$duration" "$audio_count" "$dar" "$VIDEO_FRAMES"; then rc=0; else rc=1; fi
     if [ "$rc" -ne 0 ]; then
       video_item_error "$source" "$(gettext 'output validation failed: wrong container, codec, dimensions, streams, duration or incomplete decode')"
       rm -f -- "$stage" "$error_file"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     # Decode each staged stream completely before publication. The same owned
@@ -10355,20 +10355,20 @@ action_video() {
       -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -map '0:a?' -f null - || rc=$?
     if [ "$rc" -eq 130 ]; then
       video_item_error "$source" "$(gettext 'interrupted during output validation; no output was published')"
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     if [ "$rc" -ne 0 ] || progress_cancelled "$ref"; then
       video_item_error "$source" "$(gettext 'output did not fully decode or processing was interrupted')"
       rm -f -- "$stage" "$error_file"
-      [ "$rc" -eq 0 ] || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
-      progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1
+      [ "$rc" -eq 0 ] || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
     retry=0
     while :; do
       if progress_cancelled "$ref"; then
         video_item_error "$source" "$(gettext 'interrupted immediately before publication')"
         rm -f -- "$stage" "$error_file"; progress_close "$ref" || true
-        report_finish_dialog "$(gettext 'Kim')"; return 1
+        report_finish_dialog "$(gettext 'KIMng')"; return 1
       fi
       if commit_tmp_to_target "$stage" "$target" "$mode"; then
         rm -f -- "$error_file"
@@ -10392,10 +10392,10 @@ action_video() {
       rm -f -- "$stage" "$error_file"
       break
     done
-    progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'Kim')"; return 1; }
+    progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -10547,7 +10547,7 @@ video_utility_files() {
   local array_name="$1"
   shift
   if ! collect_publication_inputs "$array_name" "$@"; then
-    kdialog --title "$(gettext 'Kim')" --error "$(gettext 'Select local, unambiguous regular video files.')"
+    kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Select local, unambiguous regular video files.')"
     return 1
   fi
 }
@@ -10848,7 +10848,7 @@ action_videoframes() {
     index=$((index + 1))
     progress_begin_item "$ref" "$(gettext 'KIMng - Video frame:') ${source##*/}" || {
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     }
     video_utility_probe "$source" || {
@@ -10864,7 +10864,7 @@ action_videoframes() {
     if progress_cancelled "$ref"; then
       report_fail "$source: $(gettext 'interrupted before frame extraction')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     duration="$VU_DURATION"
@@ -10918,7 +10918,7 @@ action_videoframes() {
       report_fail "$source: $(gettext 'interrupted; no frame was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     if [ "$rc" -ne 0 ] || ! video_utility_image_valid "$stage" "$ext"; then
@@ -10933,14 +10933,14 @@ action_videoframes() {
       report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     rm -f -- "$error_file"
     progress_value "$ref" "$index"
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -11154,7 +11154,7 @@ action_videoaudio() {
     index=$((index+1))
     progress_begin_item "$ref" "$(gettext 'KIMng - Video audio:') ${source##*/}" || {
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     }
     video_utility_probe "$source" || {
@@ -11170,7 +11170,7 @@ action_videoaudio() {
     if progress_cancelled "$ref"; then
       report_fail "$source: $(gettext 'interrupted before audio processing')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     duration="$VU_DURATION"
@@ -11184,7 +11184,7 @@ action_videoaudio() {
       if [ "$VU_AUDIO_COUNT" -gt 1 ]; then
         progress_label "$ref" "$(gettext 'Exporting the first audio stream only; additional streams are omitted:') ${source##*/}" || {
           progress_close "$ref" || true
-          report_finish_dialog "$(gettext 'Kim')"
+          report_finish_dialog "$(gettext 'KIMng')"
           return 1
         }
       fi
@@ -11253,7 +11253,7 @@ action_videoaudio() {
       report_fail "$source: $(gettext 'interrupted; no audio artifact was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     local valid=false probe actual_format output_duration
@@ -11313,14 +11313,14 @@ action_videoaudio() {
       report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     rm -f -- "$error_file"
     progress_value "$ref" "$index"
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -11419,7 +11419,7 @@ action_videogif() {
     index=$((index+1))
     progress_begin_item "$ref" "$(gettext 'KIMng - Video GIF:') ${source##*/}" || {
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     }
     video_utility_probe "$source" || {
@@ -11435,7 +11435,7 @@ action_videogif() {
     if progress_cancelled "$ref"; then
       report_fail "$source: $(gettext 'interrupted before GIF encoding')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     awk -v s="$start" -v d="$duration" -v total="$VU_DURATION" 'BEGIN { split(s,a,":"); x=a[1]*3600+a[2]*60+a[3]; exit !(x < total && x+d <= total) }' || { report_fail "$source: $(gettext 'GIF interval exceeds video duration; shorten the requested interval')"; progress_value "$ref" "$index"; continue; }
@@ -11478,7 +11478,7 @@ action_videogif() {
       report_fail "$source: $(gettext 'interrupted; no GIF was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     # Validate the encoded artifact, not merely FFmpeg's return status.
@@ -11502,7 +11502,7 @@ action_videogif() {
       report_fail "$source: $(gettext 'interrupted; no GIF was published')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     loop_marker=false
@@ -11529,14 +11529,14 @@ action_videogif() {
       report_fail "$source: $(gettext 'publication failed or operation interrupted')"
       rm -f -- "$stage"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     rm -f -- "$error_file"
     progress_value "$ref" "$index"
   done
   progress_close "$ref"
-  report_finish_dialog "$(gettext 'Kim')"
+  report_finish_dialog "$(gettext 'KIMng')"
   [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
@@ -11760,11 +11760,11 @@ action_slideshow() {
     if ! progress_begin_item "$ref" "$(gettext 'KIMng - Preparing image:') ${source##*/}" || progress_cancelled "$ref"; then
       report_fail "$source: $(gettext 'interrupted before frame preparation')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     case "${source##*.}" in [dD][nN][gG]|[cC][rR]2|[cC][rR]3|[nN][eE][fF]|[aA][rR][wW]|[rR][aA][fF]|[oO][rR][fF]|[rR][wW]2|[pP][sS][bB]|[pP][dD][fF]|[sS][vV][gG]|[sS][vV][gG][zZ]|[eE][xX][rR]|[hH][dD][rR])
-      report_fail "$source: $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1 ;; esac
+      report_fail "$source: $(gettext 'this layered, raw, vector or HDR input requires an explicit development/color workflow')"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1 ;; esac
     record="$(identify -regard-warnings +ping -format '%m|%w|%h|%[orientation]|%[colorspace]|%n\n' - < "$source" 2>/dev/null)" || rc=1
     [[ "$record" != *$'\n'* && -n "$record" ]] || rc=1
     IFS='|' read -r format source_width source_height orientation colorspace frames <<< "$record"
@@ -11774,7 +11774,7 @@ action_slideshow() {
     if [ "$rc" -ne 0 ]; then
       report_fail "$source: $(gettext 'unsupported, ambiguous or multi-frame image')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     local frame_path
@@ -11789,12 +11789,12 @@ action_slideshow() {
       if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
         report_fail "$source: $(gettext 'interrupted during frame preparation')"
         progress_close "$ref" || true
-        report_finish_dialog "$(gettext 'Kim')"
+        report_finish_dialog "$(gettext 'KIMng')"
         return 1
       fi
       report_fail "$source: $(gettext 'frame preparation failed')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     local frame_check
@@ -11803,11 +11803,11 @@ action_slideshow() {
     if [ "$rc" -ne 0 ]; then
       report_fail "$source: $(gettext 'prepared frame failed validation')"
       progress_close "$ref" || true
-      report_finish_dialog "$(gettext 'Kim')"
+      report_finish_dialog "$(gettext 'KIMng')"
       return 1
     fi
     frames_out+=("$frame_path")
-    progress_value "$ref" "$index" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'Kim')"; return 1; }
+    progress_value "$ref" "$index" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1; }
   done
   [ "${#frames_out[@]}" -gt 0 ] || {
     report_fail "$(gettext 'No slideshow frames prepared.')"
@@ -11816,7 +11816,7 @@ action_slideshow() {
   if progress_cancelled "$ref"; then
     report_fail "$(gettext 'Slideshow interrupted before encoding.')"
     progress_close "$ref" || true
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   error_file="${stage%/*}/ffmpeg.stderr"
@@ -11841,7 +11841,7 @@ action_slideshow() {
   if [ "$rc" -eq 130 ] || progress_cancelled "$ref"; then
     report_fail "$(gettext 'Slideshow interrupted during encoding.')"
     progress_close "$ref" || true
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
@@ -11864,7 +11864,7 @@ No FFmpeg error details were captured.
 Staged output: $stage"
     fi
     progress_close "$ref" || true
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   local probe format_line
@@ -11894,7 +11894,7 @@ Staged output: $stage"
   if [ "$rc" -ne 0 ] || progress_cancelled "$ref"; then
     report_fail "$(gettext 'Slideshow failed container, frame, duration or full-decode validation.')"
     progress_close "$ref" || true
-    report_finish_dialog "$(gettext 'Kim')"
+    report_finish_dialog "$(gettext 'KIMng')"
     return 1
   fi
   # Explicit destinations use an exclusive create; generated names also retry
@@ -11913,7 +11913,7 @@ Staged output: $stage"
     rc=1
   fi
   rm -f -- "$error_file" "${frames_out[@]}" 2>/dev/null || true
-  progress_close "$ref"; report_finish_dialog "$(gettext 'Kim')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
+  progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------

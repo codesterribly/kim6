@@ -83,7 +83,7 @@ For compression, conversion, resizing, metadata stripping and copyright editing,
 
 ### Settings
 
-The graphical Settings dialog writes `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf` (normally `~/.config/kim6/settings.conf`). It is a simple validated `KEY=value` text file, **not** KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.
+The graphical Settings dialog writes `${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf` (normally `~/.config/kimng/settings.conf`). It is a simple validated `KEY=value` text file, **not** KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.
 
 | Setting / environment variable | Default | Behavior |
 |---|---|---|
@@ -156,7 +156,7 @@ Explicit options, including `--quality`, `--format`, and `--color`, take precede
 The Settings dialog creates a file like this, shown with default and empty demonstration values:
 
 ~~~ini
-# KIM6 user preferences
+# KIMng user preferences
 # Environment variables take precedence.
 KIM_POLICY=prompt
 KIM_NAME_AFFIX_POSITION=suffix

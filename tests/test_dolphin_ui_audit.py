@@ -19,6 +19,14 @@ class DolphinUIAuditTests(unittest.TestCase):
         marker = self.w.control / "email-options-cancelled"
         executable = self.w.bin / "python3"
 
+        # Workspace provides a symlink to the real interpreter.
+        # Replace only the test-owned link, never its target.
+        if not executable.is_symlink():
+            raise RuntimeError(
+                "Expected isolated Python interpreter symlink"
+            )
+        executable.unlink()
+
         executable.write_text(
             "#!/bin/sh\n"
             'if [ "$2" = "email-options" ]; then\n'
@@ -66,7 +74,7 @@ class DolphinUIAuditTests(unittest.TestCase):
         ))
         self.assertFalse(
             (Path(self.w.env["XDG_DATA_HOME"]) /
-             "kim6/email-attachments").exists()
+             "kimng/email-attachments").exists()
         )
 
     def test_email_explicit_size_cancellation_has_nonzero_status(self):
@@ -87,7 +95,7 @@ class DolphinUIAuditTests(unittest.TestCase):
         ))
         self.assertFalse(
             (Path(self.w.env["XDG_DATA_HOME"]) /
-             "kim6/email-attachments").exists()
+             "kimng/email-attachments").exists()
         )
 
 

@@ -81,7 +81,7 @@
 <h2 id="configuration-and-defaults">Configuration and Defaults</h2>
 <p><strong>For normal use, open Settings in Dolphin:</strong> Right-click a supported file and choose <strong>Actions → KIMng - Settings/About → Settings</strong>. Choose whether actions prompt about replacement or automatically create separate copies where supported. The <strong>Output Filenames</strong> tab lets you customize the labels automatically added to output names, choose prefix or suffix placement, and preview examples. You can also set separate JPEG/WebP/AVIF web-export quality defaults and copyright details. Click <strong>Save</strong>. KIMng reads these settings for subsequent actions; no manual configuration editing or Dolphin restart is required.</p>
 <h3 id="settings">Settings</h3>
-<p>The graphical Settings dialog writes <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code> (normally <code>~/.config/kim6/settings.conf</code>). It is a simple validated <code>KEY=value</code> text file, <strong>not</strong> KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.</p>
+<p>The graphical Settings dialog writes <code>${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf</code> (normally <code>~/.config/kimng/settings.conf</code>). It is a simple validated <code>KEY=value</code> text file, <strong>not</strong> KConfig and not an executable shell script. The dispatcher reads supported keys at startup. Explicit environment variables override their corresponding saved values, but cannot authorize overwriting without confirmation.</p>
 <table>
 <thead>
 <tr>
@@ -298,7 +298,7 @@
 <p>Explicit options, including <code>--quality</code>, <code>--format</code>, and <code>--color</code>, take precedence for that invocation. Environment overrides must be present in the running command's environment (or Dolphin's environment). <code>KIM_POLICY=prompt</code> does not itself permit overwriting: a second explicit confirmation is required.</p>
 <h3 id="example-saved-settings">Example saved settings</h3>
 <p>The Settings dialog creates a file like this, shown with default and empty demonstration values:</p>
-<pre class="ini"><code># KIM6 user preferences
+<pre class="ini"><code># KIMng user preferences
 # Environment variables take precedence.
 KIM_POLICY=prompt
 KIM_NAME_AFFIX_POSITION=suffix

@@ -3222,7 +3222,7 @@ def email_ready_review(plan_path, mail_client):
             "XDG_DATA_HOME",
             str(Path.home() / ".local/share")
         ))
-        / "kim6/email-attachments"
+        / "kimng/email-attachments"
     )
 
     note = QLabel(

@@ -196,7 +196,7 @@ The project continued through KDE 4, KDE 5, and KDE 6, with contributions from m
 
 - [Original KIM project](http://bouveyron.free.fr/kim/index.html)
 - [KIM5 for KDE Plasma 5](https://github.com/caco3/kim5)
-- [KIMng project](https://github.com/KIM-6/kim6)
+- [KIM-6 predecessor repository](https://github.com/KIM-6/kim6)
 
 This rewrite preserves the original idea while consolidating the processing tools, adding modern image and video formats, and expanding metadata and batch-processing capabilities.
 

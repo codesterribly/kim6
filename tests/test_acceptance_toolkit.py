@@ -72,13 +72,13 @@ class AcceptanceInventoryTests(unittest.TestCase):
         cases = acceptance.load_cases(ROOT)
         preset = next(case for case in cases if case["action_id"] == "2001CompressRecommended")
         text = acceptance._instructions(preset, Path("/qa/generated/cases/example"))
-        self.assertIn("KIM6 - Convert/Compress → Compress Recommended", text)
+        self.assertIn("KIMng - Convert/Compress → Compress recommended", text)
         self.assertIn("Menu path:", text)
         self.assertIn("Output location: This case folder", text)
         self.assertIn("recommended", text.lower())
         self.assertIn("photo_compressed.jpg", text)
         self.assertIn("selected source remains unchanged", text.lower())
-        self.assertNotIn("KIM6 → JPEG compression →", text)
+        self.assertNotIn("KIMng → JPEG compression →", text)
         rotate = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "10Rotate90")
         rotate_text = acceptance._instructions(rotate, Path("/qa/generated/cases/rotate"))
         self.assertIn("validate --policy in-place", rotate_text)
@@ -86,9 +86,10 @@ class AcceptanceInventoryTests(unittest.TestCase):
         convert = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "12ConvertWEBP")
         self.assertEqual(["photo.jpg"], convert["fixtures"])
         self.assertIn("WEBP", acceptance._case_guidance(convert)[1])
-        percent = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "04ResizePercent")
-        self.assertIn("50%", acceptance._case_guidance(percent)[0])
-        self.assertIn("half the source width and height", acceptance._case_guidance(percent)[1])
+        custom = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "05ResizeCustom")
+        self.assertIn("--custom", custom["dispatcher"])
+        self.assertIn("custom size", acceptance._case_guidance(custom)[0])
+        self.assertIn("correctly sized image", acceptance._case_guidance(custom)[1])
         av1 = next(case for case in acceptance.load_cases(ROOT) if case["action_id"] == "05Av1hd720Balanced")
         self.assertIn("AV1 balanced quality", acceptance._case_guidance(av1)[0])
         self.assertNotIn("CRF ", acceptance._case_guidance(av1)[0])
@@ -247,7 +248,7 @@ Name=Separator
             "06ConvertJP2Lossy": (["profile-wide.jpg"], "authorized_overwrite"),
             "09ConvertPDF": (["photo.tif"], "authorized_overwrite"),
             "14Rotateexif": (["orientation-6.jpg"], "in_place"),
-            "04ResizePercent": (["large.jpg", "unicode photo ü [1].jpg"], "authorized_overwrite"),
+            "05ResizeCustom": (["large.jpg"], "authorized_overwrite"),
             "2203CompressCustom": (["-leading ü [1].jpg"], "authorized_overwrite"),
             "05Av1hd720Balanced": (["video-silent.mp4"], "authorized_overwrite"),
             "Videohd72017264mp4": (["video-silent.mp4"], "authorized_overwrite"),
@@ -255,7 +256,7 @@ Name=Separator
             "A04MuteVideo": (["video-multiaudio.mkv"], "derived"),
             "06Crop": (["wide.jpg"], "derived"),
             "04Overlay": (["metadata.jpg"], "derived"),
-            "02SetCaptureDate": (["metadata.jpg"], "authorized_overwrite"),
+            "02SetDates": (["metadata.jpg"], "authorized_overwrite"),
             "03Apply": (["metadata.jpg"], "authorized_overwrite"),
             "05Reduce": (["metadata.jpg"], "authorized_overwrite"),
             "04Report": (["metadata.jpg"], "none"),
@@ -306,7 +307,8 @@ Name=Separator
         plan = acceptance.render_plan(cases)
         self.assertIn(f"{len(cases)} executable menu actions", plan)
         self.assertIn(f"{len({case['menu'] for case in cases})} current service-menu templates", plan)
-        self.assertIn("KIM6 User Guide", plan)
+        self.assertIn("KIMng User Guide", plan)
+        self.assertIn("# KIMng Human Acceptance Plan", plan)
         self.assertEqual(len(cases), len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
 
     def test_media_duration_and_probe_rate_helpers_handle_common_shapes(self):
@@ -513,7 +515,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
                 result = acceptance.run_cli(["--generated", str(generated), "--state-dir", str(state_dir),
                                              "next", "--no-open", "--case-id", case_id])
             self.assertEqual(0, result)
-            self.assertIn("Compress Recommended", output.getvalue())
+            self.assertIn("Compress recommended", output.getvalue())
             self.assertEqual("failed", acceptance.load_state(state_dir / "progress.json")["results"][case_id]["status"])
 
     def test_dashboard_links_cases_and_never_calls_technical_validation_gui_acceptance(self):
@@ -552,9 +554,17 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
             # placement must still be checked independently of executable totals.
             installed_menu = prefix / "kim_compressandresize.desktop"
             original = installed_menu.read_text()
+            current_label = next(
+                item["label"]
+                for item in acceptance.parse_menu(
+                    ROOT / "src/kim_compressandresize.desktop.in"
+                )
+                if item["action_id"] == "01Resize1600"
+            )
+            self.assertIn("Name=" + current_label, original)
             mutations = {
                 "wrong arguments": original.replace("--size 1600x1600", "--size 1x1"),
-                "wrong label": original.replace("Resize to Fit 1600 × 1600", "Wrong action"),
+                "wrong label": original.replace("Name=" + current_label, "Name=Wrong action", 1),
                 "missing separator": original.replace(";_SEPARATOR_;", ";", 1),
                 "executable separator": original.replace("Name=Separator", f'Name=Separator\nExec="{runtime}" about'),
                 "duplicate section": original + "\n[Desktop Action 01Resize1600]\n",
@@ -569,7 +579,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
 
     def test_non_processing_cases_require_human_review_and_preserve_context_fixtures(self):
         cases = [case for case in acceptance.load_cases(ROOT) if case["source_behavior"] == "none"]
-        self.assertEqual({"about", "license", "manual", "settings", "location-report", "recipe"},
+        self.assertEqual({"about", "license", "manual", "settings", "location-report", "metadata-view", "metadata-edit", "recipe"},
                          {case["route"] for case in cases})
         with tempfile.TemporaryDirectory() as tmp:
             case_dir = Path(tmp)

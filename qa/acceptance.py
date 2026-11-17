@@ -186,7 +186,7 @@ def _fixture_class(route: str, args: list[str], menu: str = "") -> list[str]:
 
 
 def _source_behavior(route: str, args: list[str] | None = None) -> str:
-    if route in {"about", "license", "manual", "settings", "location-report"} or (route == "recipe" and "--editor" in (args or [])):
+    if route in {"about", "license", "manual", "settings", "location-report", "metadata-view", "metadata-edit"} or (route == "recipe" and "--editor" in (args or [])):
         return "none"
     if route in {"rotate", "rotatewithexif", "flipflop"}:
         return "in_place"
@@ -207,6 +207,8 @@ def _expected(route: str, args: list[str]) -> str:
         return "Recipe Editor opens; inspect the built-in recipe and close without saving or running."
     targets = {
         "settings": "Settings opens; inspect the tabs and close without saving changes.",
+        "metadata-view": "Open the read-only Metadata Browser and inspect the source without changing it.",
+        "metadata-edit": "Inspect a proposal in the read-only Metadata Editor, then cancel without writing.",
         "location-report": "The location inspector displays the disposable image's GPS metadata without changing it.",
         "location-apply": "A reviewed derivative with the chosen GPS coordinates, or an explicitly authorized replacement.",
         "location-reduce": "A reviewed result with reduced GPS precision and unrelated metadata preserved.",
@@ -267,7 +269,9 @@ def _dependencies(route: str) -> list[str]:
             "videoframes": ["ffmpeg", "ffprobe", "magick for contact sheets", "qdbus", "kdialog"],
             "videoaudio": ["ffmpeg", "ffprobe", "qdbus", "kdialog", "audio encoder as requested"],
             "videogif": ["ffmpeg", "ffprobe", "qdbus", "kdialog"],
-            "slideshow": ["ffmpeg", "ffprobe", "magick", "identify", "libx264", "qdbus", "kdialog"]}
+            "slideshow": ["ffmpeg", "ffprobe", "magick", "identify", "libx264", "qdbus", "kdialog"],
+            "metadata-view": ["python3", "PySide6", "exiftool"],
+            "metadata-edit": ["python3", "PySide6", "exiftool"]}
     if route in {"rotate", "rotatewithexif", "flipflop"}:
         return ["magick", "identify", "exiftool", "qdbus", "kdialog"]
     if route in {"crop", "overlay", "recipe", "settings", "location-apply", "location-report",
@@ -287,7 +291,9 @@ def _checks(route: str) -> list[str]:
         "overlay": ["Automated: decode and source preservation are checked. Human: compare watermark text, placement and opacity to the preview."],
         "checkextensions": ["Automated: decode and source preservation are checked. Human: confirm the corrected extension and identical bytes."],
         "recipe": ["Automated: decode and source preservation are checked for recipe outputs. Human: inspect the chosen recipe and its output preview, or confirm the editor opens and closes without saving."],
-        "about": ["Dialog is legible and identifies KIM6."],
+        "about": ["Dialog is legible and identifies KIMng."],
+        "metadata-view": ["Read-only inspection must preserve source bytes and timestamps; inspect metadata provenance."],
+        "metadata-edit": ["Phase 1 is read-only. Verify proposals without writing and preserve source bytes and timestamps."],
         "license": ["Opened document is the installed GPL license."],
         "manual": ["Manual renders and stylesheet loads."],
         "compress": ["JPEG bytes decode; actual format and dimensions are valid; source is unchanged in create mode."],
@@ -322,6 +328,8 @@ def _checks(route: str) -> list[str]:
 def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
     choices: dict[str, list[str]] = {
         "settings": ["Inspect Settings tabs, then close without saving; use the isolated QA session."],
+        "metadata-view": ["Inspect metadata and alternate representations, then close without writing."],
+        "metadata-edit": ["Propose a metadata change, then cancel. No writes are permitted in Phase 1."],
         "location-report": ["Inspect the seeded GPS coordinates, then close the read-only inspector."],
         "location-apply": ["Choose manual coordinates on the disposable metadata image, create mode and the case folder; review the output plan."],
         "location-reduce": ["Choose reduced coordinate precision and create mode; review the output plan in the case folder."],
@@ -411,6 +419,8 @@ def _human_checks(route: str, label: str) -> list[str]:
         return ["Confirm the expected informational resource opens, is readable, and can be closed."]
     if route in {"video", "videoframes", "videoaudio", "videogif", "slideshow"}:
         base += ["Play or open the result; check the requested motion, orientation, audio, timing and sequence. Automated checks cannot judge subjective quality."]
+    elif route in {"metadata-view", "metadata-edit"}:
+        base += ["Confirm the source bytes and filesystem timestamps remain unchanged."]
     elif route == "flipflop":
         base += ["Open the result beside its input and use the asymmetric colored shapes to confirm which axis changed."]
     elif route in {"compress", "resize", "convert", "webexport", "collage", "rotate", "rotatewithexif"}:
@@ -436,7 +446,7 @@ def _human_checks(route: str, label: str) -> list[str]:
 
 def render_plan(cases: list[dict[str, Any]]) -> str:
     menus = sorted({case["menu"] for case in cases})
-    lines = ["# KIM6 Human Acceptance Plan", "", f"Generated from {len(menus)} current service-menu templates: **{len(cases)} executable menu actions**.",
+    lines = ["# KIMng Human Acceptance Plan", "", f"Generated from {len(menus)} current service-menu templates: **{len(cases)} executable menu actions**.",
              "", "Regenerate with `python3 qa/acceptance.py inventory`. Do not edit the action list by hand.",
              "Each case has a disposable input copy under `qa/generated/cases/`. Actions must be invoked manually in Dolphin; command execution is not equivalent to GUI acceptance.", ""]
     for menu in menus:
@@ -471,7 +481,7 @@ def write_plan(repo: Path, cases: list[dict[str, Any]]) -> Path:
         raise SafetyError(f"refusing symlink acceptance plan: {path}")
     if path.exists():
         previous = path.read_text(encoding="utf-8")
-        if previous != content and not re.match(r"\A# KIM6 Human Acceptance Plan\n\nGenerated from (?:the five|\d+) current service-menu templates:", previous):
+        if previous != content and not re.match(r"\A# KIM(?:6|ng) Human Acceptance Plan\n\nGenerated from (?:the five|\d+) current service-menu templates:", previous):
             raise SafetyError(f"refusing to overwrite an unrecognized plan file: {path}")
     if not path.exists() or path.read_text(encoding="utf-8") != content:
         _write_atomic_text(path, content, 0o644)
@@ -1456,7 +1466,7 @@ def _instructions(case: dict[str, Any], case_dir: Path) -> str:
         output_location = "This case folder. In-place or authorized overwrite choices change only these disposable case copies."
     else:
         output_location = "This case folder unless the action's instructions below specify otherwise."
-    lines = [f"KIM6 Dolphin acceptance case: {case['label']}", f"Case ID: {case['id']}", "",
+    lines = [f"KIMng Dolphin acceptance case: {case['label']}", f"Case ID: {case['id']}", "",
              f"1. Open this case directory in Dolphin: {case_dir}",
              f"2. Select: {', '.join(case['fixtures']) if case['fixtures'] else '(no files)' }.",
              ("   The selected case files are passed to kim_all." if "%F" in case["exec"] or "%U" in case["exec"]
@@ -1551,12 +1561,16 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
         return "Choose manual coordinates 41, 2 on the disposable metadata image. Choose create mode, keep outputs in this case folder, and review the GPS plan before applying.", case["expected"]
     if route == "location-reduce":
         return "Choose reduced GPS precision and create mode; review the planned coordinates before applying. The integer-valued fixture may remain numerically unchanged at coarser precision.", case["expected"]
+    if route == "metadata-view":
+        return "Browse metadata and provenance without writing.", case["expected"]
+    if route == "metadata-edit":
+        return "Inspect a change proposal and cancel; no write is permitted.", case["expected"]
     if route == "capturedate":
         return "Set capture date to 2024-03-01 12:00:00, choose UTC and create mode, and review the date preview before applying.", case["expected"]
     if route == "crop":
         return "Choose a centered square crop in the visual preview; keep the source format and save in this case folder.", case["expected"]
     if route == "overlay":
-        return "Choose text watermark `KIM6 QA`, bottom-right placement and a visible opacity; save a separate result in this case folder.", case["expected"]
+        return "Choose text watermark `KIMng QA`, bottom-right placement and a visible opacity; save a separate result in this case folder.", case["expected"]
     if route == "checkextensions":
         return "Inspect mislabeled.jpg (PNG bytes), select it for a correctly named copy, review the plan and create mislabeled.png in this case folder.", case["expected"]
     if route == "resize":
@@ -1608,7 +1622,7 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
     if route == "contactsheet":
         return "Choose A4, a 3x3 grid and filename labels; save the PDF in this case folder.", "A readable PDF contact sheet showing all selected images and their filename labels; compare order, grid and page size visually."
     if route == "gallery":
-        return "Enter title `KIM6 acceptance`, author `QA`, and 3 columns; choose this case folder for the gallery output if asked.", "A gallery directory with an index, full-size images and thumbnails."
+        return "Enter title `KIMng acceptance`, author `QA`, and 3 columns; choose this case folder for the gallery output if asked.", "A gallery directory with an index, full-size images and thumbnails."
     if route == "collage":
         return "Use the defaults shown: 400x400 image size, 5x4 grid, 15% overlap and grey background; save in this case folder.", "A PNG collage containing all three colored source images."
     if route == "tiffjoin":

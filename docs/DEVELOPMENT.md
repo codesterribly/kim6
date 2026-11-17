@@ -123,7 +123,7 @@ See [FORMATS.md](FORMATS.md) for details about supported formats and dependencie
 
 ## Configuration
 
-The user-facing entry point is **Actions → KIMng - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf`.
+The user-facing entry point is **Actions → KIMng - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf`.
 
 `kim6_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
@@ -285,7 +285,7 @@ Automated menu tests verify definitions and command arguments, but actual menu d
 
 The installation scripts support user, system-wide, and custom installation directories.
 
-The installer copies the KIMng executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.
+The installer copies the KIMng executable, supporting resources, and Dolphin service menus. Running it again updates an existing installation.
 
 The uninstaller removes recognized KIMng-owned files and leaves unrelated files in place.
 

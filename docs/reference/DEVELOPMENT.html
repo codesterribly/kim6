@@ -137,7 +137,7 @@
 <p>Missing encoders or unsupported formats should produce an error rather than silently substituting another format.</p>
 <p>See <a href="FORMATS.html">FORMATS.md</a> for details about supported formats and dependencies.</p>
 <h2 id="configuration">Configuration</h2>
-<p>The user-facing entry point is <strong>Actions → KIMng - Settings/About → Settings</strong> in Dolphin. <code>src/bin/kim_settings_dialog.py</code> validates and atomically writes preferences to <code>${XDG_CONFIG_HOME:-$HOME/.config}/kim6/settings.conf</code>.</p>
+<p>The user-facing entry point is <strong>Actions → KIMng - Settings/About → Settings</strong> in Dolphin. <code>src/bin/kim_settings_dialog.py</code> validates and atomically writes preferences to <code>${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf</code>.</p>
 <p><code>kim6_load_user_settings()</code> in <code>src/bin/kim_all</code> reads supported <code>KEY=value</code> data without executing the file. Persisted settings include <code>KIM_POLICY</code>, <code>KIM_NAME_AFFIX_POSITION</code>, 21 allowlisted <code>KIM_AFFIX_*</code> labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. <code>affixed_filename()</code> resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. <code>KIM_WEB_FORMAT</code> and <code>KIM_WEB_COLOR_MODE</code> are environment-only, not saved by Settings.</p>
 <p><code>KIM_POLICY</code> accepts <code>create</code> or <code>prompt</code>. <code>choose_output_mode()</code> implements the Create/Overwrite choice and the second overwrite warning. <code>confirm_inplace_overwrite()</code> handles operations that require original-file modification. No setting silently authorizes replacement. See <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
 <h2 id="file-safety-and-error-handling">File Safety and Error Handling</h2>
@@ -226,7 +226,7 @@ git --no-pager diff --check</code></pre>
 <p>Automated menu tests verify definitions and command arguments, but actual menu display and interaction should also be tested in Dolphin.</p>
 <h2 id="installation-and-release-testing">Installation and Release Testing</h2>
 <p>The installation scripts support user, system-wide, and custom installation directories.</p>
-<p>The installer copies the KIMng executable, supporting resources, translations, and Dolphin service menus. Running it again updates an existing installation.</p>
+<p>The installer copies the KIMng executable, supporting resources, and Dolphin service menus. Running it again updates an existing installation.</p>
 <p>The uninstaller removes recognized KIMng-owned files and leaves unrelated files in place.</p>
 <p>Installation updates are performed one file at a time. An interrupted installation can be completed by running <code>install.sh</code> again.</p>
 <p>Before preparing a release:</p>

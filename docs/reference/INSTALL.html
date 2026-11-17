@@ -45,7 +45,7 @@
 <p>The installed HTML guide and its local images must remain together under the KIMng runtime <code>docs/</code> directory. Qt WebEngine uses those local files to display the guide offline.</p>
 <h2 id="install-this-rewrite-manually">Install this rewrite manually</h2>
 <p>KIMng requires KDE Plasma 6 and Dolphin.</p>
-<p>To install from a source checkout, you need <code>intltool-merge</code>, Python 3, and PySide6 Qt Widgets (and Git if you are cloning the source). KIMng currently ships with English source strings only. The seven older translation catalogs have been retired because they no longer describe the current application. The installer still supports gettext and can compile new language catalogs with <code>msgfmt</code> when they become available. No translated catalogs are required for installation.</p>
+<p>To install from a source checkout, you need Python 3 and PySide6 Qt Widgets (and Git if cloning the source). KIMng currently ships with an English interface. Older translation catalogs have been retired, and translated catalogs are not required for installation. The installer checks the required processing tools before installing.</p>
 <p>KIMng uses several common tools to process images and videos:</p>
 <ul>
 <li><strong>ImageMagick 7:</strong> Image resizing, compression, conversion, galleries, and other image operations.</li>

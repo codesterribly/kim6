@@ -6,7 +6,7 @@
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
 # Rerun to upgrade. Files are replaced individually through same-directory
 # temporary files; a partial install is completed by rerunning this script.
-# KIM6 files are identified by the dispatcher or menu contents. Unknown files,
+# KIMng files are identified by the dispatcher or menu contents. Unknown files,
 # unrelated menu collisions, and symlinks are preserved or refused. Changes to
 # known application files are replaced on reinstall. kbuildsycoca6 is
 # optional. kim_all checks media tools when needed.
