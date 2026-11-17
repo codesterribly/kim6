@@ -7,7 +7,7 @@ MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=Gallery;Collage;ContactSheet;Album;Print;Slideshow;Animation;TiffJoin;Emailfull;
 _X-KDE-Submenu=KIMng - Create/Publish
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action Album]
 Icon=image-x-generic

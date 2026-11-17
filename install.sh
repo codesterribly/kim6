@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install KIM6's unified dispatcher, resources, translations, and twelve menus.
+# Install KIMng's unified dispatcher, resources, and twelve menus.
 # Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY]. The default user path
 # is ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus; root uses the first
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
@@ -8,8 +8,8 @@
 # temporary files; a partial install is completed by rerunning this script.
 # KIM6 files are identified by the dispatcher or menu contents. Unknown files,
 # unrelated menu collisions, and symlinks are preserved or refused. Changes to
-# known KIM6 files are replaced on upgrade. intltool-merge is required; msgfmt
-# and kbuildsycoca6 are optional. kim_all checks media tools when needed.
+# known application files are replaced on reinstall. kbuildsycoca6 is
+# optional. kim_all checks media tools when needed.
 # Early KIM work is credited to Charles Bouveyron and Tomáš Hnyk; see ABOUT and
 # LICENSE.md. Exit status: 0 success, 2 invalid arguments, 1 other failure.
 set -euo pipefail
@@ -89,9 +89,7 @@ kim6_report_dependencies() {
       apt:qtnetwork) echo python3-pyside6.qtnetwork ;;
       apt:qtwebenginewidgets) echo python3-pyside6.qtwebenginewidgets ;;
       apt:xdg-open) echo xdg-utils ;;
-      apt:intltool-merge) echo intltool ;;
       apt:pandoc) echo pandoc ;;
-      apt:msgfmt) echo gettext ;;
       apt:kbuildsycoca6) echo libkf6service-bin ;;
 
       dnf:magick) echo ImageMagick ;;
@@ -103,9 +101,7 @@ kim6_report_dependencies() {
       dnf:qtwidgets|dnf:qtnetwork) echo python3-pyside6 ;;
       dnf:qtwebenginewidgets) echo 'python3-pyside6 qt6-qtwebengine' ;;
       dnf:xdg-open) echo xdg-utils ;;
-      dnf:intltool-merge) echo intltool ;;
       dnf:pandoc) echo pandoc ;;
-      dnf:msgfmt) echo gettext ;;
       dnf:kbuildsycoca6) echo kf6-kservice ;;
 
       pacman:magick) echo imagemagick ;;
@@ -117,9 +113,7 @@ kim6_report_dependencies() {
       pacman:qtwidgets|pacman:qtnetwork) echo pyside6 ;;
       pacman:qtwebenginewidgets) echo 'pyside6 qt6-webengine' ;;
       pacman:xdg-open) echo xdg-utils ;;
-      pacman:intltool-merge) echo intltool ;;
       pacman:pandoc) echo pandoc ;;
-      pacman:msgfmt) echo gettext ;;
       pacman:kbuildsycoca6) echo kservice ;;
 
       *) echo '' ;;
@@ -205,10 +199,8 @@ required|python3|Python 3|Application runtime
 required|qtwidgets|PySide6 Qt Widgets|Graphical dialogs
 required|qtnetwork|Qt map support|Maps and networking
 required|xdg-open|xdg-open|Open output files
-required|intltool-merge|intltool|Dolphin menu generation
 optional|qtwebenginewidgets|PySide6 WebEngine|Embedded HTML guide
 optional|pandoc|Pandoc|HTML documentation
-optional|msgfmt|gettext tools|Translations
 optional|kbuildsycoca6|KDE service cache|Menu cache refresh
 KIM6_DEPENDENCIES
 
@@ -336,14 +328,10 @@ echo "      Display authorization and network access are checked at runtime."
 
 
 
-command -v intltool-merge >/dev/null 2>&1 || {
-  echo "install.sh: install intltool-merge to render translated Dolphin menus" >&2
-  exit 1
-}
 [[ ! -L "$PREFIX" ]] || { echo "install.sh: refusing symlinked prefix: $PREFIX" >&2; exit 1; }
 mkdir -p -- "$PREFIX"
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
-RUNTIME="$PREFIX/kim6"
+RUNTIME="$PREFIX/kimng"
 
 # shellcheck source=install_inventory.sh
 source "$SOURCE_DIR/install_inventory.sh"
@@ -356,84 +344,59 @@ trap '[ -z "$temporary" ] || rm -f -- "$temporary"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# The dispatcher header is the simple runtime identity. The old marker and
-# recognized menus allow upgrades from earlier KIM6 installations.
-dispatcher_is_kim6() {
-  [ -f "$1" ] && [ ! -L "$1" ] && grep -Fq '# One entrypoint for KIM actions' "$1"
-}
-menu_is_kim6() {
+# Recognize only KIMng-owned installations.
+# A populated runtime requires both its ownership marker and dispatcher.
+dispatcher_is_kimng() {
   [ -f "$1" ] && [ ! -L "$1" ] &&
-    grep -Eq '^X-KIM6-Managed=true$|^Exec=.*(kim_all|kim_(album|compress|convert|flipflop|galery|multiburst|other|collage|print|rename|resize|resizeandsend|rotate|rotatewithexif|sortbydate|stripmeta|treatment|video|webexport))(["[:space:]]|$)' "$1"
-}
-runtime_is_empty() {
-  # Empty folders can be leftovers from interruption before the first copy.
-  [ -z "$(find "$RUNTIME" -mindepth 1 ! -type d -print -quit)" ]
-}
-has_kim_menu() {
-  local name
-# shellcheck disable=SC2154
-  for name in "${menu_names[@]}"; do
-    if menu_is_kim6 "$PREFIX/$name"; then return 0; fi
-  done
-  return 1
-}
-# A matching menu is not proof that an unrelated directory named "kim6"
-# belongs to us. The legacy exception requires an identifiable KIM script.
-legacy_runtime_is_kim6() {
-  local name path
-  has_kim_menu || return 1
-# shellcheck disable=SC2154
-  for name in "${legacy_names[@]}"; do
-    path="$RUNTIME/bin/$name"
-    if [ -f "$path" ] && [ ! -L "$path" ] &&
-       grep -Eq 'SOURCE_TRANSLATION_TTT|Copyright.*Charles Bouveyron' "$path"; then
-      return 0
-    fi
-  done
-  return 1
-}
-runtime_is_kim6() {
-  dispatcher_is_kim6 "$RUNTIME/bin/kim_all" ||
-    { [ -f "$RUNTIME/.kim6-owned" ] && [ ! -L "$RUNTIME/.kim6-owned" ]; } ||
-    legacy_runtime_is_kim6
+    grep -Fq '# KIMng runtime dispatcher' "$1"
 }
 
-# Refuse an unrelated populated kim6 directory, but allow a new empty directory.
+menu_is_kimng() {
+  [ -f "$1" ] && [ ! -L "$1" ] &&
+    grep -Fxq 'X-KIMng-Managed=true' "$1" &&
+    grep -Fq 'kimng/bin/kim_all' "$1"
+}
+
+runtime_is_empty() {
+  [ -z "$(find "$RUNTIME" -mindepth 1 -print -quit)" ]
+}
+
+runtime_is_kimng() {
+  [ -f "$RUNTIME/.kimng-owned" ] &&
+    [ ! -L "$RUNTIME/.kimng-owned" ] &&
+    [ "$(< "$RUNTIME/.kimng-owned")" = 'KIMng runtime' ] &&
+    dispatcher_is_kimng "$RUNTIME/bin/kim_all"
+}
+
 if [ -e "$RUNTIME" ] || [ -L "$RUNTIME" ]; then
   check_dir "$RUNTIME"
-  if [ -e "$RUNTIME/bin/kim_all" ] && ! dispatcher_is_kim6 "$RUNTIME/bin/kim_all"; then
-    die "refusing to replace an unrecognized dispatcher: $RUNTIME/bin/kim_all"
-  fi
-  runtime_is_kim6 || runtime_is_empty || die "refusing to replace an unrecognized runtime directory: $RUNTIME"
+  runtime_is_kimng || runtime_is_empty ||
+    die "refusing to replace an unrecognized runtime directory: $RUNTIME"
 fi
 
-# Check every path we will touch before copying. Unknown files elsewhere in the
-# runtime stay in place; known destinations must be ordinary files/directories.
-for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
+# Validate all installation destinations before modifying any files.
+for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" \
+  "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" \
+  "$RUNTIME/docs/reference"; do
   check_dir "$directory"
 done
-# shellcheck disable=SC2154
-for relative in "${runtime_files[@]}" .kim6-owned .kim6-manifest; do
+
+for relative in "${runtime_files[@]}" .kimng-owned .kimng-manifest; do
   check_file "$RUNTIME/$relative"
 done
-if [ -e "$RUNTIME/bin/kim_all" ] && ! dispatcher_is_kim6 "$RUNTIME/bin/kim_all"; then
-  echo "install.sh: refusing to replace an unrecognized dispatcher file: $RUNTIME/bin/kim_all" >&2
-  exit 1
+
+if [ -e "$RUNTIME/bin/kim_all" ] &&
+   ! dispatcher_is_kimng "$RUNTIME/bin/kim_all"; then
+  die "refusing to replace an unrecognized dispatcher: $RUNTIME/bin/kim_all"
 fi
-for name in "${legacy_names[@]}"; do
-  check_file "$RUNTIME/bin/$name"
-done
-# shellcheck disable=SC2154
-for language in "${languages[@]}"; do
-  check_dir "$RUNTIME/locale/$language"
-  check_dir "$RUNTIME/locale/$language/LC_MESSAGES"
-  check_file "$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
-done
+
 for name in "${menu_names[@]}"; do
   path="$PREFIX/$name"
-  if [ -L "$path" ] || { [ -e "$path" ] && { [ ! -f "$path" ] || ! menu_is_kim6 "$path"; }; }; then
-    echo "install.sh: refusing unrelated or unsafe menu file: $path" >&2
-    exit 1
+
+  if [ -L "$path" ] ||
+     { [ -e "$path" ] &&
+       { [ ! -f "$path" ] || ! menu_is_kimng "$path"; }; }; then
+    die "refusing unrelated or unsafe menu file: $path"
   fi
 done
 
@@ -481,58 +444,51 @@ install_file() {
   temporary=''
 }
 
-compile_translation() {
-  local language="$1" destination="$RUNTIME/locale/$1/LC_MESSAGES/kim6.mo"
-  mkdir -p -- "${destination%/*}"
-  temporary="$(mktemp "${destination}.tmp.XXXXXX")"
-  msgfmt -o "$temporary" "$SOURCE_DIR/po/$language.po"
-  chmod 0644 -- "$temporary"
-  if ! mv -f -- "$temporary" "$destination"; then
-    echo "install.sh: could not install translation $destination" >&2
-    return 1
-  fi
-  temporary=''
-}
-
 mkdir -p -- "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference"
 # Retain ownership from the first file write, including interruptions.
-temporary="$(mktemp "$RUNTIME/.kim6-owned.tmp.XXXXXX")"
-printf 'KIM6 runtime\n' > "$temporary"
+temporary="$(mktemp "$RUNTIME/.kimng-owned.tmp.XXXXXX")"
+printf 'KIMng runtime\n' > "$temporary"
 chmod 0644 -- "$temporary"
-mv -f -- "$temporary" "$RUNTIME/.kim6-owned"
+mv -f -- "$temporary" "$RUNTIME/.kimng-owned"
 temporary=''
 for index in "${!runtime_files[@]}"; do
 # shellcheck disable=SC2154
   install_file "$SOURCE_DIR/${runtime_sources[$index]}" "$RUNTIME/${runtime_files[$index]}" "${runtime_modes[$index]}"
 done
 
-# Remove retired KIM6 catalogs during an upgrade.
-# Existing runtime preflight checks these language paths.
-# Never remove unrelated translation domains.
-for language in de es fr hu it nl zh_TW; do
-  [ ! -f "$SOURCE_DIR/po/$language.po" ] || continue
-  catalog="$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
-  if [ -f "$catalog" ]; then
-    rm -f -- "$catalog"
-  fi
-  rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" \
-    "$RUNTIME/locale/$language" 2>/dev/null || true
-done
-
-if command -v msgfmt >/dev/null 2>&1; then
-  for language in "${languages[@]}"; do
-    if [ -f "$SOURCE_DIR/po/$language.po" ]; then compile_translation "$language"; fi
-  done
-else
-  echo "install.sh: msgfmt is unavailable; menu translations will still be installed, compiled message catalogs were skipped." >&2
-fi
-
 # Use the same Desktop Entry encoder as Recipe rendering and ownership checks.
 exec_path="$(python3 -B "$RUNTIME/bin/kim_desktop_exec.py" "$RUNTIME/bin/kim_all")"
 for name in "${menu_names[@]}"; do
   destination="$PREFIX/$name"
   temporary="$(mktemp "$PREFIX/.${name}.tmp.XXXXXX")"
-  intltool-merge --desktop-style "$SOURCE_DIR/po" "$SOURCE_DIR/src/$name.in" "$temporary" >/dev/null
+  python3 - "$SOURCE_DIR/src/$name.in" "$temporary" <<'KIMNG_MENU_RENDER'
+from pathlib import Path
+import re
+import sys
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+
+content = source.read_text(encoding="utf-8")
+
+# The templates use intltool's leading underscore to mark
+# translatable Desktop Entry keys. Render their English values
+# as ordinary Desktop Entry keys.
+content = re.sub(
+    r"^_([A-Za-z][A-Za-z0-9-]*)=",
+    r"\1=",
+    content,
+    flags=re.MULTILINE,
+)
+
+if re.search(r"^_[A-Za-z][A-Za-z0-9-]*=", content, re.MULTILINE):
+    raise SystemExit("Unrendered translation key")
+
+if "[Desktop Entry]" not in content:
+    raise SystemExit("Invalid Desktop Entry template")
+
+target.write_text(content, encoding="utf-8")
+KIMNG_MENU_RENDER
 chmod 0755 -- "$temporary"
   # Pass data as arguments; a callable replacement adds no sed/regex escaping.
   python3 - "$exec_path" "$temporary" <<'KIM6_EXEC_REPLACE'
@@ -552,7 +508,7 @@ KIM6_EXEC_REPLACE
       die "location menu must contain one Apply GPS entry and no redundant Copy GPS action"
     fi
   fi
-  if ! grep -Fq "kim6/bin/kim_all" "$temporary"; then
+  if ! grep -Fq "kimng/bin/kim_all" "$temporary"; then
     echo "install.sh: rendered menu does not reference the installed dispatcher: $name" >&2
     exit 1
   fi
@@ -565,45 +521,6 @@ KIM6_EXEC_REPLACE
 done
 
 python3 "$RUNTIME/bin/kim_recipe_core.py" --sync-menu || { echo "install.sh: Recipes shortcuts were not synchronized; retry using the installed dispatcher recipe --sync-menu" >&2; }
-
-# Retire only the known KIM legacy command names after the new menus are in place.
-for name in "${legacy_names[@]}"; do
-  path="$RUNTIME/bin/$name"
-  if [ -f "$path" ]; then rm -f -- "$path"; fi
-done
-rm -f -- "$RUNTIME/.kim6-manifest"
-
-
-# Retire verified obsolete KIM6 menus, regardless of filename.
-# Never follow symlinks or remove unrelated desktop entries.
-kim6_retire_obsolete_menus() {
-  local path name expected current
-
-  for path in "$PREFIX"/kim*.desktop; do
-    [ -e "$path" ] || [ -L "$path" ] || continue
-    [ ! -L "$path" ] || continue
-    [ -f "$path" ] || continue
-
-    name="${path##*/}"
-    current=false
-
-    for expected in "${menu_names[@]}"; do
-      if [ "$name" = "$expected" ]; then
-        current=true
-        break
-      fi
-    done
-
-    [ "$current" = false ] || continue
-
-    if menu_is_kim6 "$path"; then
-      rm -f -- "$path" || return 1
-      echo "install.sh: retired obsolete KIMng menu: $name"
-    fi
-  done
-}
-
-kim6_retire_obsolete_menus
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
@@ -645,8 +562,8 @@ for name in "${menu_names[@]}"; do
   menu="$PREFIX/$name"
 
   if [ ! -f "$menu" ] || [ -L "$menu" ] ||
-     ! grep -Fxq 'X-KIM6-Managed=true' "$menu" ||
-     ! grep -Fq 'kim6/bin/kim_all' "$menu"; then
+     ! grep -Fxq 'X-KIMng-Managed=true' "$menu" ||
+     ! grep -Fq 'kimng/bin/kim_all' "$menu"; then
     die "installed menu is missing or invalid: $menu"
   fi
 
@@ -657,23 +574,23 @@ done
 [ "$menu_count" -eq "${#menu_names[@]}" ] ||
   die "expected ${#menu_names[@]} desktop menus, found $menu_count"
 
-# A successful installation must not leave obsolete KIM6 menus behind.
+# Reject unexpected KIMng-owned menus.
 for path in "$PREFIX"/kim*.desktop; do
   [ -f "$path" ] && [ ! -L "$path" ] || continue
+  grep -Fxq 'X-KIMng-Managed=true' "$path" || continue
 
   name="${path##*/}"
-  current=false
+  expected=false
 
-  for expected in "${menu_names[@]}"; do
-    if [ "$name" = "$expected" ]; then
-      current=true
+  for candidate in "${menu_names[@]}"; do
+    if [ "$name" = "$candidate" ]; then
+      expected=true
       break
     fi
   done
 
-  if [ "$current" = false ] && menu_is_kim6 "$path"; then
-    die "obsolete KIM6 menu remains: $path"
-  fi
+  [ "$expected" = true ] ||
+    die "unexpected KIMng-owned menu: $path"
 done
 
 echo

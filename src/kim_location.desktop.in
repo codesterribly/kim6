@@ -7,7 +7,7 @@ MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=04Report;03Apply;05Reduce;07StripGPS;
 _X-KDE-Submenu=KIMng - Location/GPS
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action 03Apply]
 Icon=mark-location
@@ -16,7 +16,7 @@ Exec=kim_all location-apply -- %F
 
 [Desktop Action 04Report]
 Icon=document-properties
-_Name=Inspect location metadata…
+_Name=View GPS metadata…
 Exec=kim_all location-report -- %F
 
 [Desktop Action 05Reduce]

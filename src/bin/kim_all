@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # kim_all
-# One entrypoint for KIM actions, usually launched from a Dolphin Service Menu.
+# KIMng runtime dispatcher, launched from a Dolphin service menu.
 #
 # Derived from multiple kim_* scripts in the KIM project.
 #
@@ -56,7 +56,7 @@ DISPATCHER_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 if [ -d "$DISPATCHER_DIR/../locale" ]; then
   KIM_LOCALE_DIR="$(cd -P -- "$DISPATCHER_DIR/../locale" && pwd -P)"
   export TEXTDOMAINDIR="${TEXTDOMAINDIR:-$KIM_LOCALE_DIR}"
-  export TEXTDOMAIN="${TEXTDOMAIN:-kim6}"
+  export TEXTDOMAIN="${TEXTDOMAIN:-kimng}"
 fi
 
 # Adapters keep existing Bash actions and their policy/publication boundaries.
@@ -147,6 +147,17 @@ preview_run() {
   local diagnostic detail status=0
   diagnostic="$("$@" 2>&1)" || status=$?
   [ -z "$diagnostic" ] || printf '%s\n' "$diagnostic" >&2
+
+  # Compression review uses explicit results for Cancel, destination
+  # changes, Back, and policy changes. These are normal UI outcomes,
+  # not preview failures. Return them to action_compress().
+  if [ "${2:-}" = "$DISPATCHER_DIR/kim_compress_review.py" ] &&
+     [ "${3:-}" = review ]; then
+    case "$status" in
+      0|129|130|131|132) return "$status" ;;
+    esac
+  fi
+
   case "$status" in
     0) return 0 ;;
     125|130) return "$status" ;;
@@ -2723,9 +2734,17 @@ action_convert() {
   done
 
   local mode
-  mode="$(choose_output_mode \
-    "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')" "${#files[@]}" mixed)"
+  if [ "$preview" = true ]; then
+    # Reviewed conversions produce derivatives only. The mandatory
+    # Review Changes dialog authorizes publication, so do not show
+    # the obsolete create-versus-overwrite prompt first.
+    mode=create
+  else
+    # Retain explicit authorization for non-preview CLI operations.
+    mode="$(choose_output_mode \
+      "$(gettext 'Kim')" \
+      "$(gettext 'Do you want to create new files?')" "${#files[@]}" mixed)"
+  fi
 
   if [ "$mode" = "cancel" ]; then
     return 1
@@ -6568,8 +6587,10 @@ action_stripmeta() {
 
   local approved_policy=''
   if [ "$interactive" = true ]; then
-    approved_policy="$(choose_output_mode "$(gettext 'Kim')"       "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
-    [ "$approved_policy" != cancel ] || return 130
+    # Dolphin's interactive Strip Metadata workflow creates derivatives.
+    # Review Changes is the mandatory approval gate. Do not display
+    # the obsolete create-versus-overwrite prompt beforehand.
+    approved_policy=create
     preview_confirm strip "$approved_policy" stripped mode "$strip_mode" remove_ai "$remove_ai" || return $?
     strip_mode="$(preview_value config mode)" || return 1
     case "$strip_mode" in all|gps|ai) : ;; *) return 1 ;; esac

@@ -37,7 +37,7 @@ def render(library, dispatcher):
     command = exec_argument(str(dispatcher)) + ' recipe '
     lines = ['[Desktop Entry]', 'Type=Service', 'Icon=view-list-details', 'Name=KIMng',
              'X-KDE-ServiceTypes=KonqPopupMenu/Plugin', 'MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;', 'X-KDE-Protocol=file',
-             'X-KDE-Submenu=KIMng - Recipes', 'X-KIM6-Managed=true',
+             'X-KDE-Submenu=KIMng - Recipes', 'X-KIMng-Managed=true',
              'Actions=' + ';'.join(actions) + ';']
     for r in recipes:
         duplicate = sum(x['name'].casefold() == r['name'].casefold() for x in recipes) > 1
@@ -57,7 +57,7 @@ def render(library, dispatcher):
 
 def installed_paths():
     runtime = Path(__file__).absolute().parent.parent
-    if runtime.name != 'kim6' or runtime.resolve() != runtime:
+    if runtime.name != 'kimng' or runtime.resolve() != runtime:
         raise RecipeError('No active installed KIMng runtime; run sync from an installed dispatcher')
     return runtime.parent / 'kim_recipes.desktop', runtime / 'bin' / 'kim_all'
 
@@ -75,7 +75,7 @@ def sync_menu():
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid():
             raise RecipeError('Recipes menu is not a user-owned regular file')
         previous = menu.read_text(encoding='utf-8')
-        if 'X-KIM6-Managed=true' not in previous.splitlines() or exec_argument(str(dispatcher)) not in previous:
+        if 'X-KIMng-Managed=true' not in previous.splitlines() or exec_argument(str(dispatcher)) not in previous:
             raise RecipeError('Recipes menu belongs to another installation')
         content = render(load_library(), dispatcher)
         if content == previous and stat.S_IMODE(info.st_mode) == 0o755: return False

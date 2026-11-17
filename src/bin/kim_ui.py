@@ -9,7 +9,7 @@ def tr(text):
     import gettext
     import os
     from pathlib import Path
-    return gettext.translation('kim6',localedir=os.environ.get('TEXTDOMAINDIR') or
+    return gettext.translation('kimng',localedir=os.environ.get('TEXTDOMAINDIR') or
         Path(__file__).resolve().parent.parent/'locale',fallback=True).gettext(text)
 
 

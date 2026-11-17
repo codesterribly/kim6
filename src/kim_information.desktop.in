@@ -7,7 +7,7 @@ MimeType=image/*;video/*;
 X-KDE-Protocol=file
 Actions=01Settings;02About;03License;04Manual;
 _X-KDE-Submenu=KIMng - Settings/About
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action 02About]
 Icon=help-about

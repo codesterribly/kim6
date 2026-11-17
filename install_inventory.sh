@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Authoritative KIM6 installation inventory, sourced by install/uninstall.
+# Authoritative KIMng installation inventory, sourced by install/uninstall.
 # Rows are checkout source | runtime destination | installed mode.
 # Menus are rendered and translations compiled separately; never recursively copy.
 menu_names=(
@@ -16,7 +16,6 @@ menu_names=(
   kim_videoutilities.desktop
   kim_webemail.desktop
 )
-languages=(de es fr hu it nl zh_TW)
 legacy_names=(kim_album kim_compress kim_convert kim_flipflop kim_galery kim_multiburst
   kim_other kim_collage kim_print kim_rename kim_resize kim_resizeandsend kim_rotate
   kim_rotatewithexif kim_sortbydate kim_stripmeta kim_treatment kim_video kim_webexport)
@@ -28,7 +27,7 @@ while IFS='|' read -r source destination mode; do
   runtime_sources+=("$source")
   runtime_files+=("$destination")
   runtime_modes+=("$mode")
-done <<'KIM6_RUNTIME_FILES'
+done <<'KIMNG_RUNTIME_FILES'
 src/bin/kim_all|bin/kim_all|0755
 src/bin/kim_image_ops.py|bin/kim_image_ops.py|0644
 src/bin/kim_image_ops_dialog.py|bin/kim_image_ops_dialog.py|0644
@@ -48,6 +47,7 @@ src/bin/kim_location_map.py|bin/kim_location_map.py|0644
 src/bin/kim_job.py|bin/kim_job.py|0644
 src/bin/kim_job_process.py|bin/kim_job_process.py|0644
 src/bin/kim_action_dialog.py|bin/kim_action_dialog.py|0644
+src/bin/kim_compress_review.py|bin/kim_compress_review.py|0644
 src/bin/kim_metadata_browser.py|bin/kim_metadata_browser.py|0644
 src/bin/kim_metadata_compare.py|bin/kim_metadata_compare.py|0644
 src/bin/kim_metadata_editor.py|bin/kim_metadata_editor.py|0644
@@ -134,7 +134,7 @@ docs/images/screenshots/21-video-menu-overview.png|docs/images/screenshots/21-vi
 docs/images/screenshots/22-video-av1-presets.png|docs/images/screenshots/22-video-av1-presets.png|0644
 docs/images/screenshots/23-video-utilities.png|docs/images/screenshots/23-video-utilities.png|0644
 docs/reference/STEP2_IMPLEMENTATION.html|docs/reference/STEP2_IMPLEMENTATION.html|0644
-KIM6_RUNTIME_FILES
+KIMNG_RUNTIME_FILES
 
 # Phase 2: review-before-processing UI for video transcode presets.
 # Keep the source, installed path and mode arrays index-aligned.

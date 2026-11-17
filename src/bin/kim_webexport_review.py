@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QHeaderView,
     QLabel, QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QPlainTextEdit,
+    QPlainTextEdit, QLineEdit,
     QFileDialog, QPushButton, QHBoxLayout,
 )
 
@@ -35,11 +35,11 @@ class WebExportReview(QDialog):
         self.errors = {}
         self.source_notices = {}
 
-        self.setWindowTitle("KIMng - Review Web Export")
+        self.setWindowTitle("KIMng - Web Export - Review Changes")
         visible_rows = min(len(records), 8)
         self.resize(
             1050,
-            min(760, 370 + 34 * visible_rows)
+            min(760, 325 + 34 * visible_rows)
         )
         self.setMinimumWidth(820)
 
@@ -79,15 +79,31 @@ class WebExportReview(QDialog):
         destination_label.setWordWrap(True)
         destination_row.addWidget(destination_label, 1)
 
+        destination_input_row = QHBoxLayout()
+
+        self.destination_entry = QLineEdit()
+        self.destination_entry.setPlaceholderText(
+            "Beside each source (leave empty)"
+        )
+        self.destination_entry.setAccessibleName(
+            "Shared destination directory"
+        )
+        self.destination_entry.setText(destination)
+        self.destination_entry.textChanged.connect(
+            lambda _: self.apply.setEnabled(False)
+        )
+        self.destination_entry.editingFinished.connect(
+            self.submit_destination
+        )
+        destination_input_row.addWidget(self.destination_entry, 1)
+
         change_button = QPushButton("Change destination…")
         change_button.clicked.connect(self.change_destination)
-        destination_row.addWidget(change_button)
-
-        layout.addLayout(destination_row)
+        destination_input_row.addWidget(change_button)
 
         self.table = QTableWidget(len(records), 6)
         self.table.setHorizontalHeaderLabels((
-            "Before: Source image", "Original", "Planned size",
+            "Source image", "Original", "Planned",
             "Output filename", "Destination", "Status"
         ))
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -194,6 +210,9 @@ class WebExportReview(QDialog):
         note.setWordWrap(True)
         layout.addWidget(note)
 
+        layout.addLayout(destination_row)
+        layout.addLayout(destination_input_row)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
@@ -205,53 +224,70 @@ class WebExportReview(QDialog):
 
         self.refresh_status()
 
-    def change_destination(self):
-        initial = (
-            self.destination
-            if os.path.isdir(self.destination)
-            else os.path.dirname(self.records[0][0])
-        )
+    def submit_destination(self):
+        proposed = self.destination_entry.text().strip()
 
-        selected = QFileDialog.getExistingDirectory(
-            self,
-            "Choose Web Export Destination",
-            initial,
-        )
-
-        if not selected:
+        if proposed == self.destination:
+            self.refresh_status()
             return
 
-        selected = os.path.realpath(selected)
+        if proposed:
+            if (
+                not os.path.isabs(proposed)
+                or os.path.islink(proposed)
+                or not os.path.isdir(proposed)
+                or not os.access(proposed, os.W_OK | os.X_OK)
+            ):
+                self.status.setText(
+                    "Invalid shared destination. Choose an existing "
+                    "writable directory."
+                )
+                self.apply.setEnabled(False)
+                return
 
-        if not (
-            os.path.isdir(selected)
-            and os.access(selected, os.W_OK | os.X_OK)
-        ):
-            self.status.setText(
-                "Selected destination is not accessible."
-            )
-            return
+            proposed = os.path.realpath(proposed)
 
         try:
             Path(self.destination_request).write_bytes(
-                os.fsencode(selected) + bytes([0])
+                os.fsencode(proposed) + bytes([0])
             )
         except OSError as exc:
             self.status.setText(
                 f"Could not save destination request: {exc}"
             )
+            self.apply.setEnabled(False)
             return
 
-        # Return control to kim_all to rebuild the filename plan.
+        # The caller rebuilds the exact filenames and destinations
+        # before allowing approval. Never apply a stale plan.
         self.reject()
+
+    def change_destination(self):
+        initial = (
+            self.destination_entry.text().strip()
+            if os.path.isdir(self.destination_entry.text().strip())
+            else (
+                self.destination
+                if os.path.isdir(self.destination)
+                else os.path.dirname(self.records[0][0])
+            )
+        )
+
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Choose Web Export destination",
+            initial,
+        )
+
+        if selected:
+            self.destination_entry.setText(selected)
+            self.submit_destination()
 
     def refresh_source_notices(self):
         selection = self.table.selectionModel().selectedRows()
 
         if not selection:
-            self.before_summary.setText(
-                "Before: Select an image to inspect its source."
-            )
+            self.before_summary.hide()
             self.notice_details.hide()
             return
 
@@ -261,18 +297,16 @@ class WebExportReview(QDialog):
 
         if notices:
             self.before_summary.setText(
-                f"Before: {Path(source).name} | "
-                f"{len(notices)} source warning(s)"
+                f"Source warnings ({len(notices)})"
             )
+            self.before_summary.show()
             self.notice_details.setPlainText(
-                source + "\n\n" + "\n\n".join(notices)
+                "\n\n".join(notices)
             )
             self.notice_details.show()
         else:
-            self.before_summary.setText(
-                f"Before: {Path(source).name} | "
-                "No source warnings"
-            )
+            self.before_summary.clear()
+            self.before_summary.hide()
             self.notice_details.clear()
             self.notice_details.hide()
 

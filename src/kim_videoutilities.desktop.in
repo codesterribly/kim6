@@ -7,7 +7,7 @@ MimeType=video/*;
 X-KDE-Protocol=file
 Actions=A01ExtractVideoAudio;A02VideoFrameAt;A03VideoThumbnail;A04MuteVideo;_SEPARATOR_;z01VideoContactSheet;z02VideoToGif;
 _X-KDE-Submenu=KIMng - Video Utilities
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action A01ExtractVideoAudio]
 Icon=audio-x-generic

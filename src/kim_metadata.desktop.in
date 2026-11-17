@@ -7,7 +7,7 @@ MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;05StripMetadata;06ViewMetadata;07EditMetadata;
 _X-KDE-Submenu=KIMng - Organize/Metadata
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action 01Rename]
 Icon=edit-rename

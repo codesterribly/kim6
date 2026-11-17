@@ -7,7 +7,7 @@ MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
 X-KDE-Protocol=file
 Actions=KIMRecipe0Run;KIMRecipe1Editor;
 _X-KDE-Submenu=KIMng - Recipes
-X-KIM6-Managed=true
+X-KIMng-Managed=true
 
 [Desktop Action KIMRecipe0Run]
 Icon=view-list-details

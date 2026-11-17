@@ -1,39 +1,28 @@
 #!/usr/bin/env bash
 #
-# Remove current and obsolete KIM6 Dolphin menus and known runtime files.
-#
+# Uninstall only verified KIMng-owned runtime files and Dolphin menus.
 # Usage: ./uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]
+# Unknown files, unrelated menus, and symlinks are never deleted.
 #
-# The default is the current user's ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus.
-# When run as root, the first ${XDG_DATA_DIRS} entry (default /usr/local/share)
-# is used. --prefix names the service-menu directory itself. The script also
-# accepts --no_message for older callers; it suppresses the completion line.
-#
-# KIM6 menus are identified by their managed-menu line or known KIM dispatcher
-# and legacy command entries. The runtime is recognized by its kim_all header,
-# an older KIM6 marker, or a recognized KIM menu. Only named KIM6 files are
-# removed. Unknown files and directories are left in place; empty known runtime
-# directories are removed with rmdir. Uninstall is not transactional, so rerun
-# it after correcting any reported filesystem error.
-#
-# Bash and standard Unix file tools are required. kbuildsycoca6 is optional.
-# Early KIM work is credited to Charles Bouveyron and Tomáš Hnyk; see ABOUT
-# and LICENSE.md for project credits and licensing.
-# Exit status: 0 complete/no installation, 2 invalid arguments, 1 unsafe path.
 set -euo pipefail
 
 PREFIX=''
 quiet=false
 
-# Use the same default service-menu directory as install.sh.
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --prefix)
-      [ "$#" -ge 2 ] || { echo "uninstall.sh: --prefix needs a directory" >&2; exit 2; }
+      [ "$#" -ge 2 ] || {
+        echo "uninstall.sh: --prefix needs a directory" >&2
+        exit 2
+      }
       PREFIX="$2"
       shift 2
       ;;
-    --no_message) quiet=true; shift ;;
+    --no_message)
+      quiet=true
+      shift
+      ;;
     -h|--help)
       echo "Usage: uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]"
       exit 0
@@ -44,6 +33,7 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
 if [ -z "$PREFIX" ]; then
   if [ "$(id -u)" -eq 0 ]; then
     data_root="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
@@ -52,175 +42,194 @@ if [ -z "$PREFIX" ]; then
     PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus"
   fi
 fi
+
 [[ "$PREFIX" != *$'\n'* && "$PREFIX" != *$'\r'* ]] || {
   echo "uninstall.sh: prefix contains a newline" >&2
   exit 2
 }
-if [ -L "$PREFIX" ]; then
-  echo "uninstall.sh: refusing symlinked prefix: $PREFIX" >&2
+
+[ ! -L "$PREFIX" ] || {
+  echo "uninstall.sh: refusing symlinked prefix" >&2
   exit 1
-fi
+}
+
 if [ ! -d "$PREFIX" ]; then
-  [ "$quiet" = true ] || printf 'No KIMng service-menu directory found at %s.\n' "$PREFIX"
+  [ "$quiet" = true ] ||
+    printf 'No KIMng installation at %s\n' "$PREFIX"
   exit 0
 fi
+
 PREFIX="$(cd -P -- "$PREFIX" && pwd -P)"
-RUNTIME="$PREFIX/kim6"
-runtime_known=false
+RUNTIME="$PREFIX/kimng"
 
 SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=install_inventory.sh
 source "$SOURCE_DIR/install_inventory.sh"
-# shellcheck disable=SC2154
-menu_names+=("${obsolete_menu_names[@]}")
-runtime_files+=(.kim6-owned .kim6-manifest)
-die() { echo "uninstall.sh: $*" >&2; exit 1; }
+
+die() {
+  echo "uninstall.sh: $*" >&2
+  exit 1
+}
+
 check_dir() {
-  [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] || die "refusing unsafe directory: $1"
+  [[ ! -L "$1" && ( ! -e "$1" || -d "$1" ) ]] ||
+    die "refusing unsafe directory: $1"
 }
+
 check_file() {
-  [[ ! -L "$1" && ( ! -e "$1" || -f "$1" ) ]] || die "refusing unsafe file: $1"
+  [[ ! -L "$1" && ( ! -e "$1" || -f "$1" ) ]] ||
+    die "refusing unsafe file: $1"
 }
 
-# Menu contents, rather than a separately installed ownership database, identify
-# KIM6. These names include both the unified menus and their legacy commands.
-menu_is_kim6() {
+dispatcher_is_kimng() {
   [ -f "$1" ] && [ ! -L "$1" ] &&
-    grep -Eq '^X-KIM6-Managed=true$|^Exec=.*(kim_all|kim_(album|compress|convert|flipflop|galery|multiburst|other|collage|print|rename|resize|resizeandsend|rotate|rotatewithexif|sortbydate|stripmeta|treatment|video|webexport))(["[:space:]]|$)' "$1"
-}
-dispatcher_is_kim6() {
-  [ -f "$1" ] && [ ! -L "$1" ] && grep -Fq '# One entrypoint for KIM actions' "$1"
+    grep -Fq '# KIMng runtime dispatcher' "$1"
 }
 
-has_kim_menu=false
+menu_is_kimng() {
+  [ -f "$1" ] && [ ! -L "$1" ] &&
+    grep -Fxq 'X-KIMng-Managed=true' "$1" &&
+    grep -Eq '^Exec=.*kimng/bin/kim_all(["[:space:]]|$)' "$1"
+}
+
+# Preflight every known menu before deleting anything.
+# Never interpret an unrelated service menu as a KIMng installation.
 for name in "${menu_names[@]}"; do
   path="$PREFIX/$name"
-  if [ -L "$path" ] || { [ -e "$path" ] && [ ! -f "$path" ]; }; then
-    echo "uninstall.sh: refusing unsafe menu path: $path" >&2
-    exit 1
+  check_file "$path"
+
+  if [ -f "$path" ] && ! menu_is_kimng "$path"; then
+    die "refusing unrelated service menu: $path"
   fi
-  if menu_is_kim6 "$path"; then has_kim_menu=true; fi
 done
 
-# Refuse unsafe known paths before removing any menu. Unknown entries in the
-# runtime are never traversed or deleted, and can keep their parent directory.
-if [ -L "$RUNTIME" ] || { [ -e "$RUNTIME" ] && [ ! -d "$RUNTIME" ]; }; then
-  echo "uninstall.sh: refusing unsafe runtime path: $RUNTIME" >&2
-  exit 1
-fi
+check_dir "$RUNTIME"
+runtime_owned=false
+
 if [ -d "$RUNTIME" ]; then
-  for directory in "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" "$RUNTIME/docs/reference" "$RUNTIME/locale"; do
-    check_dir "$directory"
-  done
-  for relative in "${runtime_files[@]}"; do
-    check_file "$RUNTIME/$relative"
-  done
-  if [ -e "$RUNTIME/bin/kim_all" ] && ! dispatcher_is_kim6 "$RUNTIME/bin/kim_all"; then
-    echo "uninstall.sh: refusing to remove an unrecognized dispatcher file: $RUNTIME/bin/kim_all" >&2
-    exit 1
-  fi
-# shellcheck disable=SC2154
-  for name in "${legacy_names[@]}"; do
-    check_file "$RUNTIME/bin/$name"
-  done
-# shellcheck disable=SC2154
-  for language in "${languages[@]}"; do
-    check_dir "$RUNTIME/locale/$language"
-    check_dir "$RUNTIME/locale/$language/LC_MESSAGES"
-    check_file "$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
-  done
+  marker="$RUNTIME/.kimng-owned"
 
-  # Menus alone do not establish ownership of a separate runtime folder.
-  # Also recognize genuine legacy KIM scripts when upgrading old layouts.
-  legacy_runtime_known=false
-  if [ "$has_kim_menu" = true ]; then
-    for name in "${legacy_names[@]}"; do
-      path="$RUNTIME/bin/$name"
-      if [ -f "$path" ] && [ ! -L "$path" ] &&
-         grep -Eq 'SOURCE_TRANSLATION_TTT|Copyright.*Charles Bouveyron' "$path"; then
-        legacy_runtime_known=true
-        break
-      fi
+  # A KIMng marker is required. Preserve any unrecognized runtime.
+  check_file "$marker"
+
+  if [ -f "$marker" ] &&
+     [ "$(< "$marker")" = 'KIMng runtime' ]; then
+    runtime_owned=true
+  fi
+
+  # Never delete a runtime with an unfamiliar dispatcher.
+  if [ -e "$RUNTIME/bin/kim_all" ] ||
+     [ -L "$RUNTIME/bin/kim_all" ]; then
+    dispatcher_is_kimng "$RUNTIME/bin/kim_all" ||
+      die "refusing unrecognized dispatcher: $RUNTIME/bin/kim_all"
+  fi
+
+  if [ "$runtime_owned" = true ]; then
+    for directory in \
+      "$RUNTIME/bin" \
+      "$RUNTIME/gallery" \
+      "$RUNTIME/recipes" \
+      "$RUNTIME/docs" \
+      "$RUNTIME/docs/images" \
+      "$RUNTIME/docs/reference"; do
+      check_dir "$directory"
     done
-  fi
-  runtime_known=false
-  if dispatcher_is_kim6 "$RUNTIME/bin/kim_all" ||
-     { [ -f "$RUNTIME/.kim6-owned" ] && [ ! -L "$RUNTIME/.kim6-owned" ]; } ||
-     [ "$legacy_runtime_known" = true ]; then
-    runtime_known=true
-  fi
-  if [ "$runtime_known" = false ] && [ -n "$(find "$RUNTIME" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
-    echo "uninstall.sh: leaving unrecognized runtime directory untouched: $RUNTIME" >&2
-  fi
-fi
 
-# Remove recognized KIM6 menus, including obsolete filenames.
-# Leave unrelated entries, directories and symlinks untouched.
-for path in "$PREFIX"/kim*.desktop; do
-  [ -f "$path" ] && [ ! -L "$path" ] || continue
+    for relative in "${runtime_files[@]}"; do
+      check_file "$RUNTIME/$relative"
+    done
 
-  if menu_is_kim6 "$path"; then
-    rm -f -- "$path"
-  fi
-done
+    check_file "$RUNTIME/.kimng-manifest"
 
-if [ -d "$RUNTIME" ] && [ "$runtime_known" = true ]; then
-  # Preserve identity if removal is interrupted after deleting kim_all.
-  if [ ! -f "$RUNTIME/.kim6-owned" ]; then
-    printf 'KIM6 runtime\n' > "$RUNTIME/.kim6-owned"
-    chmod 0644 -- "$RUNTIME/.kim6-owned"
-  fi
-
-  for relative in "${runtime_files[@]}"; do
-    case "$relative" in
-      .kim6-owned|.kim6-manifest) continue ;;
-    esac
-    path="$RUNTIME/$relative"
-    if [ -f "$path" ]; then rm -f -- "$path"; fi
-  done
-  for name in "${legacy_names[@]}"; do
-    path="$RUNTIME/bin/$name"
-    if [ -f "$path" ]; then rm -f -- "$path"; fi
-  done
-  for language in "${languages[@]}"; do
-    path="$RUNTIME/locale/$language/LC_MESSAGES/kim6.mo"
-    if [ -f "$path" ]; then rm -f -- "$path"; fi
-    rmdir -- "$RUNTIME/locale/$language/LC_MESSAGES" "$RUNTIME/locale/$language" 2>/dev/null || true
-  done
-    # Remove bytecode generated from installed KIM6 modules only.
-    # Preserve unrelated files, symlinks, and unknown cache entries.
     cache="$RUNTIME/bin/__pycache__"
-    if [ -d "$cache" ] && [ ! -L "$cache" ]; then
+    check_dir "$cache"
+
+    if [ -d "$cache" ]; then
       for relative in "${runtime_files[@]}"; do
         case "$relative" in
           bin/*.py) ;;
           *) continue ;;
         esac
+
         module="${relative##*/}"
         module="${module%.py}"
+
         for compiled in "$cache/$module".cpython-*.pyc; do
-          if [ -f "$compiled" ] && [ ! -L "$compiled" ]; then
-            rm -f -- "$compiled"
-          fi
+          check_file "$compiled"
         done
       done
-      rmdir -- "$cache" 2>/dev/null || true
     fi
-  rmdir -- "$RUNTIME/docs/images" "$RUNTIME/docs/reference" 2>/dev/null || true
-  rmdir -- "$RUNTIME/docs" "$RUNTIME/locale" "$RUNTIME/bin" "$RUNTIME/gallery" "$RUNTIME/recipes" 2>/dev/null || true
+  elif [ -n "$(find "$RUNTIME" -mindepth 1 -print -quit)" ]; then
+    die "refusing unrecognized runtime directory: $RUNTIME"
+  fi
+fi
 
-  # Unknown files are preserved. Keep ownership while any remain.
+# All relevant paths have now passed preflight.
+# Remove only individually identified, KIMng-owned menus.
+for name in "${menu_names[@]}"; do
+  path="$PREFIX/$name"
+  if [ -f "$path" ] && menu_is_kimng "$path"; then
+    rm -f -- "$path"
+  fi
+done
+
+if [ "$runtime_owned" = true ]; then
+  # Keep the marker until cleanup completes, allowing a retry
+  # after interruption.
+
+  for relative in "${runtime_files[@]}"; do
+    path="$RUNTIME/$relative"
+    if [ -f "$path" ]; then
+      rm -f -- "$path"
+    fi
+  done
+
+  # Remove only bytecode derived from the installed Python modules.
+  cache="$RUNTIME/bin/__pycache__"
+  if [ -d "$cache" ]; then
+    for relative in "${runtime_files[@]}"; do
+      case "$relative" in
+        bin/*.py) ;;
+        *) continue ;;
+      esac
+
+      module="${relative##*/}"
+      module="${module%.py}"
+
+      for compiled in "$cache/$module".cpython-*.pyc; do
+        if [ -f "$compiled" ]; then
+          rm -f -- "$compiled"
+        fi
+      done
+    done
+
+    rmdir -- "$cache" 2>/dev/null || true
+  fi
+
+  rmdir -- \
+    "$RUNTIME/docs/images" \
+    "$RUNTIME/docs/reference" \
+    "$RUNTIME/docs" \
+    "$RUNTIME/bin" \
+    "$RUNTIME/gallery" \
+    "$RUNTIME/recipes" 2>/dev/null || true
+
+  # Remove the ownership marker only when all other content is gone.
   if [ -z "$(find "$RUNTIME" -mindepth 1 -maxdepth 1 \
-      ! -name '.kim6-owned' ! -name '.kim6-manifest' -print -quit)" ]; then
-    rm -f -- "$RUNTIME/.kim6-owned" "$RUNTIME/.kim6-manifest"
+    ! -name '.kimng-owned' ! -name '.kimng-manifest' \
+    -print -quit)" ]; then
+    rm -f -- \
+      "$RUNTIME/.kimng-owned" \
+      "$RUNTIME/.kimng-manifest"
     rmdir -- "$RUNTIME" 2>/dev/null || true
   else
-    rm -f -- "$RUNTIME/.kim6-manifest"
-    echo 'uninstall.sh: retained runtime ownership marker for remaining files.' >&2
+    echo "uninstall.sh: unknown runtime content preserved" >&2
   fi
 fi
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
-[ "$quiet" = true ] || printf 'Removed recognized KIMng files from %s.\n' "$PREFIX"
+
+[ "$quiet" = true ] ||
+  printf 'Removed verified KIMng files from %s\n' "$PREFIX"

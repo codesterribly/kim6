@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QButtonGroup,
     QDialog, QDialogButtonBox, QFileDialog,
     QHBoxLayout, QHeaderView, QLabel, QMessageBox,
-    QPushButton, QRadioButton, QTableWidget,
+    QPushButton, QRadioButton, QLineEdit, QTableWidget,
     QTableWidgetItem, QVBoxLayout,
 )
 
@@ -35,7 +35,7 @@ def review(plan_path, request_path, policy, destination):
     app = QApplication.instance() or QApplication(sys.argv[:1])
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIMng - Review compression changes")
+    dialog.setWindowTitle("KIMng - Compress - Review Changes")
     dialog.resize(1000, 460)
 
     layout = QVBoxLayout(dialog)
@@ -77,7 +77,16 @@ def review(plan_path, request_path, policy, destination):
 
     destination_label = QLabel(description)
     destination_label.setWordWrap(True)
-    destination_row.addWidget(destination_label, 1)
+    destination_entry = QLineEdit(dialog)
+    destination_entry.setPlaceholderText(
+        "Beside each source (leave empty)"
+    )
+    destination_entry.setAccessibleName(
+        "Shared destination directory"
+    )
+    destination_entry.setText(destination)
+
+    destination_row.addWidget(destination_entry, 1)
 
     change = QPushButton("Change destination…")
     beside = QPushButton("Beside each source")
@@ -86,8 +95,6 @@ def review(plan_path, request_path, policy, destination):
         destination_row.addWidget(change)
         if destination:
             destination_row.addWidget(beside)
-    layout.addLayout(destination_row)
-
     table = QTableWidget(len(records), 4)
     table.setHorizontalHeaderLabels([
         "Source image", "Output filename",
@@ -154,15 +161,19 @@ def review(plan_path, request_path, policy, destination):
     )
     layout.addWidget(summary)
 
+    layout.addWidget(destination_label)
+    if policy == "create":
+        layout.addLayout(destination_row)
+
     row = QHBoxLayout()
     back = QPushButton("Back")
     row.addWidget(back)
     row.addStretch()
 
     buttons = QDialogButtonBox(
-        QDialogButtonBox.Apply | QDialogButtonBox.Cancel
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
-    apply = buttons.button(QDialogButtonBox.Apply)
+    apply = buttons.button(QDialogButtonBox.Ok)
     apply.setText("Apply changes")
     apply.setEnabled(bool(records) and not blocked)
     row.addWidget(buttons)
@@ -182,6 +193,46 @@ def review(plan_path, request_path, policy, destination):
             return
         dialog.done(code)
 
+    def submit_destination():
+        proposed = destination_entry.text().strip()
+
+        if proposed:
+            folder = Path(proposed)
+
+            if (
+                not folder.is_absolute()
+                or folder.is_symlink()
+                or not folder.is_dir()
+                or not os.access(
+                    folder, os.W_OK | os.X_OK
+                )
+            ):
+                details.setText(
+                    "Invalid shared destination. Choose an "
+                    "existing writable directory."
+                )
+                apply.setEnabled(False)
+                return
+
+            proposed = str(folder.resolve(strict=True))
+
+        if proposed == destination:
+            apply.setEnabled(bool(records) and not blocked)
+            update_details()
+            return
+
+        # A directory change returns to the compression
+        # planner. It must produce a fresh approved plan.
+        request_change("directory:" + proposed, 130)
+
+    if policy == "create":
+        destination_entry.textChanged.connect(
+            lambda _: apply.setEnabled(False)
+        )
+        destination_entry.editingFinished.connect(
+            submit_destination
+        )
+
     create.toggled.connect(
         lambda checked: (
             request_change("policy:create", 132)
@@ -196,7 +247,12 @@ def review(plan_path, request_path, policy, destination):
     )
 
     def change_directory():
-        initial = destination or str(Path(records[0][0]).parent)
+        typed = destination_entry.text().strip()
+        initial = (
+            typed if os.path.isdir(typed)
+            else destination
+            or str(Path(records[0][0]).parent)
+        )
         selected = QFileDialog.getExistingDirectory(
             dialog, "Choose compression destination", initial
         )
@@ -225,7 +281,7 @@ def review(plan_path, request_path, policy, destination):
                 return
         dialog.accept()
 
-    apply.clicked.connect(approve)
+    buttons.accepted.connect(approve)
     buttons.rejected.connect(dialog.reject)
 
     result = dialog.exec()

@@ -206,7 +206,7 @@ def compression_result(path):
     """Consume private job accounting; one result for success, failure or cancellation."""
     import gettext
     import sys
-    tr = gettext.translation('kim6', localedir=os.environ.get('TEXTDOMAINDIR') or
+    tr = gettext.translation('kimng', localedir=os.environ.get('TEXTDOMAINDIR') or
                              Path(__file__).resolve().parent.parent/'locale', fallback=True).gettext
     fields = Path(path).read_bytes().decode('utf-8', errors='replace').split('\0')
     ok, failed, cancelled, skipped, original, output, measured = map(int, fields[:7])

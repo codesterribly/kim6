@@ -363,7 +363,7 @@ class ActionDialog(QDialog):
             self.layout.addWidget(self.resize_heading)
             self.resize_table = QTableWidget(0, 3, self)
             self.resize_table.setHorizontalHeaderLabels(
-                ['Image', 'Original Dimensions', 'Planned Dimensions']
+                ['Image', 'Original', 'Planned']
             )
             self.resize_table.setEditTriggers(
                 QAbstractItemView.NoEditTriggers
@@ -465,7 +465,7 @@ class ActionDialog(QDialog):
                 self.update_rotation_preview
             )
         elif kind == 'resize':
-            self.setWindowTitle('KIMng - Resize images')
+            self.setWindowTitle('KIMng - Resize')
             self.choice('method', 'Sizing', [
                 ('Resize to Fit', 'fit'),
                 ('Exact Dimensions', 'exact'),
@@ -609,7 +609,9 @@ class ActionDialog(QDialog):
             import os
 
             self.compression_stack = QStackedWidget()
-            self.compression_stack.setFixedHeight(132)
+            self.compression_stack.setSizePolicy(
+                QSizePolicy.Preferred, QSizePolicy.Fixed
+            )
             self.compression_pages = {}
 
             for codec, title in (
@@ -673,6 +675,11 @@ class ActionDialog(QDialog):
                 )
 
             self.form.addRow(self.compression_stack)
+            # Start at the first page's measured size. Refresh will
+            # adjust this whenever the selected format changes.
+            self.compression_stack.setFixedHeight(
+                self.compression_stack.currentWidget().sizeHint().height()
+            )
             self.apply.setText('Review changes…')
 
             resume_path = os.environ.get(
@@ -730,7 +737,6 @@ class ActionDialog(QDialog):
                 self.compress_table,1
             )
             self.compress_pending=[]
-            self.resize(640,380)
         elif kind=='copyright':
             self.apply.setText('Review changes…')
             self.inherited=copyright_settings()
@@ -1082,11 +1088,15 @@ class ActionDialog(QDialog):
             self.compress_table
         )
 
+        # Size from actual widget requirements, not a fixed
+        # allowance for the compression settings and message areas.
+        self.layout.activate()
+        self.adjustSize()
         self.resize(
-            640,
+            max(640, self.width()),
             min(
-                760,
-                max(390, table_height + 315),
+                self.sizeHint().height(),
+                self.screen().availableGeometry().height() * 9 // 10,
             ),
         )
 
@@ -1484,6 +1494,10 @@ class ActionDialog(QDialog):
                 if chosen in self.compression_pages:
                     self.compression_stack.setCurrentIndex(
                         self.compression_pages[chosen]
+                    )
+                    page = self.compression_stack.currentWidget()
+                    self.compression_stack.setFixedHeight(
+                        page.sizeHint().height()
                     )
                 baseline_q,baseline_png=(70,9) if self.compression_preset=='maximum' else (85,6)
                 adjusted=(any(counts[kind] and self.fields[key].value()!=baseline_q
@@ -2255,7 +2269,7 @@ def resize_output_review(
     )
 
     dialog = QDialog()
-    dialog.setWindowTitle("KIMng - Review resize changes")
+    dialog.setWindowTitle("KIMng - Resize - Review Changes")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2308,17 +2322,19 @@ def resize_output_review(
         Qt.TextSelectableByMouse
     )
 
-    destination_row.addWidget(destination_label, 1)
+    destination_entry = QLineEdit(dialog)
+    destination_entry.setPlaceholderText(
+        "Beside each source (leave empty)"
+    )
+    destination_entry.setAccessibleName(
+        "Shared destination directory"
+    )
+    destination_entry.setText(destination)
+    destination_row.addWidget(destination_entry, 1)
 
     browse_button = QPushButton("Change destination…")
-    beside_button = QPushButton("Beside each source")
-
     if policy == "create":
         destination_row.addWidget(browse_button)
-        if destination:
-            destination_row.addWidget(beside_button)
-
-    layout.addLayout(destination_row)
 
     table = QTableWidget(len(records), 4)
     table.setHorizontalHeaderLabels([
@@ -2405,6 +2421,11 @@ def resize_output_review(
     summary.setWordWrap(True)
     layout.addWidget(summary)
 
+    # Destination is always immediately above the action buttons.
+    layout.addWidget(destination_label)
+    if policy == "create":
+        layout.addLayout(destination_row)
+
     buttons = QHBoxLayout()
 
     back_button = QPushButton("Back")
@@ -2482,9 +2503,44 @@ def resize_output_review(
             return
         dialog.reject()
 
+    def submit_destination():
+        proposed = destination_entry.text().strip()
+
+        if proposed:
+            if (
+                not os.path.isabs(proposed)
+                or not os.path.isdir(proposed)
+                or os.path.islink(proposed)
+                or not os.access(proposed, os.W_OK | os.X_OK)
+            ):
+                destination_label.setText(
+                    "Destination: Invalid shared directory"
+                )
+                apply_button.setEnabled(False)
+                return
+
+            proposed = os.path.realpath(proposed)
+
+        if proposed == destination:
+            destination_label.setText(
+                "Destination: " + (
+                    proposed or "Beside each source"
+                )
+            )
+            apply_button.setEnabled(
+                ready > 0 and blocked == 0
+            )
+            return
+
+        # The dispatcher rebuilds the complete output plan
+        # before any new destination can be approved.
+        request_destination(proposed)
+
     def choose_directory():
+        typed = destination_entry.text().strip()
         initial = (
-            destination
+            typed if os.path.isdir(typed)
+            else destination
             or os.path.dirname(records[0][0])
         )
         selected = QFileDialog.getExistingDirectory(
@@ -2508,15 +2564,14 @@ def resize_output_review(
 
         request_destination(os.path.realpath(selected))
 
-    def restore_beside_sources():
-        if destination:
-            request_destination("")
-
     if policy == "create":
-        browse_button.clicked.connect(choose_directory)
-        beside_button.clicked.connect(
-            restore_beside_sources
+        destination_entry.textChanged.connect(
+            lambda _: apply_button.setEnabled(False)
         )
+        destination_entry.editingFinished.connect(
+            submit_destination
+        )
+        browse_button.clicked.connect(choose_directory)
 
     dialog.resize(
         1090,

@@ -808,7 +808,7 @@ def qt_classes():
 
             self.impact_details = QPlainTextEdit(self)
             self.impact_details.setReadOnly(True)
-            self.impact_details.setMaximumHeight(136)
+            self.impact_details.setFixedHeight(76)
             self.impact_details.setPlaceholderText(
                 'Select an image to review conversion impacts.'
             )
@@ -1008,7 +1008,7 @@ def qt_classes():
                     'Image / filename',
                     'Proposed filename',
                     'Destination directory',
-                    'Planned transformation',
+                    'Action',
                     'Status',
                 )
 
@@ -1122,12 +1122,24 @@ def qt_classes():
                     ]
 
                 elif operation == 'convert':
+                    # Simplify display text, not the approved plan.
+                    # Full diagnostics remain available in the tooltip
+                    # and selected-image details.
+                    output_format = plan['config']['format'].upper()
+                    input_format = str(
+                        entry.get('input_format') or 'Image'
+                    ).upper()
+                    action_text = (
+                        f'{input_format} - {output_format}'
+                    )
                     rows = [
                         [
                             values[0],
                             values[1],
-                            values[2],
-                            values[3],
+                            'No output' if status == 'skip'
+                            else values[2],
+                            action_text if status != 'error'
+                            else values[3],
                             status_label,
                         ]
                         for values in entry['rows']
@@ -1229,7 +1241,7 @@ def qt_classes():
             self.setWindowTitle(
                 'KIMng - Remove Metadata'
                 if spec['operation'] == 'strip'
-                else 'KIMng - Review Changes'
+                else 'KIMng - Convert - Review Changes' if spec['operation'] == 'convert' else 'KIMng - Review Changes'
             )
 
             layout = QVBoxLayout(self)
@@ -1311,16 +1323,6 @@ def qt_classes():
                     self.destination_button
                 )
 
-                self.destination_update = QPushButton(
-                    'Update review'
-                )
-                self.destination_update.clicked.connect(
-                    self.update_convert_destination
-                )
-                destination_row.addWidget(
-                    self.destination_update
-                )
-
                 layout.addLayout(destination_row)
 
                 seed_parents = {
@@ -1343,6 +1345,12 @@ def qt_classes():
                         'Destination: ' + initial
                     )
 
+                self.destination_timer = QTimer(self)
+                self.destination_timer.setSingleShot(True)
+                self.destination_timer.setInterval(300)
+                self.destination_timer.timeout.connect(
+                    self.update_convert_destination
+                )
                 self.destination_entry.textChanged.connect(
                     self.invalidate_convert_destination
                 )
@@ -1392,8 +1400,9 @@ def qt_classes():
             self.apply.setEnabled(False)
 
             self.destination_status.setText(
-                'Destination changed. Update review before applying.'
+                'Updating destination review…'
             )
+            self.destination_timer.start()
 
         def choose_convert_destination(self):
             if self.destination_entry is None:
@@ -1416,6 +1425,7 @@ def qt_classes():
             if self.destination_entry is None:
                 return
 
+            self.destination_timer.stop()
             directory = self.destination_entry.text().strip()
 
             if directory:
@@ -1571,7 +1581,7 @@ def qt_classes():
 
                     extra = (
                         178 if self.mode_select else (
-                            330 if self.spec['operation'] == 'convert'
+                            235 if self.spec['operation'] == 'convert'
                             else 125
                         )
                     )

@@ -59,7 +59,7 @@ class LocationDialog(QDialog):
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(350)
         self.timer.timeout.connect(self.start_plan)
         top = QHBoxLayout()
-        title = QLabel('Inspect location metadata - Read only' if kind == 'report' else TITLES[kind].rstrip('…'))
+        title = QLabel('View GPS metadata' if kind == 'report' else TITLES[kind].rstrip('…'))
         font = title.font(); font.setBold(True); title.setFont(font); top.addWidget(title, 1)
         measurement_label = QLabel('&Units:'); top.addWidget(measurement_label)
         self.unit_choice = QComboBox()
