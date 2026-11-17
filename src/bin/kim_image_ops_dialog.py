@@ -515,15 +515,17 @@ class ImageOperationDialog(QDialog):
         self.loading = True; self.worker = None; self.generation = 0; self.pending = False; self.closing = False
         self.dimensions = None; self.checked_generation = None
         self.fields = {}
-        self.setWindowTitle('Crop image' if self.crop else 'Add watermark / overlay'); self.resize(1160, 870)
+        self.setWindowTitle('KIMng - Crop images' if self.crop and self.standalone else 'Crop image' if self.crop else 'Add watermark / overlay'); self.resize(1160, 870)
         layout = QVBoxLayout(self)
-        note = QLabel('One configuration applies to every selected image. Manual crop areas use relative coordinates; exact crop pixels are checked individually. The table shows each image’s coordinates and output size.' if self.crop else
+        note = QLabel('One crop configuration applies to all selected images. Preview each image before reviewing changes.' if self.crop else
                       'Visible overlays change image pixels independently of embedded rights metadata. Size and margins are percentages of each final image’s shorter edge; relative placement applies to every selected image.')
         note.setWordWrap(True); layout.addWidget(note)
         selection = QHBoxLayout(); selection.addWidget(QLabel('Preview image:'))
         self.images = QComboBox()
         for path in self.files: self.images.addItem(Path(path).name, str(path))
         selection.addWidget(self.images, 1); choose = QPushButton('Choose image…'); choose.clicked.connect(self.choose_image); selection.addWidget(choose)
+        if self.crop and self.standalone:
+            choose.hide()
         layout.addLayout(selection); self.images.currentIndexChanged.connect(self.schedule)
         split = QSplitter(Qt.Horizontal); split.setChildrenCollapsible(False); split.setHandleWidth(8); layout.addWidget(split, 1)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); controls = QWidget(); self.form = QFormLayout(controls)
@@ -558,12 +560,29 @@ class ImageOperationDialog(QDialog):
         self.table.setColumnWidth(2, 220)
         self.table.setColumnWidth(3, 260)
         self.table.setMinimumHeight(145)
-        layout.addWidget(self.table)
+        if self.crop:
+            self.table.hide()
+            self.batch_summary = QLabel()
+            self.batch_summary.setWordWrap(True)
+            layout.addWidget(self.batch_summary)
+        else:
+            layout.addWidget(self.table)
         self.status = QLabel(); self.status.setWordWrap(True); self.status.setTextFormat(Qt.PlainText); layout.addWidget(self.status)
         safety = QLabel('Original images stay unchanged. Outputs use the existing verified, create-only publication path; occupied filenames receive a number.')
-        safety.setWordWrap(True); layout.addWidget(safety)
+        safety.setWordWrap(True)
+        if self.crop:
+            safety.hide()
+        else:
+            layout.addWidget(safety)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.apply = self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Review outputs…' if self.standalone else 'Use settings')
+        self.apply = self.buttons.button(QDialogButtonBox.Ok)
+        self.apply.setText(
+            'Review changes…'
+            if self.standalone and self.crop
+            else 'Review outputs…'
+            if self.standalone
+            else 'Use settings'
+        )
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(250); self.timer.timeout.connect(self.refresh)
         self.loading = False; self.sync_visibility(); self.schedule()
@@ -588,20 +607,27 @@ class ImageOperationDialog(QDialog):
         self.form.addRow(widget); widget.toggled.connect(lambda *_: self.control_changed(key)); return widget
 
     def crop_controls(self):
+        heading = QLabel('Crop settings')
+        font = heading.font()
+        font.setBold(True)
+        heading.setFont(font)
+        self.form.addRow(heading)
         self.combo('aspect', 'Aspect ratio', ASPECTS)
         self.spin('ratio_width', 'Custom ratio width', 1, 100000); self.spin('ratio_height', 'Custom ratio height', 1, 100000)
         self.combo('area', 'Crop area', [('Largest area at ratio', 'aspect'), ('Exact crop pixels', 'pixels'), ('Manual relative area', 'manual')])
         self.spin('crop_width', 'Crop width (pixels)', 1, 100000); self.spin('crop_height', 'Crop height (pixels)', 1, 100000)
         self.combo('placement', 'Crop position', PLACEMENTS)
-        hint = QLabel('Drag the rectangle edges or corners to select a manual area. Drag inside to move it. Pixel controls provide a keyboard alternative.')
+        hint = QLabel(
+            'Drag the crop edges to resize, or drag inside to move.'
+        )
         hint.setWordWrap(True); self.form.addRow(hint)
         for key, title in [('x', 'Manual left (%)'), ('y', 'Manual top (%)'), ('w', 'Manual width (%)'), ('h', 'Manual height (%)')]:
             widget = QDoubleSpinBox(); widget.setRange(0 if key in ('x', 'y') else .001, 100); widget.setDecimals(3)
             widget.setValue(self.step[key] * 100); widget.setAccessibleName(title); self.fields[key] = widget; self.form.addRow(title, widget)
             widget.valueChanged.connect(lambda *_, k=key: self.control_changed(k))
-        resize_note = QLabel('Output resizing is separate from the crop area and always preserves proportions.')
+        resize_note = QLabel('Output size')
         resize_note.setWordWrap(True); self.form.addRow(resize_note)
-        self.check('resize', 'Resize cropped output to target pixels')
+        self.check('resize', 'Resize after cropping')
         self.spin('target_width', 'Target width (pixels)', 1, 100000); self.spin('target_height', 'Target height (pixels)', 1, 100000)
         self.check('upscale', 'Allow enlargement of cropped output')
 
@@ -747,7 +773,10 @@ class ImageOperationDialog(QDialog):
     def sync_visibility(self):
         if self.crop:
             for key in ('ratio_width', 'ratio_height'): self.form.setRowVisible(self.fields[key], self.step['aspect'] == 'custom')
-            for key in ('crop_width', 'crop_height'): self.form.setRowVisible(self.fields[key], True)
+            self.form.setRowVisible(
+                self.fields[key],
+                self.step['area'] == 'pixels'
+            )
             for key in ('x', 'y', 'w', 'h'): self.form.setRowVisible(self.fields[key], self.step['area'] == 'manual')
             for key in ('target_width', 'target_height', 'upscale'): self.form.setRowVisible(self.fields[key], self.step['resize'])
         else:
@@ -776,7 +805,19 @@ class ImageOperationDialog(QDialog):
             width, height = self.dimensions
             if not keep_drag: self.canvas.selection = QRectF(result['x'] / width, result['y'] / height, result['width'] / width, result['height'] / height)
             self.canvas.ratio = crop_ratio(step, width, height); self.canvas.update()
-            self.geometry.setText(f"Image before this crop: {width} × {height}; crop: {result['width']} × {result['height']} at ({result['x']}, {result['y']}). Output resizing is shown in the plan below.")
+            unchanged = (
+                result['x'] == 0
+                and result['y'] == 0
+                and result['width'] == width
+                and result['height'] == height
+                and not self.step['resize']
+            )
+            self.geometry.setText(
+                f"Preview: {width} × {height} → "
+                f"{result['output_width']} × "
+                f"{result['output_height']} pixels"
+                + (" (no crop)" if unchanged else "")
+            )
             if self.step['area'] != 'pixels':
                 for key, v in (('crop_width', result['width']), ('crop_height', result['height'])):
                     self.step[key] = v
@@ -862,7 +903,25 @@ class ImageOperationDialog(QDialog):
         elif worker.error:
             self.canvas.image = QImage(); self.canvas.update()
         if worker.error: problems.append(worker.error)
-        self.status.setText('\n'.join(problems + warnings) or 'Every image has a valid output plan. The visual preview is scaled to fit.')
+        if self.crop:
+            ready = sum(
+                not row.problems for row in worker.rows
+            )
+            self.batch_summary.setText(
+                f'{len(worker.rows)} images selected, '
+                f'{ready} ready, '
+                f'{len(worker.rows) - ready} blocked'
+            )
+            self.status.setText(
+                '\\n'.join(problems + warnings)
+                if problems or warnings else ''
+            )
+        else:
+            self.status.setText(
+                '\\n'.join(problems + warnings)
+                or 'Every image has a valid output plan. '
+                   'The visual preview is scaled to fit.'
+            )
         self.checked_generation = self.generation
         self.apply.setEnabled(not problems and not worker.image.isNull())
         worker.deleteLater()
@@ -919,6 +978,9 @@ def main():
         files = [os.path.abspath(path) for path in args.files]
         dialog = ImageOperationDialog(dict(op='image.' + args.operation, **defaults), files)
         if dialog.exec() != QDialog.Accepted: return 1
+        if args.operation == 'crop':
+            from kim_crop_standalone import run_standalone_crop
+            return run_standalone_crop(dialog.result_recipe, files)
         from kim_recipe_run import RunRecipeDialog
         run = RunRecipeDialog(dialog.result_recipe, files, operation_title=dialog.windowTitle())
         run.exec()
