@@ -505,13 +505,14 @@ class ActionDialog(QDialog):
         elif kind=='convert':
             self.apply.setText('Review changes…')
             self.choice('format','Output format',[(f.upper(),f) for f in ('jpeg','png','webp','avif','heic','bmp','gif','pdf','tiff','jp2','jxl')])
+            self.configure_convert_formats()
             self.choice('jp2_mode','JPEG 2000',[('Lossless','lossless'),('Lossy','lossy')]); self.spin('jp2_quality','JPEG 2000 lossy quality',1,100,75)
             self.fields['progressive']=QCheckBox('Progressive JPEG'); self.form.addRow(self.fields['progressive'])
             self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding'); self.form.addRow(self.fields['optimize'])
-            self.fields['strip']=QCheckBox('Explicitly remove metadata for formats that cannot retain it'); self.form.addRow(self.fields['strip'])
+            self.fields['strip']=QCheckBox()
             self.format_profile_note = QLabel()
             self.format_profile_note.setWordWrap(True)
-            self.form.addRow('Color profile', self.format_profile_note)
+            # Color-profile impacts are reported in Review changes.
 
             self.format_quality_note = QLabel()
             self.format_quality_note.setWordWrap(True)
@@ -641,6 +642,85 @@ class ActionDialog(QDialog):
             self.populate_compression_table()
 
 
+
+
+    def configure_convert_formats(self):
+        """Disable output formats without ImageMagick write support."""
+        import re
+        import shutil
+        import subprocess
+
+        combo = self.fields['format']
+        identify = shutil.which('identify')
+        registry = ''
+
+        if identify:
+            try:
+                result = subprocess.run(
+                    [identify, '-list', 'format'],
+                    capture_output=True,
+                    text=True,
+                    timeout=12,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    registry = result.stdout
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+        aliases = {
+            'jpeg': 'JPEG',
+            'png': 'PNG',
+            'webp': 'WEBP',
+            'avif': 'AVIF',
+            'heic': 'HEIC',
+            'bmp': 'BMP',
+            'gif': 'GIF',
+            'pdf': 'PDF',
+            'tiff': 'TIFF',
+            'jp2': 'JP2',
+            'jxl': 'JXL',
+        }
+
+        available = []
+
+        for index in range(combo.count()):
+            fmt = combo.itemData(index)
+            coder = aliases[fmt]
+
+            pattern = (
+                r'^\s*'
+                + re.escape(coder)
+                + r'\*?\s+(?:\S+\s+)?[r-]w[+-]\s'
+            )
+
+            supported = any(
+                re.match(pattern, line)
+                for line in registry.splitlines()
+            )
+
+            item = combo.model().item(index)
+
+            if supported:
+                available.append(index)
+            else:
+                item.setEnabled(False)
+                combo.setItemData(
+                    index,
+                    'Encoder unavailable on this system',
+                    Qt.ToolTipRole,
+                )
+
+        if available:
+            combo.setCurrentIndex(available[0])
+        else:
+            combo.setCurrentIndex(-1)
+            self.apply.setEnabled(False)
+            self.message.setText(
+                'No supported output encoders are available.'
+            )
+
+        return bool(available)
 
     def update_convert_preview(self, *_):
         """Display a bounded source thumbnail without altering pixels."""
@@ -1221,39 +1301,16 @@ class ActionDialog(QDialog):
                 lines += planned
             elif self.kind=='convert':
                 fmt=self.fields['format'].currentData()
+                if fmt is None:
+                    self.apply.setEnabled(False)
+                    self.message.setText(
+                        'No supported output encoders are available.'
+                    )
+                    return
                 self.form.setRowVisible(self.fields['jp2_mode'],fmt=='jp2'); self.form.setRowVisible(self.fields['jp2_quality'],fmt=='jp2' and self.fields['jp2_mode'].currentData()=='lossy')
                 for key in ('progressive','optimize'):
                     self.form.setRowVisible(self.fields[key],fmt=='jpeg')
 
-                descriptions = {
-                    'jpeg': 'JPEG uses lossy compression and does not support transparency.',
-                    'png': 'PNG preserves full-color pixels and transparency using lossless encoding.',
-                    'webp': 'WebP supports modern image compression and transparency.',
-                    'avif': 'AVIF supports high-efficiency image compression and transparency.',
-                    'heic': 'HEIC output depends on the installed HEIF encoder. Unsupported metadata or profiles will be reported.',
-                    'bmp': 'BMP creates a widely compatible, typically uncompressed raster image.',
-                    'gif': 'GIF uses a limited color palette and supports binary transparency.',
-                    'pdf': 'PDF creates a document containing the converted image.',
-                    'tiff': 'TIFF supports high-quality raster storage and metadata.',
-                    'jp2': 'JPEG 2000 supports lossless and lossy encoding.',
-                    'jxl': 'JPEG XL is a modern image format with lossless and lossy capabilities.',
-                }
-
-                profile_notes = {
-                    'jpeg': 'Preserve the compatible source ICC profile.',
-                    'png': 'Preserve the compatible source ICC profile.',
-                    'webp': 'Preserve the compatible source ICC profile.',
-                    'avif': 'Verify compatible ICC/profile handling.',
-                    'heic': 'Verify compatible ICC/profile handling.',
-                    'bmp': 'Color-profile support is restricted for this output.',
-                    'gif': 'Color and palette limitations apply.',
-                    'pdf': 'Color handling depends on the generated PDF.',
-                    'tiff': 'Preserve the compatible source ICC profile.',
-                    'jp2': 'Verify compatible JPEG 2000 color-profile handling.',
-                    'jxl': 'Verify compatible JPEG XL color-profile handling.',
-                }
-
-                self.format_profile_note.setText(profile_notes[fmt])
                 self.format_quality_note.setText(
                     'JPEG 2000 lossy quality applies only in Lossy mode.'
                     if fmt == 'jp2' and
@@ -1265,22 +1322,10 @@ class ActionDialog(QDialog):
                     self.format_quality_note, fmt == 'jp2'
                 )
 
-                self.message.setText(descriptions[fmt])
+                self.message.setText('')
 
                 self.values=[fmt,self.fields['jp2_mode'].currentData(),str(self.fields['jp2_quality'].value()),'Plane' if self.fields['progressive'].isChecked() else 'None','true' if self.fields['optimize'].isChecked() else 'false','true' if self.fields['strip'].isChecked() else 'false']
-                lines = [descriptions[fmt]]
-                if fmt in ('jpeg', 'bmp', 'pdf'):
-                    lines.append(
-                        'Transparent source areas use an opaque background.'
-                    )
-                elif fmt == 'gif':
-                    lines.append(
-                        'Transparency is limited by GIF palette encoding.'
-                    )
-                else:
-                    lines.append(
-                        'Transparency is retained where the selected encoder supports it.'
-                    )
+                lines = []
             elif self.kind=='compress':
                 if not self.files:
                     raise ValueError(
@@ -2076,7 +2121,7 @@ def resize_output_review(
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIM6 - Review resize outputs")
+    dialog.setWindowTitle("KIM6 - Review changes")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2090,10 +2135,10 @@ def resize_output_review(
 
     destination_choice = QComboBox()
     destination_choice.addItem(
-        "Beside originals", "beside"
+        "Beside each source", "beside"
     )
     destination_choice.addItem(
-        "Different directory", "directory"
+        "Shared directory", "directory"
     )
 
     destination_choice.setCurrentIndex(
@@ -2102,7 +2147,7 @@ def resize_output_review(
 
     destination_row = QHBoxLayout()
     destination_row.addWidget(
-        QLabel("Save copies:")
+        QLabel("Destination:")
     )
     destination_row.addWidget(
         destination_choice, 1
@@ -2123,8 +2168,8 @@ def resize_output_review(
         "Output directory"
     )
 
-    browse_button = QPushButton("Browse…")
-    update_button = QPushButton("Update preview")
+    browse_button = QPushButton("Change destination…")
+    update_button = QPushButton("Update review")
 
     directory_row = QHBoxLayout()
     directory_row.addWidget(directory_field, 1)
@@ -2161,6 +2206,11 @@ def resize_output_review(
         QAbstractItemView.NoEditTriggers
     )
     table.verticalHeader().setVisible(False)
+
+    table.setHorizontalScrollMode(
+        QAbstractItemView.ScrollPerPixel
+    )
+    table.horizontalHeader().setStretchLastSection(False)
 
     widths = (270, 270, 330, 95)
     for column, width in enumerate(widths):
@@ -2225,21 +2275,25 @@ def resize_output_review(
     layout.addWidget(summary)
 
     buttons = QHBoxLayout()
+
+    back_button = QPushButton("Back")
+    back_button.clicked.connect(lambda: dialog.done(131))
+    buttons.addWidget(back_button)
+
     buttons.addStretch(1)
 
-    apply_button = QPushButton("Apply changes")
+    button_box = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+    apply_button = button_box.button(QDialogButtonBox.Ok)
+    apply_button.setText("Apply changes")
     apply_button.setEnabled(
         ready > 0 and blocked == 0
     )
-    buttons.addWidget(apply_button)
 
-    back_button = QPushButton("Back")
-    buttons.addWidget(back_button)
-
-    apply_button.clicked.connect(dialog.accept)
-    # 131 requests a return to the resize editor.
-    # Closing the review window remains cancellation (130).
-    back_button.clicked.connect(lambda: dialog.done(131))
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+    buttons.addWidget(button_box)
 
     layout.addLayout(buttons)
 
@@ -3118,6 +3172,15 @@ def main():
         return 0
     kind,result,*files=sys.argv[1:]; initial=None; policy='create'; preset='custom'
 
+    convert_resume = None
+
+    if kind == 'convert' and files[:1] == ['--resume-values']:
+        if len(files) < 9 or files[7] != '--':
+            raise ValueError('Incomplete saved Convert settings')
+
+        convert_resume = files[1:7]
+        files = files[8:]
+
     if kind == 'percent':
         kind = 'resize'
         files = ['--preset-percent', '50', *files]
@@ -3168,6 +3231,49 @@ def main():
         if preset not in ('90','270','180','custom','EXIF'):
             raise ValueError('Invalid rotation preset')
     app=QApplication(sys.argv[:1]); dialog=ActionDialog(kind,files,policy=policy,preset=preset)
+
+    if convert_resume is not None:
+        fmt, mode, quality, scan, optimize, strip = convert_resume
+
+        formats = (
+            'jpeg', 'png', 'webp', 'avif', 'heic',
+            'bmp', 'gif', 'pdf', 'tiff', 'jp2', 'jxl'
+        )
+
+        if (
+            fmt not in formats
+            or mode not in ('lossless', 'lossy')
+            or not quality.isdecimal()
+            or not 1 <= int(quality) <= 100
+            or scan not in ('Plane', 'None')
+            or optimize not in ('true', 'false')
+            or strip not in ('true', 'false')
+        ):
+            raise ValueError('Invalid saved Convert settings')
+
+        fields = dialog.fields
+
+        for name, value in (
+            ('format', fmt),
+            ('jp2_mode', mode),
+        ):
+            index = fields[name].findData(value)
+            if index < 0:
+                raise ValueError('Saved Convert choice unavailable')
+
+            if (
+                name == 'format'
+                and not fields[name].model().item(index).isEnabled()
+            ):
+                continue
+            fields[name].setCurrentIndex(index)
+
+        fields['jp2_quality'].setValue(int(quality))
+        fields['progressive'].setChecked(scan == 'Plane')
+        fields['optimize'].setChecked(optimize == 'true')
+        fields['strip'].setChecked(strip == 'true')
+
+        dialog.refresh()
     if resize_preset is not None:
         import re
         dimensions = re.fullmatch(
@@ -3271,6 +3377,8 @@ def main():
         dialog.refresh()
 
     if initial is not None: dialog.fields['mode'].setCurrentIndex(dialog.fields['mode'].findData(initial)); dialog.refresh()
+    if kind == 'convert':
+        dialog.fields['strip'].setChecked(False)
     if dialog.exec()!=QDialog.Accepted: return 130 if kind in ('convert','copyright','strip','rename','rotate') else 1
     if kind=='compress':
         import os

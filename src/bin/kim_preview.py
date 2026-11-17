@@ -792,7 +792,7 @@ def format_plan_row(entry, mode):
 def qt_classes():
     from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
     from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
-                                  QDialog,QApplication,QComboBox,QPushButton,QPlainTextEdit)
+                                  QDialog,QApplication,QComboBox,QPushButton,QPlainTextEdit,QLineEdit,QFileDialog,QDialogButtonBox)
 
     from PySide6.QtGui import QPixmap, QIcon
 
@@ -1212,6 +1212,19 @@ def qt_classes():
             self.worker = None
             self.closing = False
             self.pending = False
+            self.destination_dirty = False
+            self.destination_entry = None
+            self.back_button = None
+
+            if spec['operation'] == 'convert':
+                self.default_convert_seeds = [
+                    str(Path(source).parent / Path(seed).name)
+                    for source, seed in zip(
+                        spec['files'], spec['seeds']
+                    )
+                ]
+            else:
+                self.default_convert_seeds = []
 
             self.setWindowTitle(
                 'KIM6 - Remove Metadata'
@@ -1264,19 +1277,102 @@ def qt_classes():
             self.view = PreviewView()
             layout.addWidget(self.view)
 
-            # Explicit order while keeping both buttons right-aligned.
-            # Do not reverse the dialog's layout direction.
+            self.destination_status = None
+
+            if (
+                spec['operation'] == 'convert'
+                and spec['policy'] == 'create'
+            ):
+                self.destination_status = QLabel(
+                    'Destination: Beside each source'
+                )
+                layout.addWidget(self.destination_status)
+
+                destination_row = QHBoxLayout()
+
+                self.destination_entry = QLineEdit(self)
+                self.destination_entry.setPlaceholderText(
+                    'Beside each source (leave empty)'
+                )
+                self.destination_entry.setAccessibleName(
+                    'Shared destination directory'
+                )
+                destination_row.addWidget(
+                    self.destination_entry, 1
+                )
+
+                self.destination_button = QPushButton(
+                    'Change destination…'
+                )
+                self.destination_button.clicked.connect(
+                    self.choose_convert_destination
+                )
+                destination_row.addWidget(
+                    self.destination_button
+                )
+
+                self.destination_update = QPushButton(
+                    'Update review'
+                )
+                self.destination_update.clicked.connect(
+                    self.update_convert_destination
+                )
+                destination_row.addWidget(
+                    self.destination_update
+                )
+
+                layout.addLayout(destination_row)
+
+                seed_parents = {
+                    str(Path(seed).parent)
+                    for seed in spec['seeds']
+                }
+
+                if (
+                    len(seed_parents) == 1
+                    and any(
+                        Path(seed).parent != Path(source).parent
+                        for source, seed in zip(
+                            spec['files'], spec['seeds']
+                        )
+                    )
+                ):
+                    initial = next(iter(seed_parents))
+                    self.destination_entry.setText(initial)
+                    self.destination_status.setText(
+                        'Destination: ' + initial
+                    )
+
+                self.destination_entry.textChanged.connect(
+                    self.invalidate_convert_destination
+                )
+
             button_row = QHBoxLayout()
+
+            if (
+                spec['operation'] == 'convert'
+                and spec['config'].get('return_to_settings') == 'true'
+            ):
+                self.back_button = QPushButton('Back')
+                self.back_button.clicked.connect(
+                    self.back_to_convert_settings
+                )
+                button_row.addWidget(self.back_button)
+
             button_row.addStretch(1)
 
-            self.apply = QPushButton('Apply changes')
+            self.buttons = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+            )
+            self.apply = self.buttons.button(
+                QDialogButtonBox.Ok
+            )
+            self.apply.setText('Apply changes')
             self.apply.setEnabled(False)
-            self.apply.clicked.connect(self.accept)
-            button_row.addWidget(self.apply)
 
-            cancel_button = QPushButton('Cancel')
-            cancel_button.clicked.connect(self.reject)
-            button_row.addWidget(cancel_button)
+            self.buttons.accepted.connect(self.accept)
+            self.buttons.rejected.connect(self.reject)
+            button_row.addWidget(self.buttons)
 
             layout.addLayout(button_row)
 
@@ -1286,6 +1382,97 @@ def qt_classes():
                 )
 
             self.start_plan()
+
+        def invalidate_convert_destination(self, *_):
+            if self.destination_entry is None:
+                return
+
+            self.destination_dirty = True
+            self.plan = None
+            self.apply.setEnabled(False)
+
+            self.destination_status.setText(
+                'Destination changed. Update review before applying.'
+            )
+
+        def choose_convert_destination(self):
+            if self.destination_entry is None:
+                return
+
+            initial = (
+                self.destination_entry.text().strip()
+                or str(Path(self.spec['files'][0]).parent)
+            )
+
+            selected = QFileDialog.getExistingDirectory(
+                self, 'Choose Convert destination', initial
+            )
+
+            if selected:
+                self.destination_entry.setText(selected)
+                self.update_convert_destination()
+
+        def update_convert_destination(self):
+            if self.destination_entry is None:
+                return
+
+            directory = self.destination_entry.text().strip()
+
+            if directory:
+                folder = Path(directory)
+
+                if (
+                    not folder.is_absolute()
+                    or not folder.is_dir()
+                    or folder.is_symlink()
+                    or not os.access(folder, os.W_OK | os.X_OK)
+                ):
+                    self.destination_dirty = True
+                    self.plan = None
+                    self.apply.setEnabled(False)
+                    self.destination_status.setText(
+                        'Invalid shared destination. '
+                        'Choose an existing writable directory.'
+                    )
+                    return
+
+                directory = str(folder.resolve(strict=True))
+
+                self.spec['seeds'] = [
+                    str(Path(directory) / Path(seed).name)
+                    for seed in self.default_convert_seeds
+                ]
+                self.destination_status.setText(
+                    'Destination: ' + directory
+                )
+
+            else:
+                self.spec['seeds'] = list(
+                    self.default_convert_seeds
+                )
+                self.destination_status.setText(
+                    'Destination: Beside each source'
+                )
+
+            self.destination_dirty = False
+            self.plan = None
+            self.apply.setEnabled(False)
+
+            self.view._thumbnail_timer.stop()
+            self.view._thumbnail_jobs.clear()
+            self.view.table.setRowCount(0)
+
+            if self.worker is not None:
+                self.pending = True
+                self.worker.requestInterruption()
+            else:
+                self.start_plan()
+
+        def back_to_convert_settings(self):
+            if self.worker is not None:
+                return
+
+            self.done(131)
 
         def start_plan(self):
             self.plan = None
@@ -1358,6 +1545,7 @@ def qt_classes():
 
                     self.apply.setEnabled(
                         self.view.show_plan(self.plan)
+                        and not self.destination_dirty
                     )
 
                     errors = [
@@ -1383,7 +1571,7 @@ def qt_classes():
 
                     extra = (
                         178 if self.mode_select else (
-                            260 if self.spec['operation'] == 'convert'
+                            330 if self.spec['operation'] == 'convert'
                             else 125
                         )
                     )
@@ -1477,7 +1665,14 @@ def main():
     elif command=='confirm':
         from PySide6.QtWidgets import QApplication,QDialog
         app=QApplication(sys.argv[:1]); dialog=qt_classes()[2](json.loads(Path(path).read_text()))
-        if dialog.exec()!=QDialog.Accepted: return 125 if dialog.failure is not None else 130
+        review_result = dialog.exec()
+
+        if review_result == 131:
+            return 131
+
+        if review_result != QDialog.Accepted:
+            return 125 if dialog.failure is not None else 130
+
         save_plan(path+'.approved',dialog.plan)
     else:
         plan=json.loads(Path(path).read_text())

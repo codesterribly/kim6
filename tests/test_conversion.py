@@ -161,6 +161,111 @@ class ConversionTests(unittest.TestCase):
             view.close()
             view.deleteLater()
 
+    def test_convert_review_destination_and_back_navigation(self):
+        import time
+        from PySide6.QtWidgets import QApplication
+        from kim_preview import qt_classes
+
+        app = QApplication.instance() or QApplication([])
+        second = self.workspace.ppm(
+            'another-directory/second image.ppm'
+        )
+        shared = self.workspace.path('shared-output')
+        shared.mkdir(parents=True, exist_ok=True)
+
+        sources = [self.source, second]
+        spec = {
+            'operation': 'convert',
+            'policy': 'create',
+            'files': [str(path) for path in sources],
+            'seeds': [
+                str(path.with_suffix('.png'))
+                for path in sources
+            ],
+            'config': {
+                'format': 'png',
+                'return_to_settings': 'true',
+            },
+        }
+
+        before = [
+            self.workspace.observe(path)
+            for path in sources
+        ]
+
+        dialog = qt_classes()[2](spec)
+
+        def wait_for_plan():
+            deadline = time.monotonic() + 20
+            while (
+                dialog.worker is not None
+                and time.monotonic() < deadline
+            ):
+                app.processEvents()
+                time.sleep(0.01)
+
+            app.processEvents()
+            self.assertIsNone(dialog.worker)
+            self.assertIsNotNone(dialog.plan)
+
+        try:
+            dialog.show()
+            wait_for_plan()
+
+            self.assertTrue(dialog.apply.isEnabled())
+            self.assertIsNotNone(dialog.back_button)
+
+            original_targets = [
+                Path(entry['target'])
+                for entry in dialog.plan['entries']
+            ]
+
+            for source, target in zip(
+                sources, original_targets
+            ):
+                self.assertEqual(source.parent, target.parent)
+
+            dialog.destination_entry.setText(str(shared))
+            self.assertFalse(dialog.apply.isEnabled())
+
+            dialog.update_convert_destination()
+            wait_for_plan()
+
+            self.assertTrue(dialog.apply.isEnabled())
+
+            revised_targets = [
+                Path(entry['target'])
+                for entry in dialog.plan['entries']
+            ]
+
+            self.assertTrue(
+                all(target.parent == shared
+                    for target in revised_targets)
+            )
+
+            for target in revised_targets:
+                self.assertFalse(target.exists())
+
+            dialog.back_button.click()
+            self.assertEqual(131, dialog.result())
+
+            self.assertEqual(
+                before,
+                [
+                    self.workspace.observe(path)
+                    for path in sources
+                ],
+            )
+
+        finally:
+            if dialog.worker is not None:
+                dialog.worker.requestInterruption()
+                dialog.worker.wait(10000)
+
+            dialog.close()
+            dialog.deleteLater()
+            app.processEvents()
+
     def test_real_successful_create_is_destination_locally_staged(self):
         before = self.workspace.observe(self.source)
         self.workspace.use_real_conversion()

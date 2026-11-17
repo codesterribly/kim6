@@ -62,6 +62,16 @@ fi
 # Adapters keep existing Bash actions and their policy/publication boundaries.
 # Before a job starts, tools retain their normal noninteractive behavior.
 job_show_warnings() {
+  # Successful PSD conversions have already passed Review changes.
+  # Do not display a second modal containing informational notices.
+  # Failed jobs retain their normal diagnostic reporting.
+  if [ "${cmd:-}" = convert ] &&
+     [ "${1:-1}" = 0 ] &&
+     [ -n "${KIM_PSD_CACHE:-}" ] &&
+     [ -s "$KIM_PSD_CACHE/warnings.jsonl" ]; then
+    return 0
+  fi
+
   # KIM6_WEBEXPORT_NONMODAL_WARNINGS
   # Source notices for Web Export belong in pre-approval review.
   # Any remaining diagnostics go to stderr, never another modal.
@@ -141,8 +151,10 @@ preview_run() {
     0) return 0 ;;
     125|130) return "$status" ;;
     131)
-      if [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
-         [ "${3:-}" = resize-output-review ]; then
+      if { [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
+           [ "${3:-}" = resize-output-review ]; } ||
+         { [ "${2:-}" = "$DISPATCHER_DIR/kim_preview.py" ] &&
+           [ "${3:-}" = confirm ]; }; then
         return 131
       fi
       ;;
@@ -2380,7 +2392,7 @@ action_convert() {
   # Conversion validates animated inputs separately, so unsupported
   # animation or frame timing cannot silently become a still image.
   local FORMAT='' preview=false bmp5=false custom=false jp2_mode='' jp2_quality=75 jpeg_scan='' jpeg_optimize=false outdir='' strip_metadata=false
-  local -a raw_files=()
+  local -a raw_files=() convert_resume=()
   if [[ "${1:-}" == --* ]]; then
     while [ "$#" -gt 0 ]; do
       case "$1" in
@@ -2427,6 +2439,14 @@ action_convert() {
           custom=true
           shift
           ;;
+        --resume-values)
+          [ "$#" -ge 8 ] ||
+            die "convert: incomplete saved settings"
+          convert_resume=(
+            "$2" "$3" "$4" "$5" "$6" "$7"
+          )
+          shift 7
+          ;;
         --)
           shift
           raw_files+=("$@")
@@ -2437,7 +2457,11 @@ action_convert() {
     done
     if [ "$custom" = true ]; then
       [ -z "$FORMAT" ] || die "convert: use --custom-format or --format, not both"
-      action_options_dialog convert "${raw_files[@]}" || return 1
+      if [ "${#convert_resume[@]}" -eq 6 ]; then
+        action_options_dialog convert           --resume-values "${convert_resume[@]}"           -- "${raw_files[@]}" || return 1
+      else
+        action_options_dialog convert "${raw_files[@]}" || return 1
+      fi
       local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
       [ "${#choices[@]}" -eq 6 ] || { progress_error 'Custom Convert returned incomplete preview settings. No images were changed.'; return 1; }
       FORMAT="${choices[0]}"; strip_metadata="${choices[5]}"
@@ -2496,16 +2520,37 @@ action_convert() {
         return 2
       }
       if ! image_coder_supports "$FORMAT" write; then
+        if [ "$custom" = true ]; then
+          kdialog --title "Convert format" --error "The JPEG 2000 encoder is unavailable." || true
+          action_convert --custom-format \
+            --resume-values "${choices[@]}" \
+            -- "${raw_files[@]}"
+          return $?
+        fi
         progress_error "$(gettext 'The installed ImageMagick JPEG 2000 encoder is unavailable for:') $FORMAT"; return 1
       fi
       ;;
     jxl)
       if ! image_coder_supports JXL write; then
+        if [ "$custom" = true ]; then
+          kdialog --title "Convert format" --error "The JPEG XL encoder is unavailable." || true
+          action_convert --custom-format \
+            --resume-values "${choices[@]}" \
+            -- "${raw_files[@]}"
+          return $?
+        fi
         progress_error "$(gettext 'The installed ImageMagick JPEG XL encoder is unavailable.')"; return 1
       fi
       ;;
     heic|heif)
       if ! image_coder_supports HEIC write; then
+        if [ "$custom" = true ]; then
+          kdialog --title "Convert format" --error "The HEIC encoder is unavailable." || true
+          action_convert --custom-format \
+            --resume-values "${choices[@]}" \
+            -- "${raw_files[@]}"
+          return $?
+        fi
         progress_error "$(gettext 'The installed ImageMagick HEIC/HEIF encoder is unavailable.')"; return 1
       fi
       ;;
@@ -2593,7 +2638,24 @@ action_convert() {
   fi
 
   if [ "$preview" = true ]; then
-    preview_confirm convert "$mode" '' format "$FORMAT" jp2_mode "$jp2_mode" jp2_quality "$jp2_quality" jpeg_scan "$jpeg_scan" jpeg_optimize "$jpeg_optimize" bmp5 "$bmp5" strip_metadata "$strip_metadata" || return 1
+    local convert_review_status=0
+
+    if preview_confirm convert "$mode" ''       format "$FORMAT" jp2_mode "$jp2_mode"       jp2_quality "$jp2_quality"       jpeg_scan "$jpeg_scan"       jpeg_optimize "$jpeg_optimize"       bmp5 "$bmp5"       strip_metadata "$strip_metadata"       return_to_settings "$custom"; then
+      :
+    else
+      convert_review_status=$?
+
+      if [ "$convert_review_status" -eq 131 ] &&
+         [ "$custom" = true ]; then
+        # Reenter the full conversion preflight with the
+        # previous settings. Never bypass format, policy,
+        # collision, or encoder-capability validation.
+        action_convert --custom-format           --resume-values "${choices[@]}"           -- "${raw_files[@]}"
+        return $?
+      fi
+
+      return "$convert_review_status"
+    fi
   fi
   report_init
 
