@@ -31,6 +31,7 @@ done <<'KIMNG_RUNTIME_FILES'
 src/bin/kim_all|bin/kim_all|0755
 src/bin/kim_image_ops.py|bin/kim_image_ops.py|0644
 src/bin/kim_image_ops_dialog.py|bin/kim_image_ops_dialog.py|0644
+src/bin/kim_crop_standalone.py|bin/kim_crop_standalone.py|0644
 src/bin/kim_annotations.py|bin/kim_annotations.py|0644
 src/bin/kim_extensions_dialog.py|bin/kim_extensions_dialog.py|0644
 src/bin/kim_preview.py|bin/kim_preview.py|0644
@@ -47,6 +48,7 @@ src/bin/kim_location_map.py|bin/kim_location_map.py|0644
 src/bin/kim_job.py|bin/kim_job.py|0644
 src/bin/kim_job_process.py|bin/kim_job_process.py|0644
 src/bin/kim_action_dialog.py|bin/kim_action_dialog.py|0644
+src/bin/kim_dialog_buttons.py|bin/kim_dialog_buttons.py|0644
 src/bin/kim_compress_review.py|bin/kim_compress_review.py|0644
 src/bin/kim_metadata_browser.py|bin/kim_metadata_browser.py|0644
 src/bin/kim_metadata_compare.py|bin/kim_metadata_compare.py|0644

@@ -4683,13 +4683,15 @@ action_rename() {
   shift
   if [ "$mode" = interactive ]; then
     [ "${1:-}" != -- ] || shift
-    local reviewed_policy
-    reviewed_policy="$(choose_output_mode "$(gettext 'Rename Images')" "$(gettext 'Create renamed copies or explicitly rename selected originals?')" "$#" rename)"
-    [ "$reviewed_policy" != cancel ] || return 1
-    printf '%s\n' "$reviewed_policy" > "$KIMDIR/rename-policy"
+    # The existing Rename editor owns the policy choice
+    # and its reviewed output plan.
+    local reviewed_policy=create
     action_options_dialog rename "$reviewed_policy" "$@" || return 1
     preview_run mv -- "$KIMDIR/options.approved" "$KIMDIR/preview.approved" || return 1
     preview_run preview_verify || return 1
+    reviewed_policy="$(python3 "$DISPATCHER_DIR/kim_preview.py" policy "$KIMDIR/preview.approved")" || return 1
+    case "$reviewed_policy" in create|overwrite) ;; *) return 1 ;; esac
+    printf '%s\n' "$reviewed_policy" > "$KIMDIR/rename-policy"
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
     action_rename "${choices[@]}" -- "$@"; return $?
   fi
@@ -5305,7 +5307,8 @@ action_resize() {
     if preview_run python3 \
       "$DISPATCHER_DIR/kim_action_dialog.py" \
       resize-output-review "$resize_plan" "$resize_request" \
-      "$outdir" "$mode" "$SCALE" "$resize_filter"; then
+      "$outdir" "$mode" "$SCALE" "$resize_filter" \
+      "${percent:+true}"; then
       break
     else
       resize_review_result=$?
@@ -7551,8 +7554,25 @@ KIM6_LOCATION_INPUTS
     mapfile -d '' -t files < "$KIMDIR/location-inputs"
     datesync_collect_files files "${files[@]}" || { progress_error "$DATESYNC_SELECTION_ERROR"; return 1; }
   fi
-  policy="$(choose_output_mode 'KIMng - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
-  [ "$policy" != cancel ] || return 1
+  if [ "$kind" = apply ] || [ "$kind" = gpx ]; then
+    policy="$(python3 - "$selection_config" <<'KIMNG_GPS_SELECTED_POLICY'
+import json
+import sys
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text())
+policy = data.get('output_policy')
+
+if policy not in ('create', 'overwrite'):
+    raise SystemExit('Invalid GPS output policy')
+
+print(policy)
+KIMNG_GPS_SELECTED_POLICY
+)" || return 1
+  else
+    policy="$(choose_output_mode 'KIMng - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
+    [ "$policy" != cancel ] || return 1
+  fi
   : > "$KIMDIR/location-seeds" || return 1
   for source in "${files[@]}"; do
     target="$(metadata_output_path "$source" location "$policy")" || return 1
@@ -7641,8 +7661,9 @@ action_photo_date() {
   for source in "${files[@]}"; do photo_date_identities+=("$(stat -c '%h:%d:%i:%s:%y:%z' -- "$source")"); done
   config="$KIMDIR/photo-date.json"; result="$KIMDIR/photo-date.args"
   if [ "$interactive" = true ]; then
-    policy="$(choose_output_mode "$(gettext 'KIMng - Set dates')" "$(gettext 'Create dated copies or explicitly update the selected originals?')" "${#files[@]}" originals)"
-    [ "$policy" != cancel ] || return 1
+    # The unified date editor presents the publication policy
+    # as part of its existing reviewed workflow.
+    policy=create
     # Pass the existing helper's exact affix seed alongside each source.
     : > "$KIMDIR/date-seeds" || { progress_error 'Could not prepare Image Capture Dates preview inputs. No images were changed.'; return 1; }
     for source in "${files[@]}"; do
@@ -7652,6 +7673,8 @@ action_photo_date() {
     preview_run python3 "$DISPATCHER_DIR/kim_date_dialog.py" "$kind" "$config" "$policy" "$KIMDIR/date-seeds" "${files[@]}" || return 1
     preview_run mv -- "$config.approved" "$KIMDIR/preview.approved" || return 1
     preview_run preview_verify || return 1
+    policy="$(python3 "$DISPATCHER_DIR/kim_preview.py" policy "$KIMDIR/preview.approved")" || return 1
+    case "$policy" in create|overwrite) ;; *) return 1 ;; esac
   else
     python3 - "$config" "$kind" "$clock" "$zone" "$seconds" "$fields" <<'PYDATE'
 import json,sys
@@ -10018,8 +10041,8 @@ action_video() {
   if ! collect_publication_inputs files "${raw_files[@]}"; then
     progress_error "$(gettext 'Video selection is empty or contains an unsafe, aliased, linked or invalid source.')"; return 1
   fi
-  mode="$(choose_output_mode "$(gettext 'KIMng - Video')" "$(gettext 'Create transcoded copies or replace the selected videos after validation?')" "${#files[@]}" originals)"
-  [ "$mode" != cancel ] || return 1
+  # The final video review owns publication-policy selection.
+  mode=create
   # Preflight every selected video before starting FFmpeg.
   # Use the same probe, container, and naming rules as execution.
   local review_plan="$KIMDIR/video.review.plan"
@@ -10136,15 +10159,34 @@ action_video() {
       review_result=$?
     fi
 
-    if [ "$review_result" -ne 130 ] || [ ! -s "$review_request" ] ||
-       [ "$mode" != create ]; then
+    if [ "$review_result" -ne 130 ] || [ ! -s "$review_request" ]; then
       return "$review_result"
     fi
 
-    IFS= read -r -d '' KIM_VIDEO_REVIEW_DIRECTORY < "$review_request" || {
-      progress_error "Invalid video destination request."
+    local video_requested_change
+    IFS= read -r -d '' video_requested_change < "$review_request" || {
+      progress_error "Invalid video review request."
       return 1
     }
+
+    case "$video_requested_change" in
+      policy:create)
+        mode=create
+        continue
+        ;;
+      policy:overwrite)
+        mode=overwrite
+        KIM_VIDEO_REVIEW_DIRECTORY=''
+        continue
+        ;;
+      *)
+        [ "$mode" = create ] || {
+          progress_error 'Cannot change destination in overwrite mode.'
+          return 1
+        }
+        KIM_VIDEO_REVIEW_DIRECTORY="$video_requested_change"
+        ;;
+    esac
 
     if [ -n "$KIM_VIDEO_REVIEW_DIRECTORY" ]; then
       [[ "$KIM_VIDEO_REVIEW_DIRECTORY" = /* ]] || {

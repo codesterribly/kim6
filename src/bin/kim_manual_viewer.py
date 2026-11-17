@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Display the installed KIMng HTML User Guide in a standalone Qt window."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import sys
 from pathlib import Path
@@ -64,6 +65,7 @@ def main():
     controls.addWidget(open_browser)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Close)
+    style_button_box(buttons)
     buttons.rejected.connect(dialog.reject)
     controls.addWidget(buttons)
 

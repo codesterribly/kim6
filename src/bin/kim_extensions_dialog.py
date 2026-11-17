@@ -1,4 +1,5 @@
 """Content-based extension inspection. Bash owns planning, staging and publication."""
+from kim_dialog_buttons import style_button, style_button_box
 import os
 from pathlib import Path
 import stat
@@ -256,6 +257,7 @@ def confirm_plan(path):
         for column in range(2): table.setItem(row, column, QTableWidgetItem(fields[row*3+column]))
     layout.addWidget(table)
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    style_button_box(buttons)
     buttons.button(QDialogButtonBox.Ok).setText(tr('Create copies'))
     buttons.accepted.connect(dialog.accept); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
     return 0 if dialog.exec() == QDialog.Accepted else 1

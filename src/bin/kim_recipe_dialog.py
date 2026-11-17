@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reusable recipe manager/builder widget and independent Dolphin launcher."""
+from kim_dialog_buttons import style_button, style_button_box
 import copy
 import sys
 import uuid
@@ -52,6 +53,7 @@ class OperationPicker(QDialog):
         self.tree = QTreeWidget(); self.tree.setHeaderHidden(True)
         self.tree.setAccessibleName('Operations grouped by category'); layout.addWidget(self.tree, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.add = buttons.button(QDialogButtonBox.Ok); self.add.setText('Add'); self.add.setEnabled(False)
         buttons.accepted.connect(self.choose); buttons.rejected.connect(self.reject); layout.addWidget(buttons)
         self.search.textChanged.connect(self.refresh)
@@ -986,12 +988,24 @@ def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repai
             baseline=copy.deepcopy(recipes[index])
             widget.users[index-len(widget.shipped)]=copy.deepcopy(recipe)
             widget.refresh(index); widget.baseline=baseline; widget.update_modified()
+    from kim_dialog_buttons import style_button
+
     buttons = QHBoxLayout()
     buttons.addStretch(1)
     if not from_run:
-        run = QPushButton('Load images && run…'); run.clicked.connect(widget.load_photos_and_run); buttons.addWidget(run)
-    close = QPushButton('Return to recipe runner' if from_run else 'Close')
-    close.clicked.connect(dialog.accept); buttons.addWidget(close)
+        run = QPushButton('Load images && run…')
+        style_button(run, 'apply')
+        run.clicked.connect(widget.load_photos_and_run)
+        buttons.addWidget(run)
+
+    close = QPushButton(
+        'Return to recipe runner' if from_run else 'Close'
+    )
+    style_button(
+        close, 'back' if from_run else 'cancel'
+    )
+    close.clicked.connect(dialog.accept)
+    buttons.addWidget(close)
     layout.addLayout(buttons)
     return dialog
 

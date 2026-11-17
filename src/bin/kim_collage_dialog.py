@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Single-window Qt 6 configuration for KIMng's existing collage renderer."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import os
 import re
@@ -552,6 +553,7 @@ def main():
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
 
     dialog.create = buttons.button(QDialogButtonBox.Ok)
     dialog.create.setText("Create")

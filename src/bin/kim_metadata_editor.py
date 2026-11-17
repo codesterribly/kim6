@@ -6,6 +6,7 @@ the browser's read-only metadata service, keeps edits in memory, and produces
 an inspectable plan only.
 """
 from __future__ import annotations
+from kim_dialog_buttons import style_button, style_button_box
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -627,6 +628,7 @@ class FieldDetailsDialog(QDialog):
         view.setPlainText(details or "No metadata values are present.")
         layout.addWidget(view, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        style_button_box(buttons)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
@@ -660,6 +662,7 @@ class MetadataSettingsDialog(QDialog):
         self.down.clicked.connect(lambda: self._move(1))
         self.reset.clicked.connect(self._reset)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -712,6 +715,7 @@ class SourceChooserDialog(QDialog):
                 self.list.setCurrentItem(item)
         layout.addWidget(self.list, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         choose = buttons.addButton("Edit this source", QDialogButtonBox.AcceptRole)
         self.choose_button = choose
         self.list.currentItemChanged.connect(self._update_choice)
@@ -942,6 +946,7 @@ class ReviewDialog(QDialog):
             self.tree.setCurrentItem(first_change)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        style_button_box(buttons)
         buttons.rejected.connect(self.reject)
         buttons.button(QDialogButtonBox.Close).setDefault(True)
         layout.addWidget(buttons)
@@ -1232,6 +1237,7 @@ class BatchEditDialog(QDialog):
         layout.addWidget(scroll, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         add = buttons.addButton("Add batch changes", QDialogButtonBox.AcceptRole)
         self.add_button = add
         add.setDefault(True)
@@ -1564,6 +1570,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.pending_label = QLabel("Pending changes: 0")
         footer.addWidget(self.pending_label, 1)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        style_button_box(self.buttons)
         self.buttons.button(QDialogButtonBox.Cancel).setIcon(QIcon.fromTheme('dialog-cancel', self.style().standardIcon(QStyle.SP_DialogCancelButton)))
         self.review_button = self.buttons.addButton('Review changes', QDialogButtonBox.AcceptRole)
         self.review_button.setIcon(QIcon.fromTheme('go-next', self.style().standardIcon(QStyle.SP_ArrowForward)))
@@ -2621,6 +2628,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             keep = box.addButton("Keep original draft", QMessageBox.AcceptRole)
             discard = box.addButton("Discard and switch", QMessageBox.DestructiveRole)
             cancel = box.addButton("Cancel", QMessageBox.RejectRole)
+            style_button(cancel)
             box.exec()
             clicked = box.clickedButton()
             if clicked == cancel:

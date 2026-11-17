@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Shared visual controls for standalone and Recipe crop / visible overlays."""
+from kim_dialog_buttons import style_button, style_button_box
 import copy
 from collections import OrderedDict
 import html
@@ -355,6 +356,7 @@ class CropCanvas(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.image = QImage(); self.selection = QRectF(0, 0, 1, 1)
+        self.message = 'Loading image preview…'
         self.ratio = None; self.drag = None; self.editable = False
         self.setMinimumSize(340, 300); self.setMouseTracking(True)
         self.setAccessibleName('Image preview; drag crop edges, corners or the selection interior')
@@ -374,7 +376,10 @@ class CropCanvas(QWidget):
     def paintEvent(self, _event):
         painter = QPainter(self); painter.fillRect(self.rect(), self.palette().window())
         if self.image.isNull():
-            painter.drawText(self.rect(), Qt.AlignCenter, 'Choose an image to display a real preview.'); return
+            painter.drawText(
+                self.rect(), Qt.AlignCenter, self.message
+            )
+            return
         box = self.image_box(); painter.drawImage(box, self.image)
         if not self.editable: return
         r = self.selection_box()
@@ -575,6 +580,7 @@ class ImageOperationDialog(QDialog):
         else:
             layout.addWidget(safety)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(self.buttons)
         self.apply = self.buttons.button(QDialogButtonBox.Ok)
         self.apply.setText(
             'Review changes…'
@@ -585,6 +591,11 @@ class ImageOperationDialog(QDialog):
         )
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(250); self.timer.timeout.connect(self.refresh)
+        self.canvas.message = (
+            'Loading image preview…'
+            if self.files else 'Choose an image to preview.'
+        )
+        self.canvas.update()
         self.loading = False; self.sync_visibility(); self.schedule()
 
     def combo(self, key, title, values):
@@ -842,6 +853,9 @@ class ImageOperationDialog(QDialog):
     def schedule(self, *_):
         if self.loading or self.closing: return
         self.generation += 1; self.checked_generation = None; self.apply.setEnabled(False)
+        if self.canvas.image.isNull():
+            self.canvas.message = 'Loading image preview…'
+            self.canvas.update()
         self.sync_visibility()
         if self.worker: self.worker.requestInterruption(); self.pending = True
         self.timer.start()
@@ -901,7 +915,11 @@ class ImageOperationDialog(QDialog):
             if self.crop: self.update_crop_boundary()
             else: self.geometry.setText(f"Final overlay geometry: {worker.dimensions[0]} × {worker.dimensions[1]} pixels. Preview uses the production overlay renderer." if worker.rendered_overlay else 'Source image only: resolve the overlay problem below to see the visible result.')
         elif worker.error:
-            self.canvas.image = QImage(); self.canvas.update()
+            self.canvas.image = QImage()
+            self.canvas.message = (
+                'Image preview failed:\n' + worker.error
+            )
+            self.canvas.update()
         if worker.error: problems.append(worker.error)
         if self.crop:
             ready = sum(
@@ -954,6 +972,15 @@ class ImageOperationDialog(QDialog):
         if self.worker or self.checked_generation != self.generation or not self.apply.isEnabled(): return
         try: self.result_recipe = self.build_recipe()
         except (RecipeError, OSError) as exc: self.status.setText(str(exc)); return
+        if self.standalone and self.crop:
+            from kim_crop_standalone import run_standalone_crop
+            result = run_standalone_crop(
+                self.result_recipe, self.files
+            )
+            if result == 131:
+                return
+            self.crop_result = result
+
         self.timer.stop(); self.closing = True
         super().accept()
 
@@ -979,8 +1006,7 @@ def main():
         dialog = ImageOperationDialog(dict(op='image.' + args.operation, **defaults), files)
         if dialog.exec() != QDialog.Accepted: return 1
         if args.operation == 'crop':
-            from kim_crop_standalone import run_standalone_crop
-            return run_standalone_crop(dialog.result_recipe, files)
+            return dialog.crop_result
         from kim_recipe_run import RunRecipeDialog
         run = RunRecipeDialog(dialog.result_recipe, files, operation_title=dialog.windowTitle())
         run.exec()

@@ -5,6 +5,7 @@ The dialogs collect approved source order and creation settings. The Bash
 dispatcher retains responsibility for source validation, rendering, safe staging,
 collision handling and publication.
 """
+from kim_dialog_buttons import style_button, style_button_box
 
 import os
 import sys
@@ -652,6 +653,7 @@ class SlideshowDialog(OrderedImageDialog):
             QDialogButtonBox.Ok
             | QDialogButtonBox.Cancel
         )
+        style_button_box(buttons)
 
         self.create = buttons.button(
             QDialogButtonBox.Ok
@@ -1013,6 +1015,7 @@ class AnimatedImageDialog(OrderedImageDialog):
         preview_row.addLayout(preview_controls, 1)
         layout.addLayout(preview_row)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create animated image')
         self.add_source_notice(layout)
@@ -1523,6 +1526,7 @@ class GalleryDialog(OrderedImageDialog):
         )
         layout.addWidget(self.preview)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create')
         self.add_source_notice(layout)
@@ -1799,6 +1803,7 @@ class PrintLayoutDialog(OrderedImageDialog):
             )
             self.ordered.changed.connect(self.update_preview)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create')
         self.add_source_notice(layout)

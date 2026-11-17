@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """KIMng PDF Album editor with ordered images, captions and page preview."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import os
 import sys
@@ -153,6 +154,7 @@ class AlbumDialog(OrderedImageDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
+        style_button_box(buttons)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText("Create")
 

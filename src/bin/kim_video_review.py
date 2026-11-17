@@ -14,8 +14,10 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -38,11 +40,12 @@ class VideoReview(QDialog):
     def __init__(self, plan, codec, limit, quality, mode, request_path, destination):
         super().__init__()
 
-        self.setWindowTitle("KIMng - Review video conversion")
+        self.setWindowTitle("KIMng - Convert video - Review Changes")
         self.resize(1060, min(760, 300 + 52 * len(plan)))
         self.setMinimumWidth(850)
 
         self.plan = plan
+        self.mode = mode
         self.request_path = Path(request_path)
         self.identities = {}
         self.errors = {}
@@ -70,38 +73,52 @@ class VideoReview(QDialog):
         audio_note.setWordWrap(True)
         outer.addWidget(audio_note)
 
-        if mode == "overwrite":
-            policy = (
-                "Output policy: Replace originals. "
-                "The selected source files will be replaced only after "
-                "successful encoding and output validation."
-            )
-        else:
-            policy = (
-                "Output policy: Create new files. "
-                "Original videos will remain unchanged."
-            )
+        policy_row = QHBoxLayout()
+        create_radio = QRadioButton(
+            'Create new files (originals untouched)'
+        )
+        overwrite_radio = QRadioButton(
+            'Overwrite originals (confirmation required)'
+        )
+        create_radio.setChecked(mode == 'create')
+        overwrite_radio.setChecked(mode == 'overwrite')
+        policy_row.addWidget(create_radio)
+        policy_row.addWidget(overwrite_radio)
+        policy_row.addStretch(1)
+        outer.addLayout(policy_row)
 
-        policy_label = QLabel(policy)
-        policy_label.setWordWrap(True)
-        outer.addWidget(policy_label)
+        create_radio.toggled.connect(
+            lambda checked: checked and
+            self.request_destination('policy:create')
+        )
+        overwrite_radio.toggled.connect(
+            lambda checked: checked and
+            self.request_destination('policy:overwrite')
+        )
 
-        destination_row = QHBoxLayout()
         destination_label = QLabel(
-            "Destination: Replace each original in place" if mode == "overwrite"
+            "Destination: Replace each original in place"
+            if mode == "overwrite"
             else "Destination: " + (destination or "Beside each source")
         )
         destination_label.setWordWrap(True)
-        destination_row.addWidget(destination_label, 1)
-        if mode != "overwrite":
-            choose_button = QPushButton("Change destination…")
-            choose_button.clicked.connect(lambda: self.choose_destination(destination))
-            destination_row.addWidget(choose_button)
-            if destination:
-                reset_button = QPushButton("Beside each source")
-                reset_button.clicked.connect(lambda: self.request_destination(""))
-                destination_row.addWidget(reset_button)
-        outer.addLayout(destination_row)
+
+        destination_row = QHBoxLayout()
+        destination_entry = QLineEdit(self)
+        destination_entry.setPlaceholderText(
+            "Beside each source (leave empty)"
+        )
+        destination_entry.setAccessibleName(
+            "Shared destination directory"
+        )
+        destination_entry.setText(destination)
+        destination_row.addWidget(destination_entry, 1)
+
+        choose_button = QPushButton("Change destination…")
+        choose_button.clicked.connect(
+            lambda: self.choose_destination(destination_entry.text().strip())
+        )
+        destination_row.addWidget(choose_button)
 
         self.table = QTableWidget(len(plan), 6)
         self.table.setHorizontalHeaderLabels((
@@ -205,12 +222,44 @@ class VideoReview(QDialog):
         self.status = QLabel()
         outer.addWidget(self.status)
 
+        outer.addWidget(destination_label)
+        if mode == "create":
+            outer.addLayout(destination_row)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
 
         self.apply = buttons.button(QDialogButtonBox.Ok)
         self.apply.setText("Apply changes")
+
+        def submit_destination():
+            proposed = destination_entry.text().strip()
+            if proposed == destination:
+                self.refresh_status()
+                return
+            if proposed and (
+                not os.path.isabs(proposed)
+                or os.path.islink(proposed)
+                or not os.path.isdir(proposed)
+                or not os.access(proposed, os.W_OK | os.X_OK)
+            ):
+                destination_label.setText(
+                    "Destination: Invalid shared directory"
+                )
+                self.apply.setEnabled(False)
+                return
+            self.request_destination(
+                os.path.realpath(proposed) if proposed else ""
+            )
+
+        if mode == "create":
+            destination_entry.textChanged.connect(
+                lambda _: self.apply.setEnabled(False)
+            )
+            destination_entry.editingFinished.connect(
+                submit_destination
+            )
 
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -276,6 +325,16 @@ class VideoReview(QDialog):
         self.refresh_status()
 
         if self.apply.isEnabled():
+            if self.mode == 'overwrite':
+                decision = QMessageBox.warning(
+                    self,
+                    'Confirm overwriting originals',
+                    'Replace the selected original video files?',
+                    QMessageBox.Yes | QMessageBox.Cancel,
+                    QMessageBox.Cancel,
+                )
+                if decision != QMessageBox.Yes:
+                    return
             super().accept()
 
 

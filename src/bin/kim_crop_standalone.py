@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Standalone Crop review and execution interface."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import copy
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -14,8 +16,10 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QProgressBar,
     QPushButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -59,8 +63,11 @@ class CropReview(QDialog):
         self.closing = False
         self.approved = None
 
-        self.setWindowTitle("KIMng - Review changes")
-        self.resize(880, 520)
+        self.setWindowTitle("KIMng - Crop - Review Changes")
+        self.resize(
+            970,
+            min(590, 305 + 34 * max(1, len(files)))
+        )
 
         layout = QVBoxLayout(self)
 
@@ -69,12 +76,30 @@ class CropReview(QDialog):
         )
         layout.addWidget(heading)
 
-        destination_row = QHBoxLayout()
+        output_policy = QLabel(
+            "Save cropped images: Create new files "
+            "(originals untouched)"
+        )
+        layout.addWidget(output_policy)
 
         self.destination = QLabel()
         self.destination.setTextFormat(Qt.PlainText)
         self.destination.setWordWrap(True)
-        destination_row.addWidget(self.destination, 1)
+
+        destination_row = QHBoxLayout()
+        self.destination_entry = QLineEdit(self)
+        self.destination_entry.setPlaceholderText(
+            "Beside each source (leave empty)"
+        )
+        self.destination_entry.setAccessibleName(
+            "Shared destination directory"
+        )
+        self.destination_entry.setText(
+            self.recipe["destination"].get("path", "")
+            if self.recipe["destination"]["mode"] == "directory"
+            else ""
+        )
+        destination_row.addWidget(self.destination_entry, 1)
 
         self.destination_button = QPushButton(
             "Change destination…"
@@ -82,16 +107,12 @@ class CropReview(QDialog):
         self.destination_button.clicked.connect(
             self.change_destination
         )
-        destination_row.addWidget(
-            self.destination_button
-        )
-        layout.addLayout(destination_row)
+        destination_row.addWidget(self.destination_button)
 
-        self.table = QTableWidget(len(files), 3)
+        self.table = QTableWidget(len(files), 6)
         self.table.setHorizontalHeaderLabels([
-            "Image",
-            "Planned output",
-            "Dimensions",
+            "Image", "Original", "Planned",
+            "Output filename", "Destination", "Status",
         ])
         self.table.setEditTriggers(
             QAbstractItemView.NoEditTriggers
@@ -102,15 +123,13 @@ class CropReview(QDialog):
         self.table.verticalHeader().hide()
 
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(
-            0, QHeaderView.ResizeToContents
-        )
-        header.setSectionResizeMode(
-            1, QHeaderView.Stretch
-        )
-        header.setSectionResizeMode(
-            2, QHeaderView.ResizeToContents
-        )
+        for column, width in enumerate(
+            (165, 105, 105, 215, 205, 90)
+        ):
+            header.setSectionResizeMode(
+                column, QHeaderView.Interactive
+            )
+            self.table.setColumnWidth(column, width)
 
         layout.addWidget(self.table, 1)
 
@@ -121,21 +140,57 @@ class CropReview(QDialog):
         self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
 
+        layout.addWidget(self.destination)
+        layout.addLayout(destination_row)
+
+        button_row = QHBoxLayout()
+        self.back_button = QPushButton("Back")
+        style_button(self.back_button)
+        self.back_button.setIcon(
+            self.back_button.style().standardIcon(
+                QStyle.SP_ArrowLeft
+            )
+        )
+        self.back_button.clicked.connect(
+            lambda: self.done(131)
+        )
+        button_row.addWidget(self.back_button)
+        button_row.addStretch(1)
+
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.Cancel
         )
+        style_button_box(self.buttons)
         self.apply_button = self.buttons.addButton(
             "Apply changes",
             QDialogButtonBox.AcceptRole,
         )
+        style_button(self.apply_button)
+        self.apply_button.setIcon(
+            self.apply_button.style().standardIcon(
+                QStyle.SP_DialogApplyButton
+            )
+        )
         self.apply_button.setEnabled(False)
-        self.apply_button.clicked.connect(
-            self.approve
+        self.apply_button.clicked.connect(self.approve)
+        crop_cancel = self.buttons.button(
+            QDialogButtonBox.Cancel
         )
-        self.buttons.rejected.connect(
-            self.reject
+        crop_cancel.setIcon(
+            crop_cancel.style().standardIcon(
+                QStyle.SP_DialogCancelButton
+            )
         )
-        layout.addWidget(self.buttons)
+        self.buttons.rejected.connect(self.reject)
+        button_row.addWidget(self.buttons)
+        layout.addLayout(button_row)
+
+        self.destination_entry.textChanged.connect(
+            lambda _: self.apply_button.setEnabled(False)
+        )
+        self.destination_entry.editingFinished.connect(
+            self.submit_destination
+        )
 
         self.refresh_destination()
 
@@ -187,6 +242,37 @@ class CropReview(QDialog):
             "ask": False,
         }
 
+        self.destination_entry.setText(folder)
+        self.refresh_destination()
+        self.recheck()
+
+    def submit_destination(self):
+        if self.worker is not None:
+            return
+
+        directory = self.destination_entry.text().strip()
+        if directory:
+            folder = Path(directory)
+            if (
+                not folder.is_absolute()
+                or folder.is_symlink()
+                or not folder.is_dir()
+            ):
+                self.status.setText(
+                    "Choose an existing absolute destination directory."
+                )
+                self.apply_button.setEnabled(False)
+                return
+            self.recipe["destination"] = {
+                "mode": "directory",
+                "path": str(folder.resolve(strict=True)),
+                "ask": False,
+            }
+        else:
+            self.recipe["destination"] = {
+                "mode": "beside"
+            }
+
         self.refresh_destination()
         self.recheck()
 
@@ -196,6 +282,8 @@ class CropReview(QDialog):
 
         self.apply_button.setEnabled(False)
         self.destination_button.setEnabled(False)
+        self.destination_entry.setEnabled(False)
+        self.back_button.setEnabled(False)
 
         self.status.setText(
             "Checking each image and output destination…"
@@ -224,6 +312,8 @@ class CropReview(QDialog):
             return
 
         self.destination_button.setEnabled(True)
+        self.destination_entry.setEnabled(True)
+        self.back_button.setEnabled(True)
 
         if worker.error:
             self.status.setText(worker.error)
@@ -287,11 +377,25 @@ class CropReview(QDialog):
                 f"{properties.get('display_height', '?')}"
             )
 
-            for column, value in enumerate((
+            original_size, planned_size = (
+                dimensions.split(" → ", 1)
+                if " → " in dimensions
+                else (dimensions, "Unavailable")
+            )
+            output_path = (
+                Path(planned)
+                if planned != "Blocked" else None
+            )
+            values = (
                 Path(source).name,
-                planned,
-                dimensions,
-            )):
+                original_size,
+                planned_size,
+                output_path.name if output_path else "No output",
+                str(output_path.parent) if output_path else "No output",
+                "Blocked" if errors else "Ready",
+            )
+
+            for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(
                     source if column == 0 else value
@@ -311,10 +415,7 @@ class CropReview(QDialog):
             )
 
         else:
-            self.status.setText(
-                f"All {len(self.files)} images are ready. "
-                "Original images will not be overwritten."
-            )
+            self.status.setText("")
 
         self.apply_button.setEnabled(
             not problems and bool(self.files)
@@ -525,8 +626,11 @@ class CropProgress(QDialog):
 def run_standalone_crop(recipe, files):
     review = CropReview(recipe, files)
 
+    review_result = review.exec()
+    if review_result == 131:
+        return 131
     if (
-        review.exec() != QDialog.Accepted
+        review_result != QDialog.Accepted
         or review.approved is None
     ):
         return 1

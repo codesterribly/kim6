@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Parameter-only standalone retrofits; Bash retains policy and publication."""
+from kim_dialog_buttons import style_button, style_button_box
 import sys
 from pathlib import Path
 from PySide6.QtCore import QTimer, QThread, Qt, QSize
@@ -14,7 +15,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QIcon, QPixmap, QTransform
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QScrollArea,
-    QDoubleSpinBox, QFrame, QButtonGroup
+    QDoubleSpinBox, QFrame, QButtonGroup, QRadioButton
 )
 
 
@@ -378,8 +379,8 @@ class ActionDialog(QDialog):
             header.setSectionResizeMode(0, QHeaderView.Stretch)
             header.setSectionResizeMode(1, QHeaderView.Interactive)
             header.setSectionResizeMode(2, QHeaderView.Interactive)
-            self.resize_table.setColumnWidth(1, 170)
-            self.resize_table.setColumnWidth(2, 195)
+            self.resize_table.setColumnWidth(1, 115)
+            self.resize_table.setColumnWidth(2, 150)
 
             visible_rows = min(len(self.files), 10)
             table_height = min(
@@ -394,10 +395,11 @@ class ActionDialog(QDialog):
             self.preview.setMaximumHeight(100)
             self.resize_table.hide()
             self.resize(
-                850,
+                710,
                 min(600, max(350, 220 + len(self.files) * 30))
             )
         self.buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        style_button_box(self.buttons)
         self.apply=self.buttons.button(QDialogButtonBox.Ok); self.apply.setText('Apply')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); self.layout.addWidget(self.buttons)
         if kind=='rotate':
@@ -749,6 +751,27 @@ class ActionDialog(QDialog):
             self.choice('mode','Remove',[('Descriptive Metadata (keep color and orientation)','all'),('GPS Location','gps'),('Recognized AI Metadata','ai')])
             self.form.addRow('Full removal in Recipes',with_help(QLabel('Recipes also offers Remove All Metadata, including ICC.'),'strip'))
         elif kind=='rename':
+            self.rename_policy_widget = QWidget(self)
+            rename_policy_row = QHBoxLayout(self.rename_policy_widget)
+            rename_policy_row.setContentsMargins(0, 0, 0, 0)
+
+            self.rename_policy_group = QButtonGroup(self)
+            self.rename_create = QRadioButton(
+                'Create renamed copies (originals untouched)'
+            )
+            self.rename_overwrite = QRadioButton(
+                'Rename selected originals (confirmation required)'
+            )
+            self.rename_policy_group.addButton(self.rename_create)
+            self.rename_policy_group.addButton(self.rename_overwrite)
+            self.rename_create.setChecked(True)
+
+            rename_policy_row.addWidget(self.rename_create)
+            rename_policy_row.addWidget(self.rename_overwrite)
+            rename_policy_row.addStretch(1)
+            self.form.addRow(
+                'Save renamed images', self.rename_policy_widget
+            )
             self.choice('method','Method',[(label,value) for label,value in [('Sequential numbering','sequential'),('Rename using Image Capture Date','exifdate'),('Lowercase','lowercase'),('Uppercase','uppercase'),('Spaces to dashes','spacestodash'),('Spaces to underscores','spacestounderscore'),('Underscores to spaces','underscorestospace'),('Dashes to spaces','dashestospace'),('Add prefix','addprefix'),('Add suffix','addsuffix'),('Replace text','overwrite')]])
             for field,label,default in [('value','Base name','photo_'),('replacement','Replace with','')]:
                 self.fields[field]=QLineEdit(default); self.form.addRow(label,self.fields[field])
@@ -757,20 +780,63 @@ class ActionDialog(QDialog):
             self.rename_method='sequential'; self.rename_states={}
             self.fields['method'].currentIndexChanged.connect(self.rename_method_changed)
             from kim_preview import qt_classes
-            self.layout.insertWidget(self.layout.indexOf(self.preview),QLabel('Preview changes'))
             self.rename_view=qt_classes()[0](self)
             self.rename_table=self.rename_view.table
             self.layout.insertWidget(self.layout.indexOf(self.preview),self.rename_view,1)
-            self.resize(1050,650)
+            self.resize(830,610)
             self.apply.setText('Apply changes')
             self.rename_approved=None; self.rename_pending=False
             self.preview.setMaximumHeight(75)
             self.preview.hide()
             self.update_rename_controls()
-            self.fields['directory']=QLineEdit(); self.fields['directory'].setPlaceholderText('Beside each source'); self.form.addRow('Destination directory',self.fields['directory'])
-            browse=QPushButton('Choose directory…'); browse.clicked.connect(self.browse); self.form.addRow(browse)
-            self.message.setText('Before → after updates as you edit. '+('New copies protect original files.' if self.policy=='create' else 'You explicitly approved renaming originals; their old names will be removed after publication.')+' Names are checked again when saving.')
+            self.fields['directory'] = QLineEdit()
+            self.fields['directory'].setPlaceholderText(
+                'Beside each source (leave empty)'
+            )
+            self.fields['directory'].setAccessibleName(
+                'Shared destination directory'
+            )
+
+            self.rename_destination_label = QLabel(
+                'Destination: Beside each source'
+            )
+            destination_row = QHBoxLayout()
+            destination_row.addWidget(
+                self.fields['directory'], 1
+            )
+
+            browse = QPushButton('Change destination…')
+            browse.clicked.connect(self.browse)
+            destination_row.addWidget(browse)
+
+            bottom = self.layout.indexOf(self.buttons)
+            self.layout.insertWidget(
+                bottom, self.rename_destination_label
+            )
+            self.layout.insertLayout(
+                bottom + 1, destination_row
+            )
+            self.fields['directory'].textChanged.connect(
+                lambda value: self.rename_destination_label.setText(
+                    'Destination: ' + (
+                        value.strip() or 'Beside each source'
+                    )
+                )
+            )
+            self.message.setText(
+                'Review the proposed filenames below. '
+                'Creating copies preserves originals. '
+                'Renaming originals requires explicit confirmation.'
+            )
         self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(100); self.timer.timeout.connect(self.refresh)
+        if kind == 'rename':
+            self.rename_create.toggled.connect(
+                lambda checked: checked and self.timer.start()
+            )
+            self.rename_overwrite.toggled.connect(
+                lambda checked: checked and self.timer.start()
+            )
+
         for widget in self.fields.values():
             signal=widget.textChanged if isinstance(widget,QLineEdit) else widget.currentIndexChanged if isinstance(widget,QComboBox) else widget.toggled if isinstance(widget,QCheckBox) else widget.valueChanged
             signal.connect(lambda *_: self.timer.start())
@@ -1545,6 +1611,10 @@ class ActionDialog(QDialog):
             self.rename_pending=True; self.worker.requestInterruption(); return
         self.rename_pending=False
         method=self.fields['method'].currentData()
+        self.policy = (
+            'create' if self.rename_create.isChecked()
+            else 'overwrite'
+        )
         value=self.fields['date_format'].currentData() if method=='exifdate' else self.fields['value'].text()
         config=dict(method=method,value=value,replacement=self.fields['replacement'].text(),
                     start=self.fields['start'].value(),padding=self.fields['padding'].value(),directory=self.fields['directory'].text())
@@ -1564,7 +1634,7 @@ class ActionDialog(QDialog):
         else:
             self.rename_approved=worker.plan
             self.apply.setEnabled(self.rename_view.show_plan(worker.plan))
-            self.resize(1050,min(790,max(370,self.rename_table.height()+265)))
+            self.resize(830,min(720,max(370,self.rename_table.height()+245)))
             self.set_preview_text('Preview changes: final paths are available in each row’s tooltip. Changed sources or destinations require a fresh review.')
         worker.deleteLater()
 
@@ -1576,6 +1646,18 @@ class ActionDialog(QDialog):
             try: verify_plan(self.rename_approved)
             except Exception as exc:
                 self.set_preview_text(str(exc)+' Review the updated plan before applying.'); self.start_rename_plan(); return
+            if self.rename_approved['policy'] == 'overwrite':
+                from PySide6.QtWidgets import QMessageBox
+                decision = QMessageBox.warning(
+                    self,
+                    'Confirm renaming originals',
+                    'Rename the selected original files? '
+                    'Their previous filenames will no longer exist.',
+                    QMessageBox.Yes | QMessageBox.Cancel,
+                    QMessageBox.Cancel,
+                )
+                if decision != QMessageBox.Yes:
+                    return
         else: self.refresh()
         if self.apply.isEnabled(): super().accept()
 
@@ -1667,6 +1749,7 @@ class RotateBatchDialog(QDialog):
         controls = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
+        style_button_box(controls)
 
         self.apply = controls.button(QDialogButtonBox.Ok)
         self.apply.setText('Apply changes')
@@ -2008,7 +2091,7 @@ class FlipReviewDialog(QDialog):
         self.rows = []
         self.pending = []
 
-        self.setWindowTitle('KIMng - Flip images')
+        self.setWindowTitle('KIMng - Flip - Review Changes')
         # Match the initial height to the batch rather than
         # reserving a large, mostly empty scroll area.
         # Four or more images use a bounded scrolling window.
@@ -2114,6 +2197,7 @@ class FlipReviewDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
+        style_button_box(buttons)
 
         self.apply = buttons.button(QDialogButtonBox.Ok)
         self.apply.setText('Apply changes')
@@ -2229,10 +2313,13 @@ class FlipReviewDialog(QDialog):
 
 def resize_output_review(
     plan_path, request_path, destination, policy, geometry,
-    resize_filter
+    resize_filter, auto_orient=False
 ):
     """Review exact Resize output paths before publication."""
     import os
+    import subprocess
+    from kim_preview import identity, inspection_path
+    from kim_recipe_image import planned_geometry
 
     payload = plan_path.read_bytes()
 
@@ -2275,13 +2362,15 @@ def resize_output_review(
     layout.setContentsMargins(12, 10, 12, 10)
     layout.setSpacing(8)
 
-    layout.addWidget(QLabel(
+    heading = QLabel(
         f"Selected images: {len(records)} | "
-        f"Resize geometry: {geometry} | "
         f"Resampling: {filter_labels[resize_filter]}"
-    ))
+    )
+    heading.setToolTip(
+        f"Requested resize geometry: {geometry}"
+    )
+    layout.addWidget(heading)
 
-    layout.addWidget(QLabel("Save resized images:"))
 
     policy_group = QButtonGroup(dialog)
 
@@ -2296,6 +2385,8 @@ def resize_output_review(
     policy_group.addButton(overwrite_radio)
 
     policy_row = QHBoxLayout()
+    policy_row.addWidget(QLabel("Save images:"))
+    policy_row.addSpacing(10)
     policy_row.addWidget(create_radio)
     policy_row.addSpacing(20)
     policy_row.addWidget(overwrite_radio)
@@ -2336,9 +2427,11 @@ def resize_output_review(
     if policy == "create":
         destination_row.addWidget(browse_button)
 
-    table = QTableWidget(len(records), 4)
+    table = QTableWidget(len(records), 6)
     table.setHorizontalHeaderLabels([
         "Source image",
+        "Original",
+        "Planned",
         "Output filename",
         "Destination",
         "Status",
@@ -2359,25 +2452,202 @@ def resize_output_review(
     )
     table.horizontalHeader().setStretchLastSection(False)
 
-    widths = (270, 270, 330, 95)
+    widths = (185, 100, 100, 205, 190, 78)
     for column, width in enumerate(widths):
         table.setColumnWidth(column, width)
 
+    reviewed_identities = {}
+    displayed_records = []
+    geometry_cache = {}
+
+    def inspect_dimensions(source):
+        # No source access-time changes. Use the established protected
+        # stdin inspection method, rather than opening images normally.
+        source_stamp = tuple(identity(source))
+
+        command = [
+            "identify",
+            "-regard-warnings",
+            "+ping",
+            "-format",
+            "%w %h %[orientation]\\n",
+        ]
+
+        if Path(source).suffix.lower() in (
+            ".tga", ".icb", ".vda", ".vst"
+        ):
+            command.append("TGA:-")
+        else:
+            command.append("-")
+
+        with inspection_path(source) as (_opened, fd):
+            with os.fdopen(os.dup(fd), "rb") as stream:
+                result = subprocess.run(
+                    command,
+                    stdin=stream,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+
+        if result.returncode != 0:
+            raise ValueError(
+                "ImageMagick could not inspect the source dimensions"
+            )
+
+        if tuple(identity(source)) != source_stamp:
+            raise ValueError(
+                "Source changed during dimension inspection"
+            )
+
+        lines = result.stdout.splitlines()
+
+        if not lines or len(lines) > 10000:
+            raise ValueError(
+                "Invalid or excessive source frame count"
+            )
+
+        frames = []
+
+        for line in lines:
+            fields = line.split()
+
+            if (
+                len(fields) != 3
+                or not fields[0].isdigit()
+                or not fields[1].isdigit()
+            ):
+                raise ValueError(
+                    "Invalid ImageMagick dimension information"
+                )
+
+            width, height = map(int, fields[:2])
+
+            if not (0 < width <= 100000 and
+                    0 < height <= 100000):
+                raise ValueError(
+                    "Source dimensions are outside safe limits"
+                )
+
+            planned_width, planned_height = width, height
+
+            # Explicit percentage commands auto-orient before resize.
+            # The dispatcher supplies this flag from its actual
+            # execution mode, rather than inferring it from the label.
+            if (
+                auto_orient
+                and fields[2] in (
+                    "LeftTop", "RightTop",
+                    "RightBottom", "LeftBottom",
+                )
+            ):
+                planned_width, planned_height = height, width
+
+            key = (
+                planned_width,
+                planned_height,
+                geometry,
+            )
+
+            if key not in geometry_cache:
+                geometry_cache[key] = planned_geometry(
+                    planned_width,
+                    planned_height,
+                    geometry,
+                )
+
+            result_width, result_height = geometry_cache[key]
+
+            frames.append((
+                f"{width} × {height}",
+                f"{result_width} × {result_height}",
+            ))
+
+        original_size, planned_size = frames[0]
+
+        if len(frames) == 1:
+            detail = (
+                f"Original: {original_size}; "
+                f"Planned: {planned_size}"
+            )
+        else:
+            original_size += f" ({len(frames)} frames)"
+            planned_size += f" ({len(frames)} frames)"
+            detail = (
+                f"{len(frames)} frames. First-frame sizes "
+                "are displayed in the table.\\n"
+                + "\\n".join(
+                    f"Frame {index}: {a} -> {b}"
+                    for index, (a, b) in enumerate(
+                        frames[:20], 1
+                    )
+                )
+            )
+            if len(frames) > 20:
+                detail += (
+                    f"\\nAdditional frames: {len(frames) - 20}"
+                )
+
+        return (
+            original_size,
+            planned_size,
+            detail,
+            source_stamp,
+        )
+
     for row, (source, target, status, note) in enumerate(records):
+        original_size = "Unavailable"
+        planned_size = "Unavailable"
+        dimension_detail = ""
+        display_status = status
+        display_note = note
+
+        if status == "Ready":
+            try:
+                (
+                    original_size,
+                    planned_size,
+                    dimension_detail,
+                    source_stamp,
+                ) = inspect_dimensions(source)
+
+                reviewed_identities[source] = source_stamp
+
+            except Exception as exc:
+                display_status = "Blocked"
+                display_note = (
+                    "Dimension inspection failed: " + str(exc)
+                )
+
         values = (
             os.path.basename(source),
+            original_size,
+            planned_size,
             os.path.basename(target) if target else "None",
             os.path.dirname(target) if target else "None",
-            status,
+            display_status,
+        )
+
+        displayed_records.append((
+            source,
+            target,
+            display_status,
+            display_note,
+        ))
+
+        tooltip = "\\n".join(
+            filter(None, (
+                source,
+                target,
+                dimension_detail,
+                display_note,
+            ))
         )
 
         for column, value in enumerate(values):
             item = QTableWidgetItem(value)
-            item.setToolTip(
-                source if column == 0
-                else target if column in (1, 2)
-                else note
-            )
+            item.setToolTip(tooltip)
             table.setItem(row, column, item)
 
     visible_rows = min(len(records), 8)
@@ -2392,7 +2662,7 @@ def resize_output_review(
     def update_details():
         row = table.currentRow()
         if row >= 0:
-            source, _, status, note = records[row]
+            source, _, status, note = displayed_records[row]
             details.setText(
                 f"{os.path.basename(source)}: {status}. {note}"
             )
@@ -2401,8 +2671,10 @@ def resize_output_review(
     table.selectRow(0)
     update_details()
 
-    ready = sum(record[2] == "Ready" for record in records)
-    blocked = len(records) - ready
+    ready = sum(
+        record[2] == "Ready" for record in displayed_records
+    )
+    blocked = len(displayed_records) - ready
 
     if policy == "overwrite":
         summary_text = (
@@ -2429,6 +2701,7 @@ def resize_output_review(
     buttons = QHBoxLayout()
 
     back_button = QPushButton("Back")
+    style_button(back_button)
     back_button.clicked.connect(lambda: dialog.done(131))
     buttons.addWidget(back_button)
 
@@ -2437,6 +2710,7 @@ def resize_output_review(
     button_box = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(button_box)
     apply_button = button_box.button(QDialogButtonBox.Ok)
     apply_button.setText("Apply changes")
     apply_button.setEnabled(
@@ -2444,6 +2718,22 @@ def resize_output_review(
     )
 
     def approve_changes():
+        # An approved dimension preview must still refer to the
+        # exact source identities inspected for this review.
+        for source, source_stamp in reviewed_identities.items():
+            try:
+                if tuple(identity(source)) != source_stamp:
+                    raise ValueError(
+                        "Source changed since review opened"
+                    )
+            except Exception as exc:
+                apply_button.setEnabled(False)
+                details.setText(
+                    f"{os.path.basename(source)}: {exc}. "
+                    "Reopen Review Changes."
+                )
+                return
+
         if policy == "overwrite":
             confirmation = QMessageBox.warning(
                 dialog,
@@ -2574,7 +2864,7 @@ def resize_output_review(
         browse_button.clicked.connect(choose_directory)
 
     dialog.resize(
-        1090,
+        930,
         min(780, 285 + 32 * visible_rows)
     )
 
@@ -2614,7 +2904,7 @@ def email_options_review(output_path, initial_size, sources):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIMng - Prepare email images")
+    dialog.setWindowTitle("KIMng - Send via email")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2744,8 +3034,9 @@ def email_options_review(output_path, initial_size, sources):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     proceed = buttons.button(QDialogButtonBox.Ok)
-    proceed.setText("Continue to review")
+    proceed.setText("Review changes…")
 
     def refresh():
         choice = options.currentData()
@@ -2847,7 +3138,7 @@ def email_ready_review(plan_path, mail_client):
 
     app = QApplication.instance() or QApplication(sys.argv)
     dialog = QDialog()
-    dialog.setWindowTitle("KIMng - Review email attachments")
+    dialog.setWindowTitle("KIMng - Send via email - Review Changes")
 
     layout = QVBoxLayout(dialog)
     layout.setContentsMargins(12, 10, 12, 10)
@@ -2935,9 +3226,9 @@ def email_ready_review(plan_path, mail_client):
     )
 
     note = QLabel(
-        "Prepared attachments are retained under:\\n"
+        "Prepared attachments are retained under:\n"
         + str(storage_base)
-        + "\\nDelete them when no longer needed. "
+        + "\nDelete them when no longer needed. "
         "Opening the mail client does not send the message."
     )
     note.setWordWrap(True)
@@ -2946,16 +3237,19 @@ def email_ready_review(plan_path, mail_client):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     handoff = buttons.button(QDialogButtonBox.Ok)
     handoff.setText(
         "Open in " + client_names[mail_client]
     )
     handoff.setEnabled(not blocked)
 
-    back_button = buttons.addButton(
-        "Back to Options",
-        QDialogButtonBox.ActionRole
-    )
+    back_button = QPushButton("Back")
+    style_button(back_button)
+    button_row = QHBoxLayout()
+    button_row.addWidget(back_button)
+    button_row.addStretch(1)
+    button_row.addWidget(buttons)
 
     def back_to_options():
         try:
@@ -2977,7 +3271,7 @@ def email_ready_review(plan_path, mail_client):
 
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
-    layout.addWidget(buttons)
+    layout.addLayout(button_row)
 
     dialog.resize(710, min(700, 255 + 31 * min(len(records), 8)))
     return 0 if dialog.exec() == QDialog.Accepted else 130
@@ -3061,7 +3355,7 @@ def flip_output_review(inputs_path, approved_path, policy, operation):
     pairs = list(zip(values[::2], values[1::2]))
 
     window = FlipReviewDialog([source for source, _ in pairs], operation, require_output_plan=True)
-    window.setWindowTitle('KIMng - Review Flip changes')
+    window.setWindowTitle('KIMng - Flip - Review Changes')
     window.resize(960, min(740, window.height() + 90))
 
     layout = window.layout()
@@ -3073,81 +3367,78 @@ def flip_output_review(inputs_path, approved_path, policy, operation):
     introduction.setWordWrap(True)
     layout.insertWidget(2, introduction)
 
-    choice = QComboBox()
-    choice.addItem('Beside each source', 'beside')
-    choice.addItem('Choose shared destination', 'shared')
-
-    destination = QLineEdit()
-    destination.setPlaceholderText(
-        'Enter an existing absolute directory'
+    destination_label = QLabel(
+        'Destination: Beside each source'
     )
-    destination.setAccessibleName('Shared destination directory')
+    destination_label.setWordWrap(True)
 
-    browse = QPushButton('Change Destination…')
-    update = QPushButton('Update preview')
+    destination = QLineEdit(window)
+    destination.setPlaceholderText(
+        'Beside each source (leave empty)'
+    )
+    destination.setAccessibleName(
+        'Shared destination directory'
+    )
 
-    selector = QHBoxLayout()
-    selector.addWidget(QLabel('Destination:'))
-    selector.addWidget(choice, 1)
-    selector.addWidget(browse)
-    layout.insertLayout(3, selector)
+    browse = QPushButton('Change destination…')
 
-    directory_controls = QHBoxLayout()
-    directory_controls.addWidget(destination, 1)
-    directory_controls.addWidget(update)
-    layout.insertLayout(4, directory_controls)
+    destination_row = QHBoxLayout()
+    destination_row.addWidget(destination, 1)
+    destination_row.addWidget(browse)
 
     summary = QLabel()
     summary.setWordWrap(True)
-    layout.insertWidget(layout.count() - 1, summary)
-    apply = window.apply
 
+    # Keep the result summary and destination controls together
+    # immediately above Apply changes and Cancel.
+    layout.insertWidget(layout.count() - 1, summary)
+    layout.insertWidget(layout.count() - 1, destination_label)
+    layout.insertLayout(layout.count() - 1, destination_row)
+
+    apply = window.apply
     state = {'plan': None}
 
-    def show_directory_controls():
-        enabled = (
-            policy == 'create'
-            and choice.currentData() == 'shared'
-        )
-        for widget in (destination, update):
-            widget.setVisible(enabled)
+    destination_timer = QTimer(window)
+    destination_timer.setSingleShot(True)
+    destination_timer.setInterval(300)
+    destination_timer.timeout.connect(lambda: refresh())
 
     def invalidate(*_):
         state['plan'] = None
         window.output_plan = None
         apply.setEnabled(False)
-        summary.setText(
-            'Destination changed. Update the preview before applying.'
-        )
+        summary.setText('Updating destination review…')
+        destination_timer.start()
 
     def refresh():
+        destination_timer.stop()
         state['plan'] = None
         window.output_plan = None
         apply.setEnabled(False)
 
-        directory = None
+        directory = destination.text().strip() or None
 
-        if (
-            policy == 'create'
-            and choice.currentData() == 'shared'
-        ):
-            directory = destination.text().strip()
-
-            if not directory or not os.path.isabs(directory):
-                summary.setText(
-                    'Enter an existing absolute output directory.'
-                )
-                return
-
+        if directory is not None:
             if (
-                os.path.islink(directory)
+                not os.path.isabs(directory)
+                or os.path.islink(directory)
                 or not os.path.isdir(directory)
+                or not os.access(directory, os.W_OK | os.X_OK)
             ):
+                destination_label.setText(
+                    'Destination: Invalid shared directory'
+                )
                 summary.setText(
-                    'The output directory must exist and '
-                    'must not be a symbolic link.'
+                    'Choose an existing writable directory.'
                 )
                 return
+
+            directory = os.path.realpath(directory)
+
+        destination_label.setText(
+            'Destination: '
+            + (directory or 'Beside each source')
+        )
 
         reserved = set()
         seen = set()
@@ -3259,20 +3550,12 @@ def flip_output_review(inputs_path, approved_path, policy, operation):
 
         if selected:
             destination.setText(selected)
-            choice.setCurrentIndex(choice.findData('shared'))
             refresh()
 
-    choice.currentIndexChanged.connect(
-        lambda *_: (
-            show_directory_controls(),
-            refresh(),
-        )
-    )
     destination.textChanged.connect(invalidate)
+    destination.editingFinished.connect(refresh)
     browse.clicked.connect(choose_directory)
-    update.clicked.connect(refresh)
 
-    show_directory_controls()
     refresh()
 
     if window.exec() != QDialog.Accepted:
@@ -3319,7 +3602,7 @@ def main():
             Path(sys.argv[2]), sys.argv[3]
         )
     if (
-        len(sys.argv) == 8
+        len(sys.argv) in (8, 9)
         and sys.argv[1] == "resize-output-review"
     ):
         return resize_output_review(
@@ -3329,6 +3612,7 @@ def main():
             sys.argv[5],
             sys.argv[6],
             sys.argv[7],
+            len(sys.argv) == 9 and sys.argv[8] == "true",
         )
     if len(sys.argv) >= 4 and sys.argv[1] == 'flipreview':
         _, _, operation, *files = sys.argv

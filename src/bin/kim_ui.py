@@ -1,4 +1,5 @@
 """Small shared Qt controls. Importing this module never starts an application."""
+from kim_dialog_buttons import style_button, style_button_box
 from PySide6.QtCore import QDate, QLocale, QTime, Qt, Signal, QEvent, QRectF
 from PySide6.QtWidgets import (QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
     QPushButton, QToolButton, QCalendarWidget, QTimeEdit, QCheckBox, QComboBox,
@@ -126,6 +127,7 @@ class EmptyDateInput(QWidget):
         self.calendar.clicked.connect(self.choose_date)
         self.calendar.activated.connect(self.choose_date)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Reset)
+        style_button_box(buttons)
         buttons.button(QDialogButtonBox.Reset).setText('Clear Date')
         buttons.button(QDialogButtonBox.Reset).clicked.connect(lambda: (self.clear(), dialog.reject()))
         buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
@@ -301,6 +303,7 @@ def choose_capture_time(parent, initial):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
 
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)

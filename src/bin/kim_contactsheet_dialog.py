@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """KIMng Contact Sheet configuration dialog for Qt 6."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import os
 import sys
@@ -134,6 +135,7 @@ class ContactSheetDialog(OrderedImageDialog):
         layout.addWidget(self.preview_note)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.create = buttons.button(QDialogButtonBox.Ok)
         self.create.setText('Create')
         self.add_source_notice(layout)

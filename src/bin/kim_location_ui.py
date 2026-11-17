@@ -1,4 +1,5 @@
 """Presentation helpers for Image Location Tools; no publication operations."""
+from kim_dialog_buttons import style_button, style_button_box
 from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
@@ -611,6 +612,7 @@ class TechnicalMetadataDialog(QDialog):
         self.tabs.addTab(self.technical, 'Technical Details')
         layout.addWidget(self.tabs, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        style_button_box(buttons)
         self.copy_metadata = buttons.addButton('Copy Metadata', QDialogButtonBox.ActionRole)
         self.copy_metadata.clicked.connect(self.copy_full_metadata)
         buttons.rejected.connect(self.reject)

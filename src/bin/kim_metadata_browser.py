@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Standalone, read-only KIMng Metadata Browser."""
 from __future__ import annotations
+from kim_dialog_buttons import style_button, style_button_box
 
 import json
 import os
@@ -220,6 +221,7 @@ class MetadataDetailsDialog(QDialog):
             self.structure_timer.start(0) if value >= self.structure.verticalScrollBar().maximum() > 0 else None)
         layout.addWidget(self.structure, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        style_button_box(buttons)
         buttons.rejected.connect(self.reject)
         self.raw_copy = buttons.addButton('Copy raw value', QDialogButtonBox.ActionRole)
         self.raw_copy.setIcon(QIcon.fromTheme('edit-copy'))
@@ -491,6 +493,7 @@ class OverviewFieldsDialog(QDialog):
             actions.addWidget(button)
         layout.addLayout(actions)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -1926,6 +1929,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.all_tags_progress.hide()
         load_row.addWidget(self.all_tags_progress)
         self.all_tags_cancel = QPushButton('Cancel')
+        style_button(self.all_tags_cancel)
         self.all_tags_cancel.clicked.connect(self.cancel_all_tags)
         self.all_tags_cancel.hide()
         load_row.addWidget(self.all_tags_cancel)
@@ -2047,6 +2051,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.compare_progress.hide()
         compare_controls.addWidget(self.compare_progress)
         self.compare_cancel = QPushButton('Cancel')
+        style_button(self.compare_cancel)
         self.compare_cancel.clicked.connect(self.cancel_comparison)
         self.compare_cancel.hide()
         compare_controls.addWidget(self.compare_cancel)

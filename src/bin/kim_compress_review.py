@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """KIMng compression review. No processing occurs here."""
+from kim_dialog_buttons import style_button, style_button_box
 import os
 import sys
 from pathlib import Path
@@ -167,12 +168,14 @@ def review(plan_path, request_path, policy, destination):
 
     row = QHBoxLayout()
     back = QPushButton("Back")
+    style_button(back)
     row.addWidget(back)
     row.addStretch()
 
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     apply = buttons.button(QDialogButtonBox.Ok)
     apply.setText("Apply changes")
     apply.setEnabled(bool(records) and not blocked)

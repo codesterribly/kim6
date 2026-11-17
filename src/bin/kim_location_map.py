@@ -4,6 +4,7 @@ Only visible tiles are requested, after the persistent online-map opt-in. Qt's
 HTTP disk cache honours server expiry / validators; no prefetch or geocoding.
 Software QPainter rendering needs neither OpenGL nor QtWebEngine.
 """
+from kim_dialog_buttons import style_button, style_button_box
 from collections import OrderedDict
 import math
 import json
@@ -382,6 +383,43 @@ class TileMap(QWidget):
             painter.setPen(QPen(palette.color(QPalette.Text), 4)); painter.setBrush(palette.brush(QPalette.Base)); painter.drawEllipse(point, 10, 10)
             painter.setPen(QPen(palette.color(QPalette.Highlight), 3)); painter.drawEllipse(point, 7, 7)
             painter.drawLine(point + QPointF(-16, 0), point + QPointF(16, 0)); painter.drawLine(point + QPointF(0, -16), point + QPointF(0, 16))
+        if self.interactive:
+            # The map center is a navigation guide, not the
+            # selected GPS point. A click sets the selected point.
+            painter.setRenderHint(QPainter.Antialiasing)
+            center = QPointF(
+                self.width() / 2,
+                self.height() / 2,
+            )
+
+            painter.setBrush(Qt.NoBrush)
+
+            # Light outline keeps the reticle visible over maps.
+            painter.setPen(
+                QPen(palette.color(QPalette.Base), 5)
+            )
+            painter.drawLine(
+                center + QPointF(-13, 0),
+                center + QPointF(13, 0),
+            )
+            painter.drawLine(
+                center + QPointF(0, -13),
+                center + QPointF(0, 13),
+            )
+
+            painter.setPen(
+                QPen(palette.color(QPalette.Text), 2)
+            )
+            painter.drawLine(
+                center + QPointF(-13, 0),
+                center + QPointF(13, 0),
+            )
+            painter.drawLine(
+                center + QPointF(0, -13),
+                center + QPointF(0, 13),
+            )
+            painter.drawEllipse(center, 5, 5)
+
         lat = geographic_point(self.centre, self.zoom)[0]
         metres = 90 * math.cos(math.radians(lat)) * 2 * math.pi * 6378137 / (256 * 2 ** self.zoom)
         box = QRectF(6, self.height() - 36, min(self.width() - 12, 180), 30)
@@ -563,7 +601,12 @@ def choose_location(parent, initial=None, units='metric'):
         available = dialog.screen().availableGeometry()
         dialog.resize(min(800, available.width()*9//10), min(680, available.height()*9//10))
         layout = QVBoxLayout(dialog)
-        help_label = QLabel('Click to choose a position. Arrow keys pan; Space selects the center. Review the coordinates before using them.')
+        help_label = QLabel(
+            'Click a location to place the selection marker. '
+            'Drag to pan the map. The center crosshair is a '
+            'navigation guide, not the selected location. '
+            'Press Space to select the center.'
+        )
         help_label.setWordWrap(True); layout.addWidget(help_label)
         map_view = LocationMap(dialog, interactive=True, units=units); layout.addWidget(map_view, 1)
         if initial is not None: map_view.canvas.zoom = 13
@@ -571,6 +614,7 @@ def choose_location(parent, initial=None, units='metric'):
         readout = QLabel(); readout.setWordWrap(True); readout.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(readout)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         use = buttons.button(QDialogButtonBox.Ok); use.setText('Use this location'); use.setAutoDefault(False)
         buttons.button(QDialogButtonBox.Cancel).setAutoDefault(False)
         def update_selection(position):

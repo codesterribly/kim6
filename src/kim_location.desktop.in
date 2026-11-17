@@ -11,7 +11,7 @@ X-KIMng-Managed=true
 
 [Desktop Action 03Apply]
 Icon=mark-location
-_Name=Modify GPS on images…
+_Name=Edit GPS on images…
 Exec=kim_all location-apply -- %F
 
 [Desktop Action 04Report]

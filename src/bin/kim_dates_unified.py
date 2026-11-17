@@ -1,4 +1,5 @@
 """Unified image-date interface, using the existing verified publisher."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import datetime as dt
 import json
@@ -13,18 +14,22 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from kim_ui import (
@@ -180,6 +185,7 @@ class SetDatesDialog(QDialog):
         self.target = 'capture'
         self.source = 'manual'
         self.reference = None
+        self.external_reference = None
         self.reference_identity = None
 
         self.plan = None
@@ -196,8 +202,8 @@ class SetDatesDialog(QDialog):
         self._zones = {}
 
         self.setWindowTitle('KIMng - Set dates')
-        self.resize(1040, 650)
-        self.setMinimumWidth(790)
+        self.resize(910, 625)
+        self.setMinimumWidth(800)
 
         main = QVBoxLayout(self)
         main.setSpacing(6)
@@ -241,6 +247,14 @@ class SetDatesDialog(QDialog):
         )
 
         reference_row.addWidget(self.use_reference)
+
+        self.choose_external_reference = QPushButton(
+            'Choose reference image…'
+        )
+        self.choose_external_reference.clicked.connect(
+            self.select_external_reference
+        )
+        reference_row.addWidget(self.choose_external_reference)
         main.addLayout(reference_row)
 
         self.date = CaptureDateInput()
@@ -299,10 +313,10 @@ class SetDatesDialog(QDialog):
                 column, QHeaderView.Interactive
             )
 
-        self.table.setColumnWidth(0, 450)
-        self.table.setColumnWidth(1, 225)
-        self.table.setColumnWidth(2, 275)
-        self.table.setColumnWidth(3, 95)
+        self.table.setColumnWidth(0, 290)
+        self.table.setColumnWidth(1, 205)
+        self.table.setColumnWidth(2, 235)
+        self.table.setColumnWidth(3, 85)
 
         self.table.setHorizontalScrollMode(
             QAbstractItemView.ScrollPerPixel
@@ -350,7 +364,34 @@ class SetDatesDialog(QDialog):
             'Replace originals only under the approved overwrite policy'
         )
 
-        main.addWidget(QLabel(policy_note))
+        self.policy_note = QLabel(policy_note)
+        self.policy_note.hide()
+
+        self.policy_radio_widget = QWidget(self)
+        policy_row = QHBoxLayout(self.policy_radio_widget)
+        policy_row.setContentsMargins(0, 0, 0, 0)
+
+        self.policy_group = QButtonGroup(self)
+        self.policy_create = QRadioButton(
+            'Create new files (originals untouched)'
+        )
+        self.policy_overwrite = QRadioButton(
+            'Overwrite originals (confirmation required)'
+        )
+        self.policy_group.addButton(self.policy_create)
+        self.policy_group.addButton(self.policy_overwrite)
+        self.policy_create.setChecked(self.policy == 'create')
+        self.policy_overwrite.setChecked(self.policy == 'overwrite')
+
+        policy_row.addWidget(self.policy_create)
+        policy_row.addWidget(self.policy_overwrite)
+        policy_row.addStretch(1)
+        save_policy_row = QHBoxLayout()
+        save_policy_row.addWidget(QLabel('Save images:'))
+        save_policy_row.addWidget(
+            self.policy_radio_widget, 1
+        )
+        main.addLayout(save_policy_row)
 
         self.destination_mode = QComboBox()
         self.destination_mode.addItem(
@@ -362,22 +403,20 @@ class SetDatesDialog(QDialog):
 
         self.destination_label = QLabel('Save copies:')
 
-        destination_choice = QHBoxLayout()
-        destination_choice.addWidget(self.destination_label)
-        destination_choice.addWidget(
-            self.destination_mode, 1
+        self.destination_summary = QLabel(
+            'Destination: Beside each source'
         )
-        main.addLayout(destination_choice)
+        self.destination_summary.setWordWrap(True)
 
         self.directory_field = QLineEdit()
         self.directory_field.setPlaceholderText(
-            'Enter or browse to an existing directory'
+            'Beside each source (leave empty)'
         )
         self.directory_field.setAccessibleName(
             'Output directory'
         )
 
-        self.browse_directory = QPushButton('Browse…')
+        self.browse_directory = QPushButton('Change destination…')
         self.browse_directory.clicked.connect(
             self.choose_output_directory
         )
@@ -390,30 +429,37 @@ class SetDatesDialog(QDialog):
             self.browse_directory
         )
 
-        main.addLayout(self.directory_row)
-
-        self.destination_label.setVisible(
+        # Keep the existing mode widget as an internal state
+        # selector. The visible editor uses an empty directory to
+        # mean Beside each source.
+        self.destination_label.hide()
+        self.destination_mode.hide()
+        self.directory_field.setVisible(
             self.policy == 'create'
         )
-        self.destination_mode.setVisible(
+        self.browse_directory.setVisible(
             self.policy == 'create'
         )
-        self.directory_field.hide()
-        self.browse_directory.hide()
 
         buttons = QHBoxLayout()
         buttons.addStretch()
 
         self.apply = QPushButton('Review changes…')
+        style_button(self.apply)
+        self.apply.setIcon(self.apply.style().standardIcon(QStyle.SP_DialogApplyButton))
         self.apply.setEnabled(False)
         self.apply.clicked.connect(self.review_changes)
 
         buttons.addWidget(self.apply)
 
         cancel = QPushButton('Cancel')
+        style_button(cancel)
+        cancel.setIcon(cancel.style().standardIcon(QStyle.SP_DialogCancelButton))
         cancel.clicked.connect(self.reject)
 
         buttons.addWidget(cancel)
+        main.addWidget(self.destination_summary)
+        main.addLayout(self.directory_row)
         main.addLayout(buttons)
 
         self.timer = QTimer(self)
@@ -441,11 +487,17 @@ class SetDatesDialog(QDialog):
         )
         self.more.toggled.connect(self.show_selected)
 
+        self.policy_create.toggled.connect(
+            lambda checked: checked and self.change_output_policy()
+        )
+        self.policy_overwrite.toggled.connect(
+            lambda checked: checked and self.change_output_policy()
+        )
         self.destination_mode.currentIndexChanged.connect(
             self.output_destination_changed
         )
         self.directory_field.textChanged.connect(
-            self.invalidate
+            self.sync_destination_field
         )
 
         self.target_buttons['capture'].setChecked(True)
@@ -459,6 +511,37 @@ class SetDatesDialog(QDialog):
         self.reader.finished.connect(self.read_done)
         self.reader.start()
 
+
+    def change_output_policy(self, *_):
+        selected = (
+            'create' if self.policy_create.isChecked()
+            else 'overwrite'
+        )
+        if selected == self.policy:
+            return
+
+        self.policy = selected
+        self.seeds = []
+        self.cache.clear()
+        self.policy_note.setText(
+            'Create copies, originals unchanged'
+            if selected == 'create'
+            else 'Original files will be replaced only after final confirmation'
+        )
+        self.destination_summary.setText(
+            'Destination: Replace selected originals'
+            if selected == 'overwrite'
+            else 'Destination: ' + (
+                self.directory_field.text().strip()
+                or 'Beside each source'
+            )
+        )
+        self.directory_field.setVisible(selected == 'create')
+        self.browse_directory.setVisible(selected == 'create')
+        if selected == 'create':
+            self.output_destination_changed()
+        else:
+            self.invalidate()
 
     def choose_output_directory(self):
         if self.policy != 'create':
@@ -482,16 +565,28 @@ class SetDatesDialog(QDialog):
         if chosen:
             self.directory_field.setText(chosen)
 
-    def output_destination_changed(self, *_):
-        different = (
-            self.policy == 'create'
-            and self.destination_mode.currentData()
-            == 'directory'
+    def sync_destination_field(self, *_):
+        directory = self.directory_field.text().strip()
+        wanted = 'directory' if directory else 'beside'
+        index = self.destination_mode.findData(wanted)
+        if index >= 0 and self.destination_mode.currentIndex() != index:
+            self.destination_mode.setCurrentIndex(index)
+        else:
+            self.invalidate()
+
+        self.destination_summary.setText(
+            'Destination: ' + (
+                directory or 'Beside each source'
+            )
         )
 
-        self.directory_field.setVisible(different)
-        self.browse_directory.setVisible(different)
-
+    def output_destination_changed(self, *_):
+        self.directory_field.setVisible(
+            self.policy == 'create'
+        )
+        self.browse_directory.setVisible(
+            self.policy == 'create'
+        )
         self.invalidate()
 
     def destination_seeds(self):
@@ -501,7 +596,9 @@ class SetDatesDialog(QDialog):
         source alias checks, and destination snapshots.
         """
         if self.policy != 'create':
-            return list(self.original_seeds)
+            # Overwrite plans must target the actual source,
+            # never an earlier derivative filename seed.
+            return list(self.files)
 
         if self.destination_mode.currentData() != 'directory':
             return list(self.original_seeds)
@@ -614,18 +711,24 @@ class SetDatesDialog(QDialog):
         self.use_reference.setVisible(
             reference_mode
         )
+        self.choose_external_reference.setVisible(
+            reference_mode
+        )
 
-        if self.reference is not None:
-            self.reference_text.setText(
-                'Reference: '
-                + Path(
-                    self.files[self.reference]
-                ).name
-            )
-        else:
-            self.reference_text.setText(
-                'No reference image selected'
-            )
+        reference_path = (
+            self.external_reference
+            if self.external_reference is not None
+            else self.files[self.reference]
+            if self.reference is not None
+            else None
+        )
+        self.reference_text.setText(
+            'Reference: ' + Path(reference_path).name
+            if reference_path
+            else 'No reference image selected'
+        )
+        if reference_path:
+            self.reference_text.setToolTip(str(reference_path))
 
         manual = (
             self.target != 'adjust'
@@ -758,6 +861,7 @@ class SetDatesDialog(QDialog):
             return
 
         self.reference = index
+        self.external_reference = None
         self.reference_identity = snapshot
 
         self.reference_text.setText(
@@ -765,6 +869,64 @@ class SetDatesDialog(QDialog):
             + Path(self.files[index]).name
         )
 
+        self.invalidate()
+
+    def select_external_reference(self):
+        if not self.files:
+            return
+
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            'Choose reference image',
+            str(Path(self.files[0]).parent),
+            'Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff '
+            '*.heic *.heif *.avif *.dng *.nef *.cr2 *.arw);;'
+            'All files (*)',
+        )
+        if not path:
+            return
+
+        from kim_preview import identity
+
+        try:
+            candidate = Path(path)
+
+            if (
+                not candidate.is_absolute()
+                or candidate.is_symlink()
+                or not candidate.is_file()
+            ):
+                raise ValueError(
+                    'Choose a regular, local image file.'
+                )
+
+            candidate = str(candidate.resolve(strict=True))
+
+            if any(
+                os.path.samefile(candidate, source)
+                for source in self.files
+            ):
+                raise ValueError(
+                    'The external reference must be different '
+                    'from the images being changed. '
+                    'Use selected as reference for selected images.'
+                )
+
+            snapshot = identity(candidate)
+
+        except (OSError, ValueError) as exc:
+            self.summary.setText(
+                'Invalid reference image: ' + str(exc)
+            )
+            return
+
+        self.reference = None
+        self.external_reference = candidate
+        self.reference_identity = snapshot
+        self.reference_text.setText(
+            'Reference: ' + Path(candidate).name
+        )
+        self.reference_text.setToolTip(candidate)
         self.invalidate()
 
     def config(self):
@@ -800,11 +962,16 @@ class SetDatesDialog(QDialog):
         if (
             source
             and source.startswith('ref-')
-            and self.reference is not None
+            and (
+                self.external_reference is not None
+                or self.reference is not None
+            )
         ):
             result.update({
                 'reference_path': (
-                    self.files[self.reference]
+                    self.external_reference
+                    if self.external_reference is not None
+                    else self.files[self.reference]
                 ),
                 'reference_type': (
                     'capture'
@@ -884,10 +1051,11 @@ class SetDatesDialog(QDialog):
             self.source
             and self.source.startswith('ref-')
             and self.reference is None
+            and self.external_reference is None
         ):
             self.summary.setText(
-                'Select an image, then click '
-                'Use selected as reference.'
+                'Use a selected image as reference, '
+                'or choose a separate reference image.'
             )
             self.render_rows()
             return
@@ -1311,10 +1479,13 @@ class SetDatesDialog(QDialog):
 
         review = QDialog(self)
         review.setWindowTitle(
-            'KIMng - Review date changes'
+            'KIMng - Set dates - Review Changes'
         )
-        review.resize(1120, 570)
-        review.setMinimumWidth(850)
+        review.resize(
+            900,
+            min(560, 290 + 35 * max(1, len(rows)))
+        )
+        review.setMinimumWidth(760)
 
         layout = QVBoxLayout(review)
         layout.setSpacing(8)
@@ -1331,10 +1502,19 @@ class SetDatesDialog(QDialog):
         }[self.target]
 
         reference = (
-            Path(self.files[self.reference]).name
-            if self.reference is not None
-            and self.source
-            and self.source.startswith('ref-')
+            Path(
+                self.external_reference
+                if self.external_reference is not None
+                else self.files[self.reference]
+            ).name
+            if (
+                self.source
+                and self.source.startswith('ref-')
+                and (
+                    self.external_reference is not None
+                    or self.reference is not None
+                )
+            )
             else None
         )
 
@@ -1423,7 +1603,7 @@ class SetDatesDialog(QDialog):
             )
 
         for column, width in enumerate(
-            (250, 310, 350, 165)
+            (195, 255, 255, 130)
         ):
             table.setColumnWidth(column, width)
 
@@ -1477,15 +1657,35 @@ class SetDatesDialog(QDialog):
         error_label.setWordWrap(True)
         layout.addWidget(error_label)
 
-        buttons = QHBoxLayout()
-        buttons.addStretch(1)
+        button_row = QHBoxLayout()
+        back = QPushButton('Back')
+        style_button(back)
+        style_button(back, 'back')
+        back.clicked.connect(review.reject)
+        button_row.addWidget(back)
+        button_row.addStretch(1)
 
-        confirm = QPushButton('Apply changes')
+        action_buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        style_button_box(action_buttons)
+        confirm = action_buttons.button(QDialogButtonBox.Ok)
+        confirm.setText('Apply changes')
+        confirm.setIcon(confirm.style().standardIcon(QStyle.SP_DialogApplyButton))
         confirm.setEnabled(
             (created + replaced) > 0
             and not excluded
         )
-        buttons.addWidget(confirm)
+        review_cancel = action_buttons.button(
+            QDialogButtonBox.Cancel
+        )
+        review_cancel.setIcon(
+            review_cancel.style().standardIcon(
+                QStyle.SP_DialogCancelButton
+            )
+        )
+        action_buttons.rejected.connect(review.reject)
+        button_row.addWidget(action_buttons)
 
         if excluded:
             exclusion_confirm.toggled.connect(
@@ -1493,10 +1693,6 @@ class SetDatesDialog(QDialog):
                     checked and (created + replaced) > 0
                 )
             )
-
-        back = QPushButton('Back')
-        back.clicked.connect(review.reject)
-        buttons.addWidget(back)
 
         def confirm_changes():
             try:
@@ -1526,12 +1722,24 @@ class SetDatesDialog(QDialog):
                 error_label.setText(str(exc))
                 return
 
+            if self.policy == 'overwrite':
+                decision = QMessageBox.warning(
+                    review,
+                    'Confirm overwriting originals',
+                    'Apply the reviewed date changes to the '
+                    'selected original files?',
+                    QMessageBox.Yes | QMessageBox.Cancel,
+                    QMessageBox.Cancel,
+                )
+                if decision != QMessageBox.Yes:
+                    return
+
             self.approved_plan = approved
             review.accept()
 
-        confirm.clicked.connect(confirm_changes)
+        action_buttons.accepted.connect(confirm_changes)
 
-        layout.addLayout(buttons)
+        layout.addLayout(button_row)
 
         if review.exec() == QDialog.Accepted:
             # The original acceptance path verifies the plan again

@@ -1,4 +1,5 @@
 """Image location tools over the existing approved-plan engine."""
+from kim_dialog_buttons import style_button, style_button_box
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import sys
@@ -10,6 +11,7 @@ from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
     QFormLayout, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
     QDialogButtonBox, QStyle, QFileDialog, QWidget, QScrollArea,
+    QButtonGroup, QRadioButton,
     QSplitter,
     QStackedWidget, QGroupBox, QMessageBox, QSizePolicy, QToolButton, QTabWidget)
 
@@ -188,16 +190,39 @@ class LocationDialog(QDialog):
         self.image_list.list.itemActivated.connect(self.choose_reference_from_list)
         self.photo_preview.idle.connect(self.visual_idle)
         self.image_list.set_entries([dict(source=p, caption='Reading GPS location…') for p in self.files])
+        if self.selection_only:
+            self.output_policy_group = QButtonGroup(self)
+            self.output_create = QRadioButton(
+                'Create new files (originals untouched)'
+            )
+            self.output_overwrite = QRadioButton(
+                'Overwrite originals (confirmation required)'
+            )
+
+            self.output_policy_group.addButton(
+                self.output_create
+            )
+            self.output_policy_group.addButton(
+                self.output_overwrite
+            )
+            self.output_create.setChecked(True)
+
+            output_row = QHBoxLayout()
+            output_row.addWidget(QLabel('Save images:'))
+            output_row.addWidget(self.output_create)
+            output_row.addWidget(self.output_overwrite)
+            output_row.addStretch(1)
+            layout.addLayout(output_row)
+
         buttons_row = QHBoxLayout()
         self.refresh_button = QPushButton(QIcon.fromTheme('view-refresh'), '&Refresh'); self.refresh_button.clicked.connect(self.schedule_plan)
         buttons_row.addWidget(self.refresh_button); buttons_row.addStretch()
         if kind == 'report':
             self.buttons = QDialogButtonBox(QDialogButtonBox.Close)
+            style_button_box(self.buttons)
             self.buttons.rejected.connect(self.reject)
             buttons_row.addWidget(self.buttons)
         else:
-            policy_text = 'Choose output policy after source selection.' if self.selection_only else 'Create new images; originals unchanged.' if self.policy == 'create' else 'Replace reviewed originals: explicitly approved.'
-            policy_label = self.label(policy_text); layout.addWidget(policy_label)
 
             self.apply_button = QPushButton(
                 QIcon.fromTheme('dialog-ok-apply', self.style().standardIcon(QStyle.SP_DialogApplyButton)),
@@ -829,6 +854,19 @@ class LocationDialog(QDialog):
         try: verify_plan(self.plan)
         except Exception as exc:
             self.summary.setText(str(exc) + '\nRefresh and review a fresh preview.'); self.apply_button.setEnabled(False); return
+
+        if self.policy == 'overwrite':
+            confirmation = QMessageBox.warning(
+                self,
+                'Confirm overwriting originals',
+                'Replace the selected original images with '
+                'the reviewed GPS changes?',
+                QMessageBox.Yes | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+            if confirmation != QMessageBox.Yes:
+                return
+
         # Stop outstanding read-only thumbnails before the dialog is destroyed.
         if self.thumbnail_worker or self.photo_preview.worker:
             self.accept_after_thumbnails = True
@@ -1023,8 +1061,19 @@ def main():
     dialog = LocationDialog(kind, files, policy, seeds, initial); status = dialog.exec()
     if kind == 'report': return 0 if dialog.completed_report else 130
     if status != QDialog.Accepted: return 130
-    if policy == 'select': Path(result).write_text(json.dumps(dict(dialog.config(), files=dialog.files)))
-    else: save_plan(result, dialog.plan)
+    if policy == 'select':
+        requested_policy = (
+            'create'
+            if dialog.output_create.isChecked()
+            else 'overwrite'
+        )
+        Path(result).write_text(json.dumps(dict(
+            dialog.config(),
+            files=dialog.files,
+            output_policy=requested_policy,
+        )))
+    else:
+        save_plan(result, dialog.plan)
     return 0
 
 

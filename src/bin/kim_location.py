@@ -32,7 +32,7 @@ from kim_preview import (absolute, identity, inspection_path, base_entry, alloca
 from kim_process import checkpoint, inspection_context
 
 TITLES = {'gpx': 'GPX Geotagging', 'copy': 'Copy GPS from Image…',
-          'apply': 'Modify GPS on Images…', 'report': 'View GPS metadata',
+          'apply': 'Edit GPS on images…', 'report': 'View GPS metadata',
           'reduce': 'Reduce exact GPS location'}
 FORMATS = {'JPEG': {'.jpg', '.jpeg'}, 'PNG': {'.png'}, 'WEBP': {'.webp'},
            'TIFF': {'.tif', '.tiff'}, 'HEIC': {'.heic', '.heif', '.hif'},

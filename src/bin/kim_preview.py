@@ -3,6 +3,7 @@
 Plans are invocation-private scratch data, never user exports. Only the existing
 kim_all publishers write images. Filename seeds come from its policy/affix rules.
 """
+from kim_dialog_buttons import style_button, style_button_box
 import contextlib
 import datetime as dt
 import json
@@ -622,12 +623,25 @@ def verify_plan(plan):
     ):
         reference = config.get('reference_path')
 
-        if not reference or not any(
-            entry['source'] == reference
+        if (
+            not reference
+            or not os.path.isabs(reference)
+            or os.path.islink(reference)
+        ):
+            raise ValueError(
+                'Reference must be a regular local image file.'
+            )
+
+        selected = {
+            entry['source'] for entry in plan['entries']
+        }
+
+        if reference not in selected and any(
+            entry.get('target') == reference
             for entry in plan['entries']
         ):
             raise ValueError(
-                'Reference must be one of the selected images.'
+                'A separate reference cannot be an output target.'
             )
 
         if identity(reference) != config.get('reference_identity'):
@@ -997,9 +1011,9 @@ def qt_classes():
 
             if operation == 'rename':
                 headings = (
-                    'Current filename',
-                    'Proposed filename',
-                    'Destination directory',
+                    'Current',
+                    'Proposed',
+                    'Destination',
                     'Status',
                 )
 
@@ -1058,8 +1072,8 @@ def qt_classes():
             )
 
             if operation == 'rename':
-                self.table.setColumnWidth(1, 230)
-                self.table.setColumnWidth(2, 210)
+                self.table.setColumnWidth(1, 190)
+                self.table.setColumnWidth(2, 175)
             elif operation == 'convert':
                 self.table.setColumnWidth(1, 210)
                 self.table.setColumnWidth(2, 200)
@@ -1238,10 +1252,24 @@ def qt_classes():
             else:
                 self.default_convert_seeds = []
 
+            review_titles = {
+                'rename': 'Rename images',
+                'convert': 'Convert',
+                'copyright': 'Set creator and copyright',
+                'strip': 'Strip Metadata',
+                'date': 'Set dates',
+            }
+
+            if spec['operation'] == 'location':
+                from kim_location import TITLES
+                action_title = TITLES[
+                    spec['config']['kind']
+                ].rstrip('…')
+            else:
+                action_title = review_titles[spec['operation']]
+
             self.setWindowTitle(
-                'KIMng - Remove Metadata'
-                if spec['operation'] == 'strip'
-                else 'KIMng - Convert - Review Changes' if spec['operation'] == 'convert' else 'KIMng - Review Changes'
+                f'KIMng - {action_title} - Review Changes'
             )
 
             layout = QVBoxLayout(self)
@@ -1362,6 +1390,7 @@ def qt_classes():
                 and spec['config'].get('return_to_settings') == 'true'
             ):
                 self.back_button = QPushButton('Back')
+                style_button(self.back_button)
                 self.back_button.clicked.connect(
                     self.back_to_convert_settings
                 )
@@ -1372,6 +1401,7 @@ def qt_classes():
             self.buttons = QDialogButtonBox(
                 QDialogButtonBox.Ok | QDialogButtonBox.Cancel
             )
+            style_button_box(self.buttons)
             self.apply = self.buttons.button(
                 QDialogButtonBox.Ok
             )

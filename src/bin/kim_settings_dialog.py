@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """KIMng persistent settings and About dialog."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import os
 import re
@@ -458,6 +459,7 @@ def main():
     buttons = QDialogButtonBox(
         QDialogButtonBox.Save | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     footer.addWidget(buttons)
     outer.addLayout(footer)
 

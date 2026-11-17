@@ -1,4 +1,5 @@
 """Local image selection and bounded, orientation-aware read-only previews."""
+from kim_dialog_buttons import style_button, style_button_box
 from collections import Counter, OrderedDict
 import os
 from pathlib import Path
@@ -194,6 +195,7 @@ class ImagePicker(QDialog):
         self.status = QLabel()
         layout.addWidget(self.status)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        style_button_box(buttons)
         self.add_button = buttons.button(QDialogButtonBox.Ok)
         self.add_button.setText(accept_label)
         layout.addWidget(buttons)

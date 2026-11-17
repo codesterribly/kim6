@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """KIMng single-window settings for video contact sheets and GIFs."""
+from kim_dialog_buttons import style_button, style_button_box
 
 import re
 import sys
@@ -158,6 +159,7 @@ def mute_review(plan_path, request_path, destination):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
 
     apply_button = buttons.button(QDialogButtonBox.Ok)
     apply_button.setText("Apply changes")
@@ -359,6 +361,7 @@ def frame_review(plan_path, request_path, destination):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
 
     apply_button = buttons.button(QDialogButtonBox.Ok)
     apply_button.setText("Apply changes")
@@ -528,6 +531,7 @@ def frame_options(output_path, mode, initial_at, initial_format, sources):
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     buttons.button(
         QDialogButtonBox.Ok
     ).setText("Continue to review")
@@ -735,6 +739,7 @@ def main():
     buttons = QDialogButtonBox(
         QDialogButtonBox.Ok | QDialogButtonBox.Cancel
     )
+    style_button_box(buttons)
     buttons.button(QDialogButtonBox.Ok).setText("Create")
     layout.addWidget(buttons)
 

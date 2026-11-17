@@ -492,8 +492,16 @@ class RunRecipeDialog(QDialog):
         )
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.start_execution)
-        self.cancel_button = QPushButton('Cancel'); self.cancel_button.clicked.connect(self.reject)
-        buttons.addWidget(self.run_button); buttons.addWidget(self.cancel_button); layout.addLayout(buttons)
+        self.cancel_button = QPushButton('Cancel')
+        self.cancel_button.clicked.connect(self.reject)
+
+        from kim_dialog_buttons import style_button
+        style_button(self.run_button, 'apply')
+        style_button(self.cancel_button, 'cancel')
+
+        buttons.addWidget(self.run_button)
+        buttons.addWidget(self.cancel_button)
+        layout.addLayout(buttons)
         if self.files: self.inputs.setCurrentItem(self.inputs.topLevelItem(0))
         self.update_file_actions()
         self.start_preflight()
@@ -909,11 +917,19 @@ class RunRecipeDialog(QDialog):
         self.run_button.setEnabled(False); self.choose_destination.setEnabled(False)
         self.selector.setEnabled(False); self.search.setEnabled(False); self.create_button.setEnabled(False)
         self.add_photos.setEnabled(False); self.remove_selected.setEnabled(False); self.clear_list.setEnabled(False); self.inputs.setEnabled(False)
+        recipe, files, chosen = self.validated_snapshot
         self.job_status = JobStatus(self.operation_title or 'Run recipe',len(self.files))
-        self.progress = JobProgressDialog(('Applying ' + self.operation_title + '…') if self.operation_title else 'Running recipe…', 'Cancel all', 0, len(self.files), self)
+        self.progress = JobProgressDialog(
+            ('Applying ' + self.operation_title + '…')
+            if self.operation_title else 'Running recipe…',
+            'Cancel all', 0, len(self.files), self
+        )
+        if not self.operation_title:
+            self.progress.setWindowTitle(
+                'KIMng - ' + recipe['name'] + ' - Progress'
+            )
         self.progress.setWindowModality(Qt.WindowModal); self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False); self.progress.setAutoReset(False)
-        recipe, files, chosen = self.validated_snapshot
         self.execution_succeeded = False
         self.worker = RecipeWorker(recipe, files, chosen, self)
         self.progress.canceled.connect(self.cancel_execution)
