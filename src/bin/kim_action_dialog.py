@@ -563,18 +563,151 @@ class ActionDialog(QDialog):
 
         elif kind=='compress':
             base_quality=70 if preset=='maximum' else 85
-            self.compression_type=QComboBox()
-            self.form.addRow('Image type',self.compression_type)
-            self.compression_type.currentIndexChanged.connect(self.refresh)
-            for codec,label in (('jpeg','JPEG'),('webp','WebP'),('avif','AVIF')):
-                self.spin(codec+'_quality',label+' quality',1,100,base_quality)
-            self.spin('png','Compression level',0,9,9 if preset=='maximum' else 6)
-            self.fields['progressive']=QCheckBox('Progressive JPEG'); self.fields['progressive'].setChecked(True)
-            self.fields['optimize']=QCheckBox('Optimize JPEG Huffman coding')
-            self.jpeg_help_rows={key:with_help(self.fields[key],key) for key in ('progressive','optimize')}
-            for row in self.jpeg_help_rows.values(): self.form.addRow(row); self.form.setRowVisible(row,False)
-            for key in ('jpeg_quality','webp_quality','avif_quality','png'): self.form.setRowVisible(self.fields[key],False)
-            self.message.setText('Inspecting selected image formats…')
+
+            # Native KDE/Qt tabs for the formats represented in
+            # this compression batch. Preserve the existing selector
+            # API so format-specific fields and values are unchanged.
+            from PySide6.QtWidgets import QTabBar
+
+            class CompressionFormatTabs(QTabBar):
+                def addItem(self, label, value):
+                    index = self.addTab(label)
+                    self.setTabData(index, value)
+                    return index
+
+                def currentData(self):
+                    index = self.currentIndex()
+                    return (
+                        self.tabData(index)
+                        if index >= 0 else None
+                    )
+
+                def findData(self, value):
+                    for index in range(self.count()):
+                        if self.tabData(index) == value:
+                            return index
+                    return -1
+
+                def clear(self):
+                    while self.count():
+                        self.removeTab(self.count() - 1)
+
+            self.compression_type = CompressionFormatTabs()
+            self.compression_type.setExpanding(False)
+            self.compression_type.setUsesScrollButtons(True)
+            self.compression_type.setAccessibleName(
+                "Compression format settings"
+            )
+            self.form.addRow(self.compression_type)
+            self.compression_type.currentChanged.connect(
+                self.refresh
+            )
+
+            self.setWindowTitle("KIMng - Compress images")
+
+            from PySide6.QtWidgets import QStackedWidget
+            import os
+
+            self.compression_stack = QStackedWidget()
+            self.compression_stack.setFixedHeight(132)
+            self.compression_pages = {}
+
+            for codec, title in (
+                ('JPEG', 'JPEG quality'),
+                ('PNG', 'Compression level'),
+                ('WEBP', 'WebP quality'),
+                ('AVIF', 'AVIF quality'),
+            ):
+                page = QWidget()
+                page_layout = QFormLayout(page)
+                page_layout.setContentsMargins(0, 6, 0, 0)
+                page_layout.setVerticalSpacing(7)
+
+                key = (
+                    'png' if codec == 'PNG'
+                    else codec.lower() + '_quality'
+                )
+
+                control = QSpinBox()
+
+                if codec == 'PNG':
+                    control.setRange(0, 9)
+                    control.setValue(
+                        9 if preset == 'maximum' else 6
+                    )
+                else:
+                    control.setRange(1, 100)
+                    control.setValue(base_quality)
+
+                self.fields[key] = control
+                page_layout.addRow(title, control)
+
+                if codec == 'JPEG':
+                    self.fields['progressive'] = QCheckBox(
+                        'Progressive JPEG'
+                    )
+                    self.fields['progressive'].setChecked(True)
+
+                    self.fields['optimize'] = QCheckBox(
+                        'Optimize JPEG Huffman coding'
+                    )
+
+                    self.jpeg_help_rows = {
+                        key: with_help(self.fields[key], key)
+                        for key in ('progressive', 'optimize')
+                    }
+
+                    for row in self.jpeg_help_rows.values():
+                        page_layout.addRow(row)
+
+                elif codec == 'PNG':
+                    explanation = QLabel(
+                        'PNG compression is lossless. '
+                        'Higher levels may take longer.'
+                    )
+                    explanation.setWordWrap(True)
+                    page_layout.addRow(explanation)
+
+                self.compression_pages[codec] = (
+                    self.compression_stack.addWidget(page)
+                )
+
+            self.form.addRow(self.compression_stack)
+            self.apply.setText('Review changes…')
+
+            resume_path = os.environ.get(
+                'KIM_COMPRESS_RESUME_FILE'
+            )
+
+            if resume_path:
+                saved = Path(resume_path).read_bytes().split(b'\\0')
+
+                if saved and saved[-1] == b'':
+                    saved.pop()
+
+                if len(saved) < 7:
+                    raise ValueError(
+                        'Invalid saved compression settings'
+                    )
+
+                for key, value in zip(
+                    ('jpeg_quality', 'webp_quality',
+                     'avif_quality', 'png'),
+                    saved[:4],
+                ):
+                    self.fields[key].setValue(int(value))
+
+                self.fields['progressive'].setChecked(
+                    saved[4] == b'Plane'
+                )
+                self.fields['optimize'].setChecked(
+                    saved[5] == b'true'
+                )
+
+            self.message.setFixedHeight(36)
+            self.message.setText(
+                'Inspecting selected image formats…'
+            )
 
             self.compress_table=QTableWidget(0,3)
             self.compress_table.setHorizontalHeaderLabels(
@@ -953,7 +1086,7 @@ class ActionDialog(QDialog):
             640,
             min(
                 760,
-                max(320, table_height + 240),
+                max(390, table_height + 315),
             ),
         )
 
@@ -1348,10 +1481,10 @@ class ActionDialog(QDialog):
                 chosen=self.compression_type.currentData()
                 field={'JPEG':'jpeg_quality','WEBP':'webp_quality',
                        'AVIF':'avif_quality','PNG':'png'}.get(chosen)
-                for key in ('jpeg_quality','webp_quality','avif_quality','png'):
-                    self.form.setRowVisible(self.fields[key],key==field)
-                for key,row in self.jpeg_help_rows.items():
-                    self.form.setRowVisible(row,chosen=='JPEG')
+                if chosen in self.compression_pages:
+                    self.compression_stack.setCurrentIndex(
+                        self.compression_pages[chosen]
+                    )
                 baseline_q,baseline_png=(70,9) if self.compression_preset=='maximum' else (85,6)
                 adjusted=(any(counts[kind] and self.fields[key].value()!=baseline_q
                     for kind,key in (('JPEG','jpeg_quality'),('WEBP','webp_quality'),
@@ -1364,10 +1497,7 @@ class ActionDialog(QDialog):
                 self.values += ['Plane' if self.fields['progressive'].isChecked() else 'None',
                     'true' if self.fields['optimize'].isChecked() else 'false',
                     'true' if adjusted else 'false']
-                if chosen=='PNG':
-                    self.message.setText('PNG compression is lossless. Higher levels may take longer.')
-                else:
-                    self.message.clear()
+                self.message.clear()
                 if not self.compress_eligible:
                     raise ValueError('No JPEG, PNG, WebP or AVIF images are eligible.')
                 lines=[f'{len(self.compress_eligible)} eligible, '

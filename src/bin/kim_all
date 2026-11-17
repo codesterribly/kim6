@@ -2081,9 +2081,18 @@ action_compress() {
     recommended) QUALITY=85; preset_label="$(gettext 'Recommended')" ;;
     custom) preset_label="$(gettext 'Custom')" ;;
   esac
+  local mode=create compress_resume='' review_rc review_request
+  local compress_plan="$KIMDIR/compress-output.review"
+  local compress_request="$KIMDIR/compress-output.request"
+  local -a compress_all_files=("${files[@]}")
+  local -A compress_targets=() compress_stamps=() compress_reserved=()
+
+  while :; do
   if [ "$interactive" = true ]; then
     [ -n "$preset" ] || die 'compress: --interactive requires --recommended, --maximum or --custom'
-    action_options_dialog compress --preset "$preset" "${files[@]}" || return 1
+    KIM_COMPRESS_RESUME_FILE="$compress_resume" \
+      action_options_dialog compress --preset "$preset" \
+      "${compress_all_files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
     [ "${#choices[@]}" -ge 9 ] || return 1
 
@@ -2091,7 +2100,7 @@ action_compress() {
 
     # Verify the approved subset and source identities before
     # choosing a publication policy or producing any output.
-    python3 - "$KIMDIR/options" "$KIMDIR/compress-approved" "${files[@]}" <<'PYCHECK' || return 1
+    python3 - "$KIMDIR/options" "$KIMDIR/compress-approved" "${compress_all_files[@]}" <<'PYCHECK' || return 1
 import os
 import stat
 import sys
@@ -2179,15 +2188,130 @@ PYCHECK
   }
 
 
-  local mode
-  mode="$(choose_output_mode \
-    "$(gettext 'Kim')" \
-    "$(gettext 'Do you want to create new files?')" "$nbfiles" originals)"
+  # Build the exact output plan before any compression starts.
+  : > "$compress_plan" || return 1
+  rm -f -- "$compress_request" || return 1
+  compress_targets=()
+  compress_stamps=()
+  compress_reserved=()
 
-  if [ "$mode" = "cancel" ]; then
-    kdialog --title "$(gettext 'Kim')" --msgbox "$(gettext 'The action was cancelled by the user!')"
-    return 1
+  local plan_source plan_dir plan_base plan_stem plan_ext
+  local plan_target plan_status plan_note plan_number
+  local plan_stamp
+
+  for plan_source in "${files[@]}"; do
+    {
+      IFS= read -r plan_dir
+      IFS= read -r plan_base
+      IFS= read -r plan_stem
+      IFS= read -r plan_ext
+    } < <(split_path "$plan_source")
+
+    plan_status=Ready
+    plan_note='Will create a compressed copy.'
+    plan_target=''
+
+    if [ -L "$plan_source" ] ||
+       ! plan_stamp="$(stat -c '%h:%d:%i:%s:%y:%z' -- "$plan_source")"; then
+      plan_status=Blocked
+      plan_note='Source is unavailable or has changed.'
+    else
+      compress_stamps["$plan_source"]="$plan_stamp"
+    fi
+
+    if [ "$mode" = overwrite ]; then
+      plan_target="$plan_source"
+      plan_note='Will replace the original image.'
+    else
+      plan_dir="${outdir:-$plan_dir}"
+      if [ ! -d "$plan_dir" ] ||
+         [ -L "$plan_dir" ] ||
+         [ ! -w "$plan_dir" ] ||
+         [ ! -x "$plan_dir" ]; then
+        plan_status=Blocked
+        plan_note='Destination is unavailable or not writable.'
+      else
+        plan_target="$plan_dir/$(affixed_filename \
+          "$plan_stem" compressed "$plan_ext")"
+        plan_number=1
+        while [ -e "$plan_target" ] ||
+              [ -L "$plan_target" ] ||
+              [ -n "${compress_reserved[$plan_target]:-}" ]; do
+          plan_target="$plan_dir/$(affixed_filename \
+            "$plan_stem" compressed "$plan_ext" "$plan_number")"
+          plan_number=$((plan_number + 1))
+        done
+        compress_reserved["$plan_target"]=1
+      fi
+    fi
+
+    if [ "$plan_status" = Ready ]; then
+      compress_targets["$plan_source"]="$plan_target"
+    fi
+
+    printf '%s\0' \
+      "$plan_source" "$plan_target" \
+      "$plan_status" "$plan_note" >> "$compress_plan"
+  done
+
+  if preview_run python3 \
+      "$DISPATCHER_DIR/kim_compress_review.py" review \
+      "$compress_plan" "$compress_request" \
+      "$mode" "$outdir"; then
+    break
+  else
+    review_rc=$?
   fi
+
+  if [ "$review_rc" -eq 131 ]; then
+    # Back returns to the editable settings, retaining values.
+    if [ "$interactive" != true ]; then return 1; fi
+    compress_resume="$KIMDIR/compress-resume"
+    command cp -- "$KIMDIR/options" "$compress_resume" || return 1
+    continue
+  fi
+
+  if { [ "$review_rc" -eq 130 ] ||
+       [ "$review_rc" -eq 132 ]; } &&
+     [ -s "$compress_request" ]; then
+
+    IFS= read -r -d '' review_request \
+      < "$compress_request" || return 1
+
+    case "$review_request" in
+      policy:create)
+        mode=create
+        ;;
+      policy:overwrite)
+        mode=overwrite
+        ;;
+      directory:*)
+        local chosen_directory="${review_request#directory:}"
+        if [ -n "$chosen_directory" ]; then
+          [ -d "$chosen_directory" ] &&
+          [ ! -L "$chosen_directory" ] &&
+          [ -w "$chosen_directory" ] &&
+          [ -x "$chosen_directory" ] || {
+            progress_error 'Invalid compression destination.'
+            return 1
+          }
+          chosen_directory="$(
+            cd -P -- "$chosen_directory" && pwd -P
+          )" || return 1
+        fi
+        outdir="$chosen_directory"
+        ;;
+      *)
+        progress_error 'Invalid compression review request.'
+        return 1
+        ;;
+    esac
+    continue
+  fi
+
+  # Cancel or an invalid response never starts processing.
+  return 1
+  done
 
   # Without --output-dir, create derivatives beside each source.
   if [ "$mode" = "create" ] && [ -n "$outdir" ]; then
@@ -2223,7 +2347,6 @@ PYCHECK
     if ! progress_begin_item "$dbusRef" "$(gettext 'Kim - Compressing file: ')$base"; then
       report_fail "$f"
       progress_close "$dbusRef" || true
-      report_finish_dialog "$(gettext 'Kim')"
       return 1
     fi
 
@@ -2247,15 +2370,26 @@ PYCHECK
       continue
     fi
 
-    if [ "$mode" = "overwrite" ]; then
-      OUTFILE="$f"
-    else
-      OUTFILE="${outdir:-$dir}/$(affixed_filename "$stem" compressed "$ext")"
-      n=1
-      while [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; do
-        OUTFILE="${outdir:-$dir}/$(affixed_filename "$stem" compressed "$ext" "$n")"
-        n=$((n + 1))
-      done
+    OUTFILE="${compress_targets[$f]:-}"
+    if [ -z "$OUTFILE" ]; then
+      report_fail "$f: no approved output filename"
+      progress_value "$dbusRef" "$counter" || break
+      continue
+    fi
+
+    # A changed source or newly occupied filename invalidates
+    # approval rather than silently changing the output plan.
+    if [ "$source_stamp" != "${compress_stamps[$f]:-}" ]; then
+      report_fail "$f: source changed after review"
+      progress_value "$dbusRef" "$counter" || break
+      continue
+    fi
+
+    if [ "$mode" = create ] &&
+       { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then
+      report_fail "$f: approved destination is now occupied"
+      progress_value "$dbusRef" "$counter" || break
+      continue
     fi
     if ! OUTTMP="$(tmp_for_target "$OUTFILE")"; then
       report_fail "$f"
@@ -2342,10 +2476,11 @@ $(gettext 'JPEG Huffman optimization:') $optimize_setting" ;;
   done
 
   progress_close "$dbusRef" || true
-  report_finish_dialog "$(gettext 'Kim')"
-  [ "${REPORT_FAIL:-0}" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ] && [ "${REPORT_SKIPPED:-0}" -eq 0 ] && [ ! -f "$KIMDIR/job.cancelled" ]
+  [ "${REPORT_FAIL:-0}" -eq 0 ] &&
+  [ "${REPORT_CANCELLED:-0}" -eq 0 ] &&
+  [ "${REPORT_SKIPPED:-0}" -eq 0 ] &&
+  [ ! -f "$KIMDIR/job.cancelled" ]
 }
-
 
 ####################
 # Convert images to another format.
