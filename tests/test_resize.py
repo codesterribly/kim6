@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -23,31 +24,88 @@ class ResizeTests(unittest.TestCase):
         helper = self.workspace.control / "kim_action_dialog.py"
         helper_source = helper.read_text(encoding="utf-8")
 
-        approval_anchor = (
-            "    apply_button.clicked.connect(dialog.accept)"
+        # Isolated test workspace only. Locate the actual
+        # Resize review event loop without assuming indentation.
+        review_start = helper_source.index(
+            "def resize_output_review("
+        )
+        review_tail = helper_source[review_start:]
+
+        next_function = re.search(
+            r"^def [A-Za-z_]\w*\(",
+            review_tail[len("def resize_output_review("):],
+            re.MULTILINE,
+        )
+
+        review_end = (
+            len("def resize_output_review(") + next_function.start()
+            if next_function else len(review_tail)
+        )
+
+        review_source = review_tail[:review_end]
+
+        if (
+            "apply_button = button_box.button(" not in review_source
+            or "dialog.accept()" not in review_source
+        ):
+            raise RuntimeError(
+                "Resize review approval controls changed"
+            )
+
+        event_loops = list(re.finditer(
+            r"^([ \t]*)([^\n]*\bdialog\.exec\(\)[^\n]*)$",
+            review_source,
+            re.MULTILINE,
+        ))
+
+        if len(event_loops) != 1:
+            raise RuntimeError(
+                "Resize review event loop changed"
+            )
+
+        event_loop = event_loops[0]
+        indent = event_loop.group(1)
+        approval_anchor = event_loop.group(0) + chr(10)
+
+        hook_lines = [
+            "# Isolated test workspace only.",
+            "_test_review_attempts = [0]",
+            "def _test_approve_resize_review():",
+            "    if __import__('os').environ.get('KIM_POLICY') == 'prompt':",
+            "        if policy == 'create':",
+            "            overwrite_radio.click()",
+            "            return",
+            "        if policy == 'overwrite':",
+            "            QMessageBox.warning = lambda *args, **kwargs: QMessageBox.Yes",
+            "    _test_review_attempts[0] += 1",
+            "    if _test_review_attempts[0] > 160:",
+            "        dialog.reject()",
+            "        return",
+            "    if apply_button.isEnabled():",
+            "        apply_button.click()",
+            "    else:",
+            "        QTimer.singleShot(",
+            "            25, _test_approve_resize_review",
+            "        )",
+            "QTimer.singleShot(0, _test_approve_resize_review)",
+        ]
+
+        approval_hook = (
+            chr(10).join(
+                indent + line if line else ""
+                for line in hook_lines
+            )
             + chr(10)
         )
 
         if helper_source.count(approval_anchor) != 1:
             raise RuntimeError(
-                "Resize review approval anchor changed"
+                "Resize review event-loop anchor is not unique"
             )
-
-        approval_hook = """    # Isolated test workspace only.
-    # Accept only a review whose actual Apply button is enabled.
-    QTimer.singleShot(
-        0,
-        lambda: (
-            apply_button.click()
-            if apply_button.isEnabled()
-            else dialog.reject()
-        ),
-    )
-"""
 
         helper_source = helper_source.replace(
             approval_anchor,
-            approval_anchor + approval_hook,
+            approval_hook + approval_anchor,
             1,
         )
 
@@ -184,8 +242,14 @@ class ResizeTests(unittest.TestCase):
                 self.workspace.respond('magick', stdout=dimensions + '\n',
                     output_base64=base64.b64encode(self.source.read_bytes()).decode())
                 result = self.dispatch(geometry)
-                self.assertEqual(len([c for c in result.calls if c['tool'] == 'magick']), 1)
-                self.assertTrue(result.outputs)
+                if geometry == '8000x8000>':
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.outputs, {})
+                    self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))
+                else:
+                    self.assertEqual(len([c for c in result.calls if c['tool'] == 'magick']), 1)
+                if geometry != '8000x8000>':
+                    self.assertTrue(result.outputs)
                 for name in result.outputs:
                     (self.workspace.root / name).unlink()
                 self.assert_clean()
@@ -601,7 +665,15 @@ def geometry_case(geometry, dimensions):
         self.workspace.use_real_resize()
         result = self.dispatch(geometry)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.decoded(self.source.with_name('photo 雪_resized.png')), 'PNG ' + dimensions)
+        if geometry == '4x4>':
+            self.assertEqual(result.outputs, {})
+            self.assertFalse(self.source.with_name('photo 雪_resized.png').exists())
+            self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))
+        else:
+            self.assertEqual(
+                self.decoded(self.source.with_name('photo 雪_resized.png')),
+                'PNG ' + dimensions
+            )
         self.assert_clean()
     return test
 

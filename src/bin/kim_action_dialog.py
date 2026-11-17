@@ -2533,6 +2533,8 @@ def resize_output_review(
             return 0
         if review_result == 131:
             return 131
+        if review_result == 132:
+            return 132
         return 130
     finally:
         shiboken6.delete(dialog)

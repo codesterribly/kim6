@@ -150,6 +150,12 @@ preview_run() {
   case "$status" in
     0) return 0 ;;
     125|130) return "$status" ;;
+    132)
+      if [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
+         [ "${3:-}" = resize-output-review ]; then
+        return 132
+      fi
+      ;;
     131)
       if { [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
            [ "${3:-}" = resize-output-review ]; } ||
