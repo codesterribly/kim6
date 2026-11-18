@@ -8,14 +8,15 @@ import sys
 import tempfile
 from pathlib import Path
 from kim_settings_file import read_settings
+from kim_metadata_sources import MetadataSourcePreferences, SOURCE_PRIORITY_DEFAULT
 
-from PySide6.QtCore import QLocale, QUrl
+from PySide6.QtCore import QLocale, QSettings, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QLabel, QMessageBox,
     QPushButton, QSpinBox, QTabWidget, QTextEdit, QTextBrowser, QLineEdit, QCheckBox, QGroupBox,
-    QVBoxLayout, QWidget, QScrollArea,
+    QVBoxLayout, QWidget, QScrollArea, QListWidget,
 )
 
 # Logical action label, Settings description, preview extension, separator.
@@ -159,13 +160,85 @@ def save_settings(path, settings):
             os.unlink(temporary)
 
 
-def main():
-    if len(sys.argv) != 2:
-        return 2
+class MetadataSettingsTab(QWidget):
+    """Pending controls for the existing shared metadata preferences."""
 
-    app = QApplication(sys.argv)
-    path = config_path()
+    def __init__(self, preferences, parent=None):
+        super().__init__(parent)
+        self.preferences = preferences
+        layout = QVBoxLayout(self)
+        description = QLabel(
+            "Metadata reading priority, highest first. The first available "
+            "supported source supplies the preferred value in Browser and Editor."
+        )
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        self.sources = QListWidget()
+        self.sources.setAccessibleName("Metadata reading priority")
+        self.sources.addItems(preferences.priority)
+        self.sources.setCurrentRow(0)
+        layout.addWidget(self.sources)
+        controls = QHBoxLayout()
+        up = QPushButton("Move up")
+        down = QPushButton("Move down")
+        controls.addWidget(up)
+        controls.addWidget(down)
+        controls.addStretch()
+        layout.addLayout(controls)
+        up.clicked.connect(lambda: self.move_source(-1))
+        down.clicked.connect(lambda: self.move_source(1))
+
+        def update_moves():
+            row = self.sources.currentRow()
+            up.setEnabled(row > 0)
+            down.setEnabled(0 <= row < self.sources.count() - 1)
+
+        self.sources.currentRowChanged.connect(update_moves)
+        update_moves()
+        self.sync_default = QCheckBox("Sync IPTC and XMP by default")
+        self.sync_default.setChecked(preferences.sync_default)
+        layout.addWidget(self.sync_default)
+        note = QLabel(
+            "Sets the default for metadata edit plans only. Synchronization is "
+            "off by default. The Metadata Editor remains a read-only planner; "
+            "this setting does not enable metadata writing."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        pins = QLabel(
+            "Pinned fields are shared by Browser and Editor. Use Configure "
+            "fields in either application's overview, or Configure overview "
+            "fields in the Editor's All fields tab, to manage the selection."
+        )
+        pins.setWordWrap(True)
+        layout.addWidget(pins)
+        layout.addStretch()
+
+    def move_source(self, delta):
+        row = self.sources.currentRow()
+        target = row + delta
+        if 0 <= row < self.sources.count() and 0 <= target < self.sources.count():
+            item = self.sources.takeItem(row)
+            self.sources.insertItem(target, item)
+            self.sources.setCurrentRow(target)
+
+    def restore_defaults(self):
+        self.sources.clear()
+        self.sources.addItems(SOURCE_PRIORITY_DEFAULT)
+        self.sources.setCurrentRow(0)
+        self.sync_default.setChecked(False)
+
+    def snapshot(self):
+        return (tuple(self.sources.item(i).text() for i in range(self.sources.count())),
+                self.sync_default.isChecked())
+
+
+def create_dialog(about_path, path=None, metadata_preferences=None):
+    path = config_path() if path is None else path
     values = load_settings(path)
+    preferences = metadata_preferences if metadata_preferences is not None else MetadataSourcePreferences()
+    original_metadata = preferences.snapshot()
+    general_defaults_requested = False
 
     dialog = QDialog()
     dialog.setWindowTitle("KIMng - Settings and about")
@@ -203,6 +276,7 @@ def main():
         location_unit_choices(),
         location_unit_selection(values["KIM_LOCATION_UNITS"]),
     )
+    original_location_selection = location_units.currentData()
 
     explanation = QLabel(
         "Overwriting originals always requires explicit confirmation. "
@@ -336,19 +410,22 @@ def main():
     update_filename_previews()
     tabs.addTab(names_tab, "Output Filenames")
 
+    metadata_tab = MetadataSettingsTab(preferences)
+    tabs.addTab(metadata_tab, "Metadata")
+
     about_tab = QWidget()
     about_layout = QVBoxLayout(about_tab)
     about_text = QTextEdit()
     about_text.setReadOnly(True)
     about_text.setPlainText(
-        Path(sys.argv[1]).read_text(encoding="utf-8")
+        Path(about_path).read_text(encoding="utf-8")
     )
     about_layout.addWidget(about_text)
     tabs.addTab(about_tab, "About")
 
 
     # License and manual tabs supplement the existing menu actions.
-    resource_dir = Path(sys.argv[1]).resolve().parent
+    resource_dir = Path(about_path).resolve().parent
 
     def find_resource(relative):
         candidates = [
@@ -464,6 +541,11 @@ def main():
     outer.addLayout(footer)
 
     def restore_defaults():
+        nonlocal general_defaults_requested
+        if tabs.currentWidget() is metadata_tab:
+            metadata_tab.restore_defaults()
+            return
+        general_defaults_requested = True
         online_maps.setChecked(DEFAULTS["KIM_LOCATION_ONLINE_MAPS"] == "yes")
         location_units.setCurrentIndex(location_units.findData(DEFAULTS["KIM_LOCATION_UNITS"]))
         policy.setCurrentIndex(
@@ -485,7 +567,9 @@ def main():
     def save():
         updated = {
             "KIM_LOCATION_ONLINE_MAPS": "yes" if online_maps.isChecked() else "no",
-            "KIM_LOCATION_UNITS": location_units.currentData(),
+            "KIM_LOCATION_UNITS": (values["KIM_LOCATION_UNITS"]
+                                   if not general_defaults_requested and location_units.currentData() == original_location_selection
+                                   else location_units.currentData()),
             "KIM_POLICY": policy.currentData(),
             "KIM_NAME_AFFIX_POSITION": affix.currentData(),
         }
@@ -512,11 +596,33 @@ def main():
                 .replace("\r", " ")
             )
 
+        metadata_changed = metadata_tab.snapshot() != original_metadata
         try:
-            save_settings(path, updated)
+            if metadata_changed:
+                preferences.save(*metadata_tab.snapshot())
+                if preferences.settings.status() != QSettings.NoError:
+                    raise OSError(
+                        "Could not save metadata preferences to "
+                        f"{preferences.settings.fileName()}. Check the directory's "
+                        "write permissions and available disk space, then retry Save."
+                    )
         except (OSError, ValueError) as error:
+            tabs.setCurrentWidget(metadata_tab)
             QMessageBox.critical(
-                dialog, "Unable to save KIMng settings", str(error)
+                dialog, "Unable to save metadata settings", str(error)
+            )
+            return
+
+        try:
+            if updated != values:
+                save_settings(path, updated)
+        except (OSError, ValueError) as error:
+            detail = str(error)
+            if metadata_changed:
+                detail += "\nMetadata preferences were saved. General settings were not saved."
+            detail += "\nCheck the settings file's directory and retry Save."
+            QMessageBox.critical(
+                dialog, "Unable to save KIMng settings", detail
             )
             return
 
@@ -525,16 +631,25 @@ def main():
     buttons.accepted.connect(save)
     buttons.rejected.connect(dialog.reject)
 
-    # Save, Cancel, and Restore Defaults apply only to Settings.
+    # Save and Cancel apply to all editable tabs.
     # About, License, and Manual are read-only tabs.
     def update_settings_buttons(index):
-        is_settings = tabs.tabText(index) in ("Settings", "Output Filenames")
+        is_settings = tabs.tabText(index) in ("Settings", "Output Filenames", "Metadata")
         restore.setVisible(is_settings)
         buttons.setVisible(is_settings)
 
     tabs.currentChanged.connect(update_settings_buttons)
     update_settings_buttons(tabs.currentIndex())
 
+    return dialog
+
+
+def main():
+    if len(sys.argv) != 2:
+        return 2
+
+    app = QApplication(sys.argv)
+    dialog = create_dialog(sys.argv[1])
     return 0 if dialog.exec() == QDialog.Accepted else 1
 
 
