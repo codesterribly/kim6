@@ -20,8 +20,8 @@ class CompressionTests(unittest.TestCase):
         return self.workspace.dispatch('compress', quality, self.source.parent, *(sources or (self.source,)))
 
     def assert_clean(self):
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((self.workspace.control / 'tmp').iterdir()), [])
 
     def test_real_create_is_staged_and_fully_decodable(self):

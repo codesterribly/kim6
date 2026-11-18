@@ -32,8 +32,8 @@ class PublicationTests(unittest.TestCase):
         return self.workspace.dispatch("webexport", directory or self.source.parent, self.source)
 
     def assert_clean(self):
-        self.assertFalse(list(self.workspace.root.rglob(".kim6-stage.*")))
-        self.assertFalse(list(self.workspace.root.rglob(".kim6-publish.lock")))
+        self.assertFalse(list(self.workspace.root.rglob(".kimng-stage.*")))
+        self.assertFalse(list(self.workspace.root.rglob(".kimng-publish.lock")))
         self.assertEqual(list((self.workspace.control / "tmp").iterdir()), [])
 
     def test_web_stage_is_private_and_on_destination_filesystem(self):
@@ -43,7 +43,7 @@ class PublicationTests(unittest.TestCase):
         producer = next(e for e in result.events if e["tool"] == "magick")
         stage = Path(producer["output"])
         self.assertEqual(stage.parent.parent, self.source.parent)
-        self.assertTrue(stage.parent.name.startswith(".kim6-stage."))
+        self.assertTrue(stage.parent.name.startswith(".kimng-stage."))
         allocations = [e for e in result.events if e["tool"] == "mktemp"]
         self.assertTrue(all(e["directory_mode"] == 0o700 for e in allocations))
         self.assertEqual(result.outputs, {"input/photo_web.ppm": self.source.read_bytes()})
@@ -200,7 +200,7 @@ class PublicationTests(unittest.TestCase):
         self.assert_clean()
 
     def test_failed_create_publication_removes_only_owned_stage(self):
-        sentinel = self.workspace.ppm("input/.kim6-stage.unrelated/keep.ppm")
+        sentinel = self.workspace.ppm("input/.kimng-stage.unrelated/keep.ppm")
         before = self.protect(sentinel)
         self.produce(self.source.read_bytes())
         self.workspace.respond("ln", status=73)
@@ -208,7 +208,7 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(any(e["tool"] == "ln" and e["status"] == 73 for e in result.events))
         self.assertFalse(self.workspace.path("input/photo_web.ppm").exists())
         self.assert_preserved(before)
-        self.assertEqual(list(self.source.parent.glob(".kim6-stage.*")), [sentinel.parent])
+        self.assertEqual(list(self.source.parent.glob(".kimng-stage.*")), [sentinel.parent])
 
     def test_cross_device_publication_is_refused(self):
         self.produce(self.source.read_bytes())
@@ -240,7 +240,7 @@ class PublicationTests(unittest.TestCase):
         self.assert_clean()
 
     def test_preexisting_cooperative_lock_is_preserved(self):
-        lock = self.workspace.path("input/.kim6-publish.lock")
+        lock = self.workspace.path("input/.kimng-publish.lock")
         lock.mkdir()
         marker = lock / "owner"
         marker.write_text("another invocation")
@@ -433,7 +433,7 @@ class PublicationTests(unittest.TestCase):
             self.skipTest("second writable local filesystem unavailable")
         stage = self.workspace.path("native-stage")
         stage.write_bytes(b"synthetic prepared bytes")
-        with tempfile.TemporaryDirectory(prefix="kim6-exdev-", dir="/dev/shm") as folder:
+        with tempfile.TemporaryDirectory(prefix="kimng-exdev-", dir="/dev/shm") as folder:
             target = Path(folder) / "target"
             target.write_bytes(b"synthetic existing destination")
             if stage.stat().st_dev == target.stat().st_dev:

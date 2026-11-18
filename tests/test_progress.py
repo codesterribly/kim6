@@ -123,7 +123,7 @@ progress_begin_item "$ref" second
         self.assertFalse(any(c['tool'] in ('ln', 'mv') for c in result.calls))
         self.assertEqual(len(self.calls(result, 'setLabelText')), 1)
         self.assertFalse(any(c['tool'] == 'kdialog' and '--error' in c['argv'] for c in result.calls))
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
         self.assertNotIn('could not close', result.stderr)
 
     def test_no_additional_items_after_service_loss_between_items(self):
@@ -171,7 +171,7 @@ done
         self.assertEqual(b.read_bytes(), original)
         producers = [c for c in result.calls if c['tool'] == 'exiftool' and '-all=' in c['argv']]
         self.assertEqual(len(producers), 1)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
         self.assertEqual(sorted(result.outputs), [], 'K14: service loss was ignored by the pre-publication check')
 
     def test_horizontal_reference_whitespace_is_normalized(self):
@@ -201,7 +201,7 @@ done
     def test_missing_qdbus_does_not_open_dialog(self):
         (self.w.bin / 'qdbus').unlink()
         result = self.run_helpers(
-            'kim6_qdbus_available() { return 1; }; '
+            'kimng_qdbus_available() { return 1; }; '
             'ref="$(progress_open 2 Working)"'
         )
         self.assertNotEqual(result.returncode, 0)

@@ -57,7 +57,7 @@ class EntryState:
 
 class Workspace:
     def __init__(self):
-        self._temporary = tempfile.TemporaryDirectory(prefix="kim6-test-", dir="/tmp")
+        self._temporary = tempfile.TemporaryDirectory(prefix="kimng-test-", dir="/tmp")
         self._extra_temporaries = []
         self.root = Path(self._temporary.name).resolve()
         self.control = self.root / ".control"
@@ -152,7 +152,7 @@ class Workspace:
 
     def add_filesystem_root(self, parent):
         """Register another temporary fixture root for genuine EXDEV tests."""
-        temporary = tempfile.TemporaryDirectory(prefix='.kim6-test-', dir=parent)
+        temporary = tempfile.TemporaryDirectory(prefix='.kimng-test-', dir=parent)
         self._extra_temporaries.append(temporary)
         self.env['KIM_TEST_EXTRA_ROOTS'] = json.dumps([t.name for t in self._extra_temporaries])
         return Path(temporary.name)

@@ -21,10 +21,10 @@ def function(name):
 
 
 HELPERS = "\n".join(map(function, (
-    "kim6_known_affix_key",
-    "kim6_affix_value",
+    "kimng_known_affix_key",
+    "kimng_affix_value",
     "affixed_filename",
-    "kim6_load_user_settings",
+    "kimng_load_user_settings",
     "video_utility_target",
 )))
 
@@ -49,7 +49,7 @@ def settings():
 
     source_directory = str(UI.parent)
     spec = importlib.util.spec_from_file_location(
-        "kim6_filename_settings_test", UI
+        "kimng_filename_settings_test", UI
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("Cannot load real Settings module")
@@ -151,7 +151,7 @@ class OutputFilenameTests(unittest.TestCase):
 
             self.assertEqual(
                 run(
-                    "kim6_load_user_settings; "
+                    "kimng_load_user_settings; "
                     "affixed_filename photo compressed jpg; "
                     'affixed_filename clip audio mp3 "" "_" "-"',
                     XDG_CONFIG_HOME=directory,
@@ -161,7 +161,7 @@ class OutputFilenameTests(unittest.TestCase):
 
             self.assertEqual(
                 run(
-                    "kim6_load_user_settings; "
+                    "kimng_load_user_settings; "
                     "affixed_filename photo compressed jpg",
                     XDG_CONFIG_HOME=directory,
                     KIM_AFFIX_COMPRESSED="zip",
@@ -177,7 +177,7 @@ class OutputFilenameTests(unittest.TestCase):
 
             self.assertEqual(
                 run(
-                    "kim6_load_user_settings; "
+                    "kimng_load_user_settings; "
                     "affixed_filename clip web jpg; "
                     'affixed_filename clip audio mp3 "" "_" "-"',
                     XDG_CONFIG_HOME=directory,

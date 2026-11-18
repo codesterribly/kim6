@@ -25,7 +25,7 @@ def step(op, **parameters):
 @unittest.skipUnless(shutil.which('magick') and shutil.which('exiftool'), 'real image tools required')
 class CorrectnessTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='kim6-correctness-'); self.addCleanup(self.temp.cleanup)
+        self.temp = tempfile.TemporaryDirectory(prefix='kimng-correctness-'); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name); self.source = self.root/'No Date.png'
         self.cmd('magick','-size','40x30','gradient:red-blue','-profile',psd.srgb(),self.source)
         self.before = (self.source.read_bytes(),self.source.stat().st_mtime_ns)
@@ -105,7 +105,7 @@ class CorrectnessTests(unittest.TestCase):
         output = self.execute([{'op': 'file.rename_output', 'pattern': '{{date}}'}])
         self.assertEqual(output.name, '{date}_1.png')
         self.assertEqual(occupied.read_bytes(), b'occupied')
-        self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_real_date_token_requires_capture_before_publication(self):
         for pattern in ('{date}', '{{date}}_{date}'):
@@ -151,7 +151,7 @@ class CorrectnessTests(unittest.TestCase):
             self.assertEqual({tag: tags.get(tag) for tag in expected}, expected)
         finally:
             self.assertEqual((source.read_bytes(), source.stat().st_mtime_ns), before)
-            self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+            self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_shift_all_retains_distinct_exif_and_xmp_clock_precision(self):
         source = self.root / 'mirrored-dates.jpg'
@@ -200,7 +200,7 @@ class CorrectnessTests(unittest.TestCase):
                               else tags.get(tag) for tag in expected}, expected)
         finally:
             self.assertEqual((source.read_bytes(), source.stat().st_mtime_ns), before)
-            self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+            self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_repeated_shifts_keep_independent_group_clocks_and_unknown_zones(self):
         source = self.root / 'independent.jpg'
@@ -241,7 +241,7 @@ class CorrectnessTests(unittest.TestCase):
                 self.assertEqual(self.cmd('exiftool', '-s3', '-' + tag, output).strip().decode(), value, tag)
         finally:
             self.assertEqual((source.read_bytes(), source.stat().st_mtime_ns), before)
-            self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+            self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_compress_presets_use_one_encoder_and_keep_icc(self):
         import kim_recipe_image as image
@@ -288,7 +288,7 @@ class CorrectnessTests(unittest.TestCase):
         from support import Workspace
         from kim_collage_dialog import collision_message
         w = Workspace();self.addCleanup(w.close);w.use_real_gallery_collage()
-        w.env['KIM6_CREATE_PICK_MORE']='0'
+        w.env['KIMNG_CREATE_PICK_MORE']='0'
         source = w.ppm('source/photo.ppm');before = w.observe(source)
         w.path('out').mkdir();output=w.path('out/collage.png')
         for name in ('collage.png','collage_1.png','collage_2.png'):
@@ -412,7 +412,7 @@ with patch('kim_recipe_dialog.preview',side_effect=preview):
     assert saved['steps'][-2]['op']=='image.compress' and saved['steps'][-2]['enabled'] is False
     w.steps.setCurrentRow(3);w.reset_to_settings(3,'quality')
     assert w.recipe['steps'][3]['quality'] is None
-    assert 'Inherited from KIM6 Settings' in w.parameter_modes['quality'].text()
+    assert 'Inherited from KIMng Settings' in w.parameter_modes['quality'].text()
     w.parameter_widgets['quality'].setValue(72);assert w.recipe['steps'][3]['quality']==72
     w.update_preview();w.stop_preview();wait_until(lambda:w.preview_worker is None)
     timer.stop();w.close()

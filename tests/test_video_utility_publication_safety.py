@@ -99,7 +99,7 @@ class VideoUtilityPublicationSafetyTests(unittest.TestCase):
         )
 
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
     def test_video_thumbnail_late_collision_uses_numbered_file(self):

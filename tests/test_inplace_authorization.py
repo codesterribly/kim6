@@ -31,8 +31,8 @@ class InPlaceAuthorizationTests(unittest.TestCase):
         return result
 
     def assert_clean(self):
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
-        self.assertFalse(list(self.w.root.rglob(".kim6-publish.lock")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-publish.lock")))
         self.assertEqual(list((self.w.control / "tmp").iterdir()), [])
 
     def assert_preserved(self, result, added=()):
@@ -93,7 +93,7 @@ class InPlaceAuthorizationTests(unittest.TestCase):
         self.assertEqual([e["status"] for e in renders], [0] * count, renders)
         for event in renders:
             staged = Path(event["argv"][-1].split(":", 1)[1])
-            self.assertTrue(staged.parent.name.startswith(".kim6-stage."))
+            self.assertTrue(staged.parent.name.startswith(".kimng-stage."))
             self.assertEqual(staged.parent.parent, self.source.parent)
             self.assertNotEqual(staged, self.source)
 

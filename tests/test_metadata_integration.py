@@ -92,9 +92,9 @@ if os.environ.get('KIM_TEST_LAUNCH_FAILURE'):
                     self.assert_failure(result, 'Select at least one image')
             for missing, message in (
                 ('bin/python3', 'python3'), ('bin/exiftool', 'ExifTool'),
-                ('kim_metadata_reader.py', 'Reinstall KIM6'),
+                ('kim_metadata_reader.py', 'Reinstall KIMng'),
                 ('kim_metadata_browser.py' if command == 'metadata-view'
-                 else 'kim_metadata_editor.py', 'Reinstall KIM6'),
+                 else 'kim_metadata_editor.py', 'Reinstall KIMng'),
             ):
                 with self.subTest(command=command, missing=missing):
                     path = self.workspace.control / missing
@@ -147,7 +147,7 @@ class MetadataMenuTests(unittest.TestCase):
     def test_actions_append_to_existing_group_and_forward_the_complete_selection(self):
         menu = configparser.ConfigParser(interpolation=None)
         menu.read(installation.ROOT / 'src/kim_metadata.desktop.in')
-        self.assertEqual('KIM6 - Organize/Metadata', menu['Desktop Entry']['_X-KDE-Submenu'])
+        self.assertEqual('KIMng - Organize/Metadata', menu['Desktop Entry']['_X-KDE-Submenu'])
         self.assertEqual(
             '00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;'
             '05StripMetadata;06ViewMetadata;07EditMetadata;', menu['Desktop Entry']['Actions'])

@@ -51,7 +51,7 @@ python3 -B "$SOURCE_DIR/src/bin/kim_desktop_exec.py" "$PREFIX" >/dev/null || {
 }
 # Display required and optional dependencies without installing packages.
 # Distribution-specific package names are suggestions, not guarantees.
-kim6_report_dependencies() {
+kimng_report_dependencies() {
   local os_name='Linux' os_id='' os_like='' manager='' host_name=''
   local group tool label purpose found package row status
   local required_ok=0 required_missing=0 optional_ok=0 optional_missing=0
@@ -77,7 +77,7 @@ kim6_report_dependencies() {
   # Verified distribution package mappings.
   # A mapping may contain multiple packages when a module is split.
   # FFprobe is supplied by the FFmpeg package.
-  kim6_suggest_package() {
+  kimng_suggest_package() {
     case "$manager:$1" in
       apt:magick) echo imagemagick-7.q16 ;;
       apt:exiftool) echo libimage-exiftool-perl ;;
@@ -188,7 +188,7 @@ kim6_report_dependencies() {
     else
       optional_rows+=("$label|$purpose|$status")
     fi
-  done <<'KIM6_DEPENDENCIES'
+  done <<'KIMNG_DEPENDENCIES'
 required|magick|ImageMagick|Image processing
 required|exiftool|ExifTool|Metadata
 required|kdialog|KDialog|KDE dialogs
@@ -202,7 +202,7 @@ required|xdg-open|xdg-open|Open output files
 optional|qtwebenginewidgets|PySide6 WebEngine|Embedded HTML guide
 optional|pandoc|Pandoc|HTML documentation
 optional|kbuildsycoca6|KDE service cache|Menu cache refresh
-KIM6_DEPENDENCIES
+KIMNG_DEPENDENCIES
 
   # The table is displayed in two groups, independent of check order.
   printf '\n%-23s %-26s %s\n' 'REQUIRED DEPENDENCIES' 'PURPOSE' 'STATUS'
@@ -236,7 +236,7 @@ KIM6_DEPENDENCIES
   # Suggestions appear after the prerequisite table, only when needed.
   for entry in "${missing_required[@]}"; do
     IFS='|' read -r tool label <<< "$entry"
-    package="$(kim6_suggest_package "$tool")"
+    package="$(kimng_suggest_package "$tool")"
     if [ -z "$package" ]; then
       printf 'No verified package mapping for: %s\n' "$label"
       continue
@@ -252,7 +252,7 @@ KIM6_DEPENDENCIES
 
   for entry in "${missing_optional[@]}"; do
     IFS='|' read -r tool label <<< "$entry"
-    package="$(kim6_suggest_package "$tool")"
+    package="$(kimng_suggest_package "$tool")"
     if [ -z "$package" ]; then
       printf 'No verified package mapping for: %s\n' "$label"
       continue
@@ -302,7 +302,7 @@ KIM6_DEPENDENCIES
 
   echo
 }
-kim6_report_dependencies
+kimng_report_dependencies
 
 # Both graphical configuration dialogs require PySide6 Qt Widgets.
 if ! python3 -c 'from PySide6.QtWidgets import QApplication, QDialog' >/dev/null 2>&1; then
@@ -377,6 +377,7 @@ fi
 # Validate all installation destinations before modifying any files.
 for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" \
   "$RUNTIME/recipes" "$RUNTIME/docs" "$RUNTIME/docs/images" \
+  "$RUNTIME/docs/images/screenshots" \
   "$RUNTIME/docs/reference"; do
   check_dir "$directory"
 done
@@ -491,7 +492,7 @@ target.write_text(content, encoding="utf-8")
 KIMNG_MENU_RENDER
 chmod 0755 -- "$temporary"
   # Pass data as arguments; a callable replacement adds no sed/regex escaping.
-  python3 - "$exec_path" "$temporary" <<'KIM6_EXEC_REPLACE'
+  python3 - "$exec_path" "$temporary" <<'KIMNG_EXEC_REPLACE'
 from pathlib import Path
 import re
 import sys
@@ -500,7 +501,7 @@ path = Path(sys.argv[2])
 content = re.sub(r'^Exec=kim_all(?=[ \t]|$)', lambda _: 'Exec=' + sys.argv[1],
                  path.read_text(encoding='utf-8'), flags=re.MULTILINE)
 path.write_text(content, encoding='utf-8')
-KIM6_EXEC_REPLACE
+KIMNG_EXEC_REPLACE
   if [ "$name" = kim_location.desktop ]; then
     # Replacing the complete managed artifact removes the old Copy action too.
     if grep -Eq '^\[Desktop Action 02Copy\]$|^Exec=.*[[:space:]]location-copy[[:space:]]' "$temporary" ||
@@ -537,13 +538,13 @@ for relative in "${runtime_files[@]}"; do
     exit 1
   fi
 
-  if ! python3 - "$helper_path" <<'KIM6_PY_CHECK'
+  if ! python3 - "$helper_path" <<'KIMNG_PY_CHECK'
 import pathlib
 import sys
 
 path = pathlib.Path(sys.argv[1])
 compile(path.read_bytes(), str(path), "exec")
-KIM6_PY_CHECK
+KIMNG_PY_CHECK
   then
     echo "install.sh: invalid installed GUI helper: $helper_path" >&2
     exit 1

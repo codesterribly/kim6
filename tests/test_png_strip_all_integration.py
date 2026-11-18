@@ -56,7 +56,7 @@ class PNGStripAllIntegrationTests(unittest.TestCase):
 
     def clean(self):
         self.assertFalse(
-            list(self.w.root.rglob('.kim6-stage.*'))
+            list(self.w.root.rglob('.kimng-stage.*'))
         )
 
     def test_create_preserves_source_and_image(self):
@@ -150,7 +150,7 @@ class PNGStripAllIntegrationTests(unittest.TestCase):
         self.clean()
 
     def test_missing_python_preserves_original(self):
-        self.w.env['KIM_PNG_PYTHON'] = '/nonexistent/kim6-python'
+        self.w.env['KIM_PNG_PYTHON'] = '/nonexistent/kimng-python'
         before = self.w.observe(self.source)
 
         result = self.w.dispatch(

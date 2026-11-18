@@ -30,7 +30,7 @@ class ContactSheetTests(unittest.TestCase):
         self.assertEqual(self.w.observe(self.source), before)
         self.assertTrue(target.is_file())
         self.assertTrue(target.read_bytes().startswith(b'%PDF-'))
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_invalid_options_do_not_publish(self):
         target = self.w.path('out/contact.pdf')
@@ -38,7 +38,7 @@ class ContactSheetTests(unittest.TestCase):
                                  '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(target.exists())
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_failed_render_does_not_replace_existing_pdf(self):
         target = self.w.path('out/contact.pdf')
@@ -50,7 +50,7 @@ class ContactSheetTests(unittest.TestCase):
                                  '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), before)
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_create_mode_preserves_occupied_destination_and_uses_numbered_output(self):
         target = self.w.path('out/contact.pdf')
@@ -67,7 +67,7 @@ class ContactSheetTests(unittest.TestCase):
         numbered = self.w.path('out/contact_1.pdf')
         self.assertTrue(numbered.is_file())
         self.assertTrue(numbered.read_bytes().startswith(b'%PDF-'))
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_overwrite_mode_refuses_symlink_destination(self):
         protected = self.w.path('out/protected.pdf')
@@ -86,7 +86,7 @@ class ContactSheetTests(unittest.TestCase):
         self.assertEqual(self.w.observe(target), before_target)
         self.assertEqual(self.w.observe(protected), before_protected)
         self.assertEqual(self.w.observe(self.source), before_source)
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_failed_pdf_validation_preserves_existing_output(self):
         target = self.w.path('out/contact.pdf')
@@ -104,7 +104,7 @@ class ContactSheetTests(unittest.TestCase):
                             call['argv'][-1].startswith('PDF:') for call in result.calls))
         self.assertEqual(self.w.observe(target), before_target)
         self.assertEqual(self.w.observe(self.source), before_source)
-        self.assertFalse(list(self.w.path('out').glob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.path('out').glob('.kimng-stage.*')))
 
     def test_gallery_assets_are_scoped_to_gallery_action(self):
         source = (self.w.production).read_text()

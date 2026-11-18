@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: kim6-fast-${{ github.ref }}
+  group: kimng-fast-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

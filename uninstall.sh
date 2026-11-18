@@ -131,6 +131,7 @@ if [ -d "$RUNTIME" ]; then
       "$RUNTIME/recipes" \
       "$RUNTIME/docs" \
       "$RUNTIME/docs/images" \
+      "$RUNTIME/docs/images/screenshots" \
       "$RUNTIME/docs/reference"; do
       check_dir "$directory"
     done
@@ -207,6 +208,7 @@ if [ "$runtime_owned" = true ]; then
   fi
 
   rmdir -- \
+    "$RUNTIME/docs/images/screenshots" \
     "$RUNTIME/docs/images" \
     "$RUNTIME/docs/reference" \
     "$RUNTIME/docs" \

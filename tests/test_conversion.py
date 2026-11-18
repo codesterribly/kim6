@@ -16,8 +16,8 @@ class ConversionTests(unittest.TestCase):
         self.workspace.env["KIM_POLICY"] = "create"
 
     def assert_clean(self):
-        self.assertFalse(list(self.workspace.root.rglob(".kim6-stage.*")))
-        self.assertFalse(list(self.workspace.root.rglob(".kim6-publish.lock")))
+        self.assertFalse(list(self.workspace.root.rglob(".kimng-stage.*")))
+        self.assertFalse(list(self.workspace.root.rglob(".kimng-publish.lock")))
         self.assertEqual(list((self.workspace.control / "tmp").iterdir()), [])
 
     def assert_real_image(self, path, fmt):
@@ -278,7 +278,7 @@ class ConversionTests(unittest.TestCase):
         stage = Path(producer["argv"][-1])
         self.assertNotEqual(stage, output)
         self.assertEqual(stage.parent.parent, output.parent)
-        self.assertTrue(stage.parent.name.startswith(".kim6-stage."))
+        self.assertTrue(stage.parent.name.startswith(".kimng-stage."))
         self.assertEqual(self.workspace.observe(self.source), before)
         self.assert_clean()
 

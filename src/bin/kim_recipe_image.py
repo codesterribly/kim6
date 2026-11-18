@@ -1215,7 +1215,7 @@ class ImageHandler:
             # Its ICC has already been used for the required sRGB transform.
             if state['strip_all'] or fmt in ('bmp','pdf'): args += ['-strip']
             from kim_image_ops import overlay_arguments
-            with tempfile.TemporaryDirectory(prefix='.kim6-overlay.', dir=output.parent) as workspace:
+            with tempfile.TemporaryDirectory(prefix='.kimng-overlay.', dir=output.parent) as workspace:
                 composites = overlay_arguments(source, state, workspace)
                 run(['magick', str(source)] + state['pixel_args'] + composites + args + [CODERS[fmt] + ':' + str(output)])
             if fmt == 'jp2' and state['profile']:

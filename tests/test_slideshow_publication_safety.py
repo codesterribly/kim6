@@ -47,7 +47,7 @@ class SlideshowPublicationSafetyTests(unittest.TestCase):
         )
 
     def assert_no_stages(self):
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
         self.assertEqual(self.w.observe(self.source), self.before)
 
     def test_explicit_destination_created_at_publish_is_preserved(self):

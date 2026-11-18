@@ -74,20 +74,20 @@ To test the same code revision on another machine, record the full revision on t
 
 ```sh
 # On the source machine, from the checkout:
-git bundle create ../kim6-acceptance.bundle HEAD
-git diff --binary HEAD > ../kim6-working.patch
-git ls-files --others --exclude-standard -z > ../kim6-untracked.list
-if [ -s ../kim6-untracked.list ]; then tar --create --gzip --file ../kim6-untracked.tar.gz --null --files-from=../kim6-untracked.list; fi
+git bundle create ../kimng-acceptance.bundle HEAD
+git diff --binary HEAD > ../kimng-working.patch
+git ls-files --others --exclude-standard -z > ../kimng-untracked.list
+if [ -s ../kimng-untracked.list ]; then tar --create --gzip --file ../kimng-untracked.tar.gz --null --files-from=../kimng-untracked.list; fi
 ```
 
 Copy the bundle, patch, untracked archive and list to the destination machine using a removable drive or another method you choose. On that machine, after placing them at a convenient path:
 
 ```sh
-git clone /path/to/kim6-acceptance.bundle kim6-acceptance
-cd kim6-acceptance
+git clone /path/to/kimng-acceptance.bundle kimng-acceptance
+cd kimng-acceptance
 git checkout --detach FULL_REVISION_FROM_SOURCE
-git apply --binary /path/to/kim6-working.patch
-if [ -f /path/to/kim6-untracked.tar.gz ]; then tar --extract --gzip --file /path/to/kim6-untracked.tar.gz --directory .; fi
+git apply --binary /path/to/kimng-working.patch
+if [ -f /path/to/kimng-untracked.tar.gz ]; then tar --extract --gzip --file /path/to/kimng-untracked.tar.gz --directory .; fi
 git status --short
 python3 -B qa/acceptance.py prepare
 python3 -B qa/acceptance.py install-isolated

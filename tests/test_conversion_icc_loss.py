@@ -71,7 +71,7 @@ class ConversionICCLossTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, "silent ICC loss must fail conversion")
         self.assertFalse(destination.exists(), "ICC-less conversion must not be published")
         self.assertEqual(self.w.observe(self.source), self.before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_avif_encoder_dropping_icc_fails_closed(self):
         self.verify_rejection("avif", "AVIF")

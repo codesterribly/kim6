@@ -86,7 +86,7 @@ def activate_owned_cancel(reference):
 
 
 def scenario(mode):
-    title = 'KIM6 K10 synthetic ' + uuid.uuid4().hex
+    title = 'KIMng K10 synthetic ' + uuid.uuid4().hex
     script = SOURCE + r'''
 # Unique test title; all commands remain real KDE executables.
 kdialog() { command kdialog --title "$K10_TEST_TITLE" "$@"; }

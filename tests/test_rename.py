@@ -15,7 +15,7 @@ class RenameTests(unittest.TestCase):
         self.w.approve_overwrite()
 
     def clean(self):
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
         self.assertEqual(list((self.w.control / 'tmp').iterdir()), [])
 
     def test_preflight_refuses_dangling_destination_without_modifying_batch(self):
@@ -68,11 +68,11 @@ class RenameTests(unittest.TestCase):
         self.clean()
 
     def test_real_copy_preserves_extended_attributes(self):
-        os.setxattr(self.source, b'user.kim6', b'fixture metadata')
+        os.setxattr(self.source, b'user.kimng', b'fixture metadata')
         self.w.env['KIM_POLICY'] = 'create'
         self.w.use_real_rename_files()
         result = self.w.dispatch('rename', 'lowercase', self.source)
-        self.assertEqual(os.getxattr(self.source.with_name('photo 雪.JPG'), b'user.kim6'),
+        self.assertEqual(os.getxattr(self.source.with_name('photo 雪.JPG'), b'user.kimng'),
                          b'fixture metadata', result.stderr)
         self.clean()
 
@@ -307,15 +307,15 @@ class RenameTests(unittest.TestCase):
         self.assertNotEqual(destination.stat().st_dev, self.source.stat().st_dev)
         self.source.chmod(0o640)
         os.utime(self.source, ns=(1600000000000000000, 1600000001123456789))
-        os.setxattr(self.source, b'user.kim6', b'cross-device fixture')
+        os.setxattr(self.source, b'user.kimng', b'cross-device fixture')
         before = self.w.observe(self.source)
         result = self.w.dispatch('rename', 'lowercase', '--output-dir', destination, self.source)
         output = destination / 'photo 雪.JPG'
         after = self.w.observe(output)
         self.assertEqual((after.sha256, after.mode, after.mtime_ns), (before.sha256, before.mode, before.mtime_ns), result.stderr)
-        self.assertEqual(os.getxattr(output, b'user.kim6'), b'cross-device fixture')
+        self.assertEqual(os.getxattr(output, b'user.kimng'), b'cross-device fixture')
         self.assertFalse(self.source.exists())
-        self.assertFalse(list(destination.glob('.kim6-stage.*')))
+        self.assertFalse(list(destination.glob('.kimng-stage.*')))
         self.clean()
 
     def test_actual_cross_filesystem_unlink_failure_retains_both(self):
@@ -328,7 +328,7 @@ class RenameTests(unittest.TestCase):
         self.assertEqual(self.w.observe(self.source), before)
         self.assertEqual((destination / 'photo 雪.JPG').read_bytes(), self.source.read_bytes(), result.stderr)
         self.assertTrue(any('Destination retained:' in ' '.join(c['argv']) for c in result.calls))
-        self.assertFalse(list(destination.glob('.kim6-stage.*')))
+        self.assertFalse(list(destination.glob('.kimng-stage.*')))
         self.clean()
 
     def test_real_exif_date_collisions_and_mixed_directory_sources(self):
@@ -466,7 +466,7 @@ def test_actual_cross_filesystem_move_keeps_original_access_time(self):
     self.assertEqual(info.st_atime_ns, access)
     self.assertEqual(info.st_mtime_ns, modified)
     self.assertFalse(self.source.exists())
-    self.assertFalse(list(destination.glob('.kim6-stage.*')))
+    self.assertFalse(list(destination.glob('.kimng-stage.*')))
     self.clean()
 
 
@@ -476,7 +476,7 @@ RenameTests.test_actual_cross_filesystem_move_keeps_original_access_time = test_
 def test_stage_allocation_failure_preserves_source(self):
     self.w.env['KIM_POLICY'] = 'create'
     before = self.w.observe(self.source)
-    self.w.respond_to('mktemp', str(self.source.parent / '.kim6-stage.XXXXXX'), {'status': 1})
+    self.w.respond_to('mktemp', str(self.source.parent / '.kimng-stage.XXXXXX'), {'status': 1})
     result = self.w.dispatch('rename', 'lowercase', self.source)
     self.failed(result, {self.source: before})
     self.assertFalse(any(c['tool'] == 'ln' for c in result.calls))

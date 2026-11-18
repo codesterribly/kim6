@@ -1,6 +1,6 @@
 </main>
 </div>
-<footer class="gallery-footer">Created with <a href="https://github.com/KIM-6/kim6">KIM6</a> · Works offline</footer>
+<footer class="gallery-footer">Created with <a href="https://github.com/codesterribly/kim6">KIMng</a> · Works offline</footer>
 <dialog class="lightbox" aria-label="Photo viewer">
   <div class="lightbox-content">
     <img alt="" id="lightbox-image">

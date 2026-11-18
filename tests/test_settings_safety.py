@@ -15,7 +15,7 @@ from kim_settings_dialog import load_settings, save_settings, DEFAULTS
 
 class SettingsSafetyTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix='kim6-settings-')
+        temporary = tempfile.TemporaryDirectory(prefix='kimng-settings-')
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.path = self.root / 'kimng/settings.conf'

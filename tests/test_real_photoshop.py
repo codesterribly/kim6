@@ -1,6 +1,6 @@
 """Opt-in acceptance using a user-provided, read-only Photoshop PSD fixture.
 
-KIM6_REAL_PSD=1 KIM6_REAL_PSD_PATH=/path/to/fixture.psd PYTHONPATH=src/bin:tests python3 -m unittest test_real_photoshop
+KIMNG_REAL_PSD=1 KIMNG_REAL_PSD_PATH=/path/to/fixture.psd PYTHONPATH=src/bin:tests python3 -m unittest test_real_photoshop
 Only desktop interaction is adapted. Codecs, metadata and publication are real.
 Outputs and a small diagnostic report remain under /tmp for manual inspection.
 """
@@ -19,10 +19,10 @@ import kim_psd_source as psd
 from support import Workspace
 import test_recipes as base
 
-SOURCE = Path(os.environ['KIM6_REAL_PSD_PATH']) if os.environ.get('KIM6_REAL_PSD_PATH') else None
+SOURCE = Path(os.environ['KIMNG_REAL_PSD_PATH']) if os.environ.get('KIMNG_REAL_PSD_PATH') else None
 
 
-@unittest.skipUnless(os.environ.get('KIM6_REAL_PSD') == '1' and os.environ.get('KIM6_REAL_PSD_PATH'), 'real-PSD acceptance requires opt-in and KIM6_REAL_PSD_PATH')
+@unittest.skipUnless(os.environ.get('KIMNG_REAL_PSD') == '1' and os.environ.get('KIMNG_REAL_PSD_PATH'), 'real-PSD acceptance requires opt-in and KIMNG_REAL_PSD_PATH')
 class RealPhotoshopTests(unittest.TestCase):
     def cmd(self,*args):
         return subprocess.run(list(map(str,args)),capture_output=True,check=True,timeout=120).stdout
@@ -41,7 +41,7 @@ class RealPhotoshopTests(unittest.TestCase):
     def test_real_standalone_recipe_metadata_dates_and_original_identity(self):
         self.assertTrue(SOURCE.is_file(),str(SOURCE))
         initial = (hashlib.sha256(SOURCE.read_bytes()).hexdigest(),SOURCE.stat().st_mtime_ns,SOURCE.stat().st_size)
-        root = Path(tempfile.mkdtemp(prefix='kim6-real-final-'))
+        root = Path(tempfile.mkdtemp(prefix='kimng-real-final-'))
         report = {'fixture':str(SOURCE),'before':initial,'outputs':{},'checks':{}}
         print('\nReal Photoshop evidence:',root,flush=True)
         w = Workspace(); self.addCleanup(w.close)
@@ -52,7 +52,7 @@ class RealPhotoshopTests(unittest.TestCase):
             real = shutil.which(tool)
             if real: (w.bin/tool).unlink(); (w.bin/tool).symlink_to(real)
         w.env['PATH'] += os.pathsep + os.defpath
-        w.env.update(KIM_POLICY='create',KIM6_CREATE_PICK_MORE='0',MAGICK_THREAD_LIMIT='2')
+        w.env.update(KIM_POLICY='create',KIMNG_CREATE_PICK_MORE='0',MAGICK_THREAD_LIMIT='2')
         try:
             for fmt in ('jpg','pdf'):
                 occupied = root/(SOURCE.stem+'.'+fmt); occupied.write_bytes(b'occupied result')
@@ -99,7 +99,7 @@ class RealPhotoshopTests(unittest.TestCase):
             self.assertEqual(self.cmd('exiftool','-s3','-EXIF:DateTimeOriginal',result['output']).strip(),b'2024:02:29 06:07:08')
             self.assertFalse(self.cmd('exiftool','-s3','-OffsetTimeOriginal','-IPTC:TimeCreated',result['output']).strip())
             report['outputs']['recipe_set_date_after_strip'] = result['output']
-            self.assertFalse(list(root.glob('.kim6-stage.*')))
+            self.assertFalse(list(root.glob('.kimng-stage.*')))
             report['checks']['metadata_preserved_except_required_tiff_iptc_padding'] = True
         finally:
             report['after'] = (hashlib.sha256(SOURCE.read_bytes()).hexdigest(),SOURCE.stat().st_mtime_ns,SOURCE.stat().st_size)
@@ -115,7 +115,7 @@ from kim_recipe_dialog import RecipeWidget
 from kim_recipe_run import RunRecipeDialog
 from kim_recipe_core import builtins
 app=QApplication([])
-source=os.environ['KIM6_REAL_PSD_PATH']
+source=os.environ['KIMNG_REAL_PSD_PATH']
 ticks=[];stages=[]
 timer=QTimer();timer.setInterval(5);timer.timeout.connect(lambda:ticks.append(1));timer.start()
 def settle(test):
@@ -129,7 +129,7 @@ settle(lambda:w.preview_worker is None)
 assert len(ticks)>50 and any('composite' in s for s in stages),stages
 w.set_examples([source]);w.stop_preview();settle(lambda:w.preview_worker is None)
 w.close()
-recipe=builtins()[0];recipe['destination']={'mode':'directory','ask':False,'path':tempfile.mkdtemp(prefix='kim6-real-qt-')}
+recipe=builtins()[0];recipe['destination']={'mode':'directory','ask':False,'path':tempfile.mkdtemp(prefix='kimng-real-qt-')}
 dialog=RunRecipeDialog(recipe,[source]);dialog.show()
 settle(lambda:dialog.preflight_worker is None)
 assert dialog.run_button.isEnabled() and not dialog.rows[0].problems, (dialog.summary.text(),{i:r.problems for i,r in dialog.rows.items()})

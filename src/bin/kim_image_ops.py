@@ -311,7 +311,7 @@ def overlay_plan(source, width, height, step):
         if step['kind'] == 'camera' and not result['text']:
             raise RecipeError(NO_CAMERA_INFORMATION + ' Choose other fields or remove this image from the batch before continuing.')
         if result['text']:
-            with tempfile.TemporaryDirectory(prefix='kim6-overlay-plan-') as workspace:
+            with tempfile.TemporaryDirectory(prefix='kimng-overlay-plan-') as workspace:
                 lw, lh = text_layer(result['text'], width, height, step, Path(workspace) / 'text.png')
                 anchor_position(width, height, lw, lh, step)
         if not result['text']:
@@ -328,7 +328,7 @@ def ensure_gui():
     global _GUI_APP
     if QGuiApplication.instance() is None:
         os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        _GUI_APP = QGuiApplication(['kim6-overlay'])
+        _GUI_APP = QGuiApplication(['kimng-overlay'])
 
 
 def text_layer(text, width, height, step, output):

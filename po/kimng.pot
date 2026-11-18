@@ -1,0 +1,2997 @@
+# KIMng translation template.
+# Copyright (C) YEAR KIMng contributors
+# This file is distributed under the same license as the KIMng package.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: KIMng development\n"
+"Report-Msgid-Bugs-To: https://github.com/codesterribly/kim6/issues\n"
+"POT-Creation-Date: 2026-11-17 22:12+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/bin/kim_all:2192
+msgid "(adjusted)"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:19 src/kim_video_av1.desktop.in:19
+#: src/kim_video_h264.desktop.in:19
+msgid "1080p • Balanced • MP4"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:14 src/kim_video_av1.desktop.in:14
+#: src/kim_video_h264.desktop.in:14
+msgid "1080p • High quality • MP4"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:24 src/kim_video_av1.desktop.in:24
+#: src/kim_video_h264.desktop.in:24
+msgid "1080p • Smallest file • MP4"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:34 src/kim_video_av1.desktop.in:34
+#: src/kim_video_h264.desktop.in:34
+msgid "720p • Balanced • MP4"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:29 src/kim_video_av1.desktop.in:29
+#: src/kim_video_h264.desktop.in:29
+msgid "720p • High quality • MP4"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:39 src/kim_video_av1.desktop.in:39
+#: src/kim_video_h264.desktop.in:39
+msgid "720p • Smallest file • MP4"
+msgstr ""
+
+#: src/bin/kim_all:11696
+msgid "A slideshow can contain at most 200 images."
+msgstr ""
+
+#: src/bin/kim_all:8148
+msgid "A timezone-less camera value is not assumed to be UTC."
+msgstr ""
+
+#: src/bin/kim_all:10001
+msgid "AV1 CRF must be between 0 and 63."
+msgstr ""
+
+#: src/bin/kim_all:9999
+msgid "AV1 CRF quality (0-63):"
+msgstr ""
+
+#: src/bin/kim_all:9989
+msgid "AV1 quality options require --codec av1."
+msgstr ""
+
+#: src/bin/kim_all:9969
+msgid "AV1 quality was specified more than once."
+msgstr ""
+
+#: src/bin/kim_all:10004
+msgid "AV1 requires --av1-quality high, balanced, smallest or custom."
+msgstr ""
+
+#: src/bin/kim_all:10000
+msgid "AV1 speed preset (0-13; lower is slower):"
+msgstr ""
+
+#: src/bin/kim_all:10002
+msgid "AV1 speed preset must be between -2 and 13."
+msgstr ""
+
+#: src/bin/kim_all:9993
+msgid "AV1 uses --av1-quality; do not pass the H.264/H.265 --crf option."
+msgstr ""
+
+#: src/bin/kim_all:2455
+msgid "AVIF lossy quality:"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:59
+msgid "AVIF · Large (1600 × 1600)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:64
+msgid "AVIF · Medium (800 × 800)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:69
+msgid "AVIF · Thumbnail (128 × 128)"
+msgstr ""
+
+#: src/bin/kim_all:9589
+msgid "About KIMng"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:89
+msgid "Above image"
+msgstr ""
+
+#: src/bin/kim_all:486 src/bin/kim_all:494
+msgid "Action:"
+msgstr ""
+
+#: src/bin/kim_all:4730
+msgid "Add prefix"
+msgstr ""
+
+#: src/bin/kim_all:4731
+msgid "Add suffix"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:24
+msgid "Add watermark / overlay…"
+msgstr ""
+
+#: src/bin/kim_all:447
+msgid "After the renamed files have been published, the old selected filenames will be removed. KIMng cannot undo this operation."
+msgstr ""
+
+#: src/bin/kim_all:7921
+msgid "After:"
+msgstr ""
+
+#: src/bin/kim_all:2024
+msgid "Album saved, but its progress window could not be closed:"
+msgstr ""
+
+#: src/bin/kim_all:2016
+msgid "Album: ImageMagick failed or produced an invalid PDF."
+msgstr ""
+
+#: src/bin/kim_all:2021
+msgid "Album: PDF publication failed; existing files were preserved."
+msgstr ""
+
+#: src/bin/kim_all:2007
+msgid "Album: PDF rendering failed."
+msgstr ""
+
+#: src/bin/kim_all:1958
+msgid "Album: an input image could not be inspected:"
+msgstr ""
+
+#: src/bin/kim_all:1992
+msgid "Album: annotated image rendering failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:1978
+msgid "Album: cannot create destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:1973
+msgid "Album: invalid or unsafe output destination."
+msgstr ""
+
+#: src/bin/kim_all:1832
+msgid "Album: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:1953
+msgid "Album: source preparation failed:"
+msgstr ""
+
+#: src/bin/kim_all:4725
+msgid "All Uppercase"
+msgstr ""
+
+#: src/bin/kim_all:3739
+msgid "All correctly named copies were saved."
+msgstr ""
+
+#: src/bin/kim_all:4724
+msgid "All lowercase"
+msgstr ""
+
+#: src/bin/kim_all:3670
+msgid "An inspected source changed. Inspect it again before creating copies."
+msgstr ""
+
+#: src/bin/kim_all:11751
+msgid "An installed Rec. 709 ICC profile is required for slideshow color conversion."
+msgstr ""
+
+#: src/bin/kim_all:11743
+msgid "An installed sRGB ICC profile is required for slideshow color conversion."
+msgstr ""
+
+#: src/bin/kim_all:5743
+msgid "Animated PNG email resizing is unavailable; use full size to keep the animation."
+msgstr ""
+
+#: src/bin/kim_all:5443
+msgid "Animated PNG resizing is unavailable: the original animation is unchanged."
+msgstr ""
+
+#: src/bin/kim_all:8790
+msgid "Animated PNG web export is unavailable: the original animation is unchanged."
+msgstr ""
+
+#: src/bin/kim_all:7922
+msgid "Apply this fixed local-clock offset? Timezone offsets are not converted."
+msgstr ""
+
+#: src/bin/kim_all:10994
+msgid "Audio format must be m4a, mp3, flac or wav."
+msgstr ""
+
+#: src/bin/kim_all:11001
+msgid "Audio mode must be extract or mute."
+msgstr ""
+
+#: src/bin/kim_all:10955
+msgid "Audio options require values."
+msgstr ""
+
+#: src/bin/kim_all:10986
+msgid "Audio output format:"
+msgstr ""
+
+#: src/bin/kim_all:11285
+msgid "Audio validation"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:85
+msgid "Auto (recommended)"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:59
+msgid "Auto-rotate using EXIF"
+msgstr ""
+
+#: src/bin/kim_all:9372
+msgid "Background color:"
+msgstr ""
+
+#: src/bin/kim_all:7920
+msgid "Before:"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:89
+msgid "Below image"
+msgstr ""
+
+#: src/bin/kim_all:9342
+msgid "Black"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:212
+msgid "Blank captions are allowed"
+msgstr ""
+
+#: src/bin/kim_job.py:236
+msgid "Bytes saved:"
+msgstr ""
+
+#: src/bin/kim_ui.py:24
+msgid "Camera Timezone"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:81
+msgid "Camera and lens"
+msgstr ""
+
+#: src/bin/kim_all:8144
+msgid "Camera capture time:"
+msgstr ""
+
+#: src/bin/kim_all:8147
+msgid "Camera offset:"
+msgstr ""
+
+#: src/bin/kim_all:466 src/bin/kim_all:500
+msgid "Cancel"
+msgstr ""
+
+#: src/bin/kim_all:1306
+msgid "Cancel All"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:178
+msgid "Cancel scan"
+msgstr ""
+
+#: src/bin/kim_all:1078 src/bin/kim_all:1101 src/bin/kim_all:3752
+msgid "Cancelled files:"
+msgstr ""
+
+#: src/bin/kim_all:1096 src/bin/kim_all:3748
+msgid "Cancelled:"
+msgstr ""
+
+#: src/bin/kim_all:1355
+msgid "Cannot check progress cancellation. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:3735
+msgid "Cannot close the progress dialog cleanly."
+msgstr ""
+
+#: src/bin/kim_all:1303 src/bin/kim_all:1322
+msgid "Cannot initialize the progress dialog. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1315
+msgid "Cannot register the progress dialog. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1743
+msgid "Cannot set the progress range. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1424
+msgid "Cannot update the progress label. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1748
+msgid "Cannot update the progress range. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1432 src/bin/kim_all:1437
+msgid "Cannot update the progress value. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:9326
+msgid "Canvas dimensions (WIDTHxHEIGHT):"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:106
+msgid "Caption"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:84
+msgid "Caption font size:"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:88
+msgid "Caption position:"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:93
+msgid "Caption source:"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:68
+msgid "Captions beneath each image"
+msgstr ""
+
+#: src/bin/kim_all:1961
+msgid "Captions beneath each image require single-frame sources. Set Caption source to None and uncheck Include image capture date and Include camera and lens to retain every frame of a multi-frame input."
+msgstr ""
+
+#: src/kim_metadata.desktop.in:44
+msgid "Check and correct extensions…"
+msgstr ""
+
+#: src/bin/kim_all:4721
+msgid "Choose a rename method:"
+msgstr ""
+
+#: src/bin/kim_all:8114
+msgid "Choose date synchronization direction:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:188
+msgid "Choose folder"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:177
+msgid "Choose folder…"
+msgstr ""
+
+#: src/bin/kim_all:8407
+msgid "Choose output format:"
+msgstr ""
+
+#: src/kim_recipes.desktop.in:14
+msgid "Choose saved recipe…"
+msgstr ""
+
+#: src/bin/kim_ui.py:25
+msgid "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."
+msgstr ""
+
+#: src/bin/kim_all:9320
+msgid "Classic 3:2 (3840 × 2560)"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:182
+msgid "Close"
+msgstr ""
+
+#: src/bin/kim_all:9347
+msgid "Collage background color:"
+msgstr ""
+
+#: src/bin/kim_all:9340
+msgid "Collage background:"
+msgstr ""
+
+#: src/bin/kim_all:9319
+msgid "Collage canvas size:"
+msgstr ""
+
+#: src/bin/kim_all:9453
+msgid "Collage: ImageMagick failed or produced an invalid tile."
+msgstr ""
+
+#: src/bin/kim_all:9286
+msgid "Collage: approved image selection is invalid."
+msgstr ""
+
+#: src/bin/kim_all:9386
+msgid "Collage: border must be from 0 to 50 percent."
+msgstr ""
+
+#: src/bin/kim_all:9044 src/bin/kim_all:9417
+msgid "Collage: cannot create destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:9419
+msgid "Collage: cannot create private staging."
+msgstr ""
+
+#: src/bin/kim_all:9051
+msgid "Collage: cannot create staging."
+msgstr ""
+
+#: src/bin/kim_all:9192
+msgid "Collage: cannot finalize the PNG."
+msgstr ""
+
+#: src/bin/kim_all:9057
+msgid "Collage: cannot initialize canvas."
+msgstr ""
+
+#: src/bin/kim_all:9002
+msgid "Collage: canvas dimensions must be 100–8192 pixels."
+msgstr ""
+
+#: src/bin/kim_all:9179
+msgid "Collage: could not composite an image tile."
+msgstr ""
+
+#: src/bin/kim_all:9170
+msgid "Collage: could not render a shadow."
+msgstr ""
+
+#: src/bin/kim_all:9156
+msgid "Collage: could not render an image tile."
+msgstr ""
+
+#: src/bin/kim_all:9206
+msgid "Collage: generated output failed validation or was cancelled."
+msgstr ""
+
+#: src/bin/kim_all:9473
+msgid "Collage: generated output failed validation."
+msgstr ""
+
+#: src/bin/kim_all:9091 src/bin/kim_all:9161 src/bin/kim_all:9187
+#: src/bin/kim_all:9426 src/bin/kim_all:9442 src/bin/kim_all:9460
+#: src/bin/kim_all:9476
+msgid "Collage: interrupted before publication."
+msgstr ""
+
+#: src/bin/kim_all:9402
+msgid "Collage: invalid background color."
+msgstr ""
+
+#: src/bin/kim_all:9367
+msgid "Collage: invalid layout."
+msgstr ""
+
+#: src/bin/kim_all:9036
+msgid "Collage: invalid or source-aliasing destination."
+msgstr ""
+
+#: src/bin/kim_all:9279
+msgid "Collage: invalid settings or empty image selection."
+msgstr ""
+
+#: src/bin/kim_all:9235
+msgid "Collage: missing layout option value."
+msgstr ""
+
+#: src/bin/kim_all:9227
+msgid "Collage: missing option value."
+msgstr ""
+
+#: src/bin/kim_all:9291
+msgid "Collage: no approved images remain."
+msgstr ""
+
+#: src/bin/kim_all:9411
+msgid "Collage: output destination is invalid or aliases a selected image."
+msgstr ""
+
+#: src/bin/kim_all:9383
+msgid "Collage: overlap must be from 0 to 90 percent."
+msgstr ""
+
+#: src/bin/kim_all:9210 src/bin/kim_all:9479
+msgid "Collage: publication failed; existing files were preserved."
+msgstr ""
+
+#: src/bin/kim_all:9389
+msgid "Collage: random rotation must be from 0 to 180 degrees."
+msgstr ""
+
+#: src/bin/kim_all:9393
+msgid "Collage: rotation must be from -180 to 180 degrees."
+msgstr ""
+
+#: src/bin/kim_all:9397
+msgid "Collage: seed must be an integer."
+msgstr ""
+
+#: src/bin/kim_all:9017
+msgid "Collage: select between 1 and 100 images."
+msgstr ""
+
+#: src/bin/kim_all:9261
+msgid "Collage: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:9375
+msgid "Collage: size must be WIDTHxHEIGHT."
+msgstr ""
+
+#: src/bin/kim_all:9379
+msgid "Collage: tile layout must be COLUMNSxROWS."
+msgstr ""
+
+#: src/bin/kim_all:9145
+msgid "Collage: too many images for the chosen canvas."
+msgstr ""
+
+#: src/bin/kim_all:9248
+msgid "Collage: unknown option."
+msgstr ""
+
+#: src/bin/kim_ui.py:27
+msgid "Color Profile / sRGB"
+msgstr ""
+
+#: src/bin/kim_ui.py:27
+msgid "Color profiles tell applications how colors should appear. sRGB is a good choice for web sharing and general compatibility. KIMng converts colors using the original profile when available."
+msgstr ""
+
+#: src/bin/kim_all:1330
+msgid "Compress Images"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:89
+msgid "Compress custom…"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:84
+msgid "Compress maximum"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:79
+msgid "Compress recommended"
+msgstr ""
+
+#: src/bin/kim_ui.py:28
+msgid "Compression Quality"
+msgstr ""
+
+#: src/bin/kim_job.py:215
+msgid "Compression cancelled. Successfully saved results were kept"
+msgstr ""
+
+#: src/bin/kim_job.py:221
+msgid "Compression completed"
+msgstr ""
+
+#: src/bin/kim_job.py:217
+msgid "Compression failed"
+msgstr ""
+
+#: src/bin/kim_all:2453
+msgid "Compression level:"
+msgstr ""
+
+#: src/bin/kim_job.py:219
+msgid "Compression partially completed"
+msgstr ""
+
+#: src/bin/kim_all:2196 src/bin/kim_all:2201
+msgid "Compression quality must be 1-100."
+msgstr ""
+
+#: src/bin/kim_job.py:243
+msgid "Compression settings:"
+msgstr ""
+
+#: src/bin/kim_all:10676
+msgid "Contact grid must be 3x3, 4x4 or 5x5."
+msgstr ""
+
+#: src/bin/kim_all:10908
+msgid "Contact sheet"
+msgstr ""
+
+#: src/bin/kim_all:3995
+msgid "Contact sheet interrupted."
+msgstr ""
+
+#: src/bin/kim_all:4066
+msgid "Contact sheet: PDF publication failed; existing files were preserved."
+msgstr ""
+
+#: src/bin/kim_all:4061
+msgid "Contact sheet: PDF validation failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:4002
+msgid "Contact sheet: annotated thumbnail failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:3909
+msgid "Contact sheet: automatic layout failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:3949
+msgid "Contact sheet: cannot allocate destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:3954
+msgid "Contact sheet: cannot initialize staging."
+msgstr ""
+
+#: src/bin/kim_all:3878
+msgid "Contact sheet: each source must be a single-frame image."
+msgstr ""
+
+#: src/bin/kim_all:3971
+msgid "Contact sheet: heading rendering failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:3817
+msgid "Contact sheet: invalid dialog settings."
+msgstr ""
+
+#: src/bin/kim_all:3866
+msgid "Contact sheet: invalid or unsafe output destination."
+msgstr ""
+
+#: src/bin/kim_all:3978
+msgid "Contact sheet: page numbering failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:4043
+msgid "Contact sheet: page sizing failed."
+msgstr ""
+
+#: src/bin/kim_all:4026
+msgid "Contact sheet: progress update failed."
+msgstr ""
+
+#: src/bin/kim_all:3802
+msgid "Contact sheet: select images in Dolphin."
+msgstr ""
+
+#: src/bin/kim_all:3855
+msgid "Contact sheet: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:3885
+msgid "Contact sheet: source geometry inspection failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:4010
+msgid "Contact sheet: unable to render a thumbnail."
+msgstr ""
+
+#: src/bin/kim_all:1329
+msgid "Convert Images"
+msgstr ""
+
+#: src/bin/kim_all:2791
+msgid "Convert aborted. Destination aliases a selected source:"
+msgstr ""
+
+#: src/bin/kim_all:2777
+msgid "Convert aborted. Two files would write the same destination:"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:14
+msgid "Convert to AVIF"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:19
+msgid "Convert to BMP"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:24
+msgid "Convert to GIF"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:29
+msgid "Convert to HEIC/HEIF"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:44
+msgid "Convert to JPEG"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:34
+msgid "Convert to JPEG 2000 (lossless)"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:39
+msgid "Convert to JPEG 2000 (lossy)"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:49
+msgid "Convert to JPEG XL"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:54
+msgid "Convert to PDF"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:59
+msgid "Convert to PNG"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:64
+msgid "Convert to TIFF"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:69
+msgid "Convert to WebP"
+msgstr ""
+
+#: src/bin/kim_all:2637
+msgid "Convert: --bmp5 is valid only with BMP output."
+msgstr ""
+
+#: src/bin/kim_all:2924
+msgid "Convert: APNG animation could not be safely inspected."
+msgstr ""
+
+#: src/bin/kim_all:2531
+msgid "Convert: PSD composite decoding or normalization failed. Check that the document has a usable composite/layers and valid color information."
+msgstr ""
+
+#: src/bin/kim_all:2526
+msgid "Convert: a resource or security-policy limit was exceeded. Try a smaller image/batch or review the ImageMagick policy."
+msgstr ""
+
+#: src/bin/kim_all:2729
+msgid "Convert: ambiguous filename."
+msgstr ""
+
+#: src/bin/kim_all:3198
+msgid "Convert: destination or encoder/output validation failed. Check the destination, encoder capability and color-profile support:"
+msgstr ""
+
+#: src/bin/kim_all:2533
+msgid "Convert: image identification or decoding failed. Check that the input is a complete, readable image."
+msgstr ""
+
+#: src/bin/kim_all:2633
+msgid "Convert: invalid format."
+msgstr ""
+
+#: src/bin/kim_all:2528
+msgid "Convert: invalid or unsupported image format. Check the file and available ImageMagick decoders."
+msgstr ""
+
+#: src/bin/kim_all:2627
+msgid "Convert: missing format."
+msgstr ""
+
+#: src/bin/kim_all:3195
+msgid "Convert: the encoder exceeded a resource or security-policy limit. Try a smaller output or review the ImageMagick policy."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:94
+msgid "Copied bytes differ"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:89
+msgid "Copy aliases source"
+msgstr ""
+
+#: src/bin/kim_all:3742
+msgid "Copying cancelled. Already saved copies were kept."
+msgstr ""
+
+#: src/bin/kim_all:3744
+msgid "Copying did not complete successfully. Already saved copies were kept."
+msgstr ""
+
+#: src/bin/kim_all:3700
+msgid "Copying image without re-encoding:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:62
+msgid "Correct"
+msgstr ""
+
+#: src/bin/kim_all:3662
+msgid "Correctly named copies require distinct regular files without symlinks or hardlink aliases."
+msgstr ""
+
+#: src/bin/kim_all:9653
+msgid "Could not open the KIMng license."
+msgstr ""
+
+#: src/bin/kim_all:9637
+msgid "Could not open the metadata application. Check the diagnostic below and reinstall KIMng if an installed component is missing."
+msgstr ""
+
+#: src/kim_publication.desktop.in:14
+msgid "Create a PDF album…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:24
+msgid "Create a collage…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:29
+msgid "Create a contact sheet…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:49
+msgid "Create a multi-page TIFF…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:39
+msgid "Create a print-layout PDF…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:44
+msgid "Create a video slideshow…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:34
+msgid "Create an HTML gallery…"
+msgstr ""
+
+#: src/kim_publication.desktop.in:19
+msgid "Create an animated image…"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:39
+msgid "Create animated GIF from video…"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:261
+msgid "Create copies"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:180 src/bin/kim_extensions_dialog.py:248
+msgid "Create correctly named copies"
+msgstr ""
+
+#: src/bin/kim_all:7691
+msgid "Create dated copies or explicitly update the selected originals?"
+msgstr ""
+
+#: src/bin/kim_all:8173
+msgid "Create dated copies or update the selected files?"
+msgstr ""
+
+#: src/bin/kim_all:409
+msgid "Create new files (originals untouched)"
+msgstr ""
+
+#: src/bin/kim_all:412
+msgid "Create renamed copies"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:34
+msgid "Create video contact sheet…"
+msgstr ""
+
+#: src/bin/kim_all:3696
+msgid "Creating correctly named copies…"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:34
+msgid "Crop image…"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:159
+msgid "Current Extension"
+msgstr ""
+
+#: src/bin/kim_all:8146 src/bin/kim_all:8151
+msgid "Current file time:"
+msgstr ""
+
+#: src/bin/kim_all:2097
+msgid "Custom"
+msgstr ""
+
+#: src/bin/kim_all:9324
+msgid "Custom canvas size"
+msgstr ""
+
+#: src/bin/kim_all:9344
+msgid "Custom color"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:74
+msgid "Custom convert…"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:88
+msgid "Custom per-image captions"
+msgstr ""
+
+#: src/bin/kim_all:4729
+msgid "Dashes to Spaces"
+msgstr ""
+
+#: src/bin/kim_ui.py:25
+msgid "Date Fields / All Dates"
+msgstr ""
+
+#: src/bin/kim_all:7901
+msgid "Date fields to shift:"
+msgstr ""
+
+#: src/bin/kim_all:8099
+msgid "Date sync: select local, unambiguous regular files."
+msgstr ""
+
+#: src/bin/kim_all:8119
+msgid "DateTimeOriginal only"
+msgstr ""
+
+#: src/bin/kim_all:8119
+msgid "DateTimeOriginal, CreateDate and ModifyDate"
+msgstr ""
+
+#: src/bin/kim_all:1774 src/bin/kim_all:1945
+msgid "Decoding and staging PSD composite"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:159
+msgid "Detected Format"
+msgstr ""
+
+#: src/bin/kim_all:9352
+msgid "Disabled"
+msgstr ""
+
+#: src/bin/kim_all:2744 src/bin/kim_all:4839 src/bin/kim_all:6613
+#: src/bin/kim_all:7392 src/bin/kim_all:7794 src/bin/kim_all:7804
+#: src/bin/kim_all:7927
+msgid "Do you want to create new files?"
+msgstr ""
+
+#: src/bin/kim_all:9350
+msgid "Drop shadows:"
+msgstr ""
+
+#: src/bin/kim_all:4723
+msgid "EXIF date"
+msgstr ""
+
+#: src/bin/kim_all:4801
+msgid "EXIF date rename pattern:"
+msgstr ""
+
+#: src/bin/kim_all:8118
+msgid "EXIF fields to update:"
+msgstr ""
+
+#: src/bin/kim_all:8151
+msgid "EXIF timestamp preview"
+msgstr ""
+
+#: src/kim_location.desktop.in:14
+msgid "Edit GPS on images…"
+msgstr ""
+
+#: src/bin/kim_all:9612
+msgid "Edit metadata"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:39
+msgid "Edit metadata…"
+msgstr ""
+
+#: src/bin/kim_all:5647
+msgid "Email resize: --size needs a value."
+msgstr ""
+
+#: src/bin/kim_all:5669
+msgid "Email resize: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:5715
+msgid "Email resize: size must be full or positive WIDTHxHEIGHT."
+msgstr ""
+
+#: src/bin/kim_all:5659
+msgid "Email resize: unknown option."
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:86 src/bin/kim_contactsheet_dialog.py:82
+msgid "Embedded caption"
+msgstr ""
+
+#: src/bin/kim_all:9351
+msgid "Enabled"
+msgstr ""
+
+#: src/bin/kim_all:11834
+msgid "Encoding MP4 slideshow"
+msgstr ""
+
+#: src/bin/kim_all:4739
+msgid "ExifTool is required for EXIF-date renaming."
+msgstr ""
+
+#: src/bin/kim_all:7895
+msgid "ExifTool is required for camera timestamp editing."
+msgstr ""
+
+#: src/bin/kim_all:7789
+msgid "ExifTool is required for copyright metadata editing."
+msgstr ""
+
+#: src/bin/kim_all:8110
+msgid "ExifTool is required for date synchronization."
+msgstr ""
+
+#: src/bin/kim_all:7375
+msgid "ExifTool is required for selective metadata removal."
+msgstr ""
+
+#: src/bin/kim_all:457
+msgid "Existing files may be replaced without backup. This cannot be undone by KIMng."
+msgstr ""
+
+#: src/bin/kim_all:452
+msgid "Existing output files may be replaced without backups. KIMng cannot undo this operation."
+msgstr ""
+
+#: src/bin/kim_all:1339
+msgid "Export Images"
+msgstr ""
+
+#: src/bin/kim_all:3038
+msgid "Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged."
+msgstr ""
+
+#: src/bin/kim_all:11183
+msgid "Exporting the first audio stream only; additional streams are omitted:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:62
+msgid "Extension mismatch"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:14
+msgid "Extract audio…"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:24
+msgid "Extract automatic thumbnail"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:19
+msgid "Extract frame at timestamp…"
+msgstr ""
+
+#: src/bin/kim_all:10019
+msgid "FFmpeg and ffprobe are required for video transcoding."
+msgstr ""
+
+#: src/bin/kim_all:10555
+msgid "FFmpeg and ffprobe are required for video utilities."
+msgstr ""
+
+#: src/bin/kim_all:11683
+msgid "FFmpeg encoder capabilities could not be queried for slideshow creation."
+msgstr ""
+
+#: src/bin/kim_all:10022
+msgid "FFmpeg encoder capabilities could not be queried."
+msgstr ""
+
+#: src/bin/kim_all:10332
+msgid "FFmpeg failed or produced no complete output"
+msgstr ""
+
+#: src/bin/kim_all:1075 src/bin/kim_all:1107 src/bin/kim_all:3751
+msgid "Failed files (first 10):"
+msgstr ""
+
+#: src/bin/kim_all:1094 src/bin/kim_all:3747
+msgid "Failed:"
+msgstr ""
+
+#: src/bin/kim_all:8153
+msgid "Fields:"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:87 src/bin/kim_extensions_dialog.py:159
+msgid "Filename"
+msgstr ""
+
+#: src/bin/kim_all:4814
+msgid "Filename base:"
+msgstr ""
+
+#: src/bin/kim_job.py:225
+msgid "Files cancelled:"
+msgstr ""
+
+#: src/bin/kim_job.py:223
+msgid "Files failed:"
+msgstr ""
+
+#: src/bin/kim_all:3754
+msgid "Files not scheduled:"
+msgstr ""
+
+#: src/bin/kim_job.py:225
+msgid "Files skipped:"
+msgstr ""
+
+#: src/bin/kim_job.py:222
+msgid "Files successfully processed:"
+msgstr ""
+
+#: src/bin/kim_all:8144
+msgid "Filesystem modification time preview"
+msgstr ""
+
+#: src/bin/kim_all:9330
+msgid "Fill and crop"
+msgstr ""
+
+#: src/bin/kim_all:9329
+msgid "Fit entire image"
+msgstr ""
+
+#: src/bin/kim_all:1333
+msgid "Flip Images"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:64
+msgid "Flip horizontally"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:69
+msgid "Flip vertically"
+msgstr ""
+
+#: src/bin/kim_all:10608
+msgid "Frame extraction mode:"
+msgstr ""
+
+#: src/bin/kim_all:10690
+msgid "Frame format must be png or jpg."
+msgstr ""
+
+#: src/bin/kim_all:10682
+msgid "Frame mode must be single, thumbnail or contact."
+msgstr ""
+
+#: src/bin/kim_all:10573
+msgid "Frame options require values."
+msgstr ""
+
+#: src/bin/kim_all:6604
+msgid "Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal."
+msgstr ""
+
+#: src/bin/kim_all:11397
+msgid "GIF duration must be greater than 0 and at most 15 seconds."
+msgstr ""
+
+#: src/bin/kim_all:11401
+msgid "GIF frame rate must be 10, 12, 15 or 24."
+msgstr ""
+
+#: src/bin/kim_all:11439
+msgid "GIF interval exceeds video duration; shorten the requested interval"
+msgstr ""
+
+#: src/bin/kim_all:11409
+msgid "GIF loop must be infinite or once."
+msgstr ""
+
+#: src/bin/kim_all:11337
+msgid "GIF options require values."
+msgstr ""
+
+#: src/bin/kim_all:11519
+msgid "GIF output is invalid or contains fewer than two frames"
+msgstr ""
+
+#: src/bin/kim_all:11411
+msgid "GIF request exceeds 360 frames; shorten the duration or lower the frame rate."
+msgstr ""
+
+#: src/bin/kim_all:11459
+msgid "GIF request exceeds the 200 million output pixel-frame work limit; lower the frame rate, width or duration"
+msgstr ""
+
+#: src/bin/kim_all:11395
+msgid "GIF start must be HH:MM:SS[.sss]."
+msgstr ""
+
+#: src/bin/kim_all:11495
+msgid "GIF validation"
+msgstr ""
+
+#: src/bin/kim_all:11405
+msgid "GIF width must be 320, 480, 640 or 800."
+msgstr ""
+
+#: src/bin/kim_all:7386
+msgid "GPS removal is limited to recognized coordinate fields and cannot guarantee complete location anonymization. AI removal covers IPTC Extension DigitalSourceType AI values, AIPromptInformation, AIPromptWriterName, AISystemUsed and AISystemVersionUsed; generator-specific fields and signed C2PA / Content Credentials may remain."
+msgstr ""
+
+#: src/bin/kim_all:3612
+msgid "Gallery: a staged resource is missing or unsafe."
+msgstr ""
+
+#: src/bin/kim_all:3522
+msgid "Gallery: an image or thumbnail could not be generated and validated."
+msgstr ""
+
+#: src/bin/kim_all:3384
+msgid "Gallery: cannot create destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:3616
+msgid "Gallery: cannot finalize the staged output."
+msgstr ""
+
+#: src/bin/kim_all:3604
+msgid "Gallery: cannot finish the HTML page."
+msgstr ""
+
+#: src/bin/kim_all:3556
+msgid "Gallery: cannot finish the HTML template."
+msgstr ""
+
+#: src/bin/kim_all:3430
+msgid "Gallery: cannot initialize the HTML page."
+msgstr ""
+
+#: src/bin/kim_all:3403
+msgid "Gallery: cannot locate the dispatcher resources."
+msgstr ""
+
+#: src/bin/kim_all:3411
+msgid "Gallery: cannot read the HTML template."
+msgstr ""
+
+#: src/bin/kim_all:3397
+msgid "Gallery: cannot read the current date."
+msgstr ""
+
+#: src/bin/kim_all:3541
+msgid "Gallery: cannot write the HTML gallery."
+msgstr ""
+
+#: src/bin/kim_all:3444
+msgid "Gallery: cannot write the HTML page."
+msgstr ""
+
+#: src/bin/kim_all:3350
+msgid "Gallery: columns must be a positive number."
+msgstr ""
+
+#: src/bin/kim_all:3391
+msgid "Gallery: failed to create owned staging directories."
+msgstr ""
+
+#: src/bin/kim_all:3608
+msgid "Gallery: generated HTML is empty."
+msgstr ""
+
+#: src/bin/kim_all:3624
+msgid "Gallery: publication failed; existing directories were preserved."
+msgstr ""
+
+#: src/bin/kim_all:3488 src/bin/kim_all:3506
+msgid "Gallery: publication interrupted; no gallery was published."
+msgstr ""
+
+#: src/bin/kim_all:3276
+msgid "Gallery: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:3358
+msgid "Gallery: selected output folder is unavailable."
+msgstr ""
+
+#: src/bin/kim_ui.py:28
+msgid "Higher quality generally preserves more detail but creates larger files. Lower quality generally makes smaller files but may lose detail. Results vary by image and format."
+msgstr ""
+
+#: src/bin/kim_all:6129
+msgid "How should KIMng save the results?"
+msgstr ""
+
+#: src/bin/kim_contactsheet_dialog.py:80 src/bin/kim_ui.py:23
+msgid "Image Capture Date"
+msgstr ""
+
+#: src/bin/kim_all:1336
+msgid "Image Capture Dates"
+msgstr ""
+
+#: src/bin/kim_all:9336
+msgid "Image borders:"
+msgstr ""
+
+#: src/bin/kim_all:7749
+msgid "Image capture date update failed; no incomplete output was published."
+msgstr ""
+
+#: src/bin/kim_all:7901
+msgid "Image capture time only"
+msgstr ""
+
+#: src/bin/kim_all:7901
+msgid "Image capture, creation and modification dates"
+msgstr ""
+
+#: src/bin/kim_all:9354
+msgid "Image order:"
+msgstr ""
+
+#: src/bin/kim_all:9328
+msgid "Image placement:"
+msgstr ""
+
+#: src/bin/kim_all:11691
+msgid "ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames."
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:98
+msgid "Include camera and lens"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:96
+msgid "Include image capture date"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:195
+msgid "Inspecting file content…"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:73 src/bin/kim_extensions_dialog.py:140
+msgid "Inspection failure"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:217
+msgid "Inspection finished. Originals are unchanged."
+msgstr ""
+
+#: src/bin/kim_all:3753
+msgid "Interrupted files:"
+msgstr ""
+
+#: src/bin/kim_all:3748
+msgid "Interrupted:"
+msgstr ""
+
+#: src/bin/kim_all:10655
+msgid "Invalid frame extraction options."
+msgstr ""
+
+#: src/bin/kim_all:10645
+msgid "Invalid per-video timestamps."
+msgstr ""
+
+#: src/bin/kim_all:11385
+msgid "Invalid video GIF settings."
+msgstr ""
+
+#: src/bin/kim_all:10623
+msgid "Invalid video contact sheet settings."
+msgstr ""
+
+#: src/bin/kim_all:2662
+msgid "JPEG 2000 lossy quality must be between 1 and 100."
+msgstr ""
+
+#: src/bin/kim_all:2657
+msgid "JPEG 2000 mode must be lossless or lossy."
+msgstr ""
+
+#: src/bin/kim_all:2669
+msgid "JPEG 2000 mode options apply only to JP2 output."
+msgstr ""
+
+#: src/bin/kim_all:2452
+msgid "JPEG Huffman optimization:"
+msgstr ""
+
+#: src/bin/kim_all:2450
+msgid "JPEG quality:"
+msgstr ""
+
+#: src/bin/kim_all:2648 src/bin/kim_all:8444
+msgid "JPEG scan and optimization options require JPEG output."
+msgstr ""
+
+#: src/kim_webemail.desktop.in:14
+msgid "JPEG · Large (1600 × 1600)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:19
+msgid "JPEG · Medium (800 × 800)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:24
+msgid "JPEG · Thumbnail (128 × 128)"
+msgstr ""
+
+#: src/bin/kim_all:8831
+msgid "JPEG-specific options cannot be used with this keep-format input:"
+msgstr ""
+
+#: src/bin/kim_all:1098
+msgid "Job cancelled. Already saved results were kept; remaining files were not scheduled."
+msgstr ""
+
+#: src/bin/kim_all:1298
+msgid "KDialog or qdbus is unavailable. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:1308
+msgid "KDialog returned an invalid progress reference. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:270 src/bin/kim_all:480 src/bin/kim_all:485
+#: src/bin/kim_all:498 src/bin/kim_all:1203 src/bin/kim_all:1832
+#: src/bin/kim_all:2627 src/bin/kim_all:2633 src/bin/kim_all:2637
+#: src/bin/kim_all:2729 src/bin/kim_all:2743 src/bin/kim_all:2776
+#: src/bin/kim_all:2790 src/bin/kim_all:2849 src/bin/kim_all:2923
+#: src/bin/kim_all:3212 src/bin/kim_all:3276 src/bin/kim_all:3350
+#: src/bin/kim_all:3358 src/bin/kim_all:3459 src/bin/kim_all:3487
+#: src/bin/kim_all:3505 src/bin/kim_all:3521 src/bin/kim_all:3540
+#: src/bin/kim_all:3548 src/bin/kim_all:3619 src/bin/kim_all:3623
+#: src/bin/kim_all:3631 src/bin/kim_all:3855 src/bin/kim_all:3866
+#: src/bin/kim_all:3878 src/bin/kim_all:4082 src/bin/kim_all:4113
+#: src/bin/kim_all:4121 src/bin/kim_all:4169 src/bin/kim_all:4188
+#: src/bin/kim_all:4197 src/bin/kim_all:4203 src/bin/kim_all:4211
+#: src/bin/kim_all:4674 src/bin/kim_all:4839 src/bin/kim_all:4906
+#: src/bin/kim_all:5088 src/bin/kim_all:5213 src/bin/kim_all:5229
+#: src/bin/kim_all:5431 src/bin/kim_all:5618 src/bin/kim_all:5647
+#: src/bin/kim_all:5659 src/bin/kim_all:5669 src/bin/kim_all:5715
+#: src/bin/kim_all:5836 src/bin/kim_all:5842 src/bin/kim_all:5848
+#: src/bin/kim_all:5896 src/bin/kim_all:5903 src/bin/kim_all:5909
+#: src/bin/kim_all:5917 src/bin/kim_all:5925 src/bin/kim_all:5926
+#: src/bin/kim_all:5990 src/bin/kim_all:6009 src/bin/kim_all:6129
+#: src/bin/kim_all:6414 src/bin/kim_all:6604 src/bin/kim_all:6612
+#: src/bin/kim_all:6645 src/bin/kim_all:6841 src/bin/kim_all:7386
+#: src/bin/kim_all:7392 src/bin/kim_all:7513 src/bin/kim_all:7794
+#: src/bin/kim_all:7804 src/bin/kim_all:7858 src/bin/kim_all:7900
+#: src/bin/kim_all:7901 src/bin/kim_all:7923 src/bin/kim_all:7927
+#: src/bin/kim_all:7976 src/bin/kim_all:8114 src/bin/kim_all:8118
+#: src/bin/kim_all:8304 src/bin/kim_all:8378 src/bin/kim_all:8390
+#: src/bin/kim_all:8400 src/bin/kim_all:8414 src/bin/kim_all:8440
+#: src/bin/kim_all:8449 src/bin/kim_all:8745 src/bin/kim_all:8763
+#: src/bin/kim_all:8803 src/bin/kim_all:8981 src/bin/kim_all:9002
+#: src/bin/kim_all:9017 src/bin/kim_all:9036 src/bin/kim_all:9090
+#: src/bin/kim_all:9214 src/bin/kim_all:9227 src/bin/kim_all:9235
+#: src/bin/kim_all:9248 src/bin/kim_all:9261 src/bin/kim_all:9367
+#: src/bin/kim_all:9375 src/bin/kim_all:9379 src/bin/kim_all:9383
+#: src/bin/kim_all:9386 src/bin/kim_all:9389 src/bin/kim_all:9393
+#: src/bin/kim_all:9397 src/bin/kim_all:9402 src/bin/kim_all:9411
+#: src/bin/kim_all:9426 src/bin/kim_all:9442 src/bin/kim_all:9453
+#: src/bin/kim_all:9460 src/bin/kim_all:9473 src/bin/kim_all:9476
+#: src/bin/kim_all:9479 src/bin/kim_all:9482 src/bin/kim_all:9649
+#: src/bin/kim_all:9653 src/bin/kim_all:10231 src/bin/kim_all:10235
+#: src/bin/kim_all:10254 src/bin/kim_all:10263 src/bin/kim_all:10277
+#: src/bin/kim_all:10300 src/bin/kim_all:10306 src/bin/kim_all:10327
+#: src/bin/kim_all:10334 src/bin/kim_all:10339 src/bin/kim_all:10346
+#: src/bin/kim_all:10356 src/bin/kim_all:10361 src/bin/kim_all:10362
+#: src/bin/kim_all:10369 src/bin/kim_all:10393 src/bin/kim_all:10396
+#: src/bin/kim_all:10548 src/bin/kim_all:10849 src/bin/kim_all:10865
+#: src/bin/kim_all:10919 src/bin/kim_all:10934 src/bin/kim_all:10941
+#: src/bin/kim_all:11155 src/bin/kim_all:11171 src/bin/kim_all:11185
+#: src/bin/kim_all:11254 src/bin/kim_all:11314 src/bin/kim_all:11321
+#: src/bin/kim_all:11420 src/bin/kim_all:11436 src/bin/kim_all:11479
+#: src/bin/kim_all:11503 src/bin/kim_all:11530 src/bin/kim_all:11537
+#: src/bin/kim_all:11761 src/bin/kim_all:11765 src/bin/kim_all:11775
+#: src/bin/kim_all:11790 src/bin/kim_all:11795 src/bin/kim_all:11804
+#: src/bin/kim_all:11808 src/bin/kim_all:11817 src/bin/kim_all:11842
+#: src/bin/kim_all:11865 src/bin/kim_all:11895 src/bin/kim_all:11914
+msgid "KIMng"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:154
+msgid "KIMng - Check and correct extensions"
+msgstr ""
+
+#: src/bin/kim_all:2362
+msgid "KIMng - Compressing file: "
+msgstr ""
+
+#: src/bin/kim_all:2345
+msgid "KIMng - Compressing images ..."
+msgstr ""
+
+#: src/bin/kim_job.py:253
+msgid "KIMng - Compression results"
+msgstr ""
+
+#: src/kim_video_av1.desktop.in:9
+msgid "KIMng - Convert Video: AV1"
+msgstr ""
+
+#: src/kim_video_h264.desktop.in:9
+msgid "KIMng - Convert Video: H.264"
+msgstr ""
+
+#: src/kim_compressandresizevideo.desktop.in:9
+msgid "KIMng - Convert Video: H.265"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:9
+msgid "KIMng - Convert/Compress"
+msgstr ""
+
+#: src/bin/kim_all:3008
+msgid "KIMng - Converting animated image: "
+msgstr ""
+
+#: src/bin/kim_all:2846
+msgid "KIMng - Converting file: "
+msgstr ""
+
+#: src/bin/kim_all:3756
+msgid "KIMng - Correctly named copies"
+msgstr ""
+
+#: src/kim_publication.desktop.in:9
+msgid "KIMng - Create/Publish"
+msgstr ""
+
+#: src/bin/kim_all:11413
+msgid "KIMng - Creating video GIFs…"
+msgstr ""
+
+#: src/bin/kim_all:8143 src/bin/kim_all:8150 src/bin/kim_all:8173
+msgid "KIMng - Date synchronization"
+msgstr ""
+
+#: src/bin/kim_all:8761
+msgid "KIMng - Exporting file: "
+msgstr ""
+
+#: src/bin/kim_all:10986
+msgid "KIMng - Extract audio"
+msgstr ""
+
+#: src/bin/kim_all:10842
+msgid "KIMng - Extracting video frames…"
+msgstr ""
+
+#: src/bin/kim_all:2821 src/bin/kim_all:3376 src/bin/kim_all:5410
+#: src/bin/kim_all:5726 src/bin/kim_all:6620 src/bin/kim_all:7401
+#: src/bin/kim_all:7808 src/bin/kim_all:7929 src/bin/kim_all:9041
+#: src/bin/kim_all:9415
+msgid "KIMng - Initialising ..."
+msgstr ""
+
+#: src/bin/kim_all:10223
+msgid "KIMng - Initializing video transcode…"
+msgstr ""
+
+#: src/kim_location.desktop.in:9
+msgid "KIMng - Location/GPS"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:9
+msgid "KIMng - Organize/Metadata"
+msgstr ""
+
+#: src/bin/kim_all:3037
+msgid "KIMng - Photoshop to PDF"
+msgstr ""
+
+#: src/bin/kim_all:4896
+msgid "KIMng - Planning renames ..."
+msgstr ""
+
+#: src/bin/kim_all:1931
+msgid "KIMng - Preparing PDF album sources…"
+msgstr ""
+
+#: src/bin/kim_all:5730
+msgid "KIMng - Preparing email image: "
+msgstr ""
+
+#: src/bin/kim_all:11758
+msgid "KIMng - Preparing image:"
+msgstr ""
+
+#: src/bin/kim_all:11753
+msgid "KIMng - Preparing slideshow…"
+msgstr ""
+
+#: src/bin/kim_all:3456 src/bin/kim_all:6192 src/bin/kim_all:9088
+#: src/bin/kim_all:9425
+msgid "KIMng - Processing file: "
+msgstr ""
+
+#: src/bin/kim_all:11148
+msgid "KIMng - Processing video audio…"
+msgstr ""
+
+#: src/kim_recipes.desktop.in:9
+msgid "KIMng - Recipes"
+msgstr ""
+
+#: src/bin/kim_all:4985
+msgid "KIMng - Renaming file: "
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:9
+msgid "KIMng - Resize/Crop/Rotate"
+msgstr ""
+
+#: src/bin/kim_all:5428
+msgid "KIMng - Resizing file: "
+msgstr ""
+
+#: src/bin/kim_all:7691 src/bin/kim_all:7707 src/bin/kim_all:7753
+msgid "KIMng - Set dates"
+msgstr ""
+
+#: src/bin/kim_all:7811
+msgid "KIMng - Setting rights: "
+msgstr ""
+
+#: src/kim_information.desktop.in:9
+msgid "KIMng - Settings/About"
+msgstr ""
+
+#: src/bin/kim_all:7932
+msgid "KIMng - Shifting camera time: "
+msgstr ""
+
+#: src/bin/kim_all:6641
+msgid "KIMng - Stripping metadata from file: "
+msgstr ""
+
+#: src/bin/kim_all:8189
+msgid "KIMng - Synchronizing date: "
+msgstr ""
+
+#: src/bin/kim_all:8176
+msgid "KIMng - Synchronizing image capture dates…"
+msgstr ""
+
+#: src/bin/kim_all:10228
+msgid "KIMng - Transcoding video:"
+msgstr ""
+
+#: src/bin/kim_all:6189
+msgid "KIMng - Transforming images ..."
+msgstr ""
+
+#: src/bin/kim_all:7409
+msgid "KIMng - Updating metadata: "
+msgstr ""
+
+#: src/bin/kim_all:3031
+msgid "KIMng - Validating animated PNG: "
+msgstr ""
+
+#: src/bin/kim_all:11418
+msgid "KIMng - Video GIF:"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:9
+msgid "KIMng - Video Utilities"
+msgstr ""
+
+#: src/bin/kim_all:11153
+msgid "KIMng - Video audio:"
+msgstr ""
+
+#: src/bin/kim_all:10847
+msgid "KIMng - Video frame:"
+msgstr ""
+
+#: src/bin/kim_all:8407
+msgid "KIMng - Web Export"
+msgstr ""
+
+#: src/bin/kim_all:8727
+msgid "KIMng - Web exporting images ..."
+msgstr ""
+
+#: src/kim_information.desktop.in:24
+msgid "KIMng User Guide"
+msgstr ""
+
+#: src/bin/kim_ui.py:33
+msgid "KIMng saves new files without replacing existing ones. If a filename is taken, it adds a number. The final name is checked again when saving."
+msgstr ""
+
+#: src/bin/kim_ui.py:34
+msgid "KIMng uses Photoshop's saved composite when available, or ImageMagick's best-effort reconstruction. Complex layers and effects may look different. Your original PSD is never modified."
+msgstr ""
+
+#: src/bin/kim_all:487
+msgid "Keep originals unchanged"
+msgstr ""
+
+#: src/bin/kim_all:9335
+msgid "Large"
+msgstr ""
+
+#: src/kim_information.desktop.in:19
+msgid "License"
+msgstr ""
+
+#: src/bin/kim_all:10262
+msgid "MP4 cannot replace a source with a different filename extension; choose Create new files"
+msgstr ""
+
+#: src/bin/kim_all:8411
+msgid "Max image size (e.g. 1600x1600):"
+msgstr ""
+
+#: src/bin/kim_all:2095
+msgid "Maximum"
+msgstr ""
+
+#: src/bin/kim_all:9334
+msgid "Medium"
+msgstr ""
+
+#: src/bin/kim_all:4816
+msgid "Minimum number width (1-18):"
+msgstr ""
+
+#: src/bin/kim_all:4760
+msgid "Missing EXIF Dates"
+msgstr ""
+
+#: src/bin/kim_all:2447 src/bin/kim_all:2448
+msgid "No"
+msgstr ""
+
+#: src/bin/kim_all:9337
+msgid "No borders"
+msgstr ""
+
+#: src/bin/kim_job.py:242
+msgid "No outputs were successfully published; size savings are not applicable."
+msgstr ""
+
+#: src/bin/kim_all:11811
+msgid "No slideshow frames prepared."
+msgstr ""
+
+#: src/bin/kim_all:10030
+msgid "No supported AV1 encoder is available (libsvtav1 or libaom-av1)."
+msgstr ""
+
+#: src/bin/kim_all:5990
+msgid "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:"
+msgstr ""
+
+#: src/bin/kim_all:8139
+msgid "No valid destination date can be calculated. No date was changed. Use Set Image Capture Date… or choose an explicit camera timezone."
+msgstr ""
+
+#: src/bin/kim_all:9332
+msgid "None"
+msgstr ""
+
+#: src/bin/kim_job.py:237
+msgid "Not applicable (zero original size)"
+msgstr ""
+
+#: src/bin/kim_all:3749
+msgid "Not scheduled:"
+msgstr ""
+
+#: src/bin/kim_all:9370
+msgid "Number of rows and columns:"
+msgstr ""
+
+#: src/bin/kim_ui.py:30
+msgid "Optimize JPEG Huffman Coding"
+msgstr ""
+
+#: src/bin/kim_all:8407
+msgid "Original Format"
+msgstr ""
+
+#: src/bin/kim_all:496
+msgid "Original files will be replaced without backup. KIMng cannot undo this operation."
+msgstr ""
+
+#: src/bin/kim_job.py:234
+msgid "Original total size:"
+msgstr ""
+
+#: src/bin/kim_ui.py:33
+msgid "Output Filename / Location"
+msgstr ""
+
+#: src/bin/kim_job.py:235
+msgid "Output total size:"
+msgstr ""
+
+#: src/bin/kim_all:9371
+msgid "Overlapping ratio in percent:"
+msgstr ""
+
+#: src/bin/kim_all:456
+msgid "Overwrite original images or existing output files?"
+msgstr ""
+
+#: src/bin/kim_all:410 src/bin/kim_all:488
+msgid "Overwrite originals (confirmation required)"
+msgstr ""
+
+#: src/bin/kim_all:441
+msgid "Overwrite the selected original files?"
+msgstr ""
+
+#: src/bin/kim_all:492
+msgid "Overwrite the selected original images?"
+msgstr ""
+
+#: src/bin/kim_all:4799
+msgid "Overwrite with:"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:29
+msgid "PNG · Large (1600 × 1600)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:34
+msgid "PNG · Medium (800 × 800)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:39
+msgid "PNG · Thumbnail (128 × 128)"
+msgstr ""
+
+#: src/bin/kim_ui.py:34
+msgid "PSD Compatibility"
+msgstr ""
+
+#: src/bin/kim_job.py:238
+msgid "Percentage increased:"
+msgstr ""
+
+#: src/bin/kim_job.py:238
+msgid "Percentage saved:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:253
+msgid "Planned destination"
+msgstr ""
+
+#: src/bin/kim_all:3905
+msgid "Planning automatic contact-sheet pages…"
+msgstr ""
+
+#: src/bin/kim_all:7721
+msgid "Planning date change:"
+msgstr ""
+
+#: src/bin/kim_all:9339
+msgid "Polaroid frame"
+msgstr ""
+
+#: src/bin/kim_all:9323
+msgid "Portrait 4:5 (3200 × 4000)"
+msgstr ""
+
+#: src/bin/kim_all:4794
+msgid "Prefix to add:"
+msgstr ""
+
+#: src/bin/kim_all:1971
+msgid "Preparing PDF output destination…"
+msgstr ""
+
+#: src/bin/kim_all:1773 src/bin/kim_all:1943
+msgid "Preparing and validating source images"
+msgstr ""
+
+#: src/bin/kim_all:3872 src/bin/kim_all:4117 src/bin/kim_all:4193
+msgid "Preparing source images…"
+msgstr ""
+
+#: src/bin/kim_all:7919
+msgid "Preview camera-time adjustment"
+msgstr ""
+
+#: src/bin/kim_all:4143
+msgid "Print: ImageMagick failed or produced an invalid PDF."
+msgstr ""
+
+#: src/bin/kim_all:4147
+msgid "Print: PDF publication failed; existing files were preserved."
+msgstr ""
+
+#: src/bin/kim_all:4121
+msgid "Print: an input image could not be inspected."
+msgstr ""
+
+#: src/bin/kim_all:4132
+msgid "Print: cannot create destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:4113
+msgid "Print: invalid or unsafe output destination."
+msgstr ""
+
+#: src/bin/kim_all:4144
+msgid "Print: publication interrupted; no output was written."
+msgstr ""
+
+#: src/bin/kim_all:4082
+msgid "Print: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:5925
+msgid "Processing stopped. Completed attachments were kept here (not attached):"
+msgstr ""
+
+#: src/bin/kim_ui.py:29
+msgid "Progressive JPEG"
+msgstr ""
+
+#: src/bin/kim_all:2451
+msgid "Progressive JPEG:"
+msgstr ""
+
+#: src/bin/kim_all:8152
+msgid "Proposed DateTimeOriginal:"
+msgstr ""
+
+#: src/bin/kim_all:8145
+msgid "Proposed local filesystem time:"
+msgstr ""
+
+#: src/bin/kim_all:2019
+msgid "Publishing completed PDF…"
+msgstr ""
+
+#: src/bin/kim_all:4064 src/bin/kim_all:4145 src/bin/kim_all:4247
+msgid "Publishing completed output…"
+msgstr ""
+
+#: src/bin/kim_all:9631
+msgid "Python 3 with PySide6 is required. Install PySide6 for the python3 on PATH, then try again."
+msgstr ""
+
+#: src/bin/kim_all:8247
+msgid "RAW metadata editing is unsupported"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:156
+msgid "Read-only inspection. Unknown format does not mean corrupt. Folder scans are nonrecursive."
+msgstr ""
+
+#: src/kim_recipes.desktop.in:19
+msgid "Recipe editor…"
+msgstr ""
+
+#: src/bin/kim_all:2096
+msgid "Recommended"
+msgstr ""
+
+#: src/kim_location.desktop.in:24
+msgid "Reduce exact GPS location…"
+msgstr ""
+
+#: src/bin/kim_ui.py:32
+msgid "Remove All Metadata"
+msgstr ""
+
+#: src/kim_location.desktop.in:29
+msgid "Remove GPS metadata…"
+msgstr ""
+
+#: src/bin/kim_all:1337
+msgid "Remove Metadata"
+msgstr ""
+
+#: src/kim_videoutilities.desktop.in:29
+msgid "Remove audio (copy video)"
+msgstr ""
+
+#: src/bin/kim_ui.py:32
+msgid "Removes embedded information such as camera details, dates, GPS, copyright and color profiles. Use the more specific removal options if you want to keep other information."
+msgstr ""
+
+#: src/bin/kim_all:1338 src/bin/kim_all:4720 src/bin/kim_all:4738
+msgid "Rename Images"
+msgstr ""
+
+#: src/bin/kim_all:4850
+msgid "Rename destination"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:14
+msgid "Rename images…"
+msgstr ""
+
+#: src/bin/kim_all:413
+msgid "Rename selected originals (confirmation required)"
+msgstr ""
+
+#: src/bin/kim_all:446
+msgid "Rename selected originals and remove their old filenames?"
+msgstr ""
+
+#: src/bin/kim_all:1999
+msgid "Rendering PDF document"
+msgstr ""
+
+#: src/bin/kim_all:1989
+msgid "Rendering album caption"
+msgstr ""
+
+#: src/bin/kim_all:4049
+msgid "Rendering contact-sheet PDF…"
+msgstr ""
+
+#: src/bin/kim_all:4033 src/bin/kim_all:4036
+msgid "Rendering contact-sheet page"
+msgstr ""
+
+#: src/bin/kim_all:3994
+msgid "Rendering contact-sheet thumbnail"
+msgstr ""
+
+#: src/bin/kim_all:4222
+msgid "Rendering multi-page TIFF…"
+msgstr ""
+
+#: src/bin/kim_all:4135
+msgid "Rendering print-layout PDF…"
+msgstr ""
+
+#: src/bin/kim_all:4732
+msgid "Replace Text"
+msgstr ""
+
+#: src/bin/kim_all:451
+msgid "Replace existing derived output files?"
+msgstr ""
+
+#: src/bin/kim_ui.py:26
+msgid "Reset from Settings"
+msgstr ""
+
+#: src/bin/kim_all:1331
+msgid "Resize Images"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:29
+msgid "Resize custom…"
+msgstr ""
+
+#: src/bin/kim_all:5184
+msgid "Resize percentage must be an integer from 1 to 1000."
+msgstr ""
+
+#: src/bin/kim_ui.py:31
+msgid "Resize to Fit / Exact Dimensions"
+msgstr ""
+
+#: src/bin/kim_ui.py:31
+msgid "Resize to Fit keeps the original proportions within your chosen dimensions. Exact Dimensions forces the specified width and height, which can stretch the image."
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:24
+msgid "Resize to fit 1024 × 1024"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:19
+msgid "Resize to fit 1280 × 1280"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:14
+msgid "Resize to fit 1600 × 1600"
+msgstr ""
+
+#: src/bin/kim_all:5213
+msgid "Resize: missing scale."
+msgstr ""
+
+#: src/bin/kim_all:5229
+msgid "Resize: output directory is unavailable:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:250
+msgid "Review every destination. Originals will be kept. Existing destinations will never be replaced; a changed or occupied destination will fail safely."
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:49
+msgid "Rotate 180°"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:39
+msgid "Rotate 90° clockwise"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:44
+msgid "Rotate 90° counterclockwise"
+msgstr ""
+
+#: src/bin/kim_all:1332
+msgid "Rotate Images"
+msgstr ""
+
+#: src/kim_compressandresize.desktop.in:54
+msgid "Rotate custom…"
+msgstr ""
+
+#: src/bin/kim_all:3750
+msgid "Saved copies:"
+msgstr ""
+
+#: src/bin/kim_all:1118 src/bin/kim_all:1200
+msgid "Saved result retained:"
+msgstr ""
+
+#: src/bin/kim_ui.py:29
+msgid "Saves JPEG images in multiple passes, so a partially downloaded image can appear before the full file arrives. It does not change image dimensions or the selected quality. File size may change slightly."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:216
+msgid "Scan cancelled. Showing inspected files only."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:185
+msgid "Select a folder to inspect. No originals will be changed."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:42
+msgid "Select a regular file without a symlink"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:33
+msgid "Select an ordinary file with no symlinks or hardlink aliases"
+msgstr ""
+
+#: src/bin/kim_all:9617
+msgid "Select at least one image."
+msgstr ""
+
+#: src/bin/kim_all:11694
+msgid "Select local, unambiguous image files for the slideshow."
+msgstr ""
+
+#: src/bin/kim_all:7658
+msgid "Select local, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:10548
+msgid "Select local, unambiguous regular video files."
+msgstr ""
+
+#: src/bin/kim_all:8359 src/bin/kim_all:8367
+msgid "Select only one JPEG scan mode."
+msgstr ""
+
+#: src/bin/kim_all:370
+msgid "Selected filenames containing line breaks cannot be processed safely."
+msgstr ""
+
+#: src/bin/kim_all:422 src/bin/kim_all:461 src/bin/kim_all:486
+#: src/bin/kim_all:495
+msgid "Selected files:"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:73
+msgid "Selected information appears beneath each image. Nothing is printed over the image."
+msgstr ""
+
+#: src/bin/kim_all:442
+msgid "Selected original files will be replaced without backups. KIMng cannot undo this operation."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:80 src/bin/kim_extensions_dialog.py:86
+#: src/bin/kim_extensions_dialog.py:97
+msgid "Selected source changed"
+msgstr ""
+
+#: src/bin/kim_all:9355
+msgid "Selection order"
+msgstr ""
+
+#: src/kim_publication.desktop.in:54
+msgid "Send via email…"
+msgstr ""
+
+#: src/bin/kim_all:4722
+msgid "Sequential numbering"
+msgstr ""
+
+#: src/bin/kim_all:1334
+msgid "Set Creator and Copyright"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:19
+msgid "Set creator and copyright…"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:49
+msgid "Set dates…"
+msgstr ""
+
+#: src/bin/kim_all:8115
+msgid "Set file modification time from DateTimeOriginal"
+msgstr ""
+
+#: src/bin/kim_all:8116
+msgid "Set image capture time from file modification time"
+msgstr ""
+
+#: src/kim_information.desktop.in:29
+msgid "Settings…"
+msgstr ""
+
+#: src/bin/kim_all:9356
+msgid "Shuffle images"
+msgstr ""
+
+#: src/bin/kim_all:7900
+msgid "Signed camera-time offset (±HH:MM:SS):"
+msgstr ""
+
+#: src/bin/kim_job.py:236
+msgid "Size increase:"
+msgstr ""
+
+#: src/bin/kim_all:9369
+msgid "Size of small images:"
+msgstr ""
+
+#: src/bin/kim_job.py:240
+msgid "Size statistics unavailable: a published output size could not be read."
+msgstr ""
+
+#: src/bin/kim_all:1104
+msgid "Skipped files (already matched or unchanged):"
+msgstr ""
+
+#: src/bin/kim_all:1081
+msgid "Skipped files:"
+msgstr ""
+
+#: src/bin/kim_all:1096
+msgid "Skipped:"
+msgstr ""
+
+#: src/bin/kim_all:11679
+msgid "Slideshow background must be a supported color name or #RRGGBB."
+msgstr ""
+
+#: src/bin/kim_all:11728
+msgid "Slideshow destination is occupied; choose a new path."
+msgstr ""
+
+#: src/bin/kim_all:11675
+msgid "Slideshow dimensions must be even and no larger than 1920x1080."
+msgstr ""
+
+#: src/bin/kim_all:11698
+msgid "Slideshow duration is limited to 600 seconds and 18,000 frames."
+msgstr ""
+
+#: src/bin/kim_all:11855 src/bin/kim_all:11859
+msgid "Slideshow encoder failed or produced no output."
+msgstr ""
+
+#: src/bin/kim_all:11893
+msgid "Slideshow failed container, frame, duration or full-decode validation."
+msgstr ""
+
+#: src/bin/kim_all:11700
+msgid "Slideshow filenames cannot contain newlines."
+msgstr ""
+
+#: src/bin/kim_all:11671
+msgid "Slideshow frame rate must be 1-30 fps."
+msgstr ""
+
+#: src/bin/kim_all:11677
+msgid "Slideshow frame size exceeds the 1080p resource limit."
+msgstr ""
+
+#: src/bin/kim_all:11815
+msgid "Slideshow interrupted before encoding."
+msgstr ""
+
+#: src/bin/kim_all:11840
+msgid "Slideshow interrupted during encoding."
+msgstr ""
+
+#: src/bin/kim_all:11586
+msgid "Slideshow options require a value."
+msgstr ""
+
+#: src/bin/kim_all:11726
+msgid "Slideshow output cannot alias a selected source."
+msgstr ""
+
+#: src/bin/kim_all:11722 src/bin/kim_all:11724
+msgid "Slideshow output directory is unavailable."
+msgstr ""
+
+#: src/bin/kim_all:11721
+msgid "Slideshow output must use the .mp4 extension."
+msgstr ""
+
+#: src/bin/kim_all:11910
+msgid "Slideshow publication failed or was interrupted."
+msgstr ""
+
+#: src/bin/kim_all:11902
+msgid "Slideshow publication failed; destination was preserved."
+msgstr ""
+
+#: src/bin/kim_all:11670
+msgid "Slideshow seconds per image must be 1–30."
+msgstr ""
+
+#: src/bin/kim_all:11672
+msgid "Slideshow size must be WIDTHxHEIGHT."
+msgstr ""
+
+#: src/bin/kim_all:11755
+msgid "Slideshow staging failed."
+msgstr ""
+
+#: src/bin/kim_all:9333
+msgid "Small"
+msgstr ""
+
+#: src/bin/kim_all:1092
+msgid "Some files could not be processed."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:253
+msgid "Source"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:45
+msgid "Source changed during inspection"
+msgstr ""
+
+#: src/bin/kim_album_dialog.py:106
+msgid "Source filename"
+msgstr ""
+
+#: src/bin/kim_all:1779
+msgid "Source preparation failed:"
+msgstr ""
+
+#: src/bin/kim_all:4726
+msgid "Spaces to Dashes"
+msgstr ""
+
+#: src/bin/kim_all:4727
+msgid "Spaces to Underscores"
+msgstr ""
+
+#: src/bin/kim_all:9331
+msgid "Spacing between images:"
+msgstr ""
+
+#: src/bin/kim_all:9322
+msgid "Square (3200 × 3200)"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:99
+msgid "Staged copy changed"
+msgstr ""
+
+#: src/bin/kim_all:4815
+msgid "Starting number:"
+msgstr ""
+
+#: src/bin/kim_all:2340
+msgid "Starting preset:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:160
+msgid "Status"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:29
+msgid "Strip metadata"
+msgstr ""
+
+#: src/bin/kim_all:1093 src/bin/kim_all:3747
+msgid "Succeeded:"
+msgstr ""
+
+#: src/bin/kim_all:4795
+msgid "Suffix to add:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:160
+msgid "Suggested Extension"
+msgstr ""
+
+#: src/bin/kim_all:4240
+msgid "TIFF join: ImageMagick failed or produced an invalid TIFF."
+msgstr ""
+
+#: src/bin/kim_all:4203
+msgid "TIFF join: an input frame has invalid dimensions or format."
+msgstr ""
+
+#: src/bin/kim_all:4197
+msgid "TIFF join: an input image could not be decoded."
+msgstr ""
+
+#: src/bin/kim_all:4219
+msgid "TIFF join: cannot create destination-local staging."
+msgstr ""
+
+#: src/bin/kim_all:4188
+msgid "TIFF join: invalid or unsafe output destination."
+msgstr ""
+
+#: src/bin/kim_all:4211
+msgid "TIFF join: no image frames were found."
+msgstr ""
+
+#: src/bin/kim_all:4249
+msgid "TIFF join: publication failed; existing files were preserved."
+msgstr ""
+
+#: src/bin/kim_all:4244
+msgid "TIFF join: publication interrupted; no output was written."
+msgstr ""
+
+#: src/bin/kim_all:4169
+msgid "TIFF join: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:4797
+msgid "Text to overwrite:"
+msgstr ""
+
+#: src/bin/kim_all:11687
+msgid "The FFmpeg libx264 encoder is required to create an H.264 slideshow."
+msgstr ""
+
+#: src/bin/kim_ui.py:23
+msgid "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."
+msgstr ""
+
+#: src/bin/kim_all:2704
+msgid "The installed ImageMagick HEIC/HEIF encoder is unavailable."
+msgstr ""
+
+#: src/bin/kim_all:2680
+msgid "The installed ImageMagick JPEG 2000 encoder is unavailable for:"
+msgstr ""
+
+#: src/bin/kim_all:2692
+msgid "The installed ImageMagick JPEG XL encoder is unavailable."
+msgstr ""
+
+#: src/bin/kim_all:9649
+msgid "The installed license or xdg-open is unavailable."
+msgstr ""
+
+#: src/bin/kim_all:9626
+msgid "The installed metadata component is missing or unreadable. Reinstall KIMng:"
+msgstr ""
+
+#: src/bin/kim_all:378
+msgid "The same file was selected more than once. Nothing was changed."
+msgstr ""
+
+#: src/bin/kim_all:10034
+msgid "The selected AV1 encoder accepts custom CPU speed values from 0 to 8."
+msgstr ""
+
+#: src/bin/kim_all:10037
+msgid "The selected FFmpeg video encoder is unavailable:"
+msgstr ""
+
+#: src/bin/kim_all:7711
+msgid "The selected source changed. Select it again to review its date."
+msgstr ""
+
+#: src/bin/kim_ui.py:24
+msgid "The timezone where the image was taken. If you don't know it, choose Unknown. KIMng won't guess based on your computer's timezone."
+msgstr ""
+
+#: src/bin/kim_all:9338
+msgid "Thin white border"
+msgstr ""
+
+#: src/bin/kim_all:481
+msgid "This action modifies original files. KIM_POLICY=create does not permit it; use KIM_POLICY=prompt to review the operation."
+msgstr ""
+
+#: src/bin/kim_all:486
+msgid "This action replaces selected original images, not copies."
+msgstr ""
+
+#: src/bin/kim_all:9343
+msgid "Transparent"
+msgstr ""
+
+#: src/bin/kim_all:4728
+msgid "Underscores to Spaces"
+msgstr ""
+
+#: src/bin/kim_all:1361
+msgid "Unexpected progress cancellation reply. Processing stopped."
+msgstr ""
+
+#: src/bin/kim_all:10974
+msgid "Unknown audio option:"
+msgstr ""
+
+#: src/bin/kim_all:10596
+msgid "Unknown frame option:"
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:68 src/bin/kim_extensions_dialog.py:71
+msgid "Unknown or unsupported format"
+msgstr ""
+
+#: src/bin/kim_all:11608
+msgid "Unknown slideshow option:"
+msgstr ""
+
+#: src/bin/kim_all:11361
+msgid "Unknown video GIF option:"
+msgstr ""
+
+#: src/bin/kim_all:9979
+msgid "Unknown video option:"
+msgstr ""
+
+#: src/bin/kim_all:3677
+msgid "Unsafe destination for a correctly named copy."
+msgstr ""
+
+#: src/bin/kim_all:3684
+msgid "Unsafe or changed destination for a correctly named copy."
+msgstr ""
+
+#: src/bin/kim_extensions_dialog.py:88
+msgid "Unsafe staged copy"
+msgstr ""
+
+#: src/bin/kim_all:10667
+msgid "Use a timestamp formatted HH:MM:SS[.sss]."
+msgstr ""
+
+#: src/bin/kim_ui.py:43
+msgid "Use the current value from KIMng Settings for this batch instead of your custom value. The preview shows the value that will be applied."
+msgstr ""
+
+#: src/bin/kim_ui.py:26
+msgid "Use the value from KIMng Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe."
+msgstr ""
+
+#: src/bin/kim_ui.py:30
+msgid "Uses more efficient lossless coding of the JPEG's compressed data. It can reduce file size without changing the decoded image pixels or selected JPEG quality. It may take slightly longer to encode."
+msgstr ""
+
+#: src/bin/kim_all:11889
+msgid "Validating slideshow decode"
+msgstr ""
+
+#: src/bin/kim_all:4226
+msgid "Verifying multi-page TIFF…"
+msgstr ""
+
+#: src/bin/kim_all:2010
+msgid "Verifying resulting PDF"
+msgstr ""
+
+#: src/bin/kim_all:4059 src/bin/kim_all:4138
+msgid "Verifying resulting PDF…"
+msgstr ""
+
+#: src/bin/kim_all:9990
+msgid "Video CRF must be 17, 23 or 29."
+msgstr ""
+
+#: src/bin/kim_all:9966
+msgid "Video CRF was specified more than once."
+msgstr ""
+
+#: src/bin/kim_all:11474
+msgid "Video GIF"
+msgstr ""
+
+#: src/bin/kim_all:11249
+msgid "Video audio"
+msgstr ""
+
+#: src/bin/kim_all:10985
+msgid "Video audio operation:"
+msgstr ""
+
+#: src/bin/kim_all:10007
+msgid "Video codec must be libx264, libx265 or av1."
+msgstr ""
+
+#: src/bin/kim_all:9967
+msgid "Video codec was specified more than once."
+msgstr ""
+
+#: src/bin/kim_all:10014
+msgid "Video container must be orig or mp4."
+msgstr ""
+
+#: src/bin/kim_all:9968
+msgid "Video container was specified more than once."
+msgstr ""
+
+#: src/bin/kim_all:10913
+msgid "Video frame"
+msgstr ""
+
+#: src/bin/kim_all:9962
+msgid "Video options require a value."
+msgstr ""
+
+#: src/bin/kim_all:10040
+msgid "Video selection is empty or contains an unsafe, aliased, linked or invalid source."
+msgstr ""
+
+#: src/bin/kim_all:9986
+msgid "Video size must be hd720 or hd1080."
+msgstr ""
+
+#: src/bin/kim_all:9965
+msgid "Video size was specified more than once."
+msgstr ""
+
+#: src/bin/kim_all:11298
+msgid "Video validation"
+msgstr ""
+
+#: src/kim_location.desktop.in:19
+msgid "View GPS metadata…"
+msgstr ""
+
+#: src/bin/kim_all:9611
+msgid "View metadata"
+msgstr ""
+
+#: src/kim_metadata.desktop.in:34
+msgid "View metadata…"
+msgstr ""
+
+#: src/bin/kim_all:2454
+msgid "WebP lossy quality:"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:44
+msgid "WebP · Large (1600 × 1600)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:49
+msgid "WebP · Medium (800 × 800)"
+msgstr ""
+
+#: src/kim_webemail.desktop.in:54
+msgid "WebP · Thumbnail (128 × 128)"
+msgstr ""
+
+#: src/bin/kim_all:9341
+msgid "White"
+msgstr ""
+
+#: src/bin/kim_all:9321
+msgid "Widescreen 16:9 (3840 × 2160)"
+msgstr ""
+
+#: src/bin/kim_all:927
+msgid "Writing / publishing output"
+msgstr ""
+
+#: src/bin/kim_all:2447 src/bin/kim_all:2449
+msgid "Yes"
+msgstr ""
+
+#: src/bin/kim_all:438
+msgid "Yes, overwrite existing files"
+msgstr ""
+
+#: src/bin/kim_all:443 src/bin/kim_all:499
+msgid "Yes, overwrite selected originals"
+msgstr ""
+
+#: src/bin/kim_all:448
+msgid "Yes, rename selected originals"
+msgstr ""
+
+#: src/bin/kim_all:453
+msgid "Yes, replace existing outputs"
+msgstr ""
+
+#: src/bin/kim_all:11303
+msgid "audio output validation failed"
+msgstr ""
+
+#: src/bin/kim_job.py:232
+msgid "bytes"
+msgstr ""
+
+#: src/bin/kim_all:11222
+msgid "cannot select a safe output container for this video"
+msgstr ""
+
+#: src/bin/kim_all:10299
+msgid "could not create destination-local staging"
+msgstr ""
+
+#: src/bin/kim_all:10234
+msgid "could not inspect a valid video stream and container"
+msgstr ""
+
+#: src/bin/kim_all:8236
+msgid "could not set modification time"
+msgstr ""
+
+#: src/bin/kim_all:8217
+msgid "date copy preparation failed"
+msgstr ""
+
+#: src/bin/kim_all:10275
+msgid "destination is no longer available"
+msgstr ""
+
+#: src/bin/kim_all:5916
+msgid "email attachment copy"
+msgstr ""
+
+#: src/bin/kim_all:5902 src/bin/kim_all:5908
+msgid "email attachment storage"
+msgstr ""
+
+#: src/bin/kim_all:11793
+msgid "frame preparation failed"
+msgstr ""
+
+#: src/bin/kim_all:10923
+msgid "frame production or validation failed"
+msgstr ""
+
+#: src/bin/kim_all:10338
+msgid "interrupted after encoding; no output was published"
+msgstr ""
+
+#: src/bin/kim_all:11434
+msgid "interrupted before GIF encoding"
+msgstr ""
+
+#: src/bin/kim_all:11169
+msgid "interrupted before audio processing"
+msgstr ""
+
+#: src/bin/kim_all:10305
+msgid "interrupted before encoding"
+msgstr ""
+
+#: src/bin/kim_all:10863
+msgid "interrupted before frame extraction"
+msgstr ""
+
+#: src/bin/kim_all:11759
+msgid "interrupted before frame preparation"
+msgstr ""
+
+#: src/bin/kim_all:10230
+msgid "interrupted before processing"
+msgstr ""
+
+#: src/bin/kim_all:10326
+msgid "interrupted during encoding; no output was published"
+msgstr ""
+
+#: src/bin/kim_all:11788
+msgid "interrupted during frame preparation"
+msgstr ""
+
+#: src/bin/kim_all:10355
+msgid "interrupted during output validation; no output was published"
+msgstr ""
+
+#: src/bin/kim_all:10367
+msgid "interrupted immediately before publication"
+msgstr ""
+
+#: src/bin/kim_all:8220
+msgid "interrupted or publication failed"
+msgstr ""
+
+#: src/bin/kim_all:11476 src/bin/kim_all:11500
+msgid "interrupted; no GIF was published"
+msgstr ""
+
+#: src/bin/kim_all:11251
+msgid "interrupted; no audio artifact was published"
+msgstr ""
+
+#: src/bin/kim_all:10916
+msgid "interrupted; no frame was published"
+msgstr ""
+
+#: src/bin/kim_all:8264
+msgid "invalid CreateDate timezone offset"
+msgstr ""
+
+#: src/bin/kim_all:8265
+msgid "invalid ModifyDate timezone offset"
+msgstr ""
+
+#: src/bin/kim_all:8251
+msgid "invalid timezone offset"
+msgstr ""
+
+#: src/bin/kim_all:10853 src/bin/kim_all:11159 src/bin/kim_all:11424
+msgid "invalid video"
+msgstr ""
+
+#: src/bin/kim_all:8144 src/bin/kim_all:8145
+msgid "missing or invalid"
+msgstr ""
+
+#: src/bin/kim_all:8194
+msgid "missing or invalid image capture date"
+msgstr ""
+
+#: src/bin/kim_all:11177
+msgid "no audio stream"
+msgstr ""
+
+#: src/bin/kim_all:7920
+msgid "no capture time"
+msgstr ""
+
+#: src/bin/kim_all:10858 src/bin/kim_all:11164 src/bin/kim_all:11429
+msgid "no video stream"
+msgstr ""
+
+#: src/bin/kim_all:8147
+msgid "none; interpreted in system local time"
+msgstr ""
+
+#: src/bin/kim_all:10359
+msgid "output did not fully decode or processing was interrupted"
+msgstr ""
+
+#: src/bin/kim_all:10344
+msgid "output validation failed: wrong container, codec, dimensions, streams, duration or incomplete decode"
+msgstr ""
+
+#: src/bin/kim_all:1968
+msgid "page"
+msgstr ""
+
+#: src/bin/kim_all:1967
+msgid "pages"
+msgstr ""
+
+#: src/bin/kim_all:11802
+msgid "prepared frame failed validation"
+msgstr ""
+
+#: src/bin/kim_all:1792
+msgid "processing failed."
+msgstr ""
+
+#: src/bin/kim_all:10931 src/bin/kim_all:11311 src/bin/kim_all:11527
+msgid "publication failed or operation interrupted"
+msgstr ""
+
+#: src/bin/kim_all:10389
+msgid "publication failed; existing files were preserved"
+msgstr ""
+
+#: src/bin/kim_all:1219
+msgid "required dependency is unavailable:"
+msgstr ""
+
+#: src/bin/kim_all:8182
+msgid "selected original changed before processing"
+msgstr ""
+
+#: src/bin/kim_all:8228
+msgid "selected original changed before timestamp update"
+msgstr ""
+
+#: src/bin/kim_all:8214 src/bin/kim_all:10888 src/bin/kim_all:11233
+#: src/bin/kim_all:11465
+msgid "staging failed"
+msgstr ""
+
+#: src/bin/kim_all:10252
+msgid "the original container cannot be identified safely from the file extension"
+msgstr ""
+
+#: src/bin/kim_all:10250
+msgid "the selected codec is incompatible with the original container; choose MP4 explicitly"
+msgstr ""
+
+#: src/bin/kim_all:11765
+msgid "this layered, raw, vector or HDR input requires an explicit development/color workflow"
+msgstr ""
+
+#: src/bin/kim_all:8241
+msgid "timestamp changed but original access time could not be restored"
+msgstr ""
+
+#: src/bin/kim_all:10873
+msgid "timestamp is outside the video"
+msgstr ""
+
+#: src/bin/kim_all:7921
+msgid "unavailable"
+msgstr ""
+
+#: src/bin/kim_all:11773
+msgid "unsupported, ambiguous or multi-frame image"
+msgstr ""
+
+#: src/bin/kim_all:8449
+msgid "webexport: --color must be srgb or preserve."
+msgstr ""
+
+#: src/bin/kim_all:8745
+msgid "webexport: an installed sRGB ICC profile is required for color-managed export."
+msgstr ""
+
+#: src/bin/kim_all:8378
+msgid "webexport: option value missing."
+msgstr ""
+
+#: src/bin/kim_all:8440
+msgid "webexport: quality must be between 1 and 100."
+msgstr ""
+
+#: src/bin/kim_all:8400
+msgid "webexport: select regular, unambiguous image files."
+msgstr ""
+
+#: src/bin/kim_all:8414
+msgid "webexport: size must be positive WIDTHxHEIGHT."
+msgstr ""
+
+#: src/bin/kim_all:8804
+msgid "webexport: untagged CMYK has ambiguous color and was not converted."
+msgstr ""
+
+#: src/bin/kim_all:8390
+msgid "webexport: use -- before input files."
+msgstr ""

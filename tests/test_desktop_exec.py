@@ -34,7 +34,7 @@ class DesktopExecTests(unittest.TestCase):
                 menu.exec_argument('/tmp/' + chr(code) + '/kim_all')
 
     def test_installer_rejects_controls_before_creating_prefix(self):
-        with tempfile.TemporaryDirectory(prefix='kim6-control-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='kimng-control-') as tmp:
             for control in ('\t', '\n', '\r', '\x7f', '\x85'):
                 prefix = Path(tmp) / ('bad' + control)
                 result = subprocess.run(['bash', str(ROOT / 'install.sh'), '--prefix', str(prefix)],
@@ -44,7 +44,7 @@ class DesktopExecTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('kreadconfig6'), 'KDE KConfig reader unavailable')
     def test_kde_decodes_desktop_string_layer(self):
-        with tempfile.TemporaryDirectory(prefix='kim6-kconfig-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='kimng-kconfig-') as tmp:
             path = Path(tmp) / 'probe.desktop'
             executable = '/tmp/space $ back\\ quote" tick` %F & # 雪/kim_all'
             path.write_text('[Desktop Entry]\nExec=' + menu.exec_argument(executable) + ' -- %F\n')
@@ -60,7 +60,7 @@ class DesktopExecTests(unittest.TestCase):
         fixture.setUp()
         try:
             fixture.prefix = fixture.base / 'space $ back\\ quote" tick` %F & # 雪'
-            fixture.runtime = fixture.prefix / 'kim6'
+            fixture.runtime = fixture.prefix / 'kimng'
             fixture.env.update(XDG_CONFIG_HOME=str(fixture.base / 'config'),
                                PYTHONDONTWRITEBYTECODE='1', QT_QPA_PLATFORM='offscreen')
             # Do not regenerate the checkout's documentation during this test.
@@ -74,6 +74,7 @@ class DesktopExecTests(unittest.TestCase):
                 after = (fixture.prefix / template.name.removesuffix('.in')).read_text()
                 expected = re.sub(r'^Exec=kim_all(?=[ \t]|$)', lambda _: 'Exec=' + encoded,
                                   before, flags=re.M)
+                expected = re.sub(r'^_(Name|X-KDE-Submenu)=', r'\1=', expected, flags=re.M)
                 if template.name == 'kim_recipes.desktop.in':
                     expected = menu.render(RecipeLibrary(), fixture.runtime / 'bin/kim_all')
                 self.assertEqual(after, expected)

@@ -289,7 +289,7 @@ class MetadataCompareQtTests(unittest.TestCase):
             drop(panel.preview, data)
         self.assertEqual(tuple(self.paths[:2]), window.compared_paths)
         data = QMimeData()
-        data.setData('application/x-kim6-slot', b'0')
+        data.setData('application/x-kimng-slot', b'0')
         drop(window.comparison_image_2_header.preview, data)
         self.assertEqual((self.paths[1], self.paths[0]), window.compared_paths)
         window.assign_comparison(0, '/not/a/loaded/image.jpg')

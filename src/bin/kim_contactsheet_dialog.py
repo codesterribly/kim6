@@ -27,7 +27,7 @@ class ContactSheetDialog(OrderedImageDialog):
         self.settings_file = settings_file
         self.setWindowTitle('KIMng - Contact sheet')
         self.setMinimumWidth(600)
-        # KIM6_CONTACTSHEET_SCROLL_LAYOUT_V1
+        # KIMNG_CONTACTSHEET_SCROLL_LAYOUT_V1
         # Bound the window height without shrinking its controls.
         # The existing thumbnail list remains independently scrollable.
         self.resize(720, 820)
@@ -116,7 +116,7 @@ class ContactSheetDialog(OrderedImageDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
-        # KIM6_CONTACT_SHEET_PREVIEW_V1
+        # KIMNG_CONTACT_SHEET_PREVIEW_V1
         self.preview_heading = QLabel('Page preview')
         layout.addWidget(self.preview_heading)
 
@@ -468,7 +468,7 @@ class ContactSheetDialog(OrderedImageDialog):
 
         self.preview_note.setText(" ".join(notes))
 
-    # KIM6_CONTACTSHEET_COMPACT_LIST_V1
+    # KIMNG_CONTACTSHEET_COMPACT_LIST_V1
     def compact_image_list(self):
         """Show at most three thumbnail rows; retain scrolling."""
         rows = min(

@@ -142,7 +142,7 @@ class FlipPublicationTests(unittest.TestCase):
         self.assertEqual(set(expected_names), set(result.outputs))
         for path, original in protected.items():
             self.assertEqual(original, signature(path))
-        self.assertFalse(list(workspace.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(workspace.root.rglob('.kimng-stage.*')))
 
     def test_horizontal_single_beside_source(self):
         self.exercise('flop')
@@ -187,7 +187,7 @@ class FlipPublicationTests(unittest.TestCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
         self.assertEqual(before, signature(source))
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-stage.*')))
 
     def test_late_collision_is_preserved_without_renaming_output(self):
         source = self.workspace.png('input/photo.png')
@@ -197,7 +197,7 @@ class FlipPublicationTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertEqual({'input/photo_flipped_vertical.png': b'late collision; preserve me'}, result.outputs)
         self.assertEqual(before, signature(source))
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-stage.*')))
 
     def test_source_change_after_review_cannot_publish(self):
         source = self.workspace.png('input/photo.png')

@@ -46,6 +46,21 @@ def markdown_slug(heading):
 
 
 class DocumentationContractTests(unittest.TestCase):
+    def test_gettext_template_matches_active_sources(self):
+        result = subprocess.run(
+            ["python3", "-B", str(ROOT / "tools/extract_messages.py"), "--check"],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        catalog = (ROOT / "po/kimng.pot").read_text(encoding="utf-8")
+        for message in ('About KIMng', 'KIMng - Compression results',
+                        'KIMng - Resize/Crop/Rotate', 'Camera Timezone'):
+            self.assertIn('msgid "' + message + '"', catalog)
+        self.assertNotIn('/tmp/', catalog)
+        self.assertNotIn('KIM6', catalog)
+        self.assertNotIn('Project-Id-Version: kim6', catalog)
+        self.assertFalse((ROOT / "po/kim6.pot").exists())
+
     def test_html_reference_pages_current(self):
         import subprocess
         import sys

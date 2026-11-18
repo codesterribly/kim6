@@ -62,7 +62,7 @@ class GalleryCollageTests(unittest.TestCase):
         self.assertEqual(tuple(self.w.observe(source) for source in inputs), before)
         self.assertFalse(any(path.name == 'collage-tiles' for path in
                              self.w.path('out').rglob('*')))
-        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in
+        self.assertFalse(any(path.name.startswith('.kimng-stage.') for path in
                              self.w.path('out').iterdir()))
 
     def test_mosaic_layout_keeps_sources_and_cleans_tiles(self):
@@ -85,7 +85,7 @@ class GalleryCollageTests(unittest.TestCase):
                                  '--no-shadow', '--output', target, '--', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(target), old)
-        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in
+        self.assertFalse(any(path.name.startswith('.kimng-stage.') for path in
                              self.w.path('out').iterdir()))
 
     def test_collage_interactive_options_are_exposed(self):
@@ -212,7 +212,7 @@ class GalleryCollageTests(unittest.TestCase):
         result = self.w.dispatch('gallery', self.w.root, self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(path.name.startswith('kim-gallery-') for path in self.w.path('out').iterdir()))
-        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in self.w.path('out').iterdir()))
+        self.assertFalse(any(path.name.startswith('.kimng-stage.') for path in self.w.path('out').iterdir()))
 
     def test_gallery_directory_publication_failure_leaves_no_partial_public_tree(self):
         self.w.use_real_gallery_collage()
@@ -221,7 +221,7 @@ class GalleryCollageTests(unittest.TestCase):
         result = self.w.dispatch('gallery', self.w.root, self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(path.name.startswith('kim-gallery-') for path in self.w.path('out').iterdir()))
-        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in self.w.path('out').iterdir()))
+        self.assertFalse(any(path.name.startswith('.kimng-stage.') for path in self.w.path('out').iterdir()))
 
     def test_gallery_no_clobber_publication_preserves_directory_created_during_processing(self):
         self.w.use_real_gallery_collage()
@@ -233,7 +233,7 @@ class GalleryCollageTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((target / 'sentinel').read_text(), 'concurrent owner')
         self.assertFalse((target / 'index.html').exists())
-        self.assertFalse(any(path.name.startswith('.kim6-stage.') for path in self.w.path('out').iterdir()))
+        self.assertFalse(any(path.name.startswith('.kimng-stage.') for path in self.w.path('out').iterdir()))
 
     def test_gallery_cancellation_after_asset_generation_prevents_directory_publication(self):
         self.w.use_real_gallery_collage()

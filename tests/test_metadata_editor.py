@@ -550,7 +550,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         if not shutil.which("ffmpeg") or not shutil.which("exiftool"):
             raise unittest.SkipTest("ffmpeg and ExifTool are required for JPEG metadata fixtures")
-        cls.temp = tempfile.TemporaryDirectory(prefix="kim6-editor-ui-")
+        cls.temp = tempfile.TemporaryDirectory(prefix="kimng-editor-ui-")
         fixture_script = Path(__file__).parent / "fixtures/metadata_browser/generate_fixtures.py"
         subprocess.run([sys.executable, str(fixture_script), "--output-dir", cls.temp.name], check=True)
         cls.fixtures = Path(cls.temp.name)
@@ -781,7 +781,7 @@ class MetadataEditorQtTests(unittest.TestCase):
 
     def test_horizontal_and_vertical_splitters_resize_persist_and_restore(self):
         from PySide6.QtCore import QEventLoop, QTimer, Qt
-        temp = tempfile.TemporaryDirectory(prefix="kim6-editor-splitters-")
+        temp = tempfile.TemporaryDirectory(prefix="kimng-editor-splitters-")
         settings_path = Path(temp.name) / "editor.ini"
         preferences = self.settings_preferences(settings_path)
         editor = self.make_editor(["complete.jpg"], preferences)
@@ -838,7 +838,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         temp.cleanup()
 
     def test_invalid_saved_splitter_sizes_fall_back_to_visible_panes(self):
-        temp = tempfile.TemporaryDirectory(prefix="kim6-editor-invalid-splitter-")
+        temp = tempfile.TemporaryDirectory(prefix="kimng-editor-invalid-splitter-")
         settings_path = Path(temp.name) / "editor.ini"
         preferences = self.settings_preferences(settings_path)
         preferences.settings.setValue(MetadataEditor.HORIZONTAL_SPLITTER_KEY, [0, 10000])
@@ -856,7 +856,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         temp.cleanup()
 
     def test_preview_rescales_without_rereading_and_keeps_image_aspect(self):
-        with tempfile.TemporaryDirectory(prefix="kim6-editor-preview-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="kimng-editor-preview-") as temporary:
             preferences = self.settings_preferences(Path(temporary) / "editor.ini")
             editor = self.make_editor(["complete.jpg"], preferences)
             cached = editor.previews[editor.paths[0]]
@@ -1005,7 +1005,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.assertEqual('Refreshed snapshot', title.text())
 
     def test_priority_change_and_navigation_keep_draft_target_pinned(self):
-        temporary = tempfile.TemporaryDirectory(prefix='kim6-editor-priority-')
+        temporary = tempfile.TemporaryDirectory(prefix='kimng-editor-priority-')
         self.addCleanup(temporary.cleanup)
         editor = self.make_editor(['complete.jpg', 'xmp_only.jpg'])
         self.addCleanup(self.close_editor, editor)

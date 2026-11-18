@@ -68,7 +68,7 @@ class WatermarkPreviewWorker(QThread):
     def run(self):
         from kim_process import inspection_context, run_process
         try:
-            with tempfile.TemporaryDirectory(prefix='kim6-picker-') as workspace:
+            with tempfile.TemporaryDirectory(prefix='kimng-picker-') as workspace:
                 env = dict(os.environ, TMPDIR=workspace, MAGICK_TEMPORARY_PATH=workspace,
                            MAGICK_MEMORY_LIMIT='256MiB', MAGICK_MAP_LIMIT='512MiB',
                            MAGICK_DISK_LIMIT='1GiB', MAGICK_THREAD_LIMIT='2', MAGICK_TIME_LIMIT='12',
@@ -470,7 +470,7 @@ class VisualWorker(QThread):
                 self.rows = preview(self.recipe, self.files)
                 checkpoint()
                 if not self.sample: return
-                with source_session(), tempfile.TemporaryDirectory(prefix='kim6-visual-') as workspace:
+                with source_session(), tempfile.TemporaryDirectory(prefix='kimng-visual-') as workspace:
                     source = Path(self.sample)
                     before = source.stat()
                     if source.is_symlink() or not source.is_file(): raise RecipeError('Preview source must be a regular image')

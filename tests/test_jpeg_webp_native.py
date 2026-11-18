@@ -189,7 +189,7 @@ class NativeDispatcherTests(unittest.TestCase):
         )
 
         self.assertFalse(
-            list(self.w.root.rglob('.kim6-stage.*'))
+            list(self.w.root.rglob('.kimng-stage.*'))
         )
 
     def test_missing_native_engine_fails_closed(self):

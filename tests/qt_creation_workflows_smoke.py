@@ -173,7 +173,7 @@ if action_"$kind" "$@"; then exit 77; fi
 
 def main():
     app = QApplication.instance() or QApplication([])
-    with tempfile.TemporaryDirectory(prefix='kim6-creation-') as directory:
+    with tempfile.TemporaryDirectory(prefix='kimng-creation-') as directory:
         root = Path(directory)
         paths = []
         for name in ('first image.png', 'é 第二 image.png', 'third.png'):
@@ -307,7 +307,7 @@ def main():
         def close_collage():
             dialog = QApplication.activeModalWidget()
             try:
-                assert dialog.windowTitle() == 'KIM6 - Create collage'
+                assert dialog.windowTitle() == 'KIMng - Create collage'
             except BaseException as exc:
                 errors.append(exc)
             dialog.reject()

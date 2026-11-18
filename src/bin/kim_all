@@ -53,11 +53,9 @@ set -euo pipefail
 
 PROG="kim_all"
 DISPATCHER_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-if [ -d "$DISPATCHER_DIR/../locale" ]; then
-  KIM_LOCALE_DIR="$(cd -P -- "$DISPATCHER_DIR/../locale" && pwd -P)"
-  export TEXTDOMAINDIR="${TEXTDOMAINDIR:-$KIM_LOCALE_DIR}"
-  export TEXTDOMAIN="${TEXTDOMAIN:-kimng}"
-fi
+KIM_LOCALE_DIR="$(cd -P -- "$DISPATCHER_DIR/.." && pwd -P)/locale"
+export TEXTDOMAINDIR="${TEXTDOMAINDIR:-$KIM_LOCALE_DIR}"
+export TEXTDOMAIN="${TEXTDOMAIN:-kimng}"
 
 # Adapters keep existing Bash actions and their policy/publication boundaries.
 # Before a job starts, tools retain their normal noninteractive behavior.
@@ -72,7 +70,7 @@ job_show_warnings() {
     return 0
   fi
 
-  # KIM6_WEBEXPORT_NONMODAL_WARNINGS
+  # KIMNG_WEBEXPORT_NONMODAL_WARNINGS
   # Source notices for Web Export belong in pre-approval review.
   # Any remaining diagnostics go to stderr, never another modal.
   if [ "${cmd:-}" = webexport ]; then
@@ -528,7 +526,7 @@ split_path() {
 
 # Place an action tag around the complete stem; keep numbering before the extension.
 # Only fixed, supported label keys can be read from settings.
-kim6_known_affix_key() {
+kimng_known_affix_key() {
   case "$1" in
     KIM_AFFIX_COMPRESSED|KIM_AFFIX_RESIZED|KIM_AFFIX_WEB|KIM_AFFIX_ROTATED|KIM_AFFIX_AUTO_ROTATED|KIM_AFFIX_FLIPPED_HORIZONTAL|KIM_AFFIX_FLIPPED_VERTICAL|KIM_AFFIX_STRIPPED|KIM_AFFIX_GPS|KIM_AFFIX_AI|KIM_AFFIX_COPYRIGHT|KIM_AFFIX_TIMESHIFT|KIM_AFFIX_DATESYNC|KIM_AFFIX_TRANSCODED|KIM_AFFIX_FRAME|KIM_AFFIX_THUMBNAIL|KIM_AFFIX_CONTACT_SHEET|KIM_AFFIX_AUDIO|KIM_AFFIX_MUTED|KIM_AFFIX_ANIMATED|KIM_AFFIX_SLIDESHOW) return 0 ;;
     *) return 1 ;;
@@ -537,11 +535,11 @@ kim6_known_affix_key() {
 
 # Resolve a logical action label to the configured filename label.
 # Invalid environment overrides fall back to the original default.
-kim6_affix_value() {
+kimng_affix_value() {
   local default="$1" key="KIM_AFFIX_${1^^}" value
   local LC_ALL=C
   key="${key//-/_}"
-  if ! kim6_known_affix_key "$key"; then
+  if ! kimng_known_affix_key "$key"; then
     printf '%s\n' "$default"
     return
   fi
@@ -557,9 +555,9 @@ kim6_affix_value() {
 affixed_filename() {
   local stem="$1" tag="$2" ext="$3" number="${4:-}" separator="${5:-_}" joiner="${6:-_}" name
   case "$tag" in
-    frame-*) tag="$(kim6_affix_value frame)-${tag#frame-}" ;;
-    gps_ai|ai_ai) tag="$(kim6_affix_value "${tag%_ai}")_$(kim6_affix_value ai)" ;;
-    *) tag="$(kim6_affix_value "$tag")" ;;
+    frame-*) tag="$(kimng_affix_value frame)-${tag#frame-}" ;;
+    gps_ai|ai_ai) tag="$(kimng_affix_value "${tag%_ai}")_$(kimng_affix_value ai)" ;;
+    *) tag="$(kimng_affix_value "$tag")" ;;
   esac
   if [ "$KIM_NAME_AFFIX_POSITION" = "prefix" ]; then
     name="${tag}${joiner}${stem}"
@@ -860,15 +858,15 @@ preserve_meta_from() {
 register_stage_dir() {
   local stage="$1" identity
   identity="$(stat -c '%d:%i' -- "$stage")" || return 1
-  printf '%s' "$KIMDIR" > "$stage/.kim6-owner" || return 1
+  printf '%s' "$KIMDIR" > "$stage/.kimng-owner" || return 1
   printf '%s\0%s\0' "$stage" "$identity" >> "$KIMDIR/stages"
 }
 
 owned_stage_dir() {
   local stage="$1" registered identity
   [ ! -L "$stage" ] && [ -d "$stage" ] || return 1
-  [ ! -L "$stage/.kim6-owner" ] && [ -f "$stage/.kim6-owner" ] || return 1
-  [ "$(< "$stage/.kim6-owner")" = "$KIMDIR" ] || return 1
+  [ ! -L "$stage/.kimng-owner" ] && [ -f "$stage/.kimng-owner" ] || return 1
+  [ "$(< "$stage/.kimng-owner")" = "$KIMDIR" ] || return 1
   [ -f "$KIMDIR/stages" ] || return 1
   while IFS= read -r -d '' registered && IFS= read -r -d '' identity; do
     if [ "$stage" = "$registered" ] &&
@@ -894,7 +892,7 @@ cleanup_stages() {
 tmp_for_target() {
   local target="$1" parent stage base ext=""
   parent="$(cd -P -- "$(dirname -- "$target")" && pwd -P)" || return 1
-  stage="$(mktemp -d "$parent/.kim6-stage.XXXXXX")" || return 1
+  stage="$(mktemp -d "$parent/.kimng-stage.XXXXXX")" || return 1
   if ! register_stage_dir "$stage"; then
     rm -rf -- "$stage"
     return 1
@@ -946,7 +944,7 @@ $(gettext 'Writing / publishing output')" || return 1
   fi
 
   # Directory locks serialize cooperative KIM publishers, not arbitrary writers.
-  lock="$parent/.kim6-publish.lock"
+  lock="$parent/.kimng-publish.lock"
   if (umask 077; mkdir -- "$lock") 2>/dev/null; then
     if ! register_stage_dir "$lock"; then
       rm -rf -- "$lock"
@@ -1148,7 +1146,7 @@ progress_parse_ref() {
 
 # Locate Qt 6 D-Bus without requiring a legacy qdbus executable.
 # PATH executables take precedence to preserve isolated test adapters.
-kim6_qdbus_available() {
+kimng_qdbus_available() {
   type -P qdbus >/dev/null 2>&1 ||
     type -P qdbus6 >/dev/null 2>&1 ||
     [ -x /usr/lib/qt6/bin/qdbus ]
@@ -1296,7 +1294,7 @@ progress_bus_failure() {
 progress_open() {
   local max="$1" text="$2" ref rc=0
   local -a parts=()
-  if ! command -v kdialog >/dev/null 2>&1 || ! kim6_qdbus_available; then
+  if ! command -v kdialog >/dev/null 2>&1 || ! kimng_qdbus_available; then
     progress_error "$(gettext 'KDialog or qdbus is unavailable. Processing stopped.')"
     return 1
   fi
@@ -1451,7 +1449,7 @@ progress_value() {
 # Offer additional images when a Create/Publish operation starts with one.
 # The caller validates the resulting selection before creating output.
 # Return 1 for cancellation, invalid selection, or picker failure.
-kim6_create_select_more() {
+kimng_create_select_more() {
   local -n selected_ref="$1"
   local action_title="$2"
   local choice selection_file initial_dir
@@ -1462,7 +1460,7 @@ kim6_create_select_more() {
   [ "${#selected_ref[@]}" -eq 1 ] || return 0
 
   # Allow automated tests to suppress graphical selection.
-  [ "${KIM6_CREATE_PICK_MORE:-1}" = 1 ] || return 0
+  [ "${KIMNG_CREATE_PICK_MORE:-1}" = 1 ] || return 0
 
   initial_dir="$(dirname -- "${selected_ref[0]}")"
   [ -d "$initial_dir" ] || initial_dir="$PWD"
@@ -1683,13 +1681,13 @@ html_escape() {
 }
 
 # Publish a completely staged gallery as one directory rename. The cooperative
-# lock serializes KIM6 publishers; mv's no-clobber option refuses an occupied
+# lock serializes KIMng publishers; mv's no-clobber option refuses an occupied
 # target. This is atomic visibility on a local filesystem, not crash durability.
 publish_gallery_directory() {
   local staged_directory="$1" target_directory="$2" parent lock
   parent="$(cd -P -- "$(dirname -- "$target_directory")" && pwd -P)" || return 1
   target_directory="$parent/${target_directory##*/}"
-  lock="$parent/.kim6-publish.lock"
+  lock="$parent/.kimng-publish.lock"
   if (umask 077; mkdir -- "$lock") 2>/dev/null; then
     if ! register_stage_dir "$lock"; then
       rm -rf -- "$lock"
@@ -1861,7 +1859,7 @@ action_album() {
   mapfile -d '' -t album_choices < "$settings_file"
   rm -f -- "$settings_file"
 
-  # KIM6_ALBUM_ORDERED_HANDOFF_V1
+  # KIMNG_ALBUM_ORDERED_HANDOFF_V1
   # Five legacy settings, count, N captions, N ordered paths.
   local approved_count approved_offset
   local -a approved_files=()
@@ -3273,8 +3271,8 @@ action_gallery() {
   local start_dir="${1:-}" base_dir target_dir base_name
   shift || true
   local -a files=() image_assets=() thumb_assets=()
-  local -a kim6_selected_inputs=("$@")
-  collect_publication_inputs files "${kim6_selected_inputs[@]}" || {
+  local -a kimng_selected_inputs=("$@")
+  collect_publication_inputs files "${kimng_selected_inputs[@]}" || {
     kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Gallery: select regular, unambiguous image files.')"
     return 1
   }
@@ -3317,7 +3315,7 @@ action_gallery() {
   gallery_max="${selections[4]}"
   base_dir="${selections[5]}"
   base_name="${selections[6]}"
-  # KIM6_GALLERY_CAPTION_HANDOFF_V1
+  # KIMNG_GALLERY_CAPTION_HANDOFF_V1
   # Seven settings, source count, N captions and N ordered paths.
   caption_count="${selections[7]}"
   [[ "$caption_count" =~ ^[1-9][0-9]{0,3}$ ]] &&
@@ -3559,7 +3557,7 @@ EOF
       return 1
     }
   else
-    if ! cat >> "$index_file" <<'KIM6_GALLERY_FALLBACK'
+    if ! cat >> "$index_file" <<'KIMNG_GALLERY_FALLBACK'
 </main></div>
 <dialog class="lightbox" aria-label="Image viewer" style="border:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;background:#121417;color:white">
   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem">
@@ -3601,7 +3599,7 @@ EOF
 })();
 </script>
 </body></html>
-KIM6_GALLERY_FALLBACK
+KIMNG_GALLERY_FALLBACK
     then
       publication_fail "$ref" "$tmp" "$(gettext 'Gallery: cannot finish the HTML page.')"
       return 1
@@ -4079,8 +4077,8 @@ action_print() {
   local -a files=()
   dir="${1:-}"
   shift || true
-  local -a kim6_selected_inputs=("$@")
-  if ! collect_publication_inputs files "${kim6_selected_inputs[@]}"; then
+  local -a kimng_selected_inputs=("$@")
+  if ! collect_publication_inputs files "${kimng_selected_inputs[@]}"; then
     kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'Print: select regular, unambiguous image files.')"
     return 1
   fi
@@ -4167,8 +4165,8 @@ action_tiffjoin() {
       *) break ;;
     esac
   done
-  local -a kim6_selected_inputs=("$@")
-  collect_publication_inputs files "${kim6_selected_inputs[@]}" || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
+  local -a kimng_selected_inputs=("$@")
+  collect_publication_inputs files "${kimng_selected_inputs[@]}" || { kdialog --title "$(gettext 'KIMng')" --error "$(gettext 'TIFF join: select regular, unambiguous image files.')"; return 1; }
   dir="${files[0]%/*}"
   if [ -z "$requested" ]; then
     local settings_file="$KIMDIR/tiffjoin-settings"
@@ -5232,7 +5230,7 @@ action_resize() {
     return 1
   fi
 
-  # KIM6_RESIZE_OUTPUT_REVIEW
+  # KIMNG_RESIZE_OUTPUT_REVIEW
   # Final output approval happens before progress or image processing.
   # Approved output names are used unchanged by the resize engine.
   local resize_plan="$KIMDIR/resize-output.review"
@@ -5674,7 +5672,7 @@ action_resizeandsend() {
   local nbfiles="${#files[@]}"
   [ "$nbfiles" -gt 0 ] || return 0
 
-  # KIM6_EMAIL_MANDATORY_REVIEW
+  # KIMNG_EMAIL_MANDATORY_REVIEW
   # Review the selected images and resize bounds before processing.
   local email_settings_file="$KIMDIR/email-options"
   local -a email_settings=() prepared_sources=()
@@ -5685,7 +5683,7 @@ action_resizeandsend() {
 
   mapfile -d '' -t email_settings < "$email_settings_file"
 
-  # KIM6_EMAIL_CLIENT_SELECTION
+  # KIMNG_EMAIL_CLIENT_SELECTION
   [ "${#email_settings[@]}" -eq 2 ] || {
     progress_error "Invalid email preparation options."
     return 1
@@ -5861,7 +5859,7 @@ action_resizeandsend() {
     printf '%s\0%s\0'       "${prepared_sources[$email_review_index]}"       "${prepared[$email_review_index]}"       >> "$email_review_plan"
   done
 
-  # KIM6_EMAIL_BACK_TO_OPTIONS
+  # KIMNG_EMAIL_BACK_TO_OPTIONS
   local email_back_request="${email_review_plan}.back"
   local email_review_rc=0
 
@@ -5892,7 +5890,7 @@ action_resizeandsend() {
     return "$email_review_rc"
   fi
 
-  local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments"
+  local persistent_base="${XDG_DATA_HOME:-$HOME/.local/share}/kimng/email-attachments"
   if [ "${#prepared[@]}" -eq 0 ]; then
     progress_close "$dbusRef"
     report_finish_dialog "$(gettext 'KIMng')"
@@ -5975,7 +5973,7 @@ action_resizeandsend() {
       if [ "$email_client" = thunderbird-flatpak ]; then
         flatpak run org.mozilla.Thunderbird           -compose "attachment='$attachment_csv'"           >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
       else
-        # KIM6_THUNDERBIRD_X11_ENV
+        # KIMNG_THUNDERBIRD_X11_ENV
         env XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \
           MOZ_ENABLE_WAYLAND=0 thunderbird -compose "attachment='$attachment_csv'"           >"$KIMDIR/email-client.log" 2>&1 || handoff=$?
       fi
@@ -6848,7 +6846,7 @@ action_stripmeta() {
 # metadata-only writer. ExifTool edits a destination-local copy; publication
 # remains the existing K12 atomic operation.
 # Rebuild PNG/APNG metadata without re-encoding image or animation data.
-# KIM6 continues to enforce staging, verification, and atomic publication.
+# KIMng continues to enforce staging, verification, and atomic publication.
 # Compare embedded PNG ICC chunks directly, without ExifTool's
 # metadata serialization. The profile chunk must remain byte-identical.
 metadata_png_icc_equal() {
@@ -7163,7 +7161,7 @@ metadata_verify_expected() {
     # Family 0/1/4, duplicates and structures stay intact. No namespace matching
     # or flattening is needed: every returned selected field must be empty.
     exiftool -json -G0:1:4 -a -struct "${queries[@]}" -- "$file" > "$KIMDIR/metadata-expected.json" 2>/dev/null || return 1
-    python3 - "$KIMDIR/metadata-expected.json" <<'KIM6_VERIFY_REMOVAL'
+    python3 - "$KIMDIR/metadata-expected.json" <<'KIMNG_VERIFY_REMOVAL'
 import json
 import sys
 
@@ -7183,7 +7181,7 @@ if 'SourceFile' not in record: raise ValueError('Missing verification source')
 # A present empty string and an absent tag both satisfy the existing removal
 # contract. Objects, arrays, zero, errors and unknown values never do.
 raise SystemExit(0 if all(value == '' for key, value in record.items() if key != 'SourceFile') else 1)
-KIM6_VERIFY_REMOVAL
+KIMNG_VERIFY_REMOVAL
     return $?
   fi
   for pair in "${pairs[@]}"; do
@@ -7333,7 +7331,7 @@ metadata_publish_one() {
   fi
   rm -f -- "$tmp" >/dev/null 2>&1 || true
   if [ -n "$location_snapshot_dir" ]; then
-    rm -f -- "$verification_source" "$location_snapshot_dir/.kim6-owner" >/dev/null 2>&1 || true
+    rm -f -- "$verification_source" "$location_snapshot_dir/.kimng-owner" >/dev/null 2>&1 || true
     rmdir -- "$location_snapshot_dir" >/dev/null 2>&1 || true
   fi
   [ "$rc" -eq 0 ]
@@ -7538,7 +7536,7 @@ action_location() {
     # This returns input configuration only, never an approved publication plan.
     selection_config="$KIMDIR/location-selection"
     KIM_LOCATION_CONFIG='' preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
-    if ! python3 - "$selection_config" > "$KIMDIR/location-inputs" <<'KIM6_LOCATION_INPUTS'
+    if ! python3 - "$selection_config" > "$KIMDIR/location-inputs" <<'KIMNG_LOCATION_INPUTS'
 import json
 from pathlib import Path
 import sys
@@ -7546,7 +7544,7 @@ files = json.loads(Path(sys.argv[1]).read_text())['files']
 if not isinstance(files, list) or not files or any(not isinstance(p, str) or '\0' in p for p in files):
     raise ValueError('Invalid selected image paths')
 sys.stdout.buffer.write(b''.join(p.encode('utf-8') + b'\0' for p in files))
-KIM6_LOCATION_INPUTS
+KIMNG_LOCATION_INPUTS
     then
       progress_error 'The selected images could not be read. No images were changed. Reopen Modify GPS on Images.'
       return 1
@@ -8684,7 +8682,7 @@ ${web_source##*/}"; then
 
   # Approval must produce a readable disclosure manifest.
   # Do not process when warning-disclosure state is corrupt.
-  if ! python3 -B - "$KIMDIR/webexport.disclosed.jsonl" <<'KIM6_DISCLOSURE_CHECK'
+  if ! python3 -B - "$KIMDIR/webexport.disclosed.jsonl" <<'KIMNG_DISCLOSURE_CHECK'
 import json
 import sys
 from pathlib import Path
@@ -8704,7 +8702,7 @@ for line in path.read_text().splitlines():
         raise SystemExit("Invalid disclosure source")
     if entry.get("category") not in ("psd", "unprofiled"):
         raise SystemExit("Invalid disclosure category")
-KIM6_DISCLOSURE_CHECK
+KIMNG_DISCLOSURE_CHECK
   then
     progress_error "Web Export warning disclosure failed validation. No images were changed."
     return 1
@@ -8957,7 +8955,7 @@ KIM6_DISCLOSURE_CHECK
         published=true
         break
       fi
-      # Another KIM6 invocation may have claimed the free candidate after the
+      # Another KIMng invocation may have claimed the free candidate after the
       # preflight loop. Keep collision numbering safe and retry only when that
       # exact entry is now occupied; other publication errors fail closed.
       if ! { [ -e "$OUTFILE" ] || [ -L "$OUTFILE" ]; }; then break; fi
@@ -9256,7 +9254,7 @@ action_collage() {
   # noninteractive rendering options.
   if [ -n "$layout" ] ||
      [ -n "$size$tile$overlap_percent$rotation$seed$border_ratio" ]; then
-    kim6_create_select_more files "Collage" || return 1
+    kimng_create_select_more files "Collage" || return 1
   fi
 
   if ! collect_publication_inputs files "${files[@]}"; then
@@ -9496,8 +9494,8 @@ dispatcher_resource() {
 }
 
 
-# KIM6_SETTINGS_V1: load user preferences without sourcing shell code.
-kim6_load_user_settings() {
+# KIMNG_SETTINGS_V1: load user preferences without sourcing shell code.
+kimng_load_user_settings() {
   local config line key value
   local LC_ALL=C
   config="${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf"
@@ -9526,7 +9524,7 @@ kim6_load_user_settings() {
         esac
         ;;
       KIM_AFFIX_*)
-        if kim6_known_affix_key "$key" &&
+        if kimng_known_affix_key "$key" &&
            [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$ ]] &&
            [ -z "${!key+x}" ]; then
           printf -v "$key" '%s' "$value"
@@ -9571,7 +9569,7 @@ kim6_load_user_settings() {
   done < "$config"
 }
 
-kim6_load_user_settings
+kimng_load_user_settings
 
 : "${KIM_NAME_AFFIX_POSITION:=suffix}"
 : "${KIM_WEB_QUALITY:=95}"
@@ -9588,7 +9586,7 @@ action_about() {
     return 1
   fi
 
-  kdialog --title "About KIMng"     --msgbox "$(<"$about_file")"
+  kdialog --title "$(gettext 'About KIMng')" --msgbox "$(<"$about_file")"
 }
 
 action_settings() {
@@ -10455,12 +10453,12 @@ video_utility_target() {
   local source="$1" tag="$2" extension="$3" joiner="${4:-_}" number=1 directory base stem target
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
-  # KIM6_MUTE_DESTINATION_OVERRIDE
+  # KIMNG_MUTE_DESTINATION_OVERRIDE
   # Nonempty only for an approved Remove Audio shared destination.
   if [ -n "${KIM_MUTE_REVIEW_DIRECTORY:-}" ]; then
     directory="$KIM_MUTE_REVIEW_DIRECTORY"
   fi
-  # KIM6_FRAME_DESTINATION_OVERRIDE
+  # KIMNG_FRAME_DESTINATION_OVERRIDE
   if [ -n "${KIM_VIDEO_FRAME_REVIEW_DIRECTORY:-}" ]; then
     directory="$KIM_VIDEO_FRAME_REVIEW_DIRECTORY"
   fi
@@ -10485,12 +10483,12 @@ video_utility_publish() {
   local ref="$1" stage="$2" source="$3" tag="$4" extension="$5" target="$6" number="$7" joiner="${8:-_}" directory base stem
   directory="${source%/*}"
   [ "$directory" != "$source" ] || directory="$PWD"
-  # KIM6_MUTE_DESTINATION_OVERRIDE
+  # KIMNG_MUTE_DESTINATION_OVERRIDE
   # Nonempty only for an approved Remove Audio shared destination.
   if [ -n "${KIM_MUTE_REVIEW_DIRECTORY:-}" ]; then
     directory="$KIM_MUTE_REVIEW_DIRECTORY"
   fi
-  # KIM6_FRAME_DESTINATION_OVERRIDE
+  # KIMNG_FRAME_DESTINATION_OVERRIDE
   if [ -n "${KIM_VIDEO_FRAME_REVIEW_DIRECTORY:-}" ]; then
     directory="$KIM_VIDEO_FRAME_REVIEW_DIRECTORY"
   fi
@@ -10566,7 +10564,7 @@ action_videoframes() {
   local mode='' at='' format=png grid=3x3 interactive=false option source duration sample
   local index=0 tag ext stage ref rc=0
   local -a raw=() files=() args=()
-  # KIM6_PER_VIDEO_FRAME_TIMES
+  # KIMNG_PER_VIDEO_FRAME_TIMES
   local -A frame_at=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -10629,7 +10627,7 @@ action_videoframes() {
       grid="${settings[0]}"
       format="${settings[1]}"
     else
-      # KIM6_FRAME_OPTIONS_DIALOG
+      # KIMNG_FRAME_OPTIONS_DIALOG
       # Configure frame extraction in one compact dialog.
       dialog_script="$(dirname -- "${BASH_SOURCE[0]}")/kim_video_dialog.py"
       settings_file="$KIMDIR/video-frame-options"
@@ -10695,7 +10693,7 @@ action_videoframes() {
   esac
   video_utility_init || return 1
 
-  # KIM6_FRAME_MANDATORY_REVIEW
+  # KIMNG_FRAME_MANDATORY_REVIEW
   local KIM_VIDEO_FRAME_REVIEW_DIRECTORY=''
   local frame_plan="$KIMDIR/video-frames.review"
   local frame_request="$KIMDIR/video-frames.destination"
@@ -11006,7 +11004,7 @@ action_videoaudio() {
   esac
   video_utility_init || return 1
 
-  # KIM6_MUTE_MANDATORY_REVIEW
+  # KIMNG_MUTE_MANDATORY_REVIEW
   # Bash dynamic scope makes this available to the two filename
   # helpers. No other video utility receives a selected directory.
   local KIM_MUTE_REVIEW_DIRECTORY=''
@@ -11659,7 +11657,7 @@ action_slideshow() {
     output="${choices[4]}"
     files=("${choices[@]:5}")
     # Recheck images added in the picker through the normal
-    # KIM6 source safeguards. Preserve approved playback order.
+    # KIMng source safeguards. Preserve approved playback order.
     local -a revalidated_files=()
 
     if ! collect_publication_inputs revalidated_files "${files[@]}"; then
@@ -11845,7 +11843,7 @@ action_slideshow() {
     return 1
   fi
   if [ "$rc" -ne 0 ] || [ ! -s "$stage" ]; then
-    # KIM6_SLIDESHOW_ENCODER_DIAGNOSTICS
+    # KIMNG_SLIDESHOW_ENCODER_DIAGNOSTICS
     # Preserve actionable FFmpeg errors in the existing failure report.
     # Do not alter encoding, staging, cancellation or publication.
     local encoder_details=''
@@ -12048,8 +12046,8 @@ Commands:
       Resize selected images for email and open your mail client
       with validated resized copies attached. Presets: 1600, 1200, 800,
       600 and 300 square bounds. Omit --size to show the existing dialog.
-      Successful attachments remain in XDG_DATA_HOME/kim6/email-attachments
-      (or ~/.local/share/kim6/email-attachments when XDG_DATA_HOME is unset)
+      Successful attachments remain in XDG_DATA_HOME/kimng/email-attachments
+      (or ~/.local/share/kimng/email-attachments when XDG_DATA_HOME is unset)
       until you remove them, because mail clients may read them asynchronously.
 
   rotate --angle DEGREES -- <files...>

@@ -207,7 +207,7 @@ class RealRecipeTests(unittest.TestCase):
     def assert_original(self):
         self.assertEqual(self.source.read_bytes(), self.before)
         self.assertEqual(self.source.stat().st_mtime_ns, self.mtime)
-        self.assertFalse(list(self.base.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.base.rglob('.kimng-stage.*')))
 
     def test_ordered_capture_name_strip(self):
         steps = [{'op': 'metadata.shift_capture', 'seconds': 86400},

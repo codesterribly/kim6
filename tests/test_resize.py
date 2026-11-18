@@ -212,8 +212,8 @@ class ResizeTests(unittest.TestCase):
         )
 
     def assert_clean(self):
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(self.workspace.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(self.workspace.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((self.workspace.control / 'tmp').iterdir()), [])
 
     def decoded(self, path):

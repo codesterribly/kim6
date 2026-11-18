@@ -193,7 +193,7 @@ class GuiAcceptanceTests(unittest.TestCase):
         self.assertEqual(warning.call_args.args[2].count('Already in the list'), 3)
         self.assertEqual(independent.read_bytes(), self.before[0][0])
         self.assertTrue(symlink.is_symlink())
-        self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_editor_uses_filename_label_example_and_preserves_legacy_storage(self):
         w=editor.RecipeWidget();self.windows.append(w);w.new();w.show();self.app.processEvents()

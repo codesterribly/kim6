@@ -26,8 +26,8 @@ class TransformTests(unittest.TestCase):
         return [colors.index(data[n:n+3].hex()) for n in range(0, len(data), 3)]
 
     def clean(self):
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(self.w.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((self.w.control / 'tmp').iterdir()), [])
 
     def test_real_clockwise_rotation_preserves_permissions_and_nanoseconds(self):
@@ -180,7 +180,7 @@ class TransformTests(unittest.TestCase):
 
     def test_failure_of_staging_preserves_source(self):
         before = self.w.observe(self.source)
-        self.w.respond_to('mktemp', str(self.source.parent / '.kim6-stage.XXXXXX'), {'status': 1})
+        self.w.respond_to('mktemp', str(self.source.parent / '.kimng-stage.XXXXXX'), {'status': 1})
         result = self.w.dispatch('rotate', '90', self.source)
         self.assert_failed_unchanged(result, {self.source: before})
         self.assertFalse(any(c['tool'] == 'magick' for c in result.calls))

@@ -94,4 +94,4 @@ class SlideshowTests(unittest.TestCase):
             os.kill(int(marker.read_text()), 0)
         self.assertEqual(before, [self.w.observe(path) for path in self.images])
         self.assertFalse(self.images[0].with_name('slide 2 [test]_slideshow.mp4').exists())
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))

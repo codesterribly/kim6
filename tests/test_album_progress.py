@@ -12,7 +12,7 @@ import unittest
 from support import Workspace
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTE = ('Originals are never overwritten. KIM6 saves new files and adds a number when names collide, '
+NOTE = ('Originals are never overwritten. KIMng saves new files and adds a number when names collide, '
         'so nothing gets clobbered. Finished results stay put if you cancel or something fails.')
 
 CODEC_PROBE = r'''
@@ -56,7 +56,7 @@ class AlbumProgressTests(unittest.TestCase):
         self.real = {tool:shutil.which(tool) for tool in required}
         if not all(self.real.values()): self.skipTest('ImageMagick, ExifTool, PDF tools and setsid required')
         self.w=Workspace(); self.addCleanup(self.w.close)
-        self.w.env.update(KIM_POLICY='create',KIM6_CREATE_PICK_MORE='0',MAGICK_THREAD_LIMIT='1',
+        self.w.env.update(KIM_POLICY='create',KIMNG_CREATE_PICK_MORE='0',MAGICK_THREAD_LIMIT='1',
                           ALBUM_CONTROL=str(self.w.control),ALBUM_REAL_TOOLS=json.dumps(self.real))
         self.w.env['PATH'] += os.pathsep+os.defpath
         self.probe = self.w.control/'album-codec.py'
@@ -90,7 +90,7 @@ class AlbumProgressTests(unittest.TestCase):
         if success: self.assertEqual(self.process.returncode,0,stderr.decode())
         else: self.assertNotEqual(self.process.returncode,0,stderr.decode())
         self.assertEqual([self.w.observe(p) for p in (self.jpg,self.psd)],self.before)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
         self.assertEqual(list((self.w.control/'tmp').iterdir()),[])
         if closed: self.assertTrue(any(c['tool']=='qdbus' and c['argv'][-1]=='close' for c in self.calls()))
         return stdout,stderr
@@ -256,6 +256,6 @@ for width in (1120,800):
     assert note.geometry().bottom()<w.height()
     heights.append(required)
 assert heights[1]>heights[0],heights
-w.grab().save('/tmp/kim6-run-note-verified.png')
+w.grab().save('/tmp/kimng-run-note-verified.png')
 w.reject()
 ''')

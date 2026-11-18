@@ -280,7 +280,7 @@ class MetadataReaderTests(unittest.TestCase):
 class MetadataReaderIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory(prefix="kim6-reader-fixtures-")
+        cls.temporary = tempfile.TemporaryDirectory(prefix="kimng-reader-fixtures-")
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.fixtures = Path(cls.temporary.name)
         generator = Path(__file__).parent / "fixtures/metadata_browser/generate_fixtures.py"
@@ -317,7 +317,7 @@ class MetadataReaderIntegrationTests(unittest.TestCase):
 
     def test_selective_absent_and_option_like_tag_names_are_not_errors(self):
         image = self.fixtures / 'missing_metadata.jpg'
-        for fields in (['NoSuchKIM6Field'], ['XMP-notreal:NotAField'], ['r', 'execute', 'o']):
+        for fields in (['NoSuchKIMngField'], ['XMP-notreal:NotAField'], ['r', 'execute', 'o']):
             with self.subTest(fields=fields):
                 selected = read_metadata([image], fields=fields)[str(image)]
                 self.assertEqual([], selected.entries)
@@ -326,7 +326,7 @@ class MetadataReaderIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(read_metadata([broken], fields=['Title'])[str(broken)].error)
 
     def test_selective_duplicates_and_exact_qualified_identity_preserve_integrity(self):
-        with tempfile.TemporaryDirectory(prefix='kim6-selective-integrity-') as temporary:
+        with tempfile.TemporaryDirectory(prefix='kimng-selective-integrity-') as temporary:
             image = Path(temporary) / '-雪 image.jpg'
             sidecar = image.with_suffix('.XMP')
             source = self.fixtures / 'complete.jpg'
@@ -375,7 +375,7 @@ class MetadataReaderIntegrationTests(unittest.TestCase):
             self.assertEqual(before, {path: signature(path) for path in before})
 
     def test_real_extraction_preserves_fresh_sources_and_rich_metadata(self):
-        with tempfile.TemporaryDirectory(prefix="kim6-reader-integrity-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="kimng-reader-integrity-") as temporary:
             image = Path(temporary) / "雪 - image.jpg"
             sidecar = image.with_suffix(".XMP")
             for source, target in ((self.fixtures / "complete.jpg", image),
@@ -405,7 +405,7 @@ class MetadataReaderIntegrationTests(unittest.TestCase):
             embedded = [entry for entry in record.entries if entry.source == str(image)]
             adjacent = [entry for entry in record.entries if entry.source == str(sidecar)]
             makes = [entry for entry in embedded if entry.name == "Make"]
-            self.assertEqual(["KIM6 Synthetic Camera"] * 2, [entry.value for entry in makes])
+            self.assertEqual(["KIMng Synthetic Camera"] * 2, [entry.value for entry in makes])
             self.assertEqual(2, len({entry.groups for entry in makes}))
             self.assertTrue(any("Copy1" in entry.groups for entry in makes))
             self.assertIn(["harbor", "dawn", "harbor"],

@@ -75,7 +75,7 @@ class HeifAvifICCConversionTests(unittest.TestCase):
         self.assertEqual(self.icc(decoded), self.source_icc)
         self.assertEqual(self.w.observe(encoded), encoded_before)
         self.assertEqual(self.w.observe(self.source), self.source_before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_avif_profile_survives_encode_and_decode(self):
         self.check_format("avif", "AVIF")

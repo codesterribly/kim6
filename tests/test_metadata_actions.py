@@ -30,7 +30,7 @@ class MetadataActionTests(unittest.TestCase):
                         str(self.source)], check=True, capture_output=True)
 
     def assert_clean(self):
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
 
     def test_gps_mode_removes_coordinates_and_preserves_unrelated_metadata(self):
         self.set_tags('-GPSLatitude=42', '-GPSLongitude=3', '-DateTimeOriginal=2024:02:29 23:45:00',
@@ -360,7 +360,7 @@ class MetadataActionTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         for path, state in before.items():
             self.assertEqual(self.w.observe(path), state)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
 
     def test_service_disappearance_after_stage_never_publishes(self):
         self.set_tags('-Artist=Old')
@@ -371,7 +371,7 @@ class MetadataActionTests(unittest.TestCase):
         self.assertEqual(self.w.observe(self.source), before)
         self.assertEqual('Old', self.tag('-Artist'))
         self.assertFalse(any(c['tool'] in ('mv', 'ln') for c in result.calls))
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
 
     def test_cancel_after_stage_allocation_cleans_owned_stage_before_producer(self):
         self.set_tags('-GPSLatitude=42')

@@ -1,4 +1,4 @@
-"""Isolated installation regression tests for the KIM6 offline HTML manual.
+"""Isolated installation regression tests for the KIMng offline HTML manual.
 
 Runs install.sh and uninstall.sh only with disposable --prefix directories.
 Stubs menu translation and KDE's global cache refresh: these tests verify
@@ -41,11 +41,11 @@ MANUAL_FILES = (
 
 class ManualInstallationTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(prefix="kim6-manual-test-")
+        temp = tempfile.TemporaryDirectory(prefix="kimng-manual-test-")
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
         self.prefix = self.base / "kio" / "servicemenus"
-        self.runtime = self.prefix / "kim6"
+        self.runtime = self.prefix / "kimng"
 
         # Avoid global KDE cache activity, and keep this packaging test
         # independent of the system's intltool installation and translations.
@@ -202,17 +202,22 @@ class ManualInstallationTests(unittest.TestCase):
         neighbors = [self.runtime / 'docs/images/user-photo.png',
                      self.runtime / 'docs/reference/user-guide.html']
         for path in neighbors:
-            path.write_bytes(b'not managed by KIM6')
+            path.write_bytes(b'not managed by KIMng')
         self.run_installer('uninstall.sh')
         for relative in MANUAL_FILES:
             self.assertFalse((self.runtime / relative).exists(), relative)
         for path in neighbors:
-            self.assertEqual(path.read_bytes(), b'not managed by KIM6')
+            self.assertEqual(path.read_bytes(), b'not managed by KIMng')
 
-    def test_reject_symlinked_reference_directory(self):
+    def test_reject_symlinked_manual_directory(self):
+        for relative in ("docs/reference", "docs/images/screenshots"):
+            with self.subTest(directory=relative):
+                self.check_symlinked_manual_directory(relative)
+
+    def check_symlinked_manual_directory(self, relative):
         self.run_installer("install.sh")
-        directory = self.runtime / "docs/reference"
-        outside = self.base / "external-reference"
+        directory = self.runtime / relative
+        outside = self.base / ("external-" + directory.name)
         outside.mkdir()
         sentinel = outside / "do-not-touch.txt"
         sentinel.write_text("outside\n", encoding="utf-8")
@@ -225,7 +230,9 @@ class ManualInstallationTests(unittest.TestCase):
         self.run_installer("install.sh", succeeds=False)
         self.run_installer("uninstall.sh", succeeds=False)
         self.assertEqual("outside\n", sentinel.read_text())
+        self.assertTrue(directory.is_symlink())
         self.assertTrue((self.runtime / "bin/kim_all").is_file())
+        directory.unlink()
 
     def test_reject_symlinked_illustration_file(self):
         self.run_installer("install.sh")

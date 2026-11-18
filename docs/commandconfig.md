@@ -386,7 +386,7 @@ Geometry uses ImageMagick’s supported resize grammar and preserves aspect rati
 kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 ```
 
-Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; `--size full` preserves the original animation by copying its bytes. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kim6/email-attachments` because clients may read asynchronously; see [File handling](#output-and-file-handling).
+Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; `--size full` preserves the original animation by copying its bytes. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kimng/email-attachments` because clients may read asynchronously; see [File handling](#output-and-file-handling).
 
 KIMng does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. If no compatible mail program is available, KIMng reports the directory so the files can be attached manually.
 

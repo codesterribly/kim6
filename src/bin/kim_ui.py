@@ -14,19 +14,24 @@ def tr(text):
         Path(__file__).resolve().parent.parent/'locale',fallback=True).gettext(text)
 
 
+def N_(text):
+    """Mark deferred help messages for gettext extraction."""
+    return text
+
+
 HELP = {
-    'capture': ('Image Capture Date', "The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date."),
-    'timezone': ('Camera Timezone', "The timezone where the image was taken. If you don't know it, choose Unknown. KIMng won't guess based on your computer's timezone."),
-    'dates': ('Date Fields / All Dates', "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."),
-    'settings': ('Reset from Settings', 'Use the value from KIMng Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe.'),
-    'color': ('Color Profile / sRGB', 'Color profiles tell applications how colors should appear. sRGB is a good choice for web sharing and general compatibility. KIMng converts colors using the original profile when available.'),
-    'quality': ('Compression Quality', 'Higher quality generally preserves more detail but creates larger files. Lower quality generally makes smaller files but may lose detail. Results vary by image and format.'),
-    'progressive': ('Progressive JPEG', 'Saves JPEG images in multiple passes, so a partially downloaded image can appear before the full file arrives. It does not change image dimensions or the selected quality. File size may change slightly.'),
-    'optimize': ('Optimize JPEG Huffman Coding', "Uses more efficient lossless coding of the JPEG's compressed data. It can reduce file size without changing the decoded image pixels or selected JPEG quality. It may take slightly longer to encode."),
-    'resize': ('Resize to Fit / Exact Dimensions', 'Resize to Fit keeps the original proportions within your chosen dimensions. Exact Dimensions forces the specified width and height, which can stretch the image.'),
-    'strip': ('Remove All Metadata', 'Removes embedded information such as camera details, dates, GPS, copyright and color profiles. Use the more specific removal options if you want to keep other information.'),
-    'output': ('Output Filename / Location', 'KIMng saves new files without replacing existing ones. If a filename is taken, it adds a number. The final name is checked again when saving.'),
-    'psd': ('PSD Compatibility', "KIMng uses Photoshop's saved composite when available, or ImageMagick's best-effort reconstruction. Complex layers and effects may look different. Your original PSD is never modified."),
+    'capture': (N_('Image Capture Date'), N_("The date and time the image was taken, stored inside the image as metadata. This is different from the file's modification date.")),
+    'timezone': (N_('Camera Timezone'), N_("The timezone where the image was taken. If you don't know it, choose Unknown. KIMng won't guess based on your computer's timezone.")),
+    'dates': (N_('Date Fields / All Dates'), N_("Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation.")),
+    'settings': (N_('Reset from Settings'), N_('Use the value from KIMng Settings instead of a custom recipe value. Future changes in Settings will automatically apply to this recipe.')),
+    'color': (N_('Color Profile / sRGB'), N_('Color profiles tell applications how colors should appear. sRGB is a good choice for web sharing and general compatibility. KIMng converts colors using the original profile when available.')),
+    'quality': (N_('Compression Quality'), N_('Higher quality generally preserves more detail but creates larger files. Lower quality generally makes smaller files but may lose detail. Results vary by image and format.')),
+    'progressive': (N_('Progressive JPEG'), N_('Saves JPEG images in multiple passes, so a partially downloaded image can appear before the full file arrives. It does not change image dimensions or the selected quality. File size may change slightly.')),
+    'optimize': (N_('Optimize JPEG Huffman Coding'), N_("Uses more efficient lossless coding of the JPEG's compressed data. It can reduce file size without changing the decoded image pixels or selected JPEG quality. It may take slightly longer to encode.")),
+    'resize': (N_('Resize to Fit / Exact Dimensions'), N_('Resize to Fit keeps the original proportions within your chosen dimensions. Exact Dimensions forces the specified width and height, which can stretch the image.')),
+    'strip': (N_('Remove All Metadata'), N_('Removes embedded information such as camera details, dates, GPS, copyright and color profiles. Use the more specific removal options if you want to keep other information.')),
+    'output': (N_('Output Filename / Location'), N_('KIMng saves new files without replacing existing ones. If a filename is taken, it adds a number. The final name is checked again when saving.')),
+    'psd': (N_('PSD Compatibility'), N_("KIMng uses Photoshop's saved composite when available, or ImageMagick's best-effort reconstruction. Complex layers and effects may look different. Your original PSD is never modified.")),
 }
 
 
@@ -35,7 +40,7 @@ class HelpButton(QToolButton):
     def __init__(self, topic, parent=None, context=None):
         super().__init__(parent)
         self.topic = topic
-        self.explanation = ("Use the current value from KIMng Settings for this batch instead of your custom value. The preview shows the value that will be applied." if topic=='settings' and context=='batch' else HELP[topic][1])
+        self.explanation = (N_("Use the current value from KIMng Settings for this batch instead of your custom value. The preview shows the value that will be applied.") if topic=='settings' and context=='batch' else HELP[topic][1])
         self.setText('?'); self.setAutoRaise(True); self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName('Help: ' + tr(HELP[topic][0]))
         self.clicked.connect(self.open_help)

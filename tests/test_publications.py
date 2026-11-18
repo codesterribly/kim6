@@ -56,8 +56,8 @@ class PublicationActionTests(unittest.TestCase):
                 if len(fields := line.split()) > 13 and fields[2] == 'image']
 
     def clean(self):
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(self.w.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((self.w.control / 'tmp').iterdir()), [])
 
     def invoke(self, kind, output):
@@ -76,7 +76,7 @@ class PublicationActionTests(unittest.TestCase):
 
     def test_album_and_tiffjoin_ignore_overwrite_and_preserve_occupied_targets(self):
         self.real()
-        self.w.env['KIM6_CREATE_PICK_MORE'] = '0'
+        self.w.env['KIMNG_CREATE_PICK_MORE'] = '0'
         self.w.env['PATH'] += os.pathsep + os.defpath
         self.w.approve_overwrite()
         for kind, extension in (('album', 'pdf'), ('tiffjoin', 'tiff')):

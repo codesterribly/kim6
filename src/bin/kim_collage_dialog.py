@@ -44,7 +44,7 @@ def main():
     pictures = sys.argv[2:]
 
     app = QApplication.instance() or QApplication(sys.argv)
-    # KIM6_COLLAGE_ORDERED_SELECTION_V1
+    # KIMNG_COLLAGE_ORDERED_SELECTION_V1
     dialog = OrderedImageDialog()
     dialog.setWindowTitle("KIMng - Create collage")
     dialog.setMinimumWidth(680)
@@ -234,7 +234,7 @@ def main():
     browse.clicked.connect(browse_output)
 
 
-    # KIM6_COLLAGE_LAYOUT_PREVIEW_V1
+    # KIMNG_COLLAGE_LAYOUT_PREVIEW_V1
     preview_heading = QLabel("Layout preview")
     preview_heading.setAccessibleName("Collage layout preview heading")
     layout.addWidget(preview_heading)

@@ -13,8 +13,8 @@ class AnimationContractTests(unittest.TestCase):
         self.w.env["KIM_POLICY"] = "create"
 
     def assert_clean(self):
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
-        self.assertFalse(list(self.w.root.rglob(".kim6-publish.lock")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-publish.lock")))
         self.assertEqual(list((self.w.control / "tmp").iterdir()), [])
 
     def _assert_multiframe_sequence_rejected(self, coder, extension):

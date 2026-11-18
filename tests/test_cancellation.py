@@ -36,7 +36,7 @@ class CancellationTests(unittest.TestCase):
             elif phase == 'input':
                 if action == 'convert':
                     # Conversion has no input decode: interrupt destination staging.
-                    w.respond_to('mktemp', str(a.parent / '.kim6-stage.XXXXXX'), injection)
+                    w.respond_to('mktemp', str(a.parent / '.kimng-stage.XXXXXX'), injection)
                 else:
                     w.respond('identify', **injection)
             elif phase == 'producer':
@@ -66,8 +66,8 @@ class CancellationTests(unittest.TestCase):
                      and (producer != 'exiftool' or '-all=' in c['argv'])]
         publication = [c for c in result.calls if c['tool'] == 'ln'
                        or (c['tool'] == 'mv' and c['argv'] not in (['--help'], ['--version']))]
-        self.assertFalse(list(w.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(w.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(w.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(w.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((w.control / 'tmp').iterdir()), [])
         self.assertNotIn('could not close owned progress', result.stderr)
         if state is None:

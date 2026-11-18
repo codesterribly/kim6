@@ -1,1 +1,1 @@
-"""KIM6 human acceptance testing toolkit."""
+"""KIMng human acceptance testing toolkit."""

@@ -1452,7 +1452,7 @@ def write_creation_settings(dialog, destination, values):
 class GalleryDialog(OrderedImageDialog):
     def __init__(self, destination, starting_dir, paths):
         super().__init__()
-        # KIM6_GALLERY_CAPTIONS_PREVIEW_V1
+        # KIMNG_GALLERY_CAPTIONS_PREVIEW_V1
         self.captions_by_path = {}
         self.destination = destination
         self.setWindowTitle('KIMng - Create an HTML gallery')
@@ -1787,7 +1787,7 @@ class PrintLayoutDialog(OrderedImageDialog):
         layout.addWidget(self.status)
 
         if not self.tiff:
-            # KIM6_PRINT_LAYOUT_PREVIEW_V1
+            # KIMNG_PRINT_LAYOUT_PREVIEW_V1
             self.preview = QLabel()
             self.preview.setAlignment(Qt.AlignCenter)
             self.preview.setFixedHeight(165)

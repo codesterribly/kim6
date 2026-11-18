@@ -409,13 +409,13 @@ class ComparisonPreview(PreviewLabel):
 
     def dragEnterEvent(self, event):
         data = event.mimeData()
-        if data.hasFormat('application/x-kim6-slot') or (data.hasUrls() and len(data.urls()) == 1 and data.urls()[0].isLocalFile()):
+        if data.hasFormat('application/x-kimng-slot') or (data.hasUrls() and len(data.urls()) == 1 and data.urls()[0].isLocalFile()):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
         data = event.mimeData()
-        if data.hasFormat('application/x-kim6-slot'):
-            if bytes(data.data('application/x-kim6-slot')) != str(self.side).encode():
+        if data.hasFormat('application/x-kimng-slot'):
+            if bytes(data.data('application/x-kimng-slot')) != str(self.side).encode():
                 self.swapped.emit()
         elif data.hasUrls() and len(data.urls()) == 1 and data.urls()[0].isLocalFile():
             self.assigned.emit(data.urls()[0].toLocalFile())
@@ -427,7 +427,7 @@ class ComparisonPreview(PreviewLabel):
         if self.path and event.buttons() & Qt.LeftButton:
             drag = QDrag(self)
             data = QMimeData()
-            data.setData('application/x-kim6-slot', str(self.side).encode())
+            data.setData('application/x-kimng-slot', str(self.side).encode())
             data.setUrls([QUrl.fromLocalFile(self.path)])
             drag.setMimeData(data)
             drag.exec(Qt.MoveAction)

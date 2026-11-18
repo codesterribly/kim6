@@ -58,8 +58,8 @@ class FinalPublicationBoundaryTests(unittest.TestCase):
                 str(path.relative_to(self.w.root)) for path in added
             },
         )
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
-        self.assertFalse(list(self.w.root.rglob(".kim6-publish.lock")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-publish.lock")))
         self.assertEqual(list((self.w.control / "tmp").iterdir()), [])
 
     def assert_rendered(self, result):
@@ -130,7 +130,7 @@ class FinalPublicationBoundaryTests(unittest.TestCase):
             for call in result.calls
         ))
         self.assertFalse(list(
-            self.w.root.rglob(".kim6-stage.*")
+            self.w.root.rglob(".kimng-stage.*")
         ))
         self.assertEqual(result.outputs, {})
         self.assert_preserved(result)
@@ -287,7 +287,7 @@ class FinalPublicationBoundaryTests(unittest.TestCase):
             for call in result.calls
         ))
         self.assertFalse(list(
-            self.w.root.rglob(".kim6-stage.*")
+            self.w.root.rglob(".kimng-stage.*")
         ))
         self.assertEqual(result.outputs, {})
         self.assert_preserved(result)

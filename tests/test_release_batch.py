@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KIM6 focused release regression checks.
+"""KIMng focused release regression checks.
 
 Uses disposable inputs only. Never modifies user photographs.
 Runs static packaging/menu checks and actual Flip tests.
@@ -19,7 +19,7 @@ from support import Workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src"
-RUNTIME = Path.home() / ".local/share/kio/servicemenus/kim6/bin"
+RUNTIME = Path.home() / ".local/share/kio/servicemenus/kimng/bin"
 DISPATCHER = SOURCE / "bin/kim_all"
 
 
@@ -212,7 +212,7 @@ class WebExportTests(unittest.TestCase):
                 # Write binary image data to a temporary file.
                 # The text-mode subprocess helper must not decode it.
                 with tempfile.TemporaryDirectory(
-                    prefix="kim6-encoder-"
+                    prefix="kimng-encoder-"
                 ) as directory:
                     output = Path(directory) / f"test.{fmt}"
                     result = run(
@@ -652,7 +652,7 @@ class WebExportFunctionalTests(unittest.TestCase):
     def test_source_metadata_not_copied(self):
         tag = run(
             "exiftool", "-overwrite_original",
-            "-Comment=KIM6_RELEASE_TEST_MARKER",
+            "-Comment=KIMNG_RELEASE_TEST_MARKER",
             self.source,
         )
         self.assertEqual(
@@ -665,7 +665,7 @@ class WebExportFunctionalTests(unittest.TestCase):
             "exiftool", "-s3", "-Comment", self.source
         )
         self.assertIn(
-            "KIM6_RELEASE_TEST_MARKER",
+            "KIMNG_RELEASE_TEST_MARKER",
             source_metadata.stdout,
         )
 
@@ -678,12 +678,12 @@ class WebExportFunctionalTests(unittest.TestCase):
             exported_metadata.stderr,
         )
         self.assertNotIn(
-            "KIM6_RELEASE_TEST_MARKER",
+            "KIMNG_RELEASE_TEST_MARKER",
             exported_metadata.stdout,
         )
 
 
 if __name__ == "__main__":
-    print(f"KIM6 root: {ROOT}", flush=True)
+    print(f"KIMng root: {ROOT}", flush=True)
     print(f"Installed dispatcher: {DISPATCHER}", flush=True)
     unittest.main(verbosity=2)

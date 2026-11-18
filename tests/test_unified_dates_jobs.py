@@ -188,7 +188,7 @@ class DateExecutionTests(unittest.TestCase):
         self.w.respond_to('qdbus','wasCancelled',[{'stdout':'false\n'}]*3+[{'stdout':'true\n'}])
         result=self.dispatch('capturedate','--datetime','2024-01-01 12:00:00','--timezone','UTC','--',self.source)
         self.assertFalse(self.source.with_name('photo_dated.png').exists()); self.assertEqual(self.w.observe(self.source),self.before)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
 
 
 class JobTests(unittest.TestCase):
@@ -216,7 +216,7 @@ class JobTests(unittest.TestCase):
                 if message=='Writing / publishing output': cancel.set()
             with inspection_context(stage,cancel.is_set): results=core.execute(base.recipe([step('image.rotate')]),[source,source])
             self.assertEqual(len(results),1);self.assertTrue(results[0]['cancelled']);self.assertTrue(Path(successful['output']).exists())
-            self.assertEqual(len(list(Path(tmp).glob('*recipe*.png'))),1);self.assertFalse(list(Path(tmp).glob('.kim6-stage.*')))
+            self.assertEqual(len(list(Path(tmp).glob('*recipe*.png'))),1);self.assertFalse(list(Path(tmp).glob('.kimng-stage.*')))
 
     def test_owned_process_cancel_and_dialog_disappearance(self):
         for vanished in (False,True):

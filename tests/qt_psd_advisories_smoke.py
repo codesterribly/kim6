@@ -309,7 +309,7 @@ def fixed_dialogs(root, jpg, first, app):
 
 def main():
     app = QApplication.instance() or QApplication([])
-    with tempfile.TemporaryDirectory(prefix='kim6-advisories-') as directory:
+    with tempfile.TemporaryDirectory(prefix='kimng-advisories-') as directory:
         root = Path(directory)
         jpg, png = root / 'photo.jpg', root / 'photo.png'
         image = QImage(4, 3, QImage.Format_RGB32); image.fill(0x123456)

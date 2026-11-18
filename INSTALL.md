@@ -126,7 +126,7 @@ reports installed and missing dependencies. It recognizes APT, DNF,
 Pacman, and Zypper and suggests appropriate package installation commands
 when dependencies are missing. Package availability may vary by distribution.
 
-Python 3 with PySide6 Qt Widgets and `intltool-merge` are mandatory for
+Python 3 with PySide6 Qt Widgets is mandatory for
 installation. Missing image-processing or video tools are reported as
 warnings rather than automatically installed. Individual KIMng actions
 check for the tools they need when invoked.
@@ -155,7 +155,7 @@ than proceeding with an unsafe or incomplete installation.
 ### Installing KIMng components
 
 The installer places the unified `kim_all` dispatcher and its supporting
-files in a `kim6` directory beneath the selected service-menu directory.
+files in a `kimng` directory beneath the selected service-menu directory.
 
 The installed components include:
 
@@ -164,11 +164,11 @@ The installed components include:
 - Metadata processing and format-verification helpers.
 - Gallery generation resources.
 - 12 Dolphin service-menu definitions, including the Recipes submenu.
-- Compiled translation catalogs when new language files are supplied (none currently ship).
+- The English source interface (no translated language catalogs currently ship).
 - The offline HTML User Guide, illustrations, stylesheet, and reference pages.
 
-The installer generates the Dolphin service-menu entries using
-`intltool-merge` and replaces their command references with the absolute
+The installer renders the English values of the `intltool-merge`-style
+menu templates and replaces their command references with the absolute
 path to the installed dispatcher. No manual shell `PATH` changes are needed.
 
 ### Safe file replacement
@@ -208,7 +208,7 @@ For additional implementation details, see
 To check the installed program without opening Dolphin:
 
 ```sh
-"${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all" --help
+"${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kimng/bin/kim_all" --help
 ```
 
 If the menus do not appear, restart Dolphin and verify that KIMng was installed in a service-menu directory recognized by KDE.

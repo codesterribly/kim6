@@ -22,8 +22,8 @@ class StripmetaTests(unittest.TestCase):
         return self.w.dispatch('stripmeta', *(sources or (self.source,)))
 
     def clean(self):
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
-        self.assertFalse(list(self.w.root.rglob('.kim6-publish.lock')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-publish.lock')))
         self.assertEqual(list((self.w.control / 'tmp').iterdir()), [])
 
     def produce(self, payload=None, **options):

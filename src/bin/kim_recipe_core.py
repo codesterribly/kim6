@@ -20,7 +20,7 @@ if __name__ == '__main__':
     sys.modules['kim_recipe_core'] = sys.modules[__name__]
 
 
-ROOT_FOLDER = "@kim6-root"  # Virtual assignment; impossible as an ordinary folder ID.
+ROOT_FOLDER = "@kimng-root"  # Virtual assignment; impossible as an ordinary folder ID.
 
 
 class RecipeError(ValueError):
@@ -500,7 +500,7 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1):
                 fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                 try:
                     pinned = Path(f'/proc/{os.getpid()}/fd/{fd}')
-                    with tempfile.TemporaryDirectory(prefix='.kim6-stage.', dir=pinned) as tmp:
+                    with tempfile.TemporaryDirectory(prefix='.kimng-stage.', dir=pinned) as tmp:
                         original = Path(tmp) / 'input'
                         srcfd = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                         with os.fdopen(srcfd, 'rb') as inp, original.open('xb') as out:

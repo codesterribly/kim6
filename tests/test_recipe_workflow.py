@@ -71,7 +71,7 @@ class RecipeMenuTests(unittest.TestCase):
         parser.read(ROOT/'src/kim_recipes.desktop.in')
         entry = parser['Desktop Entry']
         self.assertEqual(entry['Actions'], 'KIMRecipe0Run;KIMRecipe1Editor;')
-        self.assertEqual(entry['_X-KDE-Submenu'], 'KIM6 Recipes')
+        self.assertEqual(entry['_X-KDE-Submenu'], 'KIMng Recipes')
         self.assertNotIn('X-KDE-Priority', entry)
         self.assertEqual(parser['Desktop Action KIMRecipe0Run']['Exec'], 'kim_all recipe --choose -- %F')
         self.assertEqual(parser['Desktop Action KIMRecipe1Editor']['Exec'], 'kim_all recipe --editor')

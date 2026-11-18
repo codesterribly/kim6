@@ -1,4 +1,4 @@
-"""Focused KIM6 installer ownership and ImageMagick registry guards."""
+"""Focused KIMng installer ownership and ImageMagick registry guards."""
 
 import os
 from pathlib import Path
@@ -49,12 +49,12 @@ class DelegateRegistryTests(unittest.TestCase):
 
 class InstallOwnershipTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kim6-ownership-")
+        temporary = tempfile.TemporaryDirectory(prefix="kimng-ownership-")
         self.addCleanup(temporary.cleanup)
 
         self.base = Path(temporary.name)
         self.prefix = self.base / "kio/servicemenus"
-        self.runtime = self.prefix / "kim6"
+        self.runtime = self.prefix / "kimng"
 
         self.runtime.joinpath("docs").mkdir(parents=True)
 
@@ -63,7 +63,7 @@ class InstallOwnershipTests(unittest.TestCase):
 
         self.menu = self.prefix / "kim_publication.desktop"
         self.menu.write_text(
-            "[Desktop Entry]\nX-KIM6-Managed=true\n"
+            f'[Desktop Entry]\nX-KIMng-Managed=true\nExec="{self.runtime / "bin/kim_all"}" gallery -- %F\n'
         )
 
     def test_uninstall_menu_does_not_claim_unrelated_runtime(self):
@@ -79,8 +79,9 @@ class InstallOwnershipTests(unittest.TestCase):
             timeout=10,
         )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(self.menu.exists())
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("unrecognized runtime directory", result.stderr)
+        self.assertTrue(self.menu.exists())
         self.assertEqual(
             self.unrelated.read_text(),
             "unrelated user file\n",
@@ -127,7 +128,7 @@ class InstallOwnershipTests(unittest.TestCase):
             (self.runtime / "bin/kim_all").exists()
         )
 
-    def test_uninstall_recognizes_legacy_kim_script(self):
+    def test_uninstall_refuses_unmarked_legacy_runtime(self):
         legacy = self.runtime / "bin/kim_compress"
         legacy.parent.mkdir()
 
@@ -150,9 +151,11 @@ class InstallOwnershipTests(unittest.TestCase):
             timeout=10,
         )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(legacy.exists())
-        self.assertFalse(self.unrelated.exists())
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("unrecognized runtime directory", result.stderr)
+        self.assertEqual("#!/bin/bash\nSOURCE_TRANSLATION_TTT\n", legacy.read_text())
+        self.assertEqual("unrelated user file\n", self.unrelated.read_text())
+        self.assertTrue(self.menu.exists())
         self.assertEqual(
             notes.read_text(),
             "keep me\n",

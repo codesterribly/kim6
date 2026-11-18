@@ -39,7 +39,7 @@ MAP_FAILURE_TEXT = "Map imagery couldn't be loaded."
 
 def debug_map(event, **data):
     if DEBUG_MAP:
-        print('KIM6_MAP ' + json.dumps(dict(event=event, **data), ensure_ascii=False, default=str), file=sys.stderr, flush=True)
+        print('KIMNG_MAP ' + json.dumps(dict(event=event, **data), ensure_ascii=False, default=str), file=sys.stderr, flush=True)
 
 
 class TileResponseError(ValueError):

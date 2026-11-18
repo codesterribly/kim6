@@ -125,7 +125,7 @@ See [FORMATS.md](FORMATS.md) for details about supported formats and dependencie
 
 The user-facing entry point is **Actions → KIMng - Settings/About → Settings** in Dolphin. `src/bin/kim_settings_dialog.py` validates and atomically writes preferences to `${XDG_CONFIG_HOME:-$HOME/.config}/kimng/settings.conf`.
 
-`kim6_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
+`kimng_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
 `KIM_POLICY` accepts `create` or `prompt`. `choose_output_mode()` implements the Create/Overwrite choice and the second overwrite warning. `confirm_inplace_overwrite()` handles operations that require original-file modification. No setting silently authorizes replacement. See [Configuration and Defaults](commandconfig.md#configuration-and-defaults).
 
@@ -454,23 +454,26 @@ obsolete translation catalogs were retired after the English interface
 and Dolphin service menus changed substantially.
 
 The gettext infrastructure remains available for future localization.
-The current `po/kim6.pot` template was rebuilt from the active unified
+The current `po/kimng.pot` template was rebuilt from the active unified
 dispatcher, active Python source files, and all 12 Dolphin menu
 templates. Archived scripts and historical documents were excluded.
 
-To regenerate the template after additional English UI changes:
+To regenerate the template after additional English UI changes, run:
 
-1. Extract `gettext` strings from `src/bin/kim_all` with GNU
-   `xgettext --language=Shell --keyword=gettext`.
-2. Extract explicitly marked translation strings from active
-   `src/bin/*.py` files with `xgettext --language=Python`.
-3. Extract the `_Name` and `_X-KDE-Submenu` values from all 12
-   `src/kim_*.desktop.in` templates and include them as gettext
-   source strings.
-4. Merge the extraction results using `msgcat --use-first
-   --sort-output` and write the result to `po/kim6.pot`.
-5. Validate the template using `msgfmt --check` and verify that
-   no archived sources are included.
+```sh
+python3 -B tools/extract_messages.py
+python3 -B tools/extract_messages.py --check
+```
+
+The extractor requires GNU `xgettext`, `msgcat`, and `msgfmt`. It reads
+`gettext` calls in `src/bin/kim_all`, explicitly marked Python messages
+(`tr`, `_`, `N_`, `gettext`, and `ngettext`), and `_Name` / `_X-KDE-Submenu`
+values in all 12 desktop templates. It merges and validates a fresh template,
+so removed messages do not linger. Source references are relative to the
+repository, including desktop references. Temporary extraction files stay
+outside the checkout. The header date defaults to the last Git commit time;
+set `SOURCE_DATE_EPOCH` to use a different reproducible timestamp.
+The runtime gettext domain and template basename are both `kimng`.
 
 Future language catalogs can be created from this template.
 Do not reuse the retired catalogs as translations for the

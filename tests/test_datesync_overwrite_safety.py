@@ -81,7 +81,7 @@ class DateSyncOverwriteSafetyTests(unittest.TestCase):
         )
 
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
     def test_failed_atime_restoration_rolls_back_mtime(self):
@@ -107,7 +107,7 @@ class DateSyncOverwriteSafetyTests(unittest.TestCase):
         )
 
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
 

@@ -132,7 +132,7 @@ def main():
             and (CONTROL / "slideshow-magick.pid").exists()):
         (CONTROL / "progress-gone").touch()
     if tool in ("qdbus", "qdbus6") and args[2] == "wasCancelled" and plan.get("metadata_cancel_after_stage"):
-        if any(ROOT.rglob(".kim6-stage.*")):
+        if any(ROOT.rglob(".kimng-stage.*")):
             print("true")
             return 0
     if tool == "magick" and "real_slideshow_magick" in plan and response is None:
@@ -344,7 +344,7 @@ def main():
                 values = args[2:]
             for value in values:
                 owned(value)
-            if tool == 'cp' and not Path(args[-1]).parent.name.startswith('.kim6-stage.'):
+            if tool == 'cp' and not Path(args[-1]).parent.name.startswith('.kimng-stage.'):
                 raise ValueError('rename copies require private staging')
         return subprocess.run([plan['real_rename_files'][tool], *args], timeout=10).returncode
     if tool == 'exiftool' and 'real_rename_exif' in plan:
@@ -621,7 +621,7 @@ def real_contactsheet_tool(tools, tool, args):
         else:
             raise ValueError('unsupported contact-sheet ImageMagick command')
         output = owned(output_name.removeprefix('PNG:').removeprefix('PDF:'))
-        if (output.exists() or not any(x.name.startswith('.kim6-stage.') for x in output.parents)):
+        if (output.exists() or not any(x.name.startswith('.kimng-stage.') for x in output.parents)):
             raise ValueError('contact-sheet output must use a new owned stage')
         for item in args:
             value = item.removeprefix('PNG:').removeprefix('PDF:')
@@ -646,7 +646,7 @@ def real_publication_tool(tools, tool, args):
         if len(args) < 4 or args[-1].split('.')[-1].lower() not in ('pdf', 'tif', 'tiff', 'gif'):
             raise ValueError('publication producer requires an approved derived format')
         output = owned(args[-1])
-        if output.exists() or output.is_symlink() or not output.parent.name.startswith('.kim6-stage.'):
+        if output.exists() or output.is_symlink() or not output.parent.name.startswith('.kimng-stage.'):
             raise ValueError('publication producer requires a new private stage')
         if args[0] == 'montage':
             if (len(args) < 14 or args[1] != '-tile' or args[3] != '-geometry' or
@@ -714,7 +714,7 @@ def real_gallery_collage_tool(tools, tool, args):
     """Use real ImageMagick only on small owned PPMs and private PNG/PPM stages."""
     executable = tools[tool]
     def is_private_stage(path):
-        return any(parent.name.startswith('.kim6-stage.') for parent in path.parents)
+        return any(parent.name.startswith('.kimng-stage.') for parent in path.parents)
     if tool == 'identify':
         valid = (len(args) == 5 and args[:3] == ['-regard-warnings', '-format', '%m|%w|%h|%T|%n|%#\\n']
                  and args[3] == '--')
@@ -729,7 +729,7 @@ def real_gallery_collage_tool(tools, tool, args):
             raise ValueError('gallery/collage inspection requires a small owned image')
         return subprocess.run([executable, *args], timeout=20,
                               env=dict(os.environ, PATH=os.defpath)).returncode
-    # New KIM6 collage layouts: permit only small, owned ImageMagick stages.
+    # New KIMng collage layouts: permit only small, owned ImageMagick stages.
     # Keep the old collage producer's strict command grammar unchanged.
     if tool == 'magick' and args[:1] == ['-size']:
         if (len(args) != 4 or not re.fullmatch(r'[1-9][0-9]{2,3}x[1-9][0-9]{2,3}', args[1])
@@ -869,7 +869,7 @@ def real_web_email_tool(tools, tool, args):
                 or not profile.is_file() or profile.is_symlink()
                 or profile.stat().st_size > 8388608
                 or not output.is_file() or output.is_symlink()
-                or not output.parent.name.startswith('.kim6-stage.')
+                or not output.parent.name.startswith('.kimng-stage.')
                 or output.suffix.lower() != '.png'
                 or output.stat().st_size > 1048576):
             raise ValueError('web/email ICC write exceeds test bounds')
@@ -921,7 +921,7 @@ def real_web_email_tool(tools, tool, args):
     if len(payload) > 1048576 or not payload.startswith((b'P6\n', b'P3\n', b'\xff\xd8\xff',
                                                           b'\x89PNG\r\n\x1a\n', b'GIF87a', b'GIF89a', b'II*\x00', b'MM\x00*')):
         raise ValueError('web/email producer requires a small synthetic image fixture')
-    if not (output.parent.name.startswith('.kim6-stage.') or
+    if not (output.parent.name.startswith('.kimng-stage.') or
             output.parent.resolve().is_relative_to((CONTROL / 'tmp').resolve())):
         raise ValueError('web/email output must be in a private or destination-local stage')
     return subprocess.run([executable, *args], input=payload, timeout=30,
@@ -1046,7 +1046,7 @@ def real_transform(executable, args):
     source = owned(os.readlink('/proc/self/fd/0')) if stdin_flip else owned(args[1])
     destination = owned(output)
     if (source.stat().st_size > 65536 or destination.exists() or destination.is_symlink()
-            or not destination.parent.name.startswith('.kim6-stage.')):
+            or not destination.parent.name.startswith('.kimng-stage.')):
         raise ValueError("transformation requires small source and unused private stage")
     return subprocess.run([executable, *args], timeout=15,
                           env=dict(os.environ, PATH=os.defpath)).returncode
@@ -1074,19 +1074,19 @@ def real_video_tool(tools, tool, args, plan):
         result = subprocess.run([executable, *args], timeout=10,
                                 env=dict(os.environ, PATH=os.defpath), capture_output=True)
         if (plan.get("video_force_output_format") and
-                source.parent.name.startswith(".kim6-stage.") and
+                source.parent.name.startswith(".kimng-stage.") and
                 any(value.startswith("format=format_name") for value in args)):
             result.stdout = result.stdout.replace(
                 b"format_name=mov,mp4,m4a,3gp,3g2,mj2",
                 plan["video_force_output_format"].encode("ascii"),
             )
         if (plan.get("video_force_input_dimensions") and
-                not source.parent.name.startswith(".kim6-stage.") and
+                not source.parent.name.startswith(".kimng-stage.") and
                 "stream=codec_type,codec_name,width,height,duration,nb_frames" in args):
             dimensions = plan["video_force_input_dimensions"]
             result.stdout = result.stdout.replace(b"width=96", f"width={dimensions['width']}".encode())
             result.stdout = result.stdout.replace(b"height=64", f"height={dimensions['height']}".encode())
-        if plan.get("video_interrupt_on_probe_output") and source.parent.name.startswith(".kim6-stage."):
+        if plan.get("video_interrupt_on_probe_output") and source.parent.name.startswith(".kimng-stage."):
             (CONTROL / "progress-state").write_text(plan["video_interrupt_on_probe_output"])
         sys.stdout.buffer.write(result.stdout)
         sys.stderr.buffer.write(result.stderr)
@@ -1104,7 +1104,7 @@ def real_video_tool(tools, tool, args, plan):
             if "-n" not in args:
                 raise ValueError("real ffmpeg output must refuse replacement")
             output = owned(args[-1])
-            if output.exists() or output.is_symlink() or not output.parent.name.startswith(".kim6-stage."):
+            if output.exists() or output.is_symlink() or not output.parent.name.startswith(".kimng-stage."):
                 raise ValueError("real ffmpeg requires a new destination-local stage")
         if plan.get("video_create_collision") and output is not None:
             source = input_paths[0]

@@ -318,9 +318,9 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(subprocess.check_output(['magick','identify','-format','%w %h %[quality]',result['output']]),f'8 12 {quality}'.encode())
         self.assertEqual((self.source.read_bytes(),self.source.stat().st_mtime_ns),self.original)
 
-    @unittest.skipUnless(os.environ.get('KIM_ACCEPT_REAL_PSD') and os.environ.get('KIM6_REAL_PSD_PATH'), 'opt-in real PSD inspection requires KIM6_REAL_PSD_PATH')
+    @unittest.skipUnless(os.environ.get('KIM_ACCEPT_REAL_PSD') and os.environ.get('KIMNG_REAL_PSD_PATH'), 'opt-in real PSD inspection requires KIMNG_REAL_PSD_PATH')
     def test_real_psd_queue_reports_stages_with_one_decode_and_source_integrity(self):
-        source=Path(os.environ['KIM6_REAL_PSD_PATH'])
+        source=Path(os.environ['KIMNG_REAL_PSD_PATH'])
         def integrity(): return (hashlib.sha256(source.read_bytes()).hexdigest(),source.stat().st_size,source.stat().st_mtime_ns)
         before=integrity(); seen=[]; decodes=[]
         import kim_psd_source as psd

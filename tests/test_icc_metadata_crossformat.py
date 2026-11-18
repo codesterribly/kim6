@@ -1,4 +1,4 @@
-"""Cross-format ICC and selective-metadata regressions for KIM6."""
+"""Cross-format ICC and selective-metadata regressions for KIMng."""
 
 import shutil
 import subprocess
@@ -42,7 +42,7 @@ class ICCMetadataCrossFormatTests(unittest.TestCase):
         return result
 
     def assert_no_stages(self):
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_conversion_preserves_profile_in_png_and_webp(self):
         source = self.fixture("convert-source", "tif")

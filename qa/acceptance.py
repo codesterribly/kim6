@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and track safe, human-run KIM6 Dolphin acceptance cases."""
+"""Prepare and track safe, human-run KIMng Dolphin acceptance cases."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +26,7 @@ GENERATED = QA_DIR / "generated"
 STATE_DIR = QA_DIR / "state"
 REPORT_DIR = QA_DIR / "reports"
 PLAN_PATH = QA_DIR / "ACCEPTANCE_PLAN.md"
-OWNER_TEXT = "KIM6 human acceptance workspace v1\n"
+OWNER_TEXT = "KIMng human acceptance workspace v1\n"
 STATE_VERSION = 1
 SEPARATOR_ID = "_SEPARATOR_"
 # Case-local names may intentionally disagree with the pristine master's format.
@@ -564,9 +564,9 @@ def claim_workspace(path: Path) -> Path:
     if path.exists():
         if not path.is_dir():
             raise SafetyError(f"workspace path is not a directory: {path}")
-        marker = path / ".kim6-acceptance-owner"
+        marker = path / ".kimng-acceptance-owner"
         if marker.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != OWNER_TEXT:
-            raise SafetyError(f"existing workspace is not positively owned by KIM6 QA: {path}")
+            raise SafetyError(f"existing workspace is not positively owned by KIMng QA: {path}")
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -574,10 +574,10 @@ def claim_workspace(path: Path) -> Path:
     except FileExistsError:
         return claim_workspace(path)
     try:
-        _write_exclusive(path / ".kim6-acceptance-owner", OWNER_TEXT)
+        _write_exclusive(path / ".kimng-acceptance-owner", OWNER_TEXT)
         _fsync_dir(path.parent)
     except Exception:
-        marker = path / ".kim6-acceptance-owner"
+        marker = path / ".kimng-acceptance-owner"
         if marker.exists() and not marker.is_symlink(): marker.unlink()
         try: path.rmdir()
         except OSError: pass
@@ -588,11 +588,11 @@ def claim_workspace(path: Path) -> Path:
 def assert_workspace(path: Path) -> Path:
     path = path.absolute()
     _reject_symlink_components(path)
-    marker = path / ".kim6-acceptance-owner"
+    marker = path / ".kimng-acceptance-owner"
     if not path.is_dir() or marker.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != OWNER_TEXT:
-        raise SafetyError(f"acceptance workspace is missing or not owned by KIM6 QA: {path}; run prepare first")
+        raise SafetyError(f"acceptance workspace is missing or not owned by KIMng QA: {path}; run prepare first")
     case_root = path / "cases"
-    case_marker = case_root / ".kim6-acceptance-owner"
+    case_marker = case_root / ".kimng-acceptance-owner"
     if case_root.is_symlink() or not case_root.is_dir() or case_marker.is_symlink() or not case_marker.is_file() or case_marker.read_text(encoding="utf-8") != OWNER_TEXT:
         raise SafetyError(f"acceptance case directory is missing or not owned: {case_root}")
     return path
@@ -603,7 +603,7 @@ def assert_case_directory(workspace: Path, case_id: str) -> Path:
     safe_id = re.sub(r"[^A-Za-z0-9_.:-]", "_", case_id)
     target = workspace / "cases" / safe_id
     _reject_symlink_components(target)
-    marker = target / ".kim6-case-owner"
+    marker = target / ".kimng-case-owner"
     if target.is_symlink() or not target.is_dir() or marker.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != case_id + "\n":
         raise SafetyError(f"case directory is missing or not owned by {case_id}: {target}")
     return target
@@ -634,22 +634,22 @@ def assert_owned_directory(path: Path, marker_name: str, marker_text: str) -> Pa
 
 def create_owned_case_dir(workspace: Path, case_id: str) -> Path:
     workspace = workspace.absolute()
-    root_marker = workspace / ".kim6-acceptance-owner"
+    root_marker = workspace / ".kimng-acceptance-owner"
     _reject_symlink_components(workspace)
     if not workspace.is_dir() or root_marker.is_symlink() or not root_marker.is_file() or root_marker.read_text(encoding="utf-8") != OWNER_TEXT:
         raise SafetyError(f"case creation requires a QA-owned workspace: {workspace}")
     case_root = workspace / "cases"
     if not case_root.exists():
         case_root.mkdir(mode=0o700)
-        _write_exclusive(case_root / ".kim6-acceptance-owner", OWNER_TEXT)
-    case_root_marker = case_root / ".kim6-acceptance-owner"
+        _write_exclusive(case_root / ".kimng-acceptance-owner", OWNER_TEXT)
+    case_root_marker = case_root / ".kimng-acceptance-owner"
     if case_root.is_symlink() or case_root_marker.is_symlink() or not case_root_marker.is_file() or case_root_marker.read_text(encoding="utf-8") != OWNER_TEXT:
         raise SafetyError("cases directory is not QA-owned")
     safe_id = re.sub(r"[^A-Za-z0-9_.:-]", "_", case_id)
     destination = case_root / safe_id
     _reject_symlink_components(destination)
     if destination.exists():
-        marker = destination / ".kim6-case-owner"
+        marker = destination / ".kimng-case-owner"
         if destination.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != case_id + "\n":
             raise SafetyError(f"existing case directory is not owned by this case: {destination}")
         return destination
@@ -658,7 +658,7 @@ def create_owned_case_dir(workspace: Path, case_id: str) -> Path:
     except FileExistsError as error:
         raise SafetyError(f"case destination appeared during preparation: {destination}") from error
     try:
-        _write_exclusive(destination / ".kim6-case-owner", case_id + "\n")
+        _write_exclusive(destination / ".kimng-case-owner", case_id + "\n")
     except Exception:
         try: destination.rmdir()
         except OSError: pass
@@ -668,7 +668,7 @@ def create_owned_case_dir(workspace: Path, case_id: str) -> Path:
 
 def reset_case_dir(workspace: Path, case_id: str, allowed_names: set[str], required_files: set[str] | None = None) -> None:
     case_root = workspace / "cases"
-    case_root_marker = case_root / ".kim6-acceptance-owner"
+    case_root_marker = case_root / ".kimng-acceptance-owner"
     if case_root.is_symlink() or case_root_marker.is_symlink() or not case_root_marker.is_file() or case_root_marker.read_text(encoding="utf-8") != OWNER_TEXT:
         raise SafetyError("cases directory is not QA-owned")
     safe_id = re.sub(r"[^A-Za-z0-9_.:-]", "_", case_id)
@@ -676,10 +676,10 @@ def reset_case_dir(workspace: Path, case_id: str, allowed_names: set[str], requi
     _reject_symlink_components(target)
     if not target.is_dir() or target.is_symlink():
         raise SafetyError(f"case directory is missing or unsafe: {target}")
-    marker = target / ".kim6-case-owner"
+    marker = target / ".kimng-case-owner"
     if marker.is_symlink() or not marker.is_file() or marker.read_text(encoding="utf-8") != case_id + "\n":
         raise SafetyError(f"case ownership check failed: {target}")
-    allowed = set(allowed_names) | {".kim6-case-owner", "case.json", "INSTRUCTIONS.txt"}
+    allowed = set(allowed_names) | {".kimng-case-owner", "case.json", "INSTRUCTIONS.txt"}
     actual = {str(p.relative_to(target)) for p in target.rglob("*")}
     unknown = actual - allowed
     if unknown:
@@ -880,7 +880,7 @@ def _image_signature(path: Path) -> list[str]:
 
 
 def _email_attachment_root(generated: Path) -> Path:
-    return generated / "gui-data" / "kim6" / "email-attachments"
+    return generated / "gui-data" / "kimng" / "email-attachments"
 
 
 def _email_snapshot(generated: Path) -> list[str]:
@@ -975,7 +975,7 @@ def validate_case_data(case: dict[str, Any], case_dir: Path, baseline: dict[str,
         raise SafetyError(f"refusing symlink case metadata: {record_path}")
     case_record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.is_file() else {}
     current = {}
-    excluded = {".kim6-case-owner", "case.json", "INSTRUCTIONS.txt"}
+    excluded = {".kimng-case-owner", "case.json", "INSTRUCTIONS.txt"}
     for path in case_dir.rglob("*"):
         relative = str(path.relative_to(case_dir))
         if path.is_symlink() and relative not in excluded:
@@ -1339,7 +1339,7 @@ def _generate_masters(directory: Path) -> dict[str, Any]:
         _run_checked([exiftool, "-overwrite_original", "-GPSLatitude=42", "-GPSLongitude=3",
                       "-DateTimeOriginal=2024:02:29 23:45:06", "-CreateDate=2024:02:29 23:45:06",
                       "-ModifyDate=2024:02:29 23:45:06", "-SubSecTimeOriginal=123",
-                      "-Artist=KIM6 Acceptance Photographer", "-Copyright=Copyright © 2024 QA Fixture",
+                      "-Artist=KIMng Acceptance Photographer", "-Copyright=Copyright © 2024 QA Fixture",
                       "-XMP-dc:Rights=QA sample rights", "-XMP-iptcExt:DigitalSourceType=trainedAlgorithmicMedia",
                       "-XMP-iptcExt:AIPromptInformation=synthetic QA prompt", "-XMP-iptcExt:AIPromptWriterName=Fixture Generator",
                       str(metadata)], "seed metadata fixture")
@@ -1410,8 +1410,8 @@ def _owned_tree(path: Path, label: str, owner_text: str) -> Path:
 
 def _make_masters(generated: Path) -> dict[str, Any]:
     masters = generated / "masters"
-    marker_name = ".kim6-masters-owner"
-    owner = "KIM6 acceptance pristine fixture masters v1\n"
+    marker_name = ".kimng-masters-owner"
+    owner = "KIMng acceptance pristine fixture masters v1\n"
     if masters.exists():
         if masters.is_symlink() or not (masters / marker_name).is_file() or (masters / marker_name).read_text() != owner:
             raise SafetyError("existing master fixture directory is not owned")
@@ -1662,16 +1662,16 @@ def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
 
 def prepare(generated: Path = GENERATED, state_dir: Path = STATE_DIR, repo: Path = ROOT) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     generated = claim_workspace(generated)
-    state_dir = _owned_tree(state_dir.absolute(), ".kim6-acceptance-state-owner", OWNER_TEXT)
+    state_dir = _owned_tree(state_dir.absolute(), ".kimng-acceptance-state-owner", OWNER_TEXT)
     # The transfer inbox is initialized here so a receiving checkout has a
     # known QA-owned place for a manually copied result bundle.
-    _owned_tree(QA_DIR / "transfers", ".kim6-acceptance-transfer-owner", OWNER_TEXT)
+    _owned_tree(QA_DIR / "transfers", ".kimng-acceptance-transfer-owner", OWNER_TEXT)
     cases = load_cases(repo)
     (repo / "qa").mkdir(exist_ok=True)
     plan_path = write_plan(repo, cases)
     master_manifest = _make_masters(generated)
     masters = generated / "masters"
-    _owned_tree(generated / "cases", ".kim6-acceptance-owner", OWNER_TEXT)
+    _owned_tree(generated / "cases", ".kimng-acceptance-owner", OWNER_TEXT)
     for case in cases:
         destination = create_owned_case_dir(generated, case["id"])
         if (destination / "case.json").is_symlink():
@@ -1713,7 +1713,7 @@ def prepare(generated: Path = GENERATED, state_dir: Path = STATE_DIR, repo: Path
                             except (OSError, ValueError, FileNotFoundError): pass
                 _write_atomic_text(destination / "case.json", json.dumps(existing, indent=2, sort_keys=True) + "\n")
             continue
-        allowed_partial = {".kim6-case-owner", *case["fixtures"]}
+        allowed_partial = {".kimng-case-owner", *case["fixtures"]}
         unexpected = {p.name for p in destination.iterdir()} - allowed_partial
         if unexpected:
             raise SafetyError(f"incomplete case contains unrecognized entries; inspect manually: {destination}: {sorted(unexpected)}")
@@ -1786,8 +1786,8 @@ def _render_html(cases: list[dict[str, Any]], state: dict[str, Any]) -> str:
     totals = result_totals(cases, state)
     environment = _environment_snapshot()
     parts = ["<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>",
-             "<title>KIM6 Acceptance Progress</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1200px;padding:0 1rem;color:#18212b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd3dc;padding:.55rem;text-align:left;vertical-align:top}th{background:#eef2f7}select{font:inherit;padding:.4rem}.status-passed{color:#116329}.status-failed{color:#9b1c1c}.status-blocked{color:#805500}.group{margin:2.5rem 0}code{white-space:pre-wrap}.details{white-space:pre-wrap;max-width:36rem}.environment{color:#435264}</style></head><body>",
-             "<h1>KIM6 Human Acceptance Progress</h1><p>Read-only dashboard. Record results with the CLI. A technical check is not a human GUI pass.</p>",
+             "<title>KIMng Acceptance Progress</title><style>body{font:16px system-ui;margin:2rem auto;max-width:1200px;padding:0 1rem;color:#18212b}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccd3dc;padding:.55rem;text-align:left;vertical-align:top}th{background:#eef2f7}select{font:inherit;padding:.4rem}.status-passed{color:#116329}.status-failed{color:#9b1c1c}.status-blocked{color:#805500}.group{margin:2.5rem 0}code{white-space:pre-wrap}.details{white-space:pre-wrap;max-width:36rem}.environment{color:#435264}</style></head><body>",
+             "<h1>KIMng Human Acceptance Progress</h1><p>Read-only dashboard. Record results with the CLI. A technical check is not a human GUI pass.</p>",
              f"<p>Cases: {len(cases)} · Passed: {totals['passed']} · Failed: {totals['failed']} · Skipped: {totals['skipped']} · Environment blocked: {totals['blocked']} · Pending: {totals['pending']} · GUI passes: {totals['gui_verified']} · CLI-only passes: {totals['cli_verified']} · GUI blocked: {totals['gui_blocked']}</p>",
              f"<p class='environment'>Report host: {html.escape(environment['hostname'])} · revision: {html.escape(environment['git_revision'])} · KDE: {html.escape(environment['kde_version'] or 'not detected')} · Qt: {html.escape(environment['qt_version'] or 'not detected')}</p>",
              "<label>Filter <select id='filter'><option value='all'>All</option><option>pending</option><option>passed</option><option>failed</option><option>skipped</option><option>blocked</option></select></label><p>Use the filter to focus on pending, failed, skipped or blocked cases.</p>"]
@@ -1869,7 +1869,7 @@ def _open_dolphin(path: Path, isolated: bool = False, generated: Path = GENERATE
         _reject_symlink_components(directory)
         directory.mkdir(parents=True, exist_ok=True)
     prefix = data_home / "kio" / "servicemenus"
-    dispatcher = prefix / "kim6" / "bin" / "kim_all"
+    dispatcher = prefix / "kimng" / "bin" / "kim_all"
     if not dispatcher.is_file():
         return "Isolated menu copy is not installed. Follow qa/README.md to run the explicit isolated install command first."
     env = os.environ.copy()
@@ -1880,7 +1880,7 @@ def _open_dolphin(path: Path, isolated: bool = False, generated: Path = GENERATE
                 "XDG_DATA_DIRS": "/usr/share"})
     subprocess.Popen([dbus_run, "--", "env", *[f"{key}={value}" for key, value in env.items() if key.startswith("XDG_")],
                       dolphin, "--new-window", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    return "Opened Dolphin with isolated user data/config/cache and D-Bus; email attachments and KIM6 user data stay under qa/generated/gui-data. System-wide menus from /usr/share may also appear; use only the matching KIM6 menu contract verified by check-install, and do not invoke a duplicate or unidentified menu."
+    return "Opened Dolphin with isolated user data/config/cache and D-Bus; email attachments and KIMng user data stay under qa/generated/gui-data. System-wide menus from /usr/share may also appear; use only the matching KIMng menu contract verified by check-install, and do not invoke a duplicate or unidentified menu."
 
 
 def _print_case(case: dict[str, Any], directory: Path) -> None:
@@ -1957,7 +1957,7 @@ def export_state(state_path: Path, output: Path, cases: list[dict[str, Any]]) ->
     known = {case["id"] for case in cases}
     results = {case_id: {**row, "case_id": case_id} for case_id, row in state.get("results", {}).items() if case_id in known}
     validations = {case_id: row for case_id, row in state.get("validations", {}).items() if case_id in known}
-    bundle = {"format": "kim6-acceptance-results", "version": 1, "exported_at": _utc_now(),
+    bundle = {"format": "kimng-acceptance-results", "version": 1, "exported_at": _utc_now(),
               "source": _environment_snapshot("export"), "results": results, "validations": validations}
     _write_exclusive(output, json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n", 0o600)
     return bundle
@@ -1972,7 +1972,7 @@ def read_import_bundle(path: Path) -> dict[str, Any]:
         bundle = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise SafetyError(f"cannot read acceptance transfer file: {error}") from error
-    if bundle.get("format") != "kim6-acceptance-results" or bundle.get("version") != 1:
+    if bundle.get("format") != "kimng-acceptance-results" or bundle.get("version") != 1:
         raise SafetyError("unrecognized acceptance transfer file")
     if not isinstance(bundle.get("results"), dict) or not isinstance(bundle.get("validations", {}), dict):
         raise SafetyError("transfer file has invalid results or validations")
@@ -2132,7 +2132,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             return _check_isolated_install(options.generated.absolute())
         if options.command == "next":
             assert_workspace(options.generated)
-            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            assert_owned_directory(options.state_dir, ".kimng-acceptance-state-owner", OWNER_TEXT)
             state = _get_state(state_path)
             if options.case_id:
                 case = _find_case(cases, options.case_id)
@@ -2174,7 +2174,7 @@ def run_cli(argv: list[str] | None = None) -> int:
                         print("        " + row.get("note", row.get("reason", "")))
             return 0
         if options.command == "report":
-            report_root = _owned_tree(options.reports.absolute(), ".kim6-acceptance-report-owner", OWNER_TEXT)
+            report_root = _owned_tree(options.reports.absolute(), ".kimng-acceptance-report-owner", OWNER_TEXT)
             state = _get_state(state_path)
             stamp = f"{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{time.time_ns()}"
             html_path = report_root / f"acceptance-{stamp}.html"
@@ -2193,7 +2193,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             if options.output:
                 output = options.output
             else:
-                transfer_dir = _owned_tree(QA_DIR / "transfers", ".kim6-acceptance-transfer-owner", OWNER_TEXT)
+                transfer_dir = _owned_tree(QA_DIR / "transfers", ".kimng-acceptance-transfer-owner", OWNER_TEXT)
                 output = transfer_dir / f"acceptance-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{time.time_ns()}.json"
             output = assert_toolkit_path(output, "export file")
             bundle = export_state(state_path, output, cases)
@@ -2202,14 +2202,14 @@ def run_cli(argv: list[str] | None = None) -> int:
             return 0
         if options.command == "import":
             bundle_path = assert_toolkit_path(options.bundle, "import file")
-            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            assert_owned_directory(options.state_dir, ".kimng-acceptance-state-owner", OWNER_TEXT)
             merged = import_state(state_path, bundle_path, {case["id"] for case in cases}, options.resolve or "")
             print(f"Merged results; {len(merged.get('results', {}))} case result(s) are now recorded.")
             if options.resolve:
                 print(f"Conflicts were resolved explicitly using: {options.resolve}.")
             return 0
         if options.command == "reset":
-            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            assert_owned_directory(options.state_dir, ".kimng-acceptance-state-owner", OWNER_TEXT)
             case = _find_case(cases, options.case_id)
             case_dir = assert_case_directory(options.generated, case["id"])
             record_path = case_dir / "case.json"
@@ -2226,7 +2226,7 @@ def run_cli(argv: list[str] | None = None) -> int:
                 print("Persistent email attachment files were left in qa/generated/gui-data; close the mail client before deciding whether to remove these QA-owned copies manually.")
             return 0
         if options.command == "validate":
-            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            assert_owned_directory(options.state_dir, ".kimng-acceptance-state-owner", OWNER_TEXT)
             case = _find_case(cases, options.case_id or _get_state(state_path).get("current_case") or "")
             case_dir = assert_case_directory(options.generated, case["id"])
             record_path = case_dir / "case.json"
@@ -2237,7 +2237,7 @@ def run_cli(argv: list[str] | None = None) -> int:
             save_state(state_path, _merge_validation(_get_state(state_path), case["id"], validation))
             return int(bool(validation["errors"]))
         if options.command in {"pass", "fail", "skip", "blocked"}:
-            assert_owned_directory(options.state_dir, ".kim6-acceptance-state-owner", OWNER_TEXT)
+            assert_owned_directory(options.state_dir, ".kimng-acceptance-state-owner", OWNER_TEXT)
             state = _get_state(state_path)
             case = _find_case(cases, options.case_id or state.get("current_case") or "")
             mode = options.mode
@@ -2283,9 +2283,9 @@ def _check_isolated_install(generated: Path) -> int:
         print(str(error), file=sys.stderr)
         return 1
     prefix = generated / "gui-data" / "kio" / "servicemenus"
-    runtime = prefix / "kim6" / "bin" / "kim_all"
+    runtime = prefix / "kimng" / "bin" / "kim_all"
     if runtime.is_symlink() or not runtime.is_file() or not (runtime.stat().st_mode & 0o111):
-        print("Isolated KIM6 is not installed; run: python3 qa/acceptance.py install-isolated", file=sys.stderr)
+        print("Isolated KIMng is not installed; run: python3 qa/acceptance.py install-isolated", file=sys.stderr)
         return 1
     if sha256(runtime) != sha256(ROOT / "src/bin/kim_all"):
         print("Installed dispatcher differs from the working-tree dispatcher.", file=sys.stderr)
@@ -2293,9 +2293,9 @@ def _check_isolated_install(generated: Path) -> int:
     templates = {p.name.removesuffix(".in"): parse_menu(p) for p in (ROOT / "src").glob("kim_*.desktop.in")}
     required_resources = ("ABOUT", "LICENSE.md", "INSTALL.md", "docs/index.html", "docs/work.css",
                           "gallery/index.part1", "gallery/index.part2")
-    missing_resources = [name for name in required_resources if not (prefix / "kim6" / name).is_file()]
+    missing_resources = [name for name in required_resources if not (prefix / "kimng" / name).is_file()]
     if missing_resources:
-        print("Missing installed KIM6 resource(s): " + ", ".join(missing_resources), file=sys.stderr)
+        print("Missing installed KIMng resource(s): " + ", ".join(missing_resources), file=sys.stderr)
         return 1
     legacy_names = {"kim_album", "kim_compress", "kim_convert", "kim_flipflop", "kim_galery", "kim_multiburst",
                     "kim_other", "kim_collage", "kim_print", "kim_rename", "kim_resize", "kim_resizeandsend",
@@ -2303,7 +2303,7 @@ def _check_isolated_install(generated: Path) -> int:
                     "kim_video", "kim_webexport"}
     legacy_active = []
     for name in legacy_names:
-        legacy_path = prefix / "kim6" / "bin" / name
+        legacy_path = prefix / "kimng" / "bin" / name
         if legacy_path.is_symlink() or (legacy_path.is_file() and bool(legacy_path.stat().st_mode & 0o111)):
             legacy_active.append(name)
     if legacy_active:
@@ -2312,7 +2312,7 @@ def _check_isolated_install(generated: Path) -> int:
     total = 0
     for menu_name, entries in templates.items():
         installed = prefix / menu_name
-        if installed.is_symlink() or not installed.is_file() or installed.stat().st_mode & 0o111:
+        if installed.is_symlink() or not installed.is_file() or installed.stat().st_mode & 0o777 != 0o755:
             print(f"Missing installed menu: {installed}", file=sys.stderr); return 1
         text = installed.read_text(encoding="utf-8", errors="replace")
         try:
@@ -2387,7 +2387,7 @@ def _check_isolated_install(generated: Path) -> int:
     return 0 if templates and total == sum(len(entries) for entries in templates.values()) else 1
 
 
-SECOND_PASS = """KIM6 second-pass safety acceptance checklist
+SECOND_PASS = """KIMng second-pass safety acceptance checklist
 
 Use only qa/generated/cases copies. Re-prepare an individual case before each destructive check.
 - Cancel an operation before processing, during a producer, and immediately before publication; confirm no unwanted output and no lost existing target.

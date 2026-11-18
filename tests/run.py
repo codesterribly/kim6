@@ -18,11 +18,11 @@ def main():
     if suite.countTestCases() == 0:
         print("No tests matched " + options.pattern, file=sys.stderr)
         return 2
-    # KIM6_NONINTERACTIVE_TEST_RUNNER
+    # KIMNG_NONINTERACTIVE_TEST_RUNNER
     # Never permit a test to open an actual desktop dialog.
     # Tests with their own isolated tool adapters retain those adapters.
     with tempfile.TemporaryDirectory(
-        prefix="kim6-test-no-gui-"
+        prefix="kimng-test-no-gui-"
     ) as temporary:
         shims = Path(temporary)
 
@@ -36,7 +36,7 @@ def main():
             executable.write_text(
                 "#!/bin/sh\n"
                 "printf '%s\n' "
-                "'KIM6 TEST: unexpected GUI request refused' >&2\n"
+                "'KIMng TEST: unexpected GUI request refused' >&2\n"
                 "exit 1\n"
             )
             executable.chmod(0o700)
@@ -61,7 +61,7 @@ def main():
             os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
             print(
-                "KIM6 TEST MODE: desktop dialogs disabled",
+                "KIMng TEST MODE: desktop dialogs disabled",
                 file=sys.stderr,
                 flush=True,
             )

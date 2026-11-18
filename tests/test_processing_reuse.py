@@ -33,7 +33,7 @@ class GeneratedImages(unittest.TestCase):
     def setUp(self):
         if not shutil.which('magick') or not shutil.which('exiftool'):
             self.skipTest('Real image tools required')
-        self.tmp = tempfile.TemporaryDirectory(prefix='kim6-step2-')
+        self.tmp = tempfile.TemporaryDirectory(prefix='kimng-step2-')
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.source = self.root/'source.jpg'
@@ -225,7 +225,7 @@ progress_begin_item ref source
                              self.command('exiftool', '-b', '-ICC_Profile', source))
             self.assertEqual(self.command('magick', source, '-format', '%#', 'info:'),
                              self.command('magick', output, '-format', '%#', 'info:'))
-            self.assertFalse(list(workspace.root.rglob('.kim6-stage.*')))
+            self.assertFalse(list(workspace.root.rglob('.kimng-stage.*')))
 
     def test_removal_union_equivalence_and_actual_exiftool_counts(self):
         shell = (base.ROOT/'src/bin/kim_all').read_text()

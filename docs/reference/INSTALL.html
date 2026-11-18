@@ -168,7 +168,7 @@
 <p>The installer prepares KIMng for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h3 id="dependency-checks">Dependency checks</h3>
 <p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, Pacman, and Zypper and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
-<p>Python 3 with PySide6 Qt Widgets and <code>intltool-merge</code> are mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
+<p>Python 3 with PySide6 Qt Widgets is mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
 <p>Optional tools include <code>msgfmt</code> for compiled translations, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache.</p>
 <h3 id="filesystem-and-source-validation">Filesystem and source validation</h3>
 <p>Before installing application files, <code>install.sh</code>:</p>
@@ -181,7 +181,7 @@
 </ul>
 <p>A conflict or missing mandatory source file stops installation rather than proceeding with an unsafe or incomplete installation.</p>
 <h3 id="installing-kimng-components">Installing KIMng components</h3>
-<p>The installer places the unified <code>kim_all</code> dispatcher and its supporting files in a <code>kim6</code> directory beneath the selected service-menu directory.</p>
+<p>The installer places the unified <code>kim_all</code> dispatcher and its supporting files in a <code>kimng</code> directory beneath the selected service-menu directory.</p>
 <p>The installed components include:</p>
 <ul>
 <li>The image and video command dispatcher.</li>
@@ -189,10 +189,10 @@
 <li>Metadata processing and format-verification helpers.</li>
 <li>Gallery generation resources.</li>
 <li>12 Dolphin service-menu definitions, including the Recipes submenu.</li>
-<li>Compiled translation catalogs when new language files are supplied (none currently ship).</li>
+<li>The English source interface (no translated language catalogs currently ship).</li>
 <li>The offline HTML User Guide, illustrations, stylesheet, and reference pages.</li>
 </ul>
-<p>The installer generates the Dolphin service-menu entries using <code>intltool-merge</code> and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
+<p>The installer renders the English values of the <code>intltool-merge</code>-style menu templates and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
 <h3 id="safe-file-replacement">Safe file replacement</h3>
 <p>Each installed file is written to a temporary file beside its destination and then moved into place. This prevents an interrupted copy from leaving that individual destination file partially written.</p>
 <p>Installation is not a whole-tree transaction. An interruption can leave different installed files at different revision levels. Rerunning <code>./install.sh</code> completes or repairs the installation.</p>
@@ -208,7 +208,7 @@
 <p>Successful installation confirms that the installed components are present and structurally valid. It does not guarantee that every optional media encoder or format delegate is available, or that Dolphin is free of KDE menu-display problems.</p>
 <p>For additional implementation details, see <a href="DEVELOPMENT.html#installer-safety-and-recovery">Installer safety and recovery</a>.</p>
 <p>To check the installed program without opening Dolphin:</p>
-<pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kim6/bin/kim_all&quot; --help</code></pre>
+<pre class="sh"><code>&quot;${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus/kimng/bin/kim_all&quot; --help</code></pre>
 <p>If the menus do not appear, restart Dolphin and verify that KIMng was installed in a service-menu directory recognized by KDE.</p>
 <p><strong>KDE Frameworks 6.29 issue:</strong> Frameworks 6.29 introduced a regression that prevented some Dolphin service submenus from appearing. This was fixed in Frameworks 6.30. If you are using the affected version, update KDE Frameworks when a fixed package is available for your distribution.</p>
 <p>KIMng retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>

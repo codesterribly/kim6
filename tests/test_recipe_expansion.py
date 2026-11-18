@@ -72,7 +72,7 @@ class ConvertDiagnosticsTests(unittest.TestCase):
 
 class RecipeFormatTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory(prefix='kim6-recipe-format-');self.addCleanup(self.temp.cleanup)
+        self.temp=tempfile.TemporaryDirectory(prefix='kimng-recipe-format-');self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.source=self.root/'source 雪.png'
         self.cmd('magick','-size','40x30','gradient:red-blue','-profile','/usr/share/color/icc/sRGB.icc',self.source)
         self.before=(self.source.read_bytes(),self.source.stat().st_mtime_ns)
@@ -211,7 +211,7 @@ class SourceLifetimeTests(unittest.TestCase):
             result=core.execute(core.builtins()[0],[source])[0]
         self.assertFalse(result['ok']);self.assertIn('safety limit',result['error'])
         self.assertEqual(source.read_bytes(),data)
-        self.assertFalse(list(self.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_resource_boundary_counts_new_tiff_once(self):
         source=self.root/'layers.psd';self.cmd('magick',self.source,source)

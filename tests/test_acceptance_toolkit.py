@@ -138,8 +138,8 @@ class AcceptanceInventoryTests(unittest.TestCase):
     def test_cli_export_import_round_trip_uses_explicit_paths_inside_qa(self):
         with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
             root = Path(tmp)
-            first_state = acceptance._owned_tree(root / "first-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
-            second_state = acceptance._owned_tree(root / "second-state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            first_state = acceptance._owned_tree(root / "first-state", ".kimng-acceptance-state-owner", acceptance.OWNER_TEXT)
+            second_state = acceptance._owned_tree(root / "second-state", ".kimng-acceptance-state-owner", acceptance.OWNER_TEXT)
             case_id = "kim_convertandrotate.desktop:2001CompressRecommended"
             acceptance._save_result(first_state / "progress.json", case_id, "passed", "gui", "visual check done")
             bundle = root / "transfer.json"
@@ -161,7 +161,7 @@ class AcceptanceInventoryTests(unittest.TestCase):
             repo_qa.mkdir(parents=True)
             generated = root / "generated"
             state_dir = root / "state"
-            acceptance._owned_tree(state_dir, ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            acceptance._owned_tree(state_dir, ".kimng-acceptance-state-owner", acceptance.OWNER_TEXT)
             original_progress = {"version": acceptance.STATE_VERSION, "current_case": None,
                                  "results": {"existing": {"status": "passed", "mode": "gui"}}}
             acceptance.save_state(state_dir / "progress.json", original_progress)
@@ -171,7 +171,7 @@ class AcceptanceInventoryTests(unittest.TestCase):
                     mock.patch.object(acceptance, "_make_masters", return_value={"sha256": {}, "capabilities": {}}):
                 acceptance.prepare(generated, state_dir, repo)
             transfer_dir = qa_root / "transfers"
-            marker = transfer_dir / ".kim6-acceptance-transfer-owner"
+            marker = transfer_dir / ".kimng-acceptance-transfer-owner"
             self.assertEqual(acceptance.OWNER_TEXT, marker.read_text())
             self.assertEqual(original_progress, acceptance.load_state(state_dir / "progress.json"))
 
@@ -279,7 +279,7 @@ Name=Separator
             repo = Path(tmp)
             (repo / "qa").mkdir()
             plan = repo / "qa/ACCEPTANCE_PLAN.md"
-            plan.write_text("# KIM6 Human Acceptance Plan\n\nGenerated from the five current service-menu templates: old inventory\n")
+            plan.write_text("# KIMng Human Acceptance Plan\n\nGenerated from the five current service-menu templates: old inventory\n")
             acceptance.write_plan(repo, cases)
             self.assertEqual(acceptance.render_plan(cases), plan.read_text())
             acceptance.write_plan(repo, cases[:-1])
@@ -411,12 +411,12 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
             root = Path(tmp)
             generated = acceptance.claim_workspace(root / "generated")
-            acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
+            acceptance._owned_tree(generated / "cases", ".kimng-acceptance-owner", acceptance.OWNER_TEXT)
             case_id = "kim_videoutilities.desktop:A01ExtractVideoAudio"
             case_dir = acceptance.create_owned_case_dir(generated, case_id)
             (case_dir / "video-audio.mp4").write_bytes(b"old recorded fixture")
             (case_dir / "case.json").write_text(json.dumps({"id": case_id, "fixtures": ["video-audio.mp4"]}))
-            state_dir = acceptance._owned_tree(root / "state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            state_dir = acceptance._owned_tree(root / "state", ".kimng-acceptance-state-owner", acceptance.OWNER_TEXT)
             acceptance.save_state(state_dir / "progress.json", acceptance.default_state())
             result = acceptance.run_cli(["--generated", str(generated), "--state-dir", str(state_dir), "reset", case_id])
             self.assertEqual(0, result)
@@ -499,13 +499,13 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
             root = Path(tmp)
             generated = acceptance.claim_workspace(root / "generated")
-            acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
+            acceptance._owned_tree(generated / "cases", ".kimng-acceptance-owner", acceptance.OWNER_TEXT)
             case_id = "kim_convertandrotate.desktop:2001CompressRecommended"
             case_dir = acceptance.create_owned_case_dir(generated, case_id)
             (case_dir / "case.json").write_text(json.dumps({"id": case_id, "fixtures": ["photo.jpg"],
                                                              "unavailable_fixtures": []}))
             (case_dir / "photo.jpg").write_bytes(b"disposable fixture")
-            state_dir = acceptance._owned_tree(root / "state", ".kim6-acceptance-state-owner", acceptance.OWNER_TEXT)
+            state_dir = acceptance._owned_tree(root / "state", ".kimng-acceptance-state-owner", acceptance.OWNER_TEXT)
             acceptance.save_state(state_dir / "progress.json", {**acceptance.default_state(),
                                                                  "results": {case_id: {"status": "failed", "mode": "gui"}}})
             from contextlib import redirect_stdout
@@ -532,14 +532,14 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
             generated = Path(tmp) / "generated"
             acceptance.claim_workspace(generated)
-            acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
+            acceptance._owned_tree(generated / "cases", ".kimng-acceptance-owner", acceptance.OWNER_TEXT)
             prefix = generated / "gui-data" / "kio" / "servicemenus"
-            runtime = prefix / "kim6" / "bin" / "kim_all"
+            runtime = prefix / "kimng" / "bin" / "kim_all"
             runtime.parent.mkdir(parents=True)
             shutil.copy2(ROOT / "src/bin/kim_all", runtime)
             for resource in ("ABOUT", "LICENSE.md", "INSTALL.md", "docs/index.html", "docs/work.css",
                              "gallery/index.part1", "gallery/index.part2"):
-                destination = prefix / "kim6" / resource
+                destination = prefix / "kimng" / resource
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 source_path = ROOT / "src" / resource if resource.startswith("gallery/") else ROOT / resource
                 shutil.copy2(source_path, destination)
@@ -548,7 +548,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
                 installed_text = template.read_text().replace("Exec=kim_all", f'Exec="{runtime}"')
                 installed_text = installed_text.replace("_Name=", "Name=").replace("_X-KDE-Submenu=", "X-KDE-Submenu=")
                 target.write_text(installed_text, encoding="utf-8")
-                target.chmod(0o644)
+                target.chmod(0o755)
             self.assertEqual(0, acceptance._check_isolated_install(generated))
             # Mutate only the temporary install: arguments, labels and separator
             # placement must still be checked independently of executable totals.
@@ -603,8 +603,8 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
             repo = root / "repo"
             (repo / "qa").mkdir(parents=True)
             generated = acceptance.claim_workspace(root / "generated")
-            masters = acceptance._owned_tree(generated / "masters", ".kim6-masters-owner",
-                                            "KIM6 acceptance pristine fixture masters v1\n")
+            masters = acceptance._owned_tree(generated / "masters", ".kimng-masters-owner",
+                                            "KIMng acceptance pristine fixture masters v1\n")
             master = masters / "photo.png"
             acceptance._draw_image(shutil.which("magick"), master, "#cc2244", 64, 48)
             digest = acceptance.sha256(master)
@@ -630,8 +630,8 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
             self.skipTest("Dolphin or dbus-run-session unavailable")
         with tempfile.TemporaryDirectory(dir=acceptance.QA_DIR) as tmp:
             generated = acceptance.claim_workspace(Path(tmp) / "generated")
-            acceptance._owned_tree(generated / "cases", ".kim6-acceptance-owner", acceptance.OWNER_TEXT)
-            dispatcher = generated / "gui-data" / "kio" / "servicemenus" / "kim6" / "bin" / "kim_all"
+            acceptance._owned_tree(generated / "cases", ".kimng-acceptance-owner", acceptance.OWNER_TEXT)
+            dispatcher = generated / "gui-data" / "kio" / "servicemenus" / "kimng" / "bin" / "kim_all"
             dispatcher.parent.mkdir(parents=True)
             dispatcher.write_text("test-owned dispatcher")
             with mock.patch.object(acceptance.subprocess, "Popen") as popen:

@@ -22,7 +22,7 @@ from kim_create_dialog import (
     creation_output, write_creation_settings,
 )
 
-# KIM6_ALBUM_ORDERED_PREVIEW_V1
+# KIMNG_ALBUM_ORDERED_PREVIEW_V1
 # These capacities match the existing kim_all album renderer.
 LAYOUTS = [
     ("1 × 1, Portrait", "1", 1, 1, False),

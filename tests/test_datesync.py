@@ -69,7 +69,7 @@ class DateSyncTests(unittest.TestCase):
                                        check=True, capture_output=True).stdout
         self.assertEqual(pixels, after_pixels)
         self.assertEqual(before.mtime_ns, self.source.stat().st_mtime_ns)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
 
     def test_missing_capture_time_fails_without_changing_bytes_or_mtime(self):
         subprocess.run([shutil.which('exiftool'), '-overwrite_original', '-DateTimeOriginal=', str(self.source)],

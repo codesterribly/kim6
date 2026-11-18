@@ -34,7 +34,7 @@ class GPSSourceIOTests(unittest.TestCase):
     def setUp(self):
         if not all(shutil.which(tool) for tool in ('exiftool', 'magick', 'identify')):
             self.skipTest('ExifTool and ImageMagick required')
-        self.temp = tempfile.TemporaryDirectory(prefix='.kim6-gps-test-', dir=ROOT)
+        self.temp = tempfile.TemporaryDirectory(prefix='.kimng-gps-test-', dir=ROOT)
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
         self.control = self.folder / 'control'
@@ -144,7 +144,7 @@ exit "$status"
         self.assertTrue(output.is_file())
         self.assertEqual(before, signature(source))
         self.assertEqual(sidecar_before, signature(sidecar))
-        self.assertFalse(list(self.folder.glob('.kim6-stage.*')))
+        self.assertFalse(list(self.folder.glob('.kimng-stage.*')))
 
     def test_supported_staging_formats_preserve_source_and_embedded_metadata(self):
         for suffix in ('.png', '.webp', '.avif'):
@@ -191,7 +191,7 @@ exit "$status"
                 else:
                     self.assertEqual(b'Existing destination', output.read_bytes())
                     output.unlink()
-                self.assertFalse(list(self.folder.rglob('.kim6-stage.*')))
+                self.assertFalse(list(self.folder.rglob('.kimng-stage.*')))
                 self.assertFalse(list(self.control.glob('location-source-*')))
 
     def test_repeated_and_absent_gps_inspection_is_safe(self):
@@ -254,7 +254,7 @@ exit "$status"
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(output.exists())
         self.assertEqual(before, signature(source))
-        self.assertFalse(list(self.folder.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.folder.rglob('.kimng-stage.*')))
         self.assertFalse(list(self.control.glob('location-source*')))
 
     def test_explicit_overwrite_policy_remains_available(self):
@@ -448,7 +448,7 @@ os.execv(sys.executable,[sys.executable,*args])
                     position = summarize(raw)['position']
                     for actual, approved in zip(position, review['approved'][0]['position']):
                         self.assertAlmostEqual(actual, approved, places=8)
-                self.assertFalse(list(self.folder.rglob('.kim6-stage.*')))
+                self.assertFalse(list(self.folder.rglob('.kimng-stage.*')))
                 self.assertFalse(list((workspace.control/'tmp').glob('kim.*')))
 
     def test_selective_report_retains_supported_location_representations(self):
@@ -537,5 +537,5 @@ os.execv(sys.executable,[sys.executable,*args])
         self.assertTrue(marker.is_file(), 'Failure must occur at publication after verification')
         self.assertFalse(output.exists())
         self.assertEqual(before, signature(source))
-        self.assertFalse(list(self.folder.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.folder.rglob('.kimng-stage.*')))
         self.assertFalse(list(self.control.glob('location-source*')))

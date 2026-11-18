@@ -168,7 +168,7 @@ class VideoTests(unittest.TestCase):
         details = self.probe_text(self.source)
         self.assertIn("codec_name=hevc", details)
         self.assertIn("codec_name=aac", details)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_create_collision_and_dangling_symlink_are_never_replaced(self):
         target = self.source.with_name("short clip-transcoded.mp4")
@@ -267,7 +267,7 @@ class VideoTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(self.w.observe(self.source), before)
                 self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
-                self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+                self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_valid_but_wrong_reported_container_is_rejected(self):
         self.plan_update(video_force_output_format="mpegts")
@@ -278,7 +278,7 @@ class VideoTests(unittest.TestCase):
                             "output validation failed" in call["argv"][-1] for call in result.calls))
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_valid_truncated_prefix_is_rejected_before_publication(self):
         self.plan_update(video_limit_output_duration="0.2")
@@ -289,7 +289,7 @@ class VideoTests(unittest.TestCase):
                             "output validation failed" in call["argv"][-1] for call in result.calls))
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_invalid_source_is_reported_and_batch_continues(self):
         invalid = self.w.path("input/not-a-video [x].mp4")
@@ -313,7 +313,7 @@ class VideoTests(unittest.TestCase):
         result = self.transcode()
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call["tool"] == "ffprobe" for call in result.calls))
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_missing_ffprobe_is_reported_without_starting_encoder(self):
         (self.w.bin / "ffprobe").unlink()
@@ -329,7 +329,7 @@ class VideoTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
         self.assertTrue(any(call["tool"] == "kdialog" and "--error" in call["argv"] and
                             "publication failed" in call["argv"][-1] for call in result.calls))
 
@@ -354,7 +354,7 @@ class VideoTests(unittest.TestCase):
         child_pid = int(child_file.read_text())
         with self.assertRaises(ProcessLookupError):
             os.kill(child_pid, 0)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_service_loss_after_encoding_prevents_publication(self):
         self.plan_update(video_interrupt_after_encode="gone")
@@ -363,7 +363,7 @@ class VideoTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.w.observe(self.source), before)
         self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_interruption_after_first_batch_item_keeps_it_and_stops_the_next(self):
         first = self.make_video("batch/a-first.mp4")
@@ -380,7 +380,7 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(len(encoded), 1)
         self.assertEqual(self.w.observe(first), first_before)
         self.assertEqual(self.w.observe(second), second_before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
         self.assertFalse(list(self.w.root.rglob("progress.refs")))
 
     def test_original_webm_container_rejects_incompatible_h264_without_forcing_mp4(self):

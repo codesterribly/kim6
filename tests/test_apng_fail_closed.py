@@ -118,7 +118,7 @@ os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
             for call in result.calls
         ))
         self.assertFalse(list(
-            self.w.root.rglob(".kim6-stage.*")
+            self.w.root.rglob(".kimng-stage.*")
         ))
 
         if command == "webexport":
@@ -163,7 +163,7 @@ os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
             c["tool"] in ("magick", "identify") for c in result.calls
         ))
         self.assertFalse(result.outputs)
-        storage = self.w.control / "data" / "kim6" / "email-attachments"
+        storage = self.w.control / "data" / "kimng" / "email-attachments"
         self.assertFalse(list(storage.glob("*")))
         self.assertTrue(any(
             "Animated PNG email resizing" in str(event)
@@ -179,7 +179,7 @@ os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
             result.returncode, 0, (result.stderr, result.events)
         )
         self.assertEqual(self.w.observe(self.source), self.before)
-        storage = self.w.control / "data" / "kim6" / "email-attachments"
+        storage = self.w.control / "data" / "kimng" / "email-attachments"
         attachments = list(storage.rglob("moving__send_1.png"))
         self.assertEqual(len(attachments), 1)
         self.assertEqual(

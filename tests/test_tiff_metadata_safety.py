@@ -90,7 +90,7 @@ class TIFFMetadataSafetyTests(unittest.TestCase):
 
     def assert_clean(self):
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
     def assert_rights(self, path):

@@ -379,7 +379,7 @@ class WebEmailTests(unittest.TestCase):
         self.w.respond('kmail', status=42)
         result = self.w.dispatch('resizeandsend', '--size', 'full', '--', source)
         self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(list((Path(self.w.env['XDG_DATA_HOME']) / 'kim6/email-attachments').glob('attachments.*')))
+        self.assertFalse(list((Path(self.w.env['XDG_DATA_HOME']) / 'kimng/email-attachments').glob('attachments.*')))
         self.assertEqual(self.w.image_info(source)[0], 'PPM')
 
     def test_email_all_size_presets_and_custom_geometry_are_action_local(self):
@@ -451,7 +451,7 @@ class WebEmailTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call['tool'] in ('magick', 'cp', 'kmail', 'thunderbird', 'xdg-email')
                              for call in result.calls))
-        self.assertFalse(list((Path(self.w.env['XDG_DATA_HOME']) / 'kim6/email-attachments').glob('attachments.*')))
+        self.assertFalse(list((Path(self.w.env['XDG_DATA_HOME']) / 'kimng/email-attachments').glob('attachments.*')))
 
     def test_email_thunderbird_and_xdg_email_receive_safe_multiple_file_arguments(self):
         self.w.use_real_web_email()
@@ -491,7 +491,7 @@ class WebEmailTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len([call for call in result.calls if call['tool'] == 'magick']), 2)
         self.assertFalse(any(call['tool'] in ('kmail', 'thunderbird', 'xdg-email') for call in result.calls))
-        folders = list((Path(self.w.env['XDG_DATA_HOME']) / 'kim6/email-attachments').glob('attachments.*'))
+        folders = list((Path(self.w.env['XDG_DATA_HOME']) / 'kimng/email-attachments').glob('attachments.*'))
         self.assertEqual(len(folders), 1)
         self.assertEqual(len(list(folders[0].iterdir())), 1)
 
@@ -504,7 +504,7 @@ class WebEmailTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         message = next(call for call in result.calls if call['tool'] == 'kdialog' and '--msgbox' in call['argv'])
         self.assertIn('delete the folder when finished', message['argv'][-1])
-        reported = next((Path(self.w.env['XDG_DATA_HOME']) / 'kim6/email-attachments').glob('attachments.*'))
+        reported = next((Path(self.w.env['XDG_DATA_HOME']) / 'kimng/email-attachments').glob('attachments.*'))
         self.assertIn(str(reported), message['argv'][-1])
         self.assertTrue(reported.is_dir())
         attachments = list(reported.iterdir())

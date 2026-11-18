@@ -18,7 +18,7 @@ def dispatcher_functions(*names):
 class VideoOutputNumbering(unittest.TestCase):
     def publish(self, occupied=0, *, race=False, symlink=False, failure=False,
                 cancelled=False, prefix=False, vacate_base=False, late_collisions=0):
-        with tempfile.TemporaryDirectory(prefix='kim6-numbering-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='kimng-numbering-') as tmp:
             root = Path(tmp)
             stem = 'custom-clip' if prefix else 'clip_audio'
             def target(number):
@@ -29,7 +29,7 @@ class VideoOutputNumbering(unittest.TestCase):
             stage = root / 'stage.mp3'; stage.write_bytes(b'new output')
             source = root / 'clip.mp4'; source.write_bytes(b'original')
             script = dispatcher_functions(
-                'kim6_known_affix_key', 'kim6_affix_value', 'affixed_filename',
+                'kimng_known_affix_key', 'kimng_affix_value', 'affixed_filename',
                 'owned_stage_file', 'commit_tmp_to_target',
                 'video_utility_target', 'video_utility_publish')
             script = script.replace('commit_tmp_to_target() {', 'exclusive_commit() {') + '''

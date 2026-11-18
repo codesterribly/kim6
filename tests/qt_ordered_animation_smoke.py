@@ -116,7 +116,7 @@ if action_animate -- "$@"; then exit 77; fi
 
 def main():
     app = QApplication.instance() or QApplication([])
-    with tempfile.TemporaryDirectory(prefix='.kim6-ui-smoke-', dir=ROOT) as directory:
+    with tempfile.TemporaryDirectory(prefix='.kimng-ui-smoke-', dir=ROOT) as directory:
         root = Path(directory)
         paths = []
         for name, color in [('frame 10.png', 'red'), ('frame 2.jpg', 'green'), ('frame 1.png', 'blue')]:

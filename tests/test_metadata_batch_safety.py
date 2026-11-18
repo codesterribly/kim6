@@ -34,7 +34,7 @@ class MetadataBatchSafetyTests(unittest.TestCase):
             capture_output=True,
         )
 
-        # Valid JPEG bytes under a RAW extension. KIM6 must refuse
+        # Valid JPEG bytes under a RAW extension. KIMng must refuse
         # metadata editing of this source, even if ExifTool can read it.
         self.unsupported = self.w.path("input/second.dng")
         self.unsupported.write_bytes(self.good.read_bytes())
@@ -50,7 +50,7 @@ class MetadataBatchSafetyTests(unittest.TestCase):
 
     def assert_clean(self):
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
     def test_copyright_overwrite_preserves_failed_second_file(self):

@@ -162,7 +162,7 @@ class PSDDispatcherTests(unittest.TestCase):
             if not executable: self.skipTest(tool + ' unavailable')
             (self.w.bin/tool).unlink(); (self.w.bin/tool).symlink_to(executable)
         self.w.env['PATH'] += os.pathsep + os.defpath
-        self.w.env.update(KIM_POLICY='create', KIM6_CREATE_PICK_MORE='0', MAGICK_THREAD_LIMIT='1')
+        self.w.env.update(KIM_POLICY='create', KIMNG_CREATE_PICK_MORE='0', MAGICK_THREAD_LIMIT='1')
         self.w.path('out').mkdir()
         self.inputs = [self.w.path('input/document 雪.psd'), self.w.path('input/photo.jpg'), self.w.path('input/transparent.png')]
         self.inputs[0].parent.mkdir()
@@ -179,7 +179,7 @@ class PSDDispatcherTests(unittest.TestCase):
                                 env=self.w.env, capture_output=True, text=True, timeout=90)
         self.assertEqual(result.returncode, 0, result.stderr + '\n' + self.w.log.read_text()[-5000:])
         self.assertEqual([self.w.observe(p) for p in self.inputs], self.before)
-        self.assertFalse(list(self.w.root.rglob('.kim6-stage.*')))
+        self.assertFalse(list(self.w.root.rglob('.kimng-stage.*')))
         return result
 
     def test_mixed_convert_web_and_opaque_background(self):
@@ -338,7 +338,7 @@ assert w.files==[str(b)]
 with patch('kim_recipe_run.QMessageBox.question',return_value=QMessageBox.Yes): w.clear_files()
 assert not w.files and not w.run_button.isEnabled() and not w.properties.rowCount()
 settle(w); assert not w.run_button.isEnabled()
-assert any(label.text()=='Originals are never overwritten. KIM6 saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.' for label in w.findChildren(QLabel))
+assert any(label.text()=='Originals are never overwritten. KIMng saves new files and adds a number when names collide, so nothing gets clobbered. Finished results stay put if you cancel or something fails.' for label in w.findChildren(QLabel))
 assert a.exists() and b.exists(); w.reject()
 ''')
 

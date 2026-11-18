@@ -31,7 +31,7 @@ class NativeSafetyTests(unittest.TestCase):
 
     def assert_clean(self):
         self.assertFalse(
-            list(self.w.root.rglob(".kim6-stage.*"))
+            list(self.w.root.rglob(".kimng-stage.*"))
         )
 
     def malicious_engine(self, body):

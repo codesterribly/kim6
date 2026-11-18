@@ -110,7 +110,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.source.with_name("clip [雪]-audio.mp3").exists())
         self.assertEqual(self.w.observe(self.source), before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_short_audio_truncation_beyond_one_codec_frame_is_rejected(self):
         short = self.make_video("input/short-audio.mkv", audio=True, duration="0.2")
@@ -122,7 +122,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(short.with_name("short-audio-audio.mp3").exists())
         self.assertEqual(self.w.observe(short), before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_gif_interval_may_not_extend_past_source_end(self):
         result = self.dispatch("videogif", "--start", "00:00:00.800", "--duration", "0.5",
@@ -265,7 +265,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertFalse(self.source.with_name("clip [雪]_thumbnail.png").exists())
         self.assertFalse(second.with_name("second_thumbnail.png").exists())
         self.assertEqual(self.w.observe(self.source), before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_zero_exit_with_corrupt_frame_bytes_is_rejected(self):
         self.w.respond("ffmpeg", status=0, output_base64="bm90IGFuIGltYWdl")
@@ -280,7 +280,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.source.with_name("clip [雪]_thumbnail.png").exists())
         self.assertEqual(self.w.observe(self.source), before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_missing_ffmpeg_and_symlinked_source_fail_closed(self):
         before = self.w.observe(self.source)
@@ -308,7 +308,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertFalse(self.source.with_name("clip [雪]-audio.flac").exists())
         self.assertFalse(second.with_name("second-audio.flac").exists())
         self.assertEqual(self.w.observe(self.source), before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
         self.assertTrue(any(call["tool"] == "qdbus" and call["argv"][-1] == "close"
                             for call in result.calls))
 
@@ -360,7 +360,7 @@ class VideoUtilityTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.source.with_name("clip [雪]-audio.mp3").exists())
         self.assertEqual(self.w.observe(self.source), source_before)
-        self.assertFalse(list(self.w.root.rglob(".kim6-stage.*")))
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_menu_contract_exposes_six_video_utility_actions(self):
         from pathlib import Path

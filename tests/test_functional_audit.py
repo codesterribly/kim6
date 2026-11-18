@@ -17,7 +17,7 @@ ENTRYPOINT = '\nmain "$@"\n'
 
 class FunctionalAuditTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="kim6-functional-audit-", dir="/tmp")
+        self.temporary = tempfile.TemporaryDirectory(prefix="kimng-functional-audit-", dir="/tmp")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         script = SOURCE.read_text(encoding="utf-8")

@@ -20,7 +20,7 @@ class RootTests(unittest.TestCase):
     def test_locked_menu_save_is_pending_and_retry_reads_current_library(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            runtime = root / 'kim6'
+            runtime = root / 'kimng'
             shutil.copytree(base.ROOT / 'src', runtime)
             dispatcher = runtime / 'bin/kim_all'
             target = root / 'kim_recipes.desktop'
@@ -101,7 +101,7 @@ class RootTests(unittest.TestCase):
 
     def test_atomic_repeat_foreign_symlink_and_saved_mutations(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); target = root/'kim_recipes.desktop'; dispatcher = root/'kim6/bin/kim_all'
+            root = Path(tmp); target = root/'kim_recipes.desktop'; dispatcher = root/'kimng/bin/kim_all'
             library = core.RecipeLibrary(); target.write_text(menu.render(library, dispatcher)); target.chmod(0o755)
             with patch.object(menu, 'installed_paths', return_value=(target, dispatcher)), patch.object(menu, 'load_library', return_value=library), patch.object(menu.shutil, 'which', return_value=None):
                 self.assertFalse(menu.sync_menu())
@@ -165,9 +165,9 @@ class RootInstallerTests(unittest.TestCase):
         fixture.setUp()
         try:
             config = fixture.base / 'config'
-            (config / 'kim6').mkdir(parents=True)
+            (config / 'kimng').mkdir(parents=True)
             r = base.recipe(); r['folder'] = core.ROOT_FOLDER
-            library = config / 'kim6/recipes.json'
+            library = config / 'kimng/recipes.json'
             library.write_text(json.dumps(dict(schema=1, recipes=[r], folders=[])))
             fixture.env['XDG_CONFIG_HOME'] = str(config)
             for _ in range(2):

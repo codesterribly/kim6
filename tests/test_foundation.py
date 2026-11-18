@@ -114,7 +114,7 @@ class FoundationTests(unittest.TestCase):
         self.assertNotEqual(stage, source.with_suffix(".png"))
         self.assertEqual(stage.suffix, ".png")
         self.assertEqual(stage.parent.parent, source.parent)
-        self.assertTrue(stage.parent.name.startswith(".kim6-stage."))
+        self.assertTrue(stage.parent.name.startswith(".kimng-stage."))
         self.assertEqual(list((self.workspace.control / "tmp").iterdir()), [])
 
     def test_unconfigured_media_and_desktop_tools_fail_without_forwarding(self):
