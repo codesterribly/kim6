@@ -104,8 +104,9 @@ class TileStore(QObject):
     changed = Signal()
     preference_changed = Signal(bool)
 
-    def __init__(self, parent):
+    def __init__(self, parent, persistent=True):
         super().__init__(parent)
+        self.persistent = persistent
         self.enabled = load_settings(config_path())['KIM_LOCATION_ONLINE_MAPS'] == 'yes'
         self.stored_enabled = self.enabled
         self.tiles = OrderedDict(); self.active = {}; self.failed = {}; self.diagnostics = OrderedDict(); self.painted = set()
@@ -114,7 +115,8 @@ class TileStore(QObject):
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(180)
         self.timer.timeout.connect(self.request_visible)
         self.preference_timer = QTimer(self); self.preference_timer.setInterval(2000)
-        self.preference_timer.timeout.connect(self.reload_preference); self.preference_timer.start()
+        self.preference_timer.timeout.connect(self.reload_preference)
+        if persistent: self.preference_timer.start()
 
     def initialize(self):
         if self.network or self.initialization_problem: return
@@ -123,6 +125,9 @@ class TileStore(QObject):
             self.initialization_problem = '\n'.join(problems)
             debug_map('unavailable', problems=problems); return
         try:
+            if not self.persistent:
+                self.network = QNetworkAccessManager(self)
+                return
             root = Path(QStandardPaths.writableLocation(QStandardPaths.CacheLocation)) / 'location-tiles'
             root.mkdir(parents=True, exist_ok=True)
             self.lock = QLockFile(str(root / 'cache.lock'))
@@ -144,6 +149,9 @@ class TileStore(QObject):
             if self.lock: self.lock.unlock(); self.lock = None
 
     def set_enabled(self, enabled):
+        if not self.persistent:
+            self.apply_enabled(enabled)
+            return
         try:
             settings = load_settings(config_path()); settings['KIM_LOCATION_ONLINE_MAPS'] = 'yes' if enabled else 'no'
             save_settings(config_path(), settings)
@@ -274,7 +282,8 @@ class TileStore(QObject):
             buffer = QBuffer(); buffer.setData(QByteArray(bytes(data))); buffer.open(QIODevice.ReadOnly)
             reader = QImageReader(buffer, b'PNG'); image = reader.read()
             if image.isNull(): raise TileResponseError('PNG decoding failed: ' + reader.errorString())
-            metadata = self.network.cache().metaData(reply.url()); expires = metadata.expirationDate().toSecsSinceEpoch()
+            cache = self.network.cache()
+            expires = cache.metaData(reply.url()).expirationDate().toSecsSinceEpoch() if cache else 0
             record.update(stage='decoded', width=image.width(), height=image.height(), expires=expires)
             self.tiles[key] = (QPixmap.fromImage(image), expires if expires > time.time() else time.time() + 30)
             while len(self.tiles) > 96:
@@ -319,12 +328,13 @@ def tile_store():
 class TileMap(QWidget):
     position_changed = Signal(object)
 
-    def __init__(self, parent=None, interactive=False, units='metric'):
+    def __init__(self, parent=None, interactive=False, units='metric', persistent=True):
         super().__init__(parent)
         self.interactive = interactive; self.units = units; self.zoom = 13
         self.selected = None; self.centre = world_point([0, 0], self.zoom)
         self.empty_text = 'No camera coordinates recorded'; self.drag_origin = None; self.dragged = False
-        self.store = tile_store(); self.store.changed.connect(self.map_changed)
+        self.store = tile_store() if persistent else TileStore(self, persistent=False)
+        self.store.changed.connect(self.map_changed)
         self.setMinimumSize(0, 110); self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setFocusPolicy(Qt.StrongFocus); self.setCursor(Qt.OpenHandCursor)
         self.setAccessibleName('Location map. Arrow keys pan; plus and minus zoom.' + (' Space selects the center.' if interactive else ''))
@@ -490,15 +500,18 @@ class TileMap(QWidget):
 class LocationMap(QWidget):
     position_changed = Signal(object)
 
-    def __init__(self, parent=None, interactive=False, units='metric'):
+    def __init__(self, parent=None, interactive=False, units='metric', persistent=True):
         super().__init__(parent)
         outer_layout = QVBoxLayout(self); outer_layout.setContentsMargins(0, 0, 0, 0)
         self.online = QPushButton('Enable Maps')
         self.online.setCheckable(False); self.online.setAutoDefault(False)
         self.online.setToolTip('Enable online maps and save this preference in KIMng Settings. Visible map areas are requested from OpenStreetMap; image names stay local.')
+        if not persistent:
+            self.online.setText('Enable Maps for this session')
+            self.online.setToolTip('Request visible OpenStreetMap areas for this dialog only. No map preference or disk cache is saved; image names stay local.')
         outer_layout.addWidget(self.online)
         map_area = QWidget(); layout = QVBoxLayout(map_area); layout.setContentsMargins(0, 0, 0, 0)
-        self.canvas = TileMap(self, interactive, units)
+        self.canvas = TileMap(self, interactive, units, persistent=persistent)
         self.canvas_minimum = self.canvas.minimumHeight()
         self.content_splitter = QSplitter(Qt.Vertical); self.content_splitter.setChildrenCollapsible(False)
         self.content_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
@@ -566,7 +579,9 @@ class LocationMap(QWidget):
         has_failure = bool(has_position and self.store.enabled and
                            (self.store.initialization_problem or self.store.problem or failures))
         if self.canvas.selected is None and not self.canvas.interactive: text = self.canvas.empty_text
-        elif not self.store.enabled: text = 'Online maps are off in KIMng Settings. The coordinate marker remains available.'
+        elif not self.store.enabled:
+            text = ('Online maps are off in KIMng Settings. The coordinate marker remains available.' if self.store.persistent else
+                    'Click to select coordinates. Enable maps for geographic imagery in this session; no settings or disk cache are saved.')
         elif has_failure: text = MAP_FAILURE_TEXT
         elif self.store.active: text = 'Loading geographic imagery…'
         else: text = 'Visible map areas are sent to OpenStreetMap. Drag or use arrow keys to pan.'

@@ -128,7 +128,8 @@ class OverviewPreferences:
 
     @property
     def selectors(self):
-        return self.validate(self.fields)
+        gps = next(field for field in OVERVIEW_DEFAULTS if field.label == 'GPS position')
+        return tuple(dict.fromkeys((*self.validate(self.fields), *gps.selectors)))
 
     def save(self, fields):
         from dataclasses import asdict

@@ -39,6 +39,8 @@ from kim_metadata_compare import compare_records, compare_overview_records, _ent
 from kim_photo_selection import read_thumbnail
 from kim_preview import identity
 from kim_process import inspection_context
+from kim_metadata_gps_actions import (gps_field, is_gps_entry, entry_key, action_owner,
+    add_field_controls, GPSActionDelegate, GPSField)
 
 
 DISPLAY_LIMIT = 240
@@ -1163,50 +1165,6 @@ class OverviewPresentation:
         header_row.setSpacing(6)
         header_row.addWidget(heading)
 
-        if title == 'Location':
-            open_map = getattr(self, 'view_gps_on_map', None)
-            if open_map is None and self.parent() is not None:
-                open_map = getattr(
-                    self.parent(), 'view_gps_on_map', None
-                )
-
-            if callable(open_map):
-                globe = QToolButton()
-                globe.setObjectName('viewGpsOnMap')
-                globe_image = QPixmap(24, 24)
-                globe_image.fill(Qt.transparent)
-
-                painter = QPainter(globe_image)
-                painter.setRenderHint(QPainter.Antialiasing)
-
-                pen = QPen(
-                    self.palette().color(QPalette.WindowText)
-                )
-                pen.setWidthF(1.6)
-                painter.setPen(pen)
-
-                painter.drawEllipse(2, 2, 20, 20)
-                painter.drawEllipse(8, 2, 8, 20)
-                painter.drawLine(2, 12, 22, 12)
-                painter.drawLine(4, 7, 20, 7)
-                painter.drawLine(4, 17, 20, 17)
-                painter.end()
-
-                globe.setIcon(QIcon(globe_image))
-                globe.setIconSize(QSize(24, 24))
-                globe.setMinimumSize(QSize(30, 30))
-                globe.setAutoRaise(True)
-                globe.setToolTip(
-                    'View the selected image GPS location on the map'
-                )
-                globe.setAccessibleName('View on map')
-                globe.setFocusPolicy(Qt.StrongFocus)
-                globe.clicked.connect(
-                    lambda _checked=False, action=open_map:
-                    action()
-                )
-                header_row.addWidget(globe)
-
         header_row.addStretch(1)
         self.overview_layout.addLayout(header_row)
         self.overview_layout.addWidget(body)
@@ -1361,7 +1319,14 @@ class OverviewPresentation:
             return
         self.overview_loading.setText('Loading metadata…')
         section = None
-        for field in self.overview_preferences.fields:
+        fields = list(self.overview_preferences.fields)
+        # The camera location stays discoverable even with no pins or values.
+        gps_default = next(field for field in OVERVIEW_DEFAULTS if field.label == 'GPS position')
+        if gps_default not in fields:
+            fields.append(gps_default)
+        camera_location_shown = False
+        gps_cards = {}
+        for field in fields:
             entries = field.entries(record)
             camera = field in OVERVIEW_DEFAULTS and field.section in ('Camera & capture', 'Location')
             values = self._camera_values(field.label, field.selectors, record) if camera else []
@@ -1369,7 +1334,7 @@ class OverviewPresentation:
             preferred = self._preferred(subset, tuple(dict.fromkeys(entry.name for entry in entries))) if entries else None
             visible_value = bool(values and values != ['Explicitly empty']) if camera else bool(
                 preferred and preferred.value not in ('', None, [], {}))
-            if not visible_value and not self.show_empty.isChecked():
+            if not visible_value and not self.show_empty.isChecked() and field != gps_default:
                 continue
             if field.section != section:
                 self._section_heading(field.section, first=section is None)
@@ -1389,6 +1354,35 @@ class OverviewPresentation:
             details.setAutoRaise(False)
             details.clicked.connect(lambda _checked=False, values=entries, name=field.label: self.show_metadata_details(values, name))
             heading.addWidget(details)
+            gps_entry = preferred
+            if field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude':
+                gps_entry = self._preferred(record, ('GPSAltitude',))
+            if field == gps_default:
+                gps_entry = self._preferred(record, ('GPSLatitude',)) or self._preferred(record, ('GPSPosition', 'GPSCoordinates'))
+                context = gps_field(record, gps_entry)
+                if gps_entry is not None and context.position is not None:
+                    from kim_location_ui import position_text
+                    values = [position_text(context.position)]
+                elif gps_entry is not None:
+                    values = [value_text(gps_entry.value)]
+            else:
+                context = gps_field(record, gps_entry) if (is_gps_entry(gps_entry) or
+                    field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude') else None
+            shared_card = False
+            if context is not None:
+                # Position and altitude in the same storage record share a
+                # card and one action cluster. Distinct sources/records keep
+                # their own controls and provenance.
+                representation = (gps_entry.source, entry_key(gps_entry).rsplit(':', 1)[0],
+                                  context.provenance.rsplit(' · ', 1)[-1], repr(context.position)) if gps_entry else ('missing-camera',)
+                if representation in gps_cards:
+                    card.deleteLater()
+                    card, self.section_layout = gps_cards[representation]
+                    shared_card = True
+                else:
+                    gps_cards[representation] = (card, self.section_layout)
+                    add_field_controls(heading, action_owner(self), context)
+                camera_location_shown |= context.camera
             self.section_layout.addLayout(heading)
             if camera:
                 if not values:
@@ -1398,9 +1392,22 @@ class OverviewPresentation:
                         self.section_layout.addWidget(self._content_label(value))
             else:
                 self._add_description_field(field.label, entries, subset)
+            if context is not None and not shared_card:
+                self.section_layout.addWidget(self._subdued_label(context.provenance))
             shown = ' '.join(values) if camera else _compact(preferred.value) if preferred else ''
             wide = len(shown) > 90 or len(field.label) > 45 or '\n' in shown
-            self._overview_section.add_field(card, wide)
+            if not shared_card:
+                self._overview_section.add_field(card, wide or context is not None)
+        if not camera_location_shown:
+            self._section_heading('Camera GPS location', first=section is None)
+            card = QWidget()
+            row = QHBoxLayout(card)
+            context = gps_field(record)
+            from kim_location_ui import position_text
+            text = position_text(context.position) if context.position is not None else 'No verified embedded camera coordinates in this view.'
+            row.addWidget(self._content_label('GPS location · ' + text), 1)
+            add_field_controls(row, action_owner(self), context)
+            self._overview_section.add_field(card, True)
         if section is None:
             self.overview_layout.addWidget(self._subdued_label('No configured metadata values are present.'))
         self.overview_layout.addStretch(1)
@@ -2014,6 +2021,8 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             model.pin_preferences = self.overview_preferences
             delegate = PinDelegate(view, self.overview_preferences)
             delegate.toggled.connect(lambda index: self.toggle_overview_entry(index.data(Qt.UserRole)))
+            GPSActionDelegate(view, self, lambda index: gps_field(index.model().record, index.data(Qt.UserRole))
+                              if isinstance(index.data(Qt.UserRole), MetadataEntry) else None)
         self.copy_button.setEnabled(False)
         self.copy_button.clicked.connect(self.copy_value)
         copy_row.addWidget(self.copy_button)
@@ -2087,6 +2096,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.comparison_model = ComparisonModel(self)
         self.comparison_tree = QTableView()
         self.comparison_tree.setModel(self.comparison_model)
+        GPSActionDelegate(self.comparison_tree, self, self._comparison_gps_field, (1, 2))
         self.comparison_tree.setAlternatingRowColors(True)
         self.comparison_tree.setWordWrap(False)
         self.comparison_tree.setTextElideMode(Qt.ElideRight)
@@ -2371,6 +2381,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.comparison_empty.hide()
         self.pending_comparison_paths = self.compared_paths
         records = tuple(self._comparison_record(path) for path in self.compared_paths)
+        self._comparison_gps_records = records
         if any(record is None for record in records):
             self.comparison_model.set_result(None)
             self.comparison_summary.setText('Loading all metadata…' if self.compare_scope.currentText() == 'All fields' else 'Loading metadata…')
@@ -2415,6 +2426,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         if self._closing or worker.isInterruptionRequested() or self._comparison_cancelled or not self.compared_paths:
             return
         records = tuple(self._comparison_record(path) for path in self.compared_paths)
+        self._comparison_gps_records = records
         if any(record is None for record in records) or worker.key != self._comparison_key(records):
             return
         if error:
@@ -2543,6 +2555,29 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.update_current()
         self._update_compare_button()
         QTimer.singleShot(0, self._pump_thumbnails)
+
+    def _comparison_gps_field(self, index):
+        row = index.data(Qt.UserRole)
+        if row is None or not self.compared_paths or index.column() not in (1, 2):
+            return None
+        entry = row.reference if index.column() == 1 else row.comparison
+        path = self.compared_paths[index.column() - 1]
+        records = getattr(self, '_comparison_gps_records', ())
+        record = records[index.column() - 1] if len(records) == 2 else None
+        if record is None or record.path != path:
+            return None
+        if entry is not None:
+            return gps_field(record, entry) if is_gps_entry(entry) else None
+        exemplar = row.comparison if index.column() == 1 else row.reference
+        if not is_gps_entry(exemplar):
+            return None
+        other = records[2 - index.column()]
+        origin = gps_field(other, exemplar)
+        current = gps_field(record)
+        if origin and origin.camera and current.camera and current.position is None:
+            return current  # Missing camera GPS: Add opens this column's image.
+        return GPSField(path, None, False, 'Not present · ' + exemplar.group,
+                        'This representation is absent or incomplete. Inspect camera GPS in Overview; another location record will not be edited here.')
 
     def view_gps_on_map(self):
         """Open the existing read-only GPS report for the current image."""
@@ -3597,11 +3632,13 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             QApplication.clipboard().setText(raw_metadata_value(self.selected_entry.value))
 
     def _finish_close(self):
-        if self.worker is None and not self.preview_workers and self._tag_filter_worker is None and self._comparison_worker is None and not self.thumbnail_workers:
+        if getattr(self, '_gps_dialog', None) is None and self.worker is None and not self.preview_workers and self._tag_filter_worker is None and self._comparison_worker is None and not self.thumbnail_workers:
             self.close()
 
     def closeEvent(self, event):
         self._closing = True
+        if getattr(self, '_gps_dialog', None) is not None:
+            self._gps_dialog.reject()
         self._activity_hide_timer.stop()
         self._metadata_prefetch_timer.stop()
         for worker in tuple(self.thumbnail_workers):
@@ -3613,7 +3650,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             worker.requestInterruption()
         if self.worker is not None:
             self.worker.requestInterruption()
-        if self.worker is not None or self.preview_workers or self._tag_filter_worker is not None or self._comparison_worker is not None or self.thumbnail_workers:
+        if getattr(self, '_gps_dialog', None) is not None or self.worker is not None or self.preview_workers or self._tag_filter_worker is not None or self._comparison_worker is not None or self.thumbnail_workers:
             self.close_after_worker = True
             event.ignore()
             return

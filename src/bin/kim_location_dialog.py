@@ -9,13 +9,14 @@ import os
 from PySide6.QtCore import QThread, Signal, QTimer, Qt, QSize, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
+    QFormLayout, QGridLayout, QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
     QDialogButtonBox, QStyle, QFileDialog, QWidget, QScrollArea,
     QButtonGroup, QRadioButton,
     QSplitter,
     QStackedWidget, QGroupBox, QMessageBox, QSizePolicy, QToolButton, QTabWidget)
 
-from kim_location import TITLES, build_plan, coordinate, number, source_info, summarize, optional_gps, MAX_FILES
+from kim_location import (build_manual_proposal, proposal_problem, inspect_editor_gps, editor_gps_description,
+    TITLES, build_plan, coordinate, number, source_info, summarize, optional_gps, MAX_FILES)
 from kim_preview import verify_plan, save_plan, identity, absolute
 from kim_location_ui import (preferred_units, unit_preference, persist_units, altitude_to_metres,
     altitude_from_metres, distance, position_text, reference_caption, location_unit_choices,
@@ -40,9 +41,38 @@ class LocationWorker(QThread):
         except Exception as exc: self.error = str(exc)
 
 
+class ProposalWorker(QThread):
+    """Cancellable protected inspection, with no publication planner."""
+    def __init__(self, path, config, parent):
+        super().__init__(parent)
+        self.path = path; self.config = config; self.proposal = None; self.error = ''
+
+    def run(self):
+        try:
+            self.proposal = build_manual_proposal(self.path, self.config, cancelled=self.isInterruptionRequested)
+        except Exception as exc:
+            self.error = str(exc)
+
+
+class GPSInspectionWorker(QThread):
+    """Share protected asynchronous GPS inspection between Editor and dialog."""
+    def __init__(self, path, parent):
+        super().__init__(parent)
+        self.path = path; self.snapshot = None
+
+    def run(self):
+        try:
+            self.snapshot = inspect_editor_gps(self.path, cancelled=self.isInterruptionRequested)
+        except Exception as exc:
+            self.snapshot = dict(source=self.path, existing=None, sidecars=[], blocked=[str(exc)])
+
+
 class LocationDialog(QDialog):
     def __init__(self, kind, files, policy, seeds, initial=None):
         super().__init__()
+        self.proposal_only = policy == 'proposal'
+        if self.proposal_only and len(files) != 1:
+            raise ValueError('Select exactly one image for a GPS proposal')
         self.kind, self.files, self.policy, self.seeds = kind, [absolute(p) for p in files], policy, seeds
         self.selection_only = policy == 'select'
         if self.selection_only: self.policy = 'create'
@@ -61,7 +91,8 @@ class LocationDialog(QDialog):
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(350)
         self.timer.timeout.connect(self.start_plan)
         top = QHBoxLayout()
-        title = QLabel('View GPS metadata' if kind == 'report' else TITLES[kind].rstrip('…'))
+        title = QLabel(('Edit GPS location' if initial else 'Add GPS location') if self.proposal_only else 'View GPS metadata' if kind == 'report' else TITLES[kind].rstrip('…'))
+        self.title_label = title
         font = title.font(); font.setBold(True); title.setFont(font); top.addWidget(title, 1)
         measurement_label = QLabel('&Units:'); top.addWidget(measurement_label)
         self.unit_choice = QComboBox()
@@ -87,7 +118,8 @@ class LocationDialog(QDialog):
                 QSizePolicy.Preferred,
                 QSizePolicy.Maximum,
             )
-        for form in self.controls.findChildren(QFormLayout): form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        for form in self.controls.findChildren(QFormLayout):
+            form.setRowWrapPolicy(QFormLayout.WrapLongRows if self.proposal_only else QFormLayout.WrapAllRows)
         if kind == 'apply': self.source_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         if kind != 'report': visual_layout.insertWidget(0, self.controls, 0, Qt.AlignTop)
         destination_actions = QHBoxLayout()
@@ -150,7 +182,8 @@ class LocationDialog(QDialog):
         self.map_subject = QComboBox(); self.map_subject.addItem('Original GPS location', 'existing'); self.map_subject.addItem('New GPS location', 'proposed')
         self.map_subject.setCurrentIndex(1 if kind == 'reduce' else 0)
         self.map_subject.currentIndexChanged.connect(self.update_visual); map_layout.addWidget(self.map_subject); self.map_subject.hide()
-        self.location_map = LocationMap(self, units=self.units); map_layout.addWidget(self.location_map, 1)
+        self.location_map = LocationMap(self, units=self.units, interactive=True, persistent=False) if self.proposal_only else LocationMap(self, units=self.units)
+        map_layout.addWidget(self.location_map, 1)
         self.map_panel = map_panel; self.visual_splitter.addWidget(map_panel); self.visual_splitter.setSizes([420, 420])
         visual_host = QWidget(); visual_host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         host_layout = QVBoxLayout(visual_host); host_layout.setContentsMargins(0, 0, 0, 0)
@@ -246,7 +279,12 @@ class LocationDialog(QDialog):
         self.setTabOrder(self.image_list.list, self.report_copy); self.setTabOrder(self.report_copy, self.report_map)
         self.setTabOrder(self.report_map, self.location_map.online); self.setTabOrder(self.location_map.online, self.location_map.canvas)
         self.unit_choice.currentIndexChanged.connect(self.change_units)
-        QImageReader.setAllocationLimit(32)
+        # PNG cannot scale during Qt decoding. Allow ordinary camera-sized
+        # images (e.g. 3840 × 2560 RGB32 needs 37.5 MiB), retaining a finite cap.
+        QImageReader.setAllocationLimit(64)
+        if self.proposal_only:
+            self._init_proposal(files, initial)
+            return
         if initial: self.restore_input(initial)
         self.schedule_plan()
         self.thumbnail_queue = list(dict.fromkeys([*self.files, *self.candidate_items]))
@@ -270,6 +308,12 @@ class LocationDialog(QDialog):
         return field
 
     def build_location_methods(self, layout):
+        if self.proposal_only:
+            self.source_form = QFormLayout()
+            layout.addLayout(self.source_form)
+            page = self.build_manual_page()
+            layout.addWidget(page)
+            return
         form = QFormLayout(); form.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
         self.source_form = form
         self.method = QComboBox()
@@ -294,15 +338,7 @@ class LocationDialog(QDialog):
         self.map_label = self.label('No location selected.'); map_layout.addWidget(self.map_label)
         map_layout.addWidget(self.label('Applies to all destinations. Old altitude and direction are removed.'))
         self.method_pages.addWidget(map_page)
-        manual_page = QWidget(); manual_form = QFormLayout(manual_page); manual_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
-        for key, label, hint in [('latitude', 'Latitude (−90 to +90)', 'Signed decimal degrees; north is positive'), ('longitude', 'Longitude (−180 to +180)', 'Signed decimal degrees; east is positive')]:
-            field = self.add_text(key, hint); field.textChanged.connect(self.update_coordinate_readout); manual_form.addRow(label, field)
-        self.coordinate_readout = self.label('Enter decimal coordinates.'); manual_form.addRow(self.coordinate_readout)
-        self.altitude_label = QLabel('Altitude (optional, ft)' if self.units == 'imperial' else 'Altitude (optional, m)')
-        altitude = self.add_text('altitude', 'Blank removes old altitude'); altitude.textChanged.connect(self.capture_altitude); manual_form.addRow(self.altitude_label, altitude)
-        manual_form.addRow('Image direction (optional, degrees)', self.add_text('direction', '0 to less than 360; from true north'))
-        map_here = QPushButton('Choose on Map at These Coordinates…'); map_here.clicked.connect(self.open_manual_map); manual_form.addRow(map_here)
-        self.add_source_page(manual_page)
+        self.add_source_page(self.build_manual_page())
         gpx_page = QWidget(); gpx_layout = QVBoxLayout(gpx_page)
         manual_inputs, self.inputs = self.inputs, {}
         self.build_gpx_controls(gpx_layout)
@@ -312,6 +348,151 @@ class LocationDialog(QDialog):
         for i in range(self.method_pages.count()):
             self.method_pages.widget(i).setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred if i == 0 else QSizePolicy.Ignored)
         self.fit_method_page()
+
+    def build_manual_page(self):
+        if self.proposal_only:
+            page = QWidget()
+            page.setMaximumWidth(600)
+            grid = QGridLayout(page)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(12)
+            self.altitude_label = QLabel('Altitude (optional, ft)' if self.units == 'imperial' else 'Altitude (optional, m)')
+            fields = (
+                ('latitude', QLabel('Latitude'), '−90 to +90; north is positive'),
+                ('longitude', QLabel('Longitude'), '−180 to +180; east is positive'),
+                ('altitude', self.altitude_label, 'Optional; blank removes old altitude'),
+                ('direction', QLabel('Image direction (optional, degrees)'), '0 to less than 360; true north'),
+            )
+            for index, (key, label, hint) in enumerate(fields):
+                field = self.add_text(key, hint)
+                field.setMinimumWidth(130)
+                field.setMaximumWidth(230)
+                label.setBuddy(field)
+                grid.addWidget(label, (index // 2) * 2, index % 2)
+                grid.addWidget(field, (index // 2) * 2 + 1, index % 2)
+                if key in ('latitude', 'longitude'):
+                    field.textChanged.connect(self.update_coordinate_readout)
+                elif key == 'altitude':
+                    field.textChanged.connect(self.capture_altitude)
+            self.coordinate_readout = self.label('Enter decimal coordinates.')
+            grid.addWidget(self.coordinate_readout, 4, 0, 1, 2)
+            return page
+        manual_page = QWidget(); manual_form = QFormLayout(manual_page); manual_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        for key, label, hint in [('latitude', 'Latitude (−90 to +90)', 'Signed decimal degrees; north is positive'), ('longitude', 'Longitude (−180 to +180)', 'Signed decimal degrees; east is positive')]:
+            field = self.add_text(key, hint); field.textChanged.connect(self.update_coordinate_readout); manual_form.addRow(label, field)
+        self.coordinate_readout = self.label('Enter decimal coordinates.'); manual_form.addRow(self.coordinate_readout)
+        self.altitude_label = QLabel('Altitude (optional, ft)' if self.units == 'imperial' else 'Altitude (optional, m)')
+        altitude = self.add_text('altitude', 'Blank removes old altitude'); altitude.textChanged.connect(self.capture_altitude); manual_form.addRow(self.altitude_label, altitude)
+        manual_form.addRow('Image direction (optional, degrees)', self.add_text('direction', '0 to less than 360; from true north'))
+        if not self.proposal_only:
+            map_here = QPushButton('Choose on Map at These Coordinates…'); map_here.clicked.connect(self.open_manual_map); manual_form.addRow(map_here)
+        return manual_page
+
+    def _init_proposal(self, files, initial):
+        self.proposal = None; self.gps_snapshot = None; self._proposal_touched = False
+        self._proposal_initial = initial
+        self.setWindowTitle('Edit GPS location' if initial else 'Add GPS location')
+        self.sidebar.hide(); self.refresh_button.hide()
+        self.report_copy.hide(); self.report_map.hide()
+        self.selected_image.setText(Path(self.files[0]).name)
+        self.selected_image.setToolTip(self.files[0])
+        self.selected_location.setText('Checking GPS location…')
+        self.summary.setParent(self.controls)
+        self.controls.layout().addWidget(self.summary)
+        self.controls.layout().insertWidget(0, self.label('Choose a point on the map or enter coordinates.'))
+        self.layout().insertWidget(self.layout().count() - 1, self.label(
+            'This location will be included in Review changes.\nYour image will not be modified.'))
+        self.summary.setText('Choose a point on the map or enter coordinates.')
+        self.summary.show()
+        self.apply_button.setText('Use this location')
+        self.timer.timeout.disconnect(self.start_plan)
+        self.timer.timeout.connect(self._start_proposal)
+        self.location_map.position_changed.connect(self._proposal_map_selected)
+        for field in self.inputs.values(): field.textEdited.connect(self._proposal_edited)
+        if initial and initial.get('latitude') and initial.get('longitude'):
+            self.location_map.canvas.zoom = 13
+        for key in ('latitude', 'longitude', 'direction'):
+            self.inputs[key].setText(str((initial or {}).get(key, '')))
+        self.altitude_metres = (initial or {}).get('altitude', '')
+        self.inputs['altitude'].blockSignals(True)
+        self.inputs['altitude'].setText(altitude_from_metres(self.altitude_metres, self.units) if self.altitude_metres != '' else '')
+        self.inputs['altitude'].blockSignals(False)
+        self.photo_preview.set_path(self.files[0])
+        self.inspection_worker = None
+        QTimer.singleShot(0, self._inspect_proposal_source)
+
+    def _inspect_proposal_source(self):
+        if self.closing: return
+        self.inspection_worker = GPSInspectionWorker(self.files[0], self)
+        self.inspection_worker.finished.connect(self._proposal_inspected)
+        self.inspection_worker.start()
+
+    def _proposal_edited(self, *_):
+        self._proposal_touched = True
+
+    def _proposal_map_selected(self, point):
+        if point is None: return
+        self._proposal_touched = True
+        self.inputs['latitude'].setText(f'{point[0]:.12f}')
+        self.inputs['longitude'].setText(f'{point[1]:.12f}')
+        self.schedule_plan()
+
+    def _proposal_inspected(self):
+        worker, self.inspection_worker = self.inspection_worker, None
+        worker.wait()
+        self.gps_snapshot = worker.snapshot
+        worker.deleteLater()
+        if self.closing: self.finish_close_when_idle(); return
+        self.selected_location.setText(editor_gps_description(self.gps_snapshot))
+        existing = self.gps_snapshot.get('existing')
+        title = 'Edit GPS location' if self._proposal_initial or (existing and existing['position'] is not None) else 'Add GPS location'
+        self.setWindowTitle(title)
+        self.title_label.setText(title)
+        if not self._proposal_initial and not self._proposal_touched and not any(f.text() for f in self.inputs.values()):
+            initial = self.gps_snapshot.get('initial', {})
+            if initial: self.location_map.canvas.zoom = 13
+            for key in ('latitude', 'longitude', 'direction'):
+                self.inputs[key].setText(initial.get(key, ''))
+            self.altitude_metres = initial.get('altitude', '')
+            field = self.inputs['altitude']; field.blockSignals(True)
+            field.setText(altitude_from_metres(self.altitude_metres, self.units) if self.altitude_metres != '' else '')
+            field.blockSignals(False)
+        self.schedule_plan()
+
+    def _proposal_config(self):
+        return dict(method='manual', latitude=self.inputs['latitude'].text().strip(),
+                    longitude=self.inputs['longitude'].text().strip(),
+                    altitude=self.altitude_metres if self.altitude_metres is not None else 'invalid altitude',
+                    direction=self.inputs['direction'].text().strip())
+
+    def _start_proposal(self):
+        if self.closing: return
+        if self.worker:
+            self.pending = True; self.worker.requestInterruption(); return
+        self.pending = False
+        if getattr(self, 'inspection_worker', None): return
+        if self.gps_snapshot and self.gps_snapshot['blocked']:
+            self.summary.setText('; '.join(self.gps_snapshot['blocked'])); return
+        if not self.inputs['latitude'].text().strip() or not self.inputs['longitude'].text().strip():
+            self.summary.setText('Enter latitude and longitude or click the map to choose a location.')
+            return
+        self.worker = ProposalWorker(self.files[0], self._proposal_config(), self)
+        self.worker.finished.connect(self._proposal_ready); self.worker.start()
+
+    def _proposal_ready(self):
+        worker, self.worker = self.worker, None
+        worker.wait()
+        if self.closing:
+            worker.deleteLater(); self.finish_close_when_idle(); return
+        if self.pending or self.timer.isActive() or worker.config != self._proposal_config():
+            worker.deleteLater(); self.timer.stop(); self._start_proposal(); return
+        self.proposal = worker.proposal
+        blocked = self.proposal.get('blocked', []) if self.proposal else [worker.error]
+        self.summary.setText('; '.join(blocked) if blocked else
+                             'No GPS changes required.' if self.proposal['noop'] else
+                             'Location is ready for Review changes.')
+        self.apply_button.setEnabled(bool(self.proposal) and not blocked)
+        worker.deleteLater()
 
     def add_candidate(self, path):
         self.candidates.addItem(self.placeholder_icon, Path(path).name + ': Reading GPS coordinates…', path)
@@ -500,7 +681,8 @@ class LocationDialog(QDialog):
             field.setText(altitude_from_metres(self.altitude_metres, chosen) if self.altitude_metres != '' else '')
             field.blockSignals(False); self.altitude_label.setText('Altitude (optional, ft)' if chosen == 'imperial' else 'Altitude (optional, m)')
         if self.kind == 'reduce': self.update_grid_labels()
-        try: persist_units(preference)
+        try:
+            if not self.proposal_only: persist_units(preference)
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, 'Measurement preference was not saved', 'The units changed for this session, but could not be saved:\n' + str(exc))
         self.schedule_plan()
@@ -509,6 +691,9 @@ class LocationDialog(QDialog):
         return [coordinate(self.inputs['latitude'].text().strip(), None, True), coordinate(self.inputs['longitude'].text().strip(), None, False)]
 
     def update_coordinate_readout(self):
+        if self.proposal_only and (not self.inputs['latitude'].text().strip() or not self.inputs['longitude'].text().strip()):
+            self.coordinate_readout.setText('Enter signed decimal coordinates or click the map.')
+            return
         try: text = position_text(self.manual_position())
         except ValueError as exc: text = str(exc)
         self.coordinate_readout.setText(text)
@@ -627,6 +812,14 @@ class LocationDialog(QDialog):
         self.schedule_plan()
 
     def schedule_plan(self, *_):
+        if self.proposal_only:
+            if self.closing or not hasattr(self, 'timer'): return
+            self.proposal = None; self.apply_button.setEnabled(False)
+            try: position = self.manual_position()
+            except ValueError: position = None
+            self.location_map.set_position(position)
+            if self.worker: self.pending = True; self.worker.requestInterruption()
+            self.timer.start(); return
         self.accept_after_thumbnails = False; self.plan = None
         if hasattr(self, 'report_copy'):
             self.report_copy.setEnabled(False); self.report_map.setEnabled(False)
@@ -838,6 +1031,18 @@ class LocationDialog(QDialog):
             self.inputs['altitude'].blockSignals(False)
 
     def accept(self):
+        if self.proposal_only:
+            if self.closing or self.worker or self.inspection_worker or self.timer.isActive() or not self.proposal: return
+            if self.proposal['input'] != self._proposal_config(): self.schedule_plan(); return
+            problem = proposal_problem(self.proposal)
+            if problem:
+                self.summary.setText(problem); self.apply_button.setEnabled(False); return
+            if self.proposal['status'] in ('valid', 'noop'):
+                if self.photo_preview.worker or self.inspection_worker:
+                    self.accept_after_thumbnails = True
+                    return
+                self.location_map.stop_requests(); self.photo_preview.stop(); super().accept()
+            return
         # The report has no approval / save route, even via keyboard or code.
         if self.kind == 'report': return
         if self.worker or self.timer.isActive() or not self.plan or not self.apply_button or not self.apply_button.isEnabled(): return
@@ -877,9 +1082,17 @@ class LocationDialog(QDialog):
         self.location_map.stop_requests(); self.photo_preview.stop(); super().accept()
 
     def finish_close_when_idle(self):
-        if not self.worker and not self.thumbnail_worker and not self.photo_preview.worker: super().reject()
+        if not self.worker and not getattr(self, 'inspection_worker', None) and not self.thumbnail_worker and not self.photo_preview.worker: super().reject()
 
     def reject(self):
+        if self.proposal_only:
+            self.closing = True; self.proposal = None; self.timer.stop()
+            self.location_map.stop_requests(); self.photo_preview.stop()
+            self.apply_button.setEnabled(False)
+            if self.worker: self.worker.requestInterruption()
+            if self.inspection_worker: self.inspection_worker.requestInterruption()
+            self.finish_close_when_idle()
+            return
         self.closing = True; self.accept_after_thumbnails = False; self.timer.stop(); self.thumbnail_queue.clear()
         self.location_map.stop_requests(); self.photo_preview.stop()
         if self.apply_button: self.apply_button.setEnabled(False)
@@ -889,12 +1102,17 @@ class LocationDialog(QDialog):
         self.finish_close_when_idle()
 
     def closeEvent(self, event):
+        if self.proposal_only:
+            self.reject()
+            if self.worker or self.inspection_worker or self.photo_preview.worker: event.ignore()
+            else: event.accept()
+            return
         self.reject()
         if self.worker or self.thumbnail_worker or self.photo_preview.worker: event.ignore()
         else: event.accept()
 
     def uses_reference(self):
-        return self.kind == 'apply' and self.method.currentData() == 'photo'
+        return not self.proposal_only and self.kind == 'apply' and self.method.currentData() == 'photo'
 
     def reference_info(self):
         data = source_info(self.reference, self.cache) if self.reference and not self.worker else None
@@ -955,6 +1173,7 @@ class LocationDialog(QDialog):
 
     def update_visual(self, *_):
         if not hasattr(self, 'location_map'): return
+        if self.proposal_only: return
         reference = self.uses_reference()
         self.remove_image.setEnabled(self.selection_only and bool(self.image_list.current_path()))
         self.details_subject.setVisible(reference)

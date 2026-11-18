@@ -16,6 +16,11 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         self.driver.setUp()
         self.addCleanup(self.driver.doCleanups)
         self.driver.configure(delay=0.5, entries=25000)
+        # GPS inspection has its own real-reader coverage in test_metadata_editor_gps.
+        # Keep its independent reads out of this progressive-reader call log.
+        gps_section = patch.object(MetadataEditor, '_refresh_gps_section', lambda self: None)
+        gps_section.start()
+        self.addCleanup(gps_section.stop)
         self.window = MetadataEditor(list(map(str, self.driver.paths)))
         self.driver.windows.append(self.window)
         self.window.show()
@@ -57,19 +62,17 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         # asynchronous selective metadata reader. The current image
         # record is sufficient to render empty pinned Location fields.
         window.overview.set_record(window._record(path))
-        globe = window.overview.overview_body.findChild(
-            QToolButton, "viewGpsOnMap"
-        )
-        self.assertIsNotNone(globe)
-
-        self.assertEqual("View on map", globe.accessibleName())
-
-        with patch("kim_location_dialog.LocationDialog") as dialog:
-            globe.click()
-            dialog.assert_called_once_with(
-                "report", [path], "create", None
-            )
-            dialog.return_value.exec.assert_called_once_with()
+        controls = window.overview.overview_body.findChildren(QToolButton, 'gpsFieldAction')
+        maps = [button for button in controls if button.text() == 'View on map…']
+        self.assertTrue(maps)
+        # This fixture has no coordinates: field-level map controls cannot
+        # launch a preferred-source report for a missing coordinate pair.
+        self.assertTrue(all(not button.isEnabled() for button in maps))
+        self.assertTrue(any(button.text() == 'Add GPS…' for button in controls))
+        with patch('kim_location_dialog.LocationDialog') as dialog:
+            for button in maps:
+                button.click()
+            dialog.assert_not_called()
 
         self.assertIs(
             original_draft, window.drafts[path]["title"]
@@ -267,7 +270,12 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
                                         for row in range(len(window.paths))))
         self.driver.wait_for(lambda: not window.thumbnail_workers and window.worker is None)
         self.assertEqual(0, window.file_list.currentRow())
-        self.assertEqual(1, len(self.driver.calls()))
+        # The permanent fields and default pins can require two selective reads.
+        calls = self.driver.calls()
+        self.assertLessEqual(len(calls), 2)
+        self.assertTrue(calls)
+        self.assertFalse(any(call['full'] for call in calls))
+        self.assertEqual(1, len({call['inode'] for call in calls}))
         self.assertEqual(heights, [window.file_list.sizeHintForRow(row) for row in range(len(window.paths))])
         with patch('kim_metadata_browser.read_thumbnail', side_effect=AssertionError('Thumbnail decoded twice')):
             window._pump_thumbnails()
@@ -433,9 +441,9 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         window = self.window
         self.driver.wait_for(lambda: window._record(window.paths[0]) is not None and window.worker is None)
         self.driver.configure(delay=0.1, entries=0, metadata={
-            'EXIF:IFD0:Image:Make': {'id': 'Make', 'val': 'Retained camera make'},
-            'EXIF:IFD0:Image:Model': {'id': 'Model', 'val': 'New camera model'}})
-        title, make, model = (OverviewField(name, name) for name in ('Title', 'Make', 'Model'))
+            'EXIF:IFD0:Image:Software': {'id': 'Software', 'val': 'Retained software'},
+            'EXIF:IFD0:Image:WhiteBalance': {'id': 'WhiteBalance', 'val': 'New white balance'}})
+        title, make, model = (OverviewField(name, name) for name in ('Title', 'Software', 'WhiteBalance'))
         window.overview_preferences.save([title, make])
         window.tabs.setCurrentIndex(window.OVERVIEW_TAB)
         self.driver.wait_for(lambda: not window.overview.overview_loading.isVisible() and window.worker is None)
@@ -446,8 +454,8 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         window._reload_overview_preferences()
         self.driver.wait_for(lambda: not window.overview.overview_loading.isVisible() and window.worker is None)
         texts = [label.text() for label in window.overview.overview_body.findChildren(QLabel)]
-        self.assertIn('Retained camera make', texts)
-        self.assertIn('New camera model', texts)
+        self.assertIn('Retained software', texts)
+        self.assertIn('New white balance', texts)
         self.assertFalse(any(call['full'] for call in self.driver.calls()))
 
     def test_source_change_before_worker_start_does_not_merge_old_fields(self):
@@ -458,8 +466,8 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         self.driver.wait_for(lambda: window._record(window.paths[0]) is not None and window.worker is None)
         self.driver.configure(delay=0.01, entries=0, metadata={
             'XMP:XMP-dc:Image:Title': {'id': 'title', 'val': 'Fresh title'},
-            'EXIF:IFD0:Image:Make': {'id': 'Make', 'val': 'Fresh maker'}})
-        window.overview_preferences.save([OverviewField('Title', 'Title'), OverviewField('Make', 'Make')])
+            'EXIF:IFD0:Image:Software': {'id': 'Software', 'val': 'Fresh maker'}})
+        window.overview_preferences.save([OverviewField('Title', 'Title'), OverviewField('Software', 'Software')])
         original_start = MetadataWorker.start
         changed = []
         def start_with_sidecar_change(worker, *args):
@@ -479,7 +487,7 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         from kim_metadata_sources import OverviewField
         window = self.window
         self.driver.wait_for(lambda: window._record(window.paths[0]) is not None and window.worker is None)
-        window.overview_preferences.save([OverviewField('Title', 'Title'), OverviewField('Make', 'Make')])
+        window.overview_preferences.save([OverviewField('Title', 'Title'), OverviewField('Software', 'Software')])
         with patch('kim_metadata_browser.read_metadata', side_effect=RuntimeError('fixture extraction unavailable')) as reader:
             window.tabs.setCurrentIndex(window.OVERVIEW_TAB)
             self.driver.wait_for(lambda: window.overview.overview_retry.isVisible() and window.worker is None)

@@ -10,6 +10,7 @@ from kim_dialog_buttons import style_button, style_button_box
 
 from dataclasses import dataclass
 from pathlib import Path
+import json
 import signal
 import sys
 
@@ -33,9 +34,12 @@ except ModuleNotFoundError as exc:
 from kim_metadata_reader import MetadataEntry, MetadataRecord, read_metadata, value_text, _source_path, _select_fields
 from kim_photo_selection import read_thumbnail
 from kim_process import inspection_context
+from kim_location import proposal_problem, editor_gps_description
+from kim_metadata_gps_actions import (gps_field, is_gps_entry, add_field_controls,
+    GPSActionDelegate, GPSField, dispatch, field_actions)
 from kim_metadata_sources import (
     MetadataSourcePreferences, MetadataRepresentation, TargetIdentity,
-    SOURCE_PRIORITY_DEFAULT, metadata_representations, index_metadata_representations,
+    SOURCE_PRIORITY_DEFAULT, OVERVIEW_DEFAULTS, metadata_representations, index_metadata_representations,
     ordered_representations, preferred_entry, preferred_representation, OverviewPreferences, overview_source,
 )
 
@@ -536,7 +540,46 @@ def build_plan(paths: list[str], records: dict[str, MetadataRecord],
     return plan
 
 
+def gps_review_rows(proposal):
+    """Adapt a GPS proposal to the existing read-only ReviewDialog."""
+    problem = proposal_problem(proposal)
+    blockers = list(proposal['blocked']) + ([problem] if problem else [])
+    status = 'blocked' if blockers else proposal['status']
+    warning = '\n'.join(blockers + proposal['warnings'])
+    path = proposal['source']
+    rows = []
+    for _image, field, before, after, detail in proposal['rows']:
+        sidecar = field.startswith('Unchanged sidecar:')
+        rows.append(dict(image=Path(path).name, path=path, field=field, gps=True,
+                         operation='Unchanged' if sidecar else 'Propose GPS reconciliation',
+                         status='unchanged' if sidecar else status, before=before, after=after,
+                         warning=detail if sidecar else warning + '\n' + detail,
+                         sources='Associated XMP sidecar' if sidecar else 'Embedded image GPS',
+                         targets='Unchanged sidecar' if sidecar else 'Embedded EXIF GPS',
+                         result=''))
+    from kim_location_ui import position_text
+    existing = proposal.get('existing', {}).get('position')
+    proposed = proposal.get('proposed', {}).get('position')
+    for row in rows:
+        row['gps_detail'] = True
+    primary = dict(image=Path(path).name, path=path, field='GPS location', gps=True,
+                   operation='Change GPS location' if existing is not None else 'Add GPS location',
+                   status=status, before=position_text(existing) if existing is not None else 'No camera GPS coordinates recorded.',
+                   after=position_text(proposed) if proposed is not None else 'Unavailable',
+                   warning=warning, sources='Embedded image GPS; associated sidecars remain unchanged',
+                   targets='Embedded EXIF GPS', result='', details=rows,
+                   identity=json.dumps({key: proposal.get(key) for key in
+                                        ('freshness', 'embedded_provenance', 'sidecars', 'removed_fields')},
+                                       ensure_ascii=False, indent=2))
+    return [primary] + rows
+
+
+PERMANENT_FIELDS = tuple(field for field in OVERVIEW_DEFAULTS
+                         if field.label in ('Camera', 'Capture date', 'Location'))
+
+
 EDITOR_FIELDS = tuple(dict.fromkeys(['FileType', 'ImageWidth', 'ImageHeight'] +
+    [selector for field in PERMANENT_FIELDS for selector in field.selectors] +
                                        [alias for spec in FIELD_SPECS for alias in spec.aliases]))
 
 
@@ -825,7 +868,9 @@ class ReviewDialog(QDialog):
     def __init__(self, plan, parent=None, selected_count=None):
         super().__init__(parent)
         self.plan = list(plan)
-        self.has_proposals = any(row.get("status") in ("valid", "blocked") for row in self.plan)
+        plan = [row for row in self.plan if not row.get("gps_detail")]
+        self.has_proposals = any(row.get("status") in ("valid", "blocked") or row.get("gps") or
+                                 (row.get("status") == "noop" and row.get("field")) for row in plan)
         if not self.has_proposals:
             return
         self.setWindowTitle("Review changes")
@@ -839,17 +884,17 @@ class ReviewDialog(QDialog):
         blocked_rows = [row for row in plan if row.get("status") == "blocked"]
         blocked_images = {row.get("path", row["image"]) for row in blocked_rows}
         noop_count = sum(row.get("status") == "noop" for row in plan)
+        proposed_rows = valid_rows + blocked_rows
+        proposed_images = {row.get("path", row["image"]) for row in proposed_rows}
         selected_label = "image" if selected == 1 else "images"
-        valid_label = "image will" if len(valid_images) == 1 else "images will"
-        field_label = "field" if len(valid_rows) == 1 else "fields"
-        blocked_label = "image" if len(blocked_images) == 1 else "images"
-        blocked_operation_label = "operation" if len(blocked_rows) == 1 else "operations"
-        noop_label = "operation" if noop_count == 1 else "operations"
+        image_phrase = "image has" if len(proposed_images) == 1 else "images have"
+        operation_label = "operation" if len(proposed_rows) == 1 else "operations"
         self.summary = QLabel(
-            "Planning only. Metadata will not be written.\n"
-            f"{selected} selected {selected_label} | {len(valid_images)} {valid_label} change | "
-            f"{len(valid_rows)} {field_label} changing | {len(blocked_images)} blocked {blocked_label} "
-            f"({len(blocked_rows)} blocked {blocked_operation_label}) | {noop_count} no-op {noop_label}")
+            f"{selected} selected {selected_label} | {len(proposed_images)} {image_phrase} proposed changes | "
+            f"{len(proposed_rows)} proposed {operation_label} | {len(blocked_images)} blocked "
+            f"{'image' if len(blocked_images) == 1 else 'images'} "
+            f"({len(blocked_rows)} blocked {'operation' if len(blocked_rows) == 1 else 'operations'})" +
+            (f" | {noop_count} no-op {'operation' if noop_count == 1 else 'operations'}" if noop_count else ""))
         self.summary.setWordWrap(True)
         self.summary.setStyleSheet("padding: 8px; border: 1px solid palette(mid); border-radius: 4px;")
         layout.addWidget(self.summary)
@@ -871,13 +916,12 @@ class ReviewDialog(QDialog):
         self.warning_label = QLabel()
         self.warning_label.setWordWrap(True)
         self.warning_label.setStyleSheet("color: palette(link); padding: 3px;")
-        self.warning_label.setMaximumHeight(44)
         detail_layout.addWidget(self.warning_label)
         value_columns = QHBoxLayout()
         self.before_view = self._value_view()
         self.after_view = self._value_view()
-        before_panel = self._value_panel("Before", self.before_view)
-        after_panel = self._value_panel("After", self.after_view)
+        before_panel = self._value_panel("Current", self.before_view)
+        after_panel = self._value_panel("Proposed", self.after_view)
         before_panel.setMaximumHeight(160)
         after_panel.setMaximumHeight(160)
         value_columns.addWidget(before_panel, 1)
@@ -890,7 +934,7 @@ class ReviewDialog(QDialog):
         self.source_label.setWordWrap(True)
         detail_layout.addWidget(self.source_label)
         self.technical_button = QToolButton()
-        self.technical_button.setText("Show file path and metadata targets")
+        self.technical_button.setText("Technical details")
         self.technical_button.setCheckable(True)
         self.technical = QPlainTextEdit()
         self.technical.setReadOnly(True)
@@ -916,7 +960,7 @@ class ReviewDialog(QDialog):
             if "blocked" in statuses:
                 image_status = "Blocked"
             elif "valid" in statuses:
-                image_status = "Valid changes"
+                image_status = "Proposed changes"
             elif "noop" in statuses:
                 image_status = "No change required"
             else:
@@ -928,7 +972,7 @@ class ReviewDialog(QDialog):
                                                  "status": image_status})
             self.tree.addTopLevelItem(parent_item)
             for row in rows:
-                child = QTreeWidgetItem([f"{row['field']} · {row['operation']}"])
+                child = QTreeWidgetItem([row["operation"] if row.get("gps") else f"{row['field']} · {row['operation']}"])
                 child.setData(0, Qt.UserRole, row)
                 parent_item.addChild(child)
                 self.items.append(child)
@@ -945,11 +989,28 @@ class ReviewDialog(QDialog):
                                 first_image.child(0))
             self.tree.setCurrentItem(first_change)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        self.writing_notice = QLabel(
+            "Metadata writing is not yet available.\nYour proposed changes remain in the Editor.")
+        self.writing_notice.setWordWrap(True)
+        layout.addWidget(self.writing_notice)
+        buttons = QDialogButtonBox()
+        self.back_button = buttons.addButton("Back to editor", QDialogButtonBox.RejectRole)
+        self.apply_button = buttons.addButton("Apply changes", QDialogButtonBox.ActionRole)
+        self.apply_button.setEnabled(False)
+        self.apply_button.setAutoDefault(False)
+        self.apply_button.setDefault(False)
         style_button_box(buttons)
         buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.Close).setDefault(True)
+        self.back_button.setDefault(True)
         layout.addWidget(buttons)
+
+    def accept(self):
+        """Preview only: neither Return nor a direct callback can apply a plan."""
+        return
+
+    def done(self, result):
+        if result != QDialog.DialogCode.Accepted:
+            super().done(result)
 
     def exec(self):
         if not self.has_proposals:
@@ -998,10 +1059,7 @@ class ReviewDialog(QDialog):
             self.after_view.setPlainText(
                 f"{valid} valid changes\n{noops} no-op operations\n{len(blocked)} blocked operations\n"
                 f"{unchanged} unchanged fields")
-            planned_results = [value.get("result", "") for value in siblings
-                               if value.get("status") == "valid" and value.get("result")]
-            self.result_label.setText(f"Planned result: {Path(planned_results[0]).name}" if planned_results
-                                      else "No output planned")
+            self.result_label.setText("Preview only. No output will be created.")
             self.source_label.clear()
             self.technical.setPlainText(f"Full path: {row.get('path', '')}" if isinstance(row, dict) else "")
             return
@@ -1015,13 +1073,8 @@ class ReviewDialog(QDialog):
         }.get(status, ""))
         self.before_view.setPlainText(row.get("before", ""))
         self.after_view.setPlainText(row.get("after", ""))
-        self.source_label.setText(
-            (f"Editing: {row.get('sources', 'Unselected source')}" if row.get("sources") else "") +
-            (f" · Sync IPTC and XMP: {'On' if row.get('sync') == 'True' else 'Off'}"
-             if "sync" in row else ""))
-        result = row.get("result", "No output planned")
-        self.result_label.setText(f"Planned result: {Path(result).name}" if row.get("status") == "valid"
-                                  else "No output planned")
+        self.source_label.clear()
+        self.result_label.setText("Preview only. No output will be created.")
         technical = [f"Image: {row.get('image', '')}"]
         if row.get("path"):
             technical.append(f"Full path: {row['path']}")
@@ -1031,8 +1084,15 @@ class ReviewDialog(QDialog):
             technical.append(f"Provenance: {row['sources']}")
         if row.get("untouched"):
             technical.append(f"Existing representations left unchanged: {row['untouched']}")
-        if row.get("result"):
-            technical.append(f"Planned result: {row['result']}")
+        if "sync" in row:
+            technical.append(f"Sync IPTC and XMP: {row['sync']}")
+        if row.get('identity'):
+            technical.append('Source and representation identity:\n' + row['identity'])
+        for detail in row.get('details', []):
+            technical.append(f"{detail['field']}\nCurrent: {detail['before']}\nProposed: {detail['after']}\n"
+                             f"Provenance: {detail['sources']}\nTargets: {detail['targets']}\n{detail['warning']}")
+        if row.get('warning'):
+            technical.append('Warnings and blocked reasons: ' + row['warning'])
         self.technical.setPlainText("\n".join(technical))
 
 
@@ -1391,6 +1451,10 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.counterpart_authorizations = {}
         self.drafts: dict[str, dict[str, Draft]] = {}
         self.batch_sessions = []
+        self.gps_drafts = {}
+        self._gps_dialog = None
+        self._gps_inspection = None
+        self._gps_snapshots = {}
         self.worker = None
         self.close_after_worker = False
         self._refreshing = False
@@ -1499,6 +1563,17 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             Qt.TextSelectableByMouse
         )
         self.advanced_layout.addWidget(self.sources_targets_help)
+        self.sources_gps_section = QGroupBox('GPS location')
+        source_gps_layout = QVBoxLayout(self.sources_gps_section)
+        self.sources_gps_status = QLabel()
+        self.sources_gps_status.setTextFormat(Qt.PlainText)
+        self.sources_gps_status.setWordWrap(True)
+        source_gps_layout.addWidget(self.sources_gps_status)
+        self.sources_gps_actions = QHBoxLayout()
+        source_gps_layout.addLayout(self.sources_gps_actions)
+        self.sources_gps_representations = QVBoxLayout()
+        source_gps_layout.addLayout(self.sources_gps_representations)
+        self.advanced_layout.addWidget(self.sources_gps_section)
         self.advanced_scroll.setWidget(advanced)
         self.loading_label = QLabel('Loading metadata…')
         self.loading_label.setTextFormat(Qt.PlainText)
@@ -1523,20 +1598,53 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         configure.clicked.connect(self._configure_editor_pins)
         pin_row.addWidget(configure)
 
+        self.capture_section = QGroupBox('Camera, capture and location')
+        capture_layout = QVBoxLayout(self.capture_section)
+        self.capture_values = {}
+        capture_form = QFormLayout()
+        for field in PERMANENT_FIELDS:
+            value = QLabel('Loading…')
+            value.setTextFormat(Qt.PlainText)
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            capture_form.addRow(field.label, value)
+            self.capture_values[field.key] = value
+        capture_layout.addLayout(capture_form)
+        self.gps_section = QGroupBox('GPS location')
+        gps_layout = QVBoxLayout(self.gps_section)
+        self.gps_status = QLabel('Checking GPS location…')
+        self.gps_status.setTextFormat(Qt.PlainText)
+        self.gps_status.setWordWrap(True)
+        self.gps_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        gps_layout.addWidget(self.gps_status)
+        gps_actions = QHBoxLayout()
         self.view_gps_button = QPushButton('View on map…')
         self.view_gps_button.setIcon(QIcon.fromTheme('globe'))
         self.view_gps_button.setToolTip(
             'Inspect this image in the existing read-only GPS viewer. '
             'Pending metadata proposals are preserved.'
         )
-        self.view_gps_button.clicked.connect(self.view_gps_on_map)
-        pin_row.addWidget(self.view_gps_button)
+        self.view_gps_button.clicked.connect(self._view_camera_gps_field)
+        gps_actions.addWidget(self.view_gps_button)
+        self.add_gps_button = QPushButton('Add GPS location…')
+        self.add_gps_button.clicked.connect(self.add_gps_location)
+        gps_actions.addWidget(self.add_gps_button)
+        self.discard_gps_button = QPushButton('Discard change')
+        self.discard_gps_button.clicked.connect(self.discard_gps_proposal)
+        self.discard_gps_button.hide()
+        gps_actions.addWidget(self.discard_gps_button)
+        gps_actions.addStretch(1)
+        gps_layout.addLayout(gps_actions)
+        self.gps_representation_actions = QVBoxLayout()
+        gps_layout.addLayout(self.gps_representation_actions)
+        capture_layout.addWidget(self.gps_section)
         self.fields_layout.addLayout(pin_row)
         self._pin_signature = None
         self._readonly_pins = {}
         self._pin_order = []
         self._build_fields()
         self.advanced_layout.addStretch(1)
+        self.fields_layout.addWidget(self.capture_section)
         self.fields_layout.addStretch(1)
         self._refresh_editor_pins()
         self.form_scroll.setWidget(self.form_content)
@@ -1625,6 +1733,8 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.all_model = TagModel(False, self)
         self.all_table = QTableView()
         self.all_table.setModel(self.all_model)
+        GPSActionDelegate(self.all_table, self, lambda index: gps_field(index.model().record, index.data(Qt.UserRole))
+                          if isinstance(index.data(Qt.UserRole), MetadataEntry) else None)
         self.all_table.setWordWrap(False)
         self.all_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.all_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1899,6 +2009,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
 
     def _retry_metadata(self):
         path = self._active_path()
+        self._gps_snapshots.pop(path, None)
         self.records.pop(path, None)
         self._planning_records.pop(path, None)
         self._representation_indexes.pop(path, None)
@@ -2066,9 +2177,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._update_all_fields()
 
     def _proposal_paths(self):
-        paths = {path for path, fields in self.drafts.items() if any(draft.operation != 'Leave unchanged' for draft in fields.values())}
-        paths.update(path for path, _key, draft in self.source_drafts if draft.operation != 'Leave unchanged')
-        paths.update(path for session in self.batch_sessions if session['fields'] for path in session['paths'])
+        paths = set(self._descriptive_proposal_paths()) | set(self.gps_drafts)
         return [path for path in self.paths if path in paths]
 
     def _plan_records(self, paths):
@@ -2110,6 +2219,173 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             "copyright": "copyright",
             "usageterms": "usage",
         }.get(field.selector.casefold())
+
+    def _gps_inspected(self):
+        worker, self._gps_inspection = self._gps_inspection, None
+        worker.wait()
+        if not self._closing and not worker.isInterruptionRequested():
+            self._gps_snapshots[worker.path] = worker.snapshot
+            while len(self._gps_snapshots) > 4:
+                self._gps_snapshots.pop(next(iter(self._gps_snapshots)))
+        worker.deleteLater()
+        if self._closing: self._finish_close()
+        else: self._refresh_gps_section()
+
+    def _refresh_gps_section(self):
+        if not hasattr(self, 'gps_status') or self._closing: return
+        path = self._active_path()
+        snapshot = self._gps_snapshots.get(path)
+        if snapshot and 'freshness' in snapshot and proposal_problem(snapshot):
+            self._gps_snapshots.pop(path, None); snapshot = None
+        proposal = self.gps_drafts.get(path)
+        self.view_gps_button.setVisible(bool(path))
+        self.discard_gps_button.setVisible(proposal is not None)
+        self.add_gps_button.setVisible(bool(snapshot and not snapshot['blocked']) or proposal is not None)
+        self.add_gps_button.setEnabled(bool(snapshot) and not snapshot['blocked'])
+        self.add_gps_button.setText('Edit location…' if proposal else
+                                    'Edit GPS location…' if snapshot and snapshot.get('existing') and snapshot['existing']['position'] is not None else
+                                    'Add GPS location…')
+        text = editor_gps_description(snapshot) if snapshot else 'Checking GPS location…' if path else 'Select an image to inspect its GPS location.'
+        if proposal:
+            from kim_location_ui import position_text
+            text += '\nCurrent: ' + position_text(proposal['existing']['position']) if proposal.get('existing', {}).get('position') is not None else '\nCurrent: no embedded camera coordinates.'
+            text += '\nProposed: ' + position_text(proposal['proposed']['position'])
+            problem = proposal_problem(proposal)
+            if problem: text += '\n' + problem
+            if proposal.get('blocked'): text += '\n' + '\n'.join(proposal['blocked'])
+        self.gps_status.setText(text)
+        self.sources_gps_status.setText(text)
+        MetadataOverview._clear_layout(self.sources_gps_actions)
+        if path:
+            context = gps_field(MetadataRecord(path))
+            actions = field_actions(self, context)
+            self.view_gps_button.setEnabled(actions[0][2])
+            self.view_gps_button.setToolTip(actions[0][3])
+            self.add_gps_button.setVisible(True)
+            self.add_gps_button.setToolTip(actions[1][3])
+            add_field_controls(self.sources_gps_actions, self, context)
+            self.sources_gps_actions.addStretch(1)
+        self.all_table.viewport().update()
+        signature = (path, id(snapshot), id(proposal))
+        if getattr(self, '_gps_field_signature', None) != signature:
+            self._gps_field_signature = signature
+            self._refresh_gps_representations(path, snapshot, proposal)
+            self._displayed_overview = None
+            self._update_overview()
+            self._refresh_editor_pins()
+        if path and snapshot is None:
+            if self._gps_inspection:
+                if self._gps_inspection.path != path: self._gps_inspection.requestInterruption()
+            else:
+                from kim_location_dialog import GPSInspectionWorker
+                self._gps_inspection = GPSInspectionWorker(path, self)
+                self._gps_inspection.finished.connect(self._gps_inspected)
+                self._gps_inspection.start()
+
+    def _refresh_gps_representations(self, path, snapshot, proposal):
+        """Keep alternative/proposed coordinates beside their own map controls."""
+        from kim_location_ui import position_text
+        fields = []
+        if snapshot:
+            sources = [(path, snapshot.get('existing'))] + [
+                (item['source'], item.get('existing')) for item in snapshot.get('sidecars', [])]
+            for source, info in sources:
+                for record in (info or {}).get('records', []):
+                    if source == path and record['category'] == 'camera' and info.get('position') is not None:
+                        continue  # The main camera action row already covers this record.
+                    provenance = ('Embedded image' if source == path else 'Sidecar ' + Path(source).name)
+                    provenance += ' · ' + record['category'] + ' · ' + record['source']
+                    position = record['position'] if not info['categories'][record['category']]['issues'] else None
+                    fields.append(GPSField(path, position, False, provenance,
+                        'This representation is read-only. Only verified embedded camera GPS can be proposed.'))
+        if proposal:
+            fields.append(GPSField(path, proposal['proposed']['position'], False,
+                                   'Proposed embedded camera GPS (unwritten)'))
+        for layout in (self.gps_representation_actions, self.sources_gps_representations):
+            MetadataOverview._clear_layout(layout)
+            for field in fields:
+                row = QHBoxLayout()
+                value = QLabel(field.provenance + ' · ' + (position_text(field.position) if field.position is not None else 'Incomplete coordinate pair'))
+                value.setTextFormat(Qt.PlainText)
+                value.setWordWrap(True)
+                row.addWidget(value, 1)
+                if field.provenance.startswith('Proposed'):
+                    button = QToolButton()
+                    button.setText('View on map')
+                    button.setIcon(QIcon.fromTheme('globe'))
+                    button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+                    button.setAutoRaise(True)
+                    button.clicked.connect(lambda checked=False, target=field: dispatch(self, target, field_actions(self, target)[0]))
+                    row.addWidget(button)
+                else:
+                    add_field_controls(row, self, field)
+                layout.addLayout(row)
+
+    def discard_gps_proposal(self):
+        path = self._active_path()
+        if path not in self.gps_drafts: return
+        answer = QMessageBox.question(self, 'Discard GPS proposal',
+                                      'Discard this unwritten GPS proposal? Other metadata drafts will be kept.',
+                                      QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer == QMessageBox.Discard:
+            del self.gps_drafts[path]
+            self._refresh_pending()
+
+    def add_gps_location(self):
+        if self._closing or self._gps_dialog is not None: return
+        path = self._active_path()
+        if not path: return
+        snapshot = self._gps_snapshots.get(path)
+        if not snapshot or snapshot['blocked'] or ('freshness' in snapshot and proposal_problem(snapshot)):
+            self._refresh_gps_section()
+            return
+        existing = self.gps_drafts.get(path)
+        if existing is not None:
+            answer = QMessageBox.question(
+                self, 'Replace GPS proposal',
+                'Replace the existing GPS proposal with a newly inspected proposal?',
+                QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+            if answer != QMessageBox.Yes: return
+        from kim_location_dialog import LocationDialog
+        dialog = LocationDialog('apply', [path], 'proposal', None,
+                                initial=existing['input'] if existing else None)
+        dialog.setParent(self, dialog.windowFlags())
+        dialog.finished.connect(dialog.deleteLater)
+        self._gps_dialog = dialog
+        try:
+            accepted = dialog.exec() == QDialog.Accepted
+            if accepted and not self._closing and dialog.proposal is not None:
+                problem = proposal_problem(dialog.proposal)
+                if problem:
+                    QMessageBox.warning(self, 'GPS proposal changed', problem)
+                else:
+                    self.gps_drafts[path] = dialog.proposal
+                    self._refresh_pending()
+        finally:
+            self._gps_dialog = None
+            dialog.reject()
+            if self._closing: self._finish_close()
+
+    def _descriptive_proposal_paths(self):
+        paths = {path for path, fields in self.drafts.items()
+                 if any(draft.operation != 'Leave unchanged' for draft in fields.values())}
+        paths.update(path for path, _key, draft in self.source_drafts if draft.operation != 'Leave unchanged')
+        paths.update(path for session in self.batch_sessions if session['fields'] for path in session['paths'])
+        return [path for path in self.paths if path in paths]
+
+    def _combined_plan(self):
+        paths = self._descriptive_proposal_paths()
+        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
+                          self.source_drafts, self.preferences.priority)
+        for path in self.paths:
+            if path in self.gps_drafts: plan.extend(gps_review_rows(self.gps_drafts[path]))
+        return plan
+
+    def _view_camera_gps_field(self):
+        path = self._active_path()
+        if path:
+            context = gps_field(MetadataRecord(path))
+            dispatch(self, context, field_actions(self, context)[0])
 
     def view_gps_on_map(self):
         """Inspect GPS without changing the Editor's pending drafts."""
@@ -2188,7 +2464,11 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         value.setReadOnly(True)
         value.setEnabled(False)
         value.setMaximumHeight(80)
-        layout.addWidget(value)
+        value_row = QHBoxLayout()
+        value_row.addWidget(value, 1)
+        gps_actions = QHBoxLayout()
+        value_row.addLayout(gps_actions)
+        layout.addLayout(value_row)
 
         provenance = QLabel()
         provenance.setTextFormat(Qt.PlainText)
@@ -2209,7 +2489,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
 
         self._readonly_pins[field.key] = {
             "card": card, "value": value,
-            "source": provenance, "details": details,
+            "source": provenance, "details": details, "gps_actions": gps_actions, "note": note,
         }
         return card
 
@@ -2247,13 +2527,15 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self._pin_order.clear()
 
             for field in fields:
+                if field in PERMANENT_FIELDS or field.key == next(f.key for f in OVERVIEW_DEFAULTS if f.label == 'GPS position'):
+                    continue
                 key = self._pin_spec(field)
                 card = (
                     self.field_controls[key]["card"]
                     if key else self._new_readonly_pin(field)
                 )
                 self.fields_layout.insertWidget(
-                    self.fields_layout.count() - 1, card
+                    self.fields_layout.indexOf(self.capture_section), card
                 )
                 self._pin_order.append((field, card, key))
 
@@ -2271,6 +2553,21 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             else set()
         )
 
+        for field in PERMANENT_FIELDS:
+            value = self.capture_values[field.key]
+            if not record:
+                text = 'Loading…'
+            elif record.error:
+                text = 'Metadata unavailable'
+            else:
+                formatted = self.overview._camera_values(field.label, field.selectors, record)
+                entries = field.entries(record)
+                sources = list(dict.fromkeys(overview_source(entry, record) for entry in entries))
+                text = ' | '.join(formatted) if formatted else 'Not present'
+                if sources:
+                    text += '\nSource: ' + ', '.join(sources)
+            value.setText(text)
+
         for field, card, key in self._pin_order:
             card.setVisible(bool(base and not base.error))
             if key:
@@ -2281,6 +2578,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             source = widgets["source"]
             details = widgets["details"]
 
+            MetadataOverview._clear_layout(widgets['gps_actions'])
             details.setEnabled(False)
             source.clear()
             value.setToolTip("")
@@ -2298,14 +2596,21 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             entries = field.entries(record)
             if not entries:
                 value.setPlainText("Not present")
+                if field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude':
+                    add_field_controls(widgets['gps_actions'], self, gps_field(record))
+                    widgets['gps_actions'].addStretch(1)
+                    widgets['note'].hide()
                 continue
 
+            # GPSAltitude's overview selector also retrieves its reference.
+            # That reference is detail data, not a competing altitude value.
+            candidates = [item for item in entries if item.name == 'GPSAltitude'] if field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude' else entries
             chosen = preferred_entry(
-                entries, record, self.preferences.priority,
+                candidates, record, self.preferences.priority,
                 language_alt=True, locale=QLocale().name()
             )
-            if chosen is None and len(entries) == 1:
-                chosen = entries[0]
+            if chosen is None and len(candidates) == 1:
+                chosen = candidates[0]
 
             # Match Browser Overview for composite camera fields.
             # Never combine a source- or language-qualified pin with
@@ -2348,6 +2653,15 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                 for entry in entries
             ))
             source.setText("Source: " + ", ".join(sources))
+            actions = widgets['gps_actions']
+            MetadataOverview._clear_layout(actions)
+            gps_entries = [item for item in entries if is_gps_entry(item)]
+            widgets['note'].setVisible(not gps_entries)
+            if gps_entries:
+                context = gps_field(record, chosen) if chosen is not None else GPSField(path, None, False,
+                    'Multiple GPS representations', 'Choose an exact representation in All fields to inspect its coordinates. Editing is unavailable for this ambiguous field.')
+                add_field_controls(actions, self, context)
+                actions.addStretch(1)
             details.setEnabled(True)
 
     def _build_fields(self):
@@ -3150,6 +3464,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.sources_targets_help.setText("\n".join(lines))
 
     def _refresh_pending(self):
+        self._refresh_gps_section()
         if not hasattr(self, "pending_label"):
             return
         self._refresh_sources_targets()
@@ -3159,11 +3474,10 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self.pending_label.setText('Pending changes: 0')
             self.review_button.setEnabled(False)
             return
-        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
-                          self.source_drafts, self.preferences.priority)
+        plan = [row for row in self._combined_plan() if not row.get("gps_detail")]
         valid = sum(row.get("status") == "valid" for row in plan)
         blocked = sum(row.get("status") == "blocked" for row in plan)
-        count = valid + blocked
+        count = valid + blocked + sum(bool(row.get('gps')) and row.get('status') == 'noop' for row in plan)
         self.review_button.setEnabled(count > 0)
         if not count:
             self.pending_label.setText("Pending changes: 0")
@@ -3197,27 +3511,25 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self._pump_load()
 
     def _finish_close(self):
-        if self.worker is None and not self.preview_workers and self._inspection_filter is None and not self.thumbnail_workers:
+        if self._gps_dialog is None and self._gps_inspection is None and self.worker is None and not self.preview_workers and self._inspection_filter is None and not self.thumbnail_workers:
             self.close()
 
     def review_changes(self):
         if self._closing:
             return
         paths = self._proposal_paths()
-        if self._request_paths(paths, 'review'):
+        if self._request_paths(self._descriptive_proposal_paths(), 'review'):
             return
-        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
-                          self.source_drafts, self.preferences.priority)
-        if not any(row.get("status") in ("valid", "blocked") for row in plan):
+        plan = self._combined_plan()
+        if not any(row.get("status") in ("valid", "blocked") or row.get("gps") for row in plan):
             self._refresh_pending()
             return
         ReviewDialog(plan, self, len(paths)).exec()
 
     def closeEvent(self, event):
         paths = self._proposal_paths()
-        plan = build_plan(paths, self._plan_records(paths), self.drafts, 'Combined', self.batch_sessions,
-                          self.source_drafts, self.preferences.priority) if paths else []
-        if any(row.get("status") in ("valid", "blocked") for row in plan):
+        plan = self._combined_plan() if paths else []
+        if self.gps_drafts or any(row.get("status") in ("valid", "blocked") for row in plan):
             answer = QMessageBox.question(
                 self, "Pending changes",
                 "Your proposed changes have not been written. Keep editing or discard them?",
@@ -3228,7 +3540,10 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self.drafts.clear()
             self.source_drafts.clear()
             self.batch_sessions.clear()
+            self.gps_drafts.clear()
         self._closing = True
+        if self._gps_inspection is not None: self._gps_inspection.requestInterruption()
+        if self._gps_dialog is not None: self._gps_dialog.reject()
         self._pending_action = None
         for worker in tuple(self.thumbnail_workers):
             worker.requestInterruption()
@@ -3241,7 +3556,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             if not self.worker.isRunning():
                 self.worker.deleteLater()
                 self.worker = None
-        if self.worker is not None or self.preview_workers or self._inspection_filter is not None or self.thumbnail_workers:
+        if self._gps_dialog is not None or self._gps_inspection is not None or self.worker is not None or self.preview_workers or self._inspection_filter is not None or self.thumbnail_workers:
             event.ignore()
             return
         self._persist_splitter_sizes()

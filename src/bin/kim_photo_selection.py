@@ -66,15 +66,22 @@ def read_thumbnail(path, size, auto_orient=True):
             reader = QImageReader(device)
             reader.setDecideFormatFromContent(True)
             reader.setAutoTransform(auto_orient)
+            if not reader.canRead():
+                raise ValueError('Image decoder: ' + reader.errorString())
             dimensions = reader.size()
             if not dimensions.isValid() or dimensions.width() * dimensions.height() > 1_000_000_000:
                 raise ValueError('Preview dimensions unavailable or too large')
             native_scale = reader.supportsOption(QImageIOHandler.ScaledSize)
             if not native_scale and dimensions.width() * dimensions.height() > 24_000_000:
-                raise ValueError('Safe small preview unavailable for this decoder')
+                raise ValueError('This decoder cannot downscale while reading; the image exceeds the 24 megapixel preview safety limit.')
+            limit = QImageReader.allocationLimit()
+            # Qt allocates at least 32 bits/pixel, potentially 64 for deep PNG.
+            depth = 8 if QImage(1, 1, reader.imageFormat()).depth() > 32 else 4
+            if not native_scale and limit > 0 and dimensions.width() * dimensions.height() * depth > limit * 1024 * 1024:
+                raise ValueError(f'Decoded image exceeds the {limit} MiB preview allocation limit; this decoder cannot downscale while reading.')
             reader.setScaledSize(dimensions.scaled(size, Qt.KeepAspectRatio))
             image = reader.read()
-            if image.isNull(): raise ValueError('No thumbnail decoder for this image')
+            if image.isNull(): raise ValueError('Image decoding failed: ' + reader.errorString())
             image = image.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         finally:
             device.close()
@@ -88,13 +95,16 @@ class ThumbnailWorker(QThread):
     def __init__(self, paths, size, parent):
         super().__init__(parent)
         self.paths = paths; self.size = size
+        self.errors = {}
 
     def run(self):
         with inspection_context(cancelled=self.isInterruptionRequested):
             for path in self.paths:
                 if self.isInterruptionRequested(): break
                 try: image, stamp = read_thumbnail(path, self.size)
-                except Exception: image, stamp = QImage(), None
+                except Exception as exc:
+                    self.errors[path] = str(exc)
+                    image, stamp = QImage(), None
                 if not self.isInterruptionRequested(): self.thumbnail_ready.emit(path, image, stamp)
 
 
@@ -526,7 +536,8 @@ class PhotoPreview(QWidget):
         except (OSError, ValueError): valid = False
         if image.isNull() or not valid:
             self.canvas.image = QImage()
-            self.canvas.message = 'Image preview unavailable.\nThe format may lack a safe thumbnail decoder.\nLocation metadata is inspected independently.'
+            reason = self.worker.errors.get(path, 'Image changed while previewing.' if stamp is not None else 'The preview worker returned no image.')
+            self.canvas.message = 'Image preview unavailable.\n' + reason + '\nLocation metadata is inspected independently.'
         else: self.canvas.image = image; self.stamp = stamp
         self.canvas.update()
 

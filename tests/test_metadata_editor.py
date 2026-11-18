@@ -562,7 +562,9 @@ class MetadataEditorQtTests(unittest.TestCase):
     def make_editor(self, names, preferences=None):
         from PySide6.QtCore import QSize
         paths = [str((self.fixtures / name).resolve()) for name in names]
-        with patch("kim_metadata_editor.MetadataWorker.start", return_value=None):
+        # PySide6 inspects class methods during signal connection. A plain
+        # callable avoids native crashes caused by MagicMock introspection.
+        with patch("kim_metadata_editor.MetadataWorker.start", new=lambda self: None):
             editor = MetadataEditor(paths, preferences=preferences)
         records = read_metadata(paths)
         previews = {}
@@ -1169,8 +1171,8 @@ class MetadataEditorQtTests(unittest.TestCase):
         review = ReviewDialog(plan, editor, len(editor.paths))
         self.assertIn("3 selected images", review.summary.text())
         self.assertIn("blocked", review.summary.text())
-        self.assertFalse(any("Apply" in button.text() or "Write" in button.text()
-                             for button in review.findChildren(QPushButton)))
+        self.assertEqual("Apply changes", review.apply_button.text())
+        self.assertFalse(review.apply_button.isEnabled())
         review.close()
         self.close_editor(editor)
 
@@ -1205,7 +1207,7 @@ class MetadataEditorQtTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual("Snow peaks with Unicode metadata.", review.before_view.toPlainText())
         self.assertEqual("First line\nSecond line\nThird line", review.after_view.toPlainText())
-        self.assertEqual("Planned result: xmp_only-metadata.jpg", review.result_label.text())
+        self.assertEqual("Preview only. No output will be created.", review.result_label.text())
         review.technical_button.setChecked(True)
         self.assertIn("Provenance:", review.technical.toPlainText())
         review.close()

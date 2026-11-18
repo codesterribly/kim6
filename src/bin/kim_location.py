@@ -762,6 +762,164 @@ def input_instruction(kind, config):
     return ''
 
 
+def manual_location(config):
+    """Validate manual input using the standalone GPS engine's rules."""
+    altitude = direction = None
+    if any(decimal_digits(config.get(k, '')) > 12 for k in ('latitude', 'longitude')):
+        raise ValueError('Enter at most twelve decimal places for each coordinate')
+    position = [coordinate(config.get('latitude', ''), None, True), coordinate(config.get('longitude', ''), None, False)]
+    if config.get('altitude', '') != '': altitude = number(config['altitude'], 'altitude', -12000, 100000)
+    if config.get('direction', '') != '': direction = number(config['direction'], 'image direction', 0, 359.999999)
+    return position, altitude, direction
+
+
+def _gps_changes(path, raw, location, info=None, removed=None):
+    """Shared semantic changes, with no destination or publication policy."""
+    info = summarize(raw) if info is None else info
+    if removed is None: _, removed = removal_args(info, location.get('reduce', False))
+    position = location['position']; altitude = location['altitude']
+    direction = location['direction']; direction_ref = location['direction_ref']
+    rows = []
+    rows.append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set GPS location; remove other recognized precise coordinate records'])
+    rows.append([Path(path).name, 'GPS fix details', 'Existing altitude / time / direction / speed', 'Altitude: ' + (str(altitude) + ' m' if altitude is not None else 'absent') + '; direction: ' + (str(direction) + '° ' + direction_ref if direction is not None else 'absent'), 'Remove stale fix metadata; never invent a GPS timestamp'])
+    for key in removed:
+        rows.append([Path(path).name, key, json.dumps(info['fields'][key], ensure_ascii=False), 'Remove / reconcile', 'Explicit location field'])
+
+    return dict(rows=rows, removed_fields=removed, warnings=list(info['issues']),
+                noop=matches_approved(info, raw, location))
+
+
+def _proposal_freshness(path):
+    # Enumerate strictly: unreadable directories must never look like no sidecars.
+    image = Path(path)
+    sidecars = sorted(str(p) for p in image.parent.iterdir()
+                      if p.suffix.casefold() == '.xmp' and p.stem.casefold() == image.stem.casefold())
+    return dict(source=dict(identity=identity(path), atime_ns=os.lstat(path).st_atime_ns),
+                sidecars={p: dict(identity=identity(p), atime_ns=os.lstat(p).st_atime_ns)
+                          for p in sidecars})
+
+
+def proposal_problem(proposal):
+    """Return a freshness blocker without changing or rebasing the proposal."""
+    try:
+        if _proposal_freshness(proposal['source']) != proposal['freshness']:
+            return 'Image, sidecar, or sidecar membership changed. Explicitly regenerate the GPS proposal.'
+    except (OSError, ValueError, KeyError) as exc:
+        return 'Cannot verify GPS proposal freshness: ' + str(exc)
+    return ''
+
+
+def inspect_editor_gps(path, *, cancelled=lambda: False):
+    """Protected read-only snapshot for Editor controls, independent of drafts."""
+    path = absolute(path)
+    result = dict(source=path, existing=None, sidecars=[], blocked=[], initial={})
+    with inspection_context(cancelled=cancelled):
+        try:
+            before = _proposal_freshness(path)
+            result['freshness'] = before
+            data = read_many([path])[path]
+            if data.get('error'): raise ValueError(data['error'])
+            raw = data['raw']; info = summarize(raw)
+            result['existing'] = info
+            for sidecar in before['sidecars']:
+                checkpoint()
+                data = read_many([sidecar], complete=False)[sidecar]
+                if data.get('error'): raise ValueError('Cannot inspect sidecar: ' + data['error'])
+                result['sidecars'].append(dict(source=sidecar, existing=summarize(data['raw'])))
+            if before != _proposal_freshness(path):
+                raise ValueError('Image or sidecar changed during GPS inspection')
+            safe_format(path, raw)
+            if info['categories']['camera']['issues']:
+                raise ValueError('Conflicting or incomplete embedded camera GPS; editing is unavailable.')
+            if info['position'] is not None:
+                initial = dict(method='manual', latitude=str(info['position'][0]), longitude=str(info['position'][1]))
+                altitude, _ = optional_gps_record(raw, 'GPSAltitude', -12000, 100000)
+                direction, ref = optional_gps_record(raw, 'GPSImgDirection', 0, 359.999999)
+                initial.update(altitude=str(altitude) if altitude is not None else '',
+                               direction=str(direction) if direction is not None and ref == 'T' else '')
+                result['initial'] = initial
+        except (OSError, ValueError) as exc:
+            checkpoint()
+            result['blocked'].append(str(exc))
+    return result
+
+
+def editor_gps_description(snapshot):
+    """Present embedded and sidecar provenance without merging their targets."""
+    def describe(info, source):
+        camera = info['categories']['camera']
+        lines = []
+        for record in camera['records']:
+            if record['position'] is not None:
+                lines.append(source + ' · ' + record['source'].split(':')[0] + ': ' + display_position(record['position']))
+        lines.extend(source + ': ' + issue for issue in camera['issues'])
+        return lines
+    info = snapshot.get('existing')
+    lines = describe(info, 'Embedded image') if info else []
+    if info and not snapshot.get('blocked') and not info['categories']['camera']['records'] and not info['categories']['camera']['issues']:
+        lines.append('No camera GPS coordinates recorded.')
+    for sidecar in snapshot.get('sidecars', []):
+        lines.extend(describe(sidecar['existing'], 'Sidecar ' + Path(sidecar['source']).name + ' (unchanged)'))
+    side_positions = [side['existing']['position'] for side in snapshot.get('sidecars', [])
+                      if side['existing']['position'] is not None]
+    if side_positions:
+        if info and info['position'] is None:
+            lines.append('Sidecar-only GPS is not embedded camera GPS. Proposals target the image only.')
+        elif info and any(not same_position(info['position'], point) for point in side_positions):
+            lines.append('Embedded and sidecar GPS conflict. Sidecar coordinates remain unchanged.')
+    lines.extend(snapshot.get('blocked', []))
+    return '\n'.join(lines)
+
+
+def build_manual_proposal(path, config, *, cancelled=lambda: False):
+    """Inspect one verified still-image GPS target as view-only semantic data.
+
+    No output policy, writer arguments, destination, or publication authorization
+    is included. Sidecar locations are provenance only and remain unchanged.
+    """
+    path = absolute(path)
+    proposal = dict(source=path, input=dict(config), status='blocked', warnings=[],
+                    blocked=[], rows=[], sidecars=[], noop=False)
+    with inspection_context(cancelled=cancelled):
+        try:
+            if config.get('method', 'manual') != 'manual':
+                raise ValueError('Only manual GPS proposals are supported')
+            position, altitude, direction = manual_location(config)
+            before = _proposal_freshness(path)
+            proposal['identity'] = before['source']['identity']
+            proposal['freshness'] = before
+            data = read_many([path])[path]
+            if data.get('error'): raise ValueError(data['error'])
+            raw = data['raw']; info = summarize(raw)
+            proposal['existing'] = info
+            safe_format(path, raw)
+            location = dict(category='camera', position=position, altitude=altitude,
+                            altitude_ref=str(int(altitude < 0)) if altitude is not None else None,
+                            direction=direction, direction_ref='T', reduce=False)
+            changes = _gps_changes(path, raw, location, info)
+            proposal.update(changes, proposed=location, embedded_provenance=info['records'])
+            proposal['warnings'].append(
+                'Reconciliation may remove stale GPS fix timestamps, speed, movement data, altitude, '
+                'direction, and duplicate coordinate representations. Sidecars remain unchanged.')
+            for sidecar in before['sidecars']:
+                checkpoint()
+                data = read_many([sidecar], complete=False)[sidecar]
+                if data.get('error'): raise ValueError('Cannot inspect sidecar: ' + data['error'])
+                side_info = summarize(data['raw'])
+                proposal['sidecars'].append(dict(source=sidecar, existing=side_info))
+                for row in report_rows(sidecar, side_info):
+                    proposal['rows'].append([row[0], 'Unchanged sidecar: ' + row[1], row[2], row[2],
+                                             'Associated sidecar metadata only; not an embedded GPS target. ' + row[4]])
+            checkpoint()
+            if before != _proposal_freshness(path):
+                raise ValueError('Image or sidecar changed during GPS inspection')
+            proposal['status'] = 'noop' if proposal['noop'] else 'valid'
+        except (OSError, ValueError) as exc:
+            checkpoint()
+            proposal['blocked'].append(str(exc))
+    return proposal
+
+
 def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None, cancelled=lambda: False, cache=None, track_cache=None):
     if kind not in TITLES or policy not in ('create', 'overwrite'): raise ValueError('Invalid location operation or output policy')
     if not files or len(files) > MAX_FILES: raise ValueError('Select between 1 and 1000 images')
@@ -839,11 +997,7 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                 args, removed = removal_args(info, kind == 'reduce')
                 altitude = direction = altitude_ref = None; direction_ref = 'T'
                 if kind == 'apply':
-                    if any(decimal_digits(config.get(k, '')) > 12 for k in ('latitude', 'longitude')):
-                        raise ValueError('Enter at most twelve decimal places for each coordinate')
-                    position = [coordinate(config.get('latitude', ''), None, True), coordinate(config.get('longitude', ''), None, False)]
-                    if config.get('altitude', '') != '': altitude = number(config['altitude'], 'altitude', -12000, 100000)
-                    if config.get('direction', '') != '': direction = number(config['direction'], 'image direction', 0, 359.999999)
+                    position, altitude, direction = manual_location(config)
                 elif kind == 'copy':
                     position = reference['position']
                     if config.get('altitude'):
@@ -878,13 +1032,11 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                     entry['warnings'].append('Free-text captions, image content and external information may still reveal location. Narrative text is preserved.')
                 entry['approved_location'] = {'category': 'camera', 'position': position, 'altitude': altitude, 'direction': direction, 'direction_ref': direction_ref, 'altitude_ref': altitude_ref, 'reduce': kind == 'reduce'}
                 entry['args'] = args + assignments(position, altitude, direction, direction_ref, altitude_ref)
-                entry['rows'].append([Path(path).name, 'WGS84 camera GPS coordinates', display_position(info['position']), display_position(position), 'Set GPS location; remove other recognized precise coordinate records'])
-                entry['rows'].append([Path(path).name, 'GPS fix details', 'Existing altitude / time / direction / speed', 'Altitude: ' + (str(altitude) + ' m' if altitude is not None else 'absent') + '; direction: ' + (str(direction) + '° ' + direction_ref if direction is not None else 'absent'), 'Remove stale fix metadata; never invent a GPS timestamp'])
-                for key in removed:
-                    entry['rows'].append([Path(path).name, key, json.dumps(info['fields'][key], ensure_ascii=False), 'Remove / reconcile', 'Explicit location field'])
-                entry['removed_fields'] = removed
-                entry['warnings'].extend(info['issues'])
-                if matches_approved(info, raw, entry['approved_location']): entry['status'] = 'skip'
+                changes = _gps_changes(path, raw, entry['approved_location'], info, removed)
+                entry['rows'].extend(changes['rows'])
+                entry['removed_fields'] = changes['removed_fields']
+                entry['warnings'].extend(changes['warnings'])
+                if changes['noop']: entry['status'] = 'skip'
                 candidate = seeds[index] if seeds else path
                 target = allocate(path, candidate, policy, reserved, '-')
                 if policy == 'create' and target == path: raise ValueError('Create policy cannot replace an original')

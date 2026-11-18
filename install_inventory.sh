@@ -51,6 +51,7 @@ src/bin/kim_action_dialog.py|bin/kim_action_dialog.py|0644
 src/bin/kim_dialog_buttons.py|bin/kim_dialog_buttons.py|0644
 src/bin/kim_compress_review.py|bin/kim_compress_review.py|0644
 src/bin/kim_metadata_browser.py|bin/kim_metadata_browser.py|0644
+src/bin/kim_metadata_gps_actions.py|bin/kim_metadata_gps_actions.py|0644
 src/bin/kim_metadata_compare.py|bin/kim_metadata_compare.py|0644
 src/bin/kim_metadata_editor.py|bin/kim_metadata_editor.py|0644
 src/bin/kim_metadata_reader.py|bin/kim_metadata_reader.py|0644
