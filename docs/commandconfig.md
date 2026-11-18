@@ -178,7 +178,7 @@ See [Output and File Handling](#output-and-file-handling), [copyright](#copyrigh
 
 ## Recipes
 
-The **KIMng - Recipes** submenu in Dolphin provides **Choose saved recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+The **KIMng - Recipes** submenu in Dolphin provides **Run a recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
 
 Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which also provides **Load Photos & Run**. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
 

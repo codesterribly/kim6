@@ -4,10 +4,10 @@ Recipes let you combine image operations into a saved workflow and run them dire
 
 ## Start in Dolphin
 
-![KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
+![KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Run a recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
 
 1. Select one or more supported images and right-click.
-2. Open **KIMng - Recipes → Choose saved recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
+2. Open **KIMng - Recipes → Run a recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
 3. Review the selected images and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
 4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
 
@@ -38,7 +38,7 @@ KIMng provides two distinct Web Export workflows:
 - **KIMng - Web Export** offers twelve direct Dolphin presets,
   covering JPEG, PNG, WebP, and AVIF at three maximum
   image sizes (1600, 800, and 128 pixels).
-- **KIMng - Recipes → Choose saved recipe… → Web Export**
+- **KIMng - Recipes → Run a recipe… → Web Export**
   runs the built-in, multi-step recipe.
 
 The built-in recipe auto-orients images, fits them within

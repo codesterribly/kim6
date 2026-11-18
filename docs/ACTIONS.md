@@ -82,7 +82,7 @@ View metadata opens the existing read-only Metadata Browser with all selected im
 
 | Menu action | Dispatcher command |
 |---|---|
-| Choose saved recipe… | `kim_all recipe --choose -- %F` |
+| Run a recipe… | `kim_all recipe --choose -- %F` |
 | Recipe editor… | `kim_all recipe --editor -- %F` |
 
 ### KIMng - Resize/Crop/Rotate

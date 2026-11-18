@@ -4,11 +4,12 @@ from pathlib import Path
 import re
 
 from PySide6.QtCore import Qt, QRect, QEvent, QPersistentModelIndex
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QVBoxLayout, QLabel,
     QToolButton, QMenu, QStyledItemDelegate, QStyleOptionViewItem,
     QStyleOptionToolButton, QStyle, QToolTip, QMessageBox)
 
-from kim_location import coordinate, summarize, coordinate_category, location_kind, proposal_problem
+from kim_location import coordinate, summarize, coordinate_category, location_kind, proposal_problem, FORMATS
 from kim_metadata_reader import MetadataEntry
 
 
@@ -89,7 +90,7 @@ def gps_field(record, entry=None):
                 return contexts[0]
             return GPSField(record.path, None, False, 'Embedded camera GPS',
                             'Embedded camera GPS is incomplete or ambiguous. Inspect its individual fields; editing is unavailable.')
-        return GPSField(record.path, None, True, 'Embedded camera GPS')
+        return GPSField(record.path, None, True, 'No embedded camera GPS coordinates')
     if not is_gps_entry(entry):
         return None
     cache = getattr(record, '_gps_field_actions', None)
@@ -206,7 +207,11 @@ def field_actions(owner, field):
         reason = '\n'.join(snapshot['blocked'])
     if field.camera and hasattr(owner, 'gps_drafts') and snapshot is None:
         reason = 'Checking embedded camera GPS before editing.'
-    label = 'Edit GPS…' if proposal or position is not None else 'Add GPS…'
+    if field.camera and Path(field.path).suffix.lower() not in {
+            suffix for extensions in FORMATS.values()
+            for suffix in extensions}:
+        reason = 'GPS proposals are unavailable for this image extension.'
+    label = 'Edit GPS' if proposal or position is not None else 'Add GPS'
     actions.append((label, 'document-edit', field.camera and not reason,
                     reason or ('Propose embedded camera GPS for ' + field.path + '. Other representations stay unchanged.'), None))
     if proposal:
@@ -222,7 +227,23 @@ def show_field_map(parent, field, position):
     dialog.setWindowTitle('View on map')
     dialog.resize(720, 540)
     layout = QVBoxLayout(dialog)
-    label = QLabel(field.provenance + '\n' + position_text(position))
+    provenance = field.provenance
+    if (
+        position is not None
+        and 'No embedded camera GPS coordinates' in provenance
+    ):
+        visible_source = (
+            'GPS coordinates from selected metadata'
+        )
+    else:
+        visible_source = provenance
+
+    label = QLabel(
+        visible_source + '\n' + position_text(position)
+    )
+    label.setToolTip(
+        'Metadata source: ' + provenance
+    )
     label.setTextFormat(Qt.PlainText)
     label.setWordWrap(True)
     layout.addWidget(label)
@@ -293,11 +314,30 @@ def add_field_controls(layout, owner, field):
         button = QToolButton()
         button.setObjectName('gpsFieldAction')
         button.setText(label)
-        button.setAccessibleName(label)
-        button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        button.setAccessibleName('View on map' if label == 'View on map…' else label)
+        if label == "View on map…":
+            button.setIcon(QIcon.fromTheme(
+                "map-globe",
+                QIcon.fromTheme(
+                    "globe",
+                    button.style().standardIcon(
+                        QStyle.SP_DriveNetIcon
+                    ),
+                ),
+            ))
+            button.setText('Map')
+            button.setToolButtonStyle(
+                Qt.ToolButtonTextBesideIcon
+            )
+        else:
+            if label in ("Edit GPS", "Add GPS"):
+                button.setIcon(QIcon.fromTheme("document-edit"))
+                button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            else:
+                button.setToolButtonStyle(Qt.ToolButtonTextOnly)
         button.setAutoRaise(False)
         button.setEnabled(enabled)
-        button.setToolTip(label + '\n' + tip)
+        button.setToolTip(('View on map' if label == 'View on map…' else label) + '\n' + tip)
         button.clicked.connect(lambda checked=False, target=field, selected=action: dispatch(owner, target, selected))
         layout.addWidget(button)
 

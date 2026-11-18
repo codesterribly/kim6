@@ -18,7 +18,7 @@ try:
     from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QLocale, QSignalBlocker, QEvent, QItemSelectionModel
     from PySide6.QtGui import QImage, QPixmap, QIcon, QAction
     from PySide6.QtWidgets import (
-        QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+        QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout,
         QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
         QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
         QScrollArea, QVBoxLayout, QWidget, QTreeWidget, QTreeWidgetItem,
@@ -43,9 +43,23 @@ from kim_metadata_sources import (
     ordered_representations, preferred_entry, preferred_representation, OverviewPreferences, overview_source,
 )
 
+
+from kim_metadata_browser import kimng_simple_field_label
 from kim_metadata_browser import (MetadataWorker as InspectionWorker, PreviewWorker, InspectionCache,
     _file_stamp, _record_stamp, _record_bytes, TagModel, TagFilterWorker, OverviewFieldsDialog,
     MetadataBrowser, PinDelegate, MetadataDetailsDialog, metadata_alternatives, MetadataOverview, ListThumbnails)
+
+
+def kimng_source_display_text(value):
+    """Remove redundant embedded-image wording in UI text."""
+    text = str(value)
+    return (
+        text.replace(', Embedded image', '')
+        .replace('Embedded image, ', '')
+        .replace('Embedded image · ', '')
+        .replace('Embedded image', '')
+        .strip(' ,·')
+    )
 
 
 @dataclass(frozen=True)
@@ -73,7 +87,7 @@ FIELD_SPECS = (
               multiline=True, multiple=True),
     FieldSpec("creator", "Creator", ("Creator", "By-line", "Artist"), "XMP-dc:Creator", "IPTC:By-line", 32,
               multiline=True, multiple=True),
-    FieldSpec("copyright", "Copyright notice", ("Rights", "CopyrightNotice"),
+    FieldSpec("copyright", "Copyright", ("Rights", "CopyrightNotice"),
               "XMP-dc:Rights", "IPTC:CopyrightNotice", 128, language_alt=True),
     FieldSpec("usage", "Usage terms", ("UsageTerms",),
               "XMP-xmpRights:UsageTerms", None, None, multiline=True, language_alt=True),
@@ -993,16 +1007,27 @@ class ReviewDialog(QDialog):
             "Metadata writing is not yet available.\nYour proposed changes remain in the Editor.")
         self.writing_notice.setWordWrap(True)
         layout.addWidget(self.writing_notice)
+        button_row = QHBoxLayout()
+        self.back_button = QPushButton("Back")
+        style_button(self.back_button, "back")
+        self.back_button.clicked.connect(self.reject)
+        button_row.addWidget(self.back_button)
+        button_row.addStretch(1)
+
         buttons = QDialogButtonBox()
-        self.back_button = buttons.addButton("Back to editor", QDialogButtonBox.RejectRole)
-        self.apply_button = buttons.addButton("Apply changes", QDialogButtonBox.ActionRole)
+        self.apply_button = buttons.addButton(
+            "Apply changes", QDialogButtonBox.AcceptRole)
+        style_button(self.apply_button, "apply")
         self.apply_button.setEnabled(False)
         self.apply_button.setAutoDefault(False)
         self.apply_button.setDefault(False)
+        self.cancel_button = buttons.addButton(QDialogButtonBox.Cancel)
         style_button_box(buttons)
         buttons.rejected.connect(self.reject)
+
+        button_row.addWidget(buttons)
         self.back_button.setDefault(True)
-        layout.addWidget(buttons)
+        layout.addLayout(button_row)
 
     def accept(self):
         """Preview only: neither Return nor a direct callback can apply a plan."""
@@ -1101,7 +1126,7 @@ def _input_widget(spec, name):
     if spec.multiple or spec.multiline:
         widget = QPlainTextEdit()
         widget.setObjectName(name)
-        widget.setPlaceholderText("One value per line" if spec.multiple else "Enter a value")
+        widget.setPlaceholderText("One value per line" if spec.multiple else "")
         widget.setMinimumHeight(50 if spec.multiple else 60)
         widget.setMaximumHeight(86 if spec.multiple else 100)
         return widget
@@ -1586,20 +1611,34 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.target_notice = QLabel('Planning only. Your image files will not be changed.')
         self.target_notice.setWordWrap(True)
         self.fields_layout.addWidget(self.target_notice)
-        pin_row = QHBoxLayout()
+        pin_row = QVBoxLayout()
+        pin_row.setSpacing(5)
         pin_help = QLabel(
-            "Pins control which fields appear in Browser and Editor."
+            "You can pin fields in the All Fields tab to "
+            "display them in both Browser and Editor."
         )
         pin_help.setTextFormat(Qt.PlainText)
         pin_help.setWordWrap(True)
-        pin_row.addWidget(pin_help, 1)
+        pin_help.setWordWrap(True)
+        pin_row.addWidget(pin_help)
         configure = QPushButton("Configure fields…")
         configure.setIcon(QIcon.fromTheme("configure"))
         configure.clicked.connect(self._configure_editor_pins)
-        pin_row.addWidget(configure)
+        pin_row.addWidget(configure, 0, Qt.AlignLeft)
 
-        self.capture_section = QGroupBox('Camera, capture and location')
+        self.capture_section = QGroupBox(
+            'Camera, Capture and Location'
+        )
+        self.capture_section.setTitle('')
         capture_layout = QVBoxLayout(self.capture_section)
+
+        capture_heading = QLabel(
+            'Camera, Capture and Location'
+        )
+        capture_heading_font = capture_heading.font()
+        capture_heading_font.setBold(True)
+        capture_heading.setFont(capture_heading_font)
+        capture_layout.addWidget(capture_heading)
         self.capture_values = {}
         capture_form = QFormLayout()
         for field in PERMANENT_FIELDS:
@@ -1618,15 +1657,28 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.gps_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
         gps_layout.addWidget(self.gps_status)
         gps_actions = QHBoxLayout()
-        self.view_gps_button = QPushButton('View on map…')
-        self.view_gps_button.setIcon(QIcon.fromTheme('globe'))
+        self.view_gps_button = QPushButton()
+        self.view_gps_button.setObjectName("viewGpsMapButton")
+        self.view_gps_button.setAccessibleName("View on map")
+        self.view_gps_button.setIcon(QIcon.fromTheme(
+            "map-globe",
+            QIcon.fromTheme(
+                "globe",
+                self.style().standardIcon(
+                    QStyle.SP_DriveNetIcon
+                ),
+            ),
+        ))
+        self.view_gps_button.setText('Map')
+        self.view_gps_button.setFixedWidth(84)
         self.view_gps_button.setToolTip(
             'Inspect this image in the existing read-only GPS viewer. '
             'Pending metadata proposals are preserved.'
         )
         self.view_gps_button.clicked.connect(self._view_camera_gps_field)
         gps_actions.addWidget(self.view_gps_button)
-        self.add_gps_button = QPushButton('Add GPS location…')
+        self.add_gps_button = QPushButton('Add GPS')
+        self.add_gps_button.setIcon(QIcon.fromTheme('document-edit'))
         self.add_gps_button.clicked.connect(self.add_gps_location)
         gps_actions.addWidget(self.add_gps_button)
         self.discard_gps_button = QPushButton('Discard change')
@@ -1642,6 +1694,25 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._pin_signature = None
         self._readonly_pins = {}
         self._pin_order = []
+        self.editable_fields_host = QWidget(self.form_content)
+        self.editable_fields_host.setMaximumWidth(960)
+        self.editable_fields_host.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.editable_grid = QGridLayout(self.editable_fields_host)
+        self.editable_grid.setContentsMargins(0, 0, 0, 0)
+        self.editable_grid.setHorizontalSpacing(10)
+        self.editable_grid.setVerticalSpacing(6)
+        self.editable_grid.setColumnStretch(0, 1)
+        self.editable_grid.setColumnStretch(1, 1)
+        self.editable_positions = {
+            "title": (0, 0, 1, 1),
+            "creator": (0, 1, 1, 1),
+            "copyright": (1, 0, 1, 1),
+            "usage": (1, 1, 1, 1),
+            "caption": (2, 0, 1, 2),
+            "keywords": (3, 0, 1, 2),
+        }
+        self.fields_layout.addWidget(self.editable_fields_host)
         self._build_fields()
         self.advanced_layout.addStretch(1)
         self.fields_layout.addWidget(self.capture_section)
@@ -2242,9 +2313,11 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.discard_gps_button.setVisible(proposal is not None)
         self.add_gps_button.setVisible(bool(snapshot and not snapshot['blocked']) or proposal is not None)
         self.add_gps_button.setEnabled(bool(snapshot) and not snapshot['blocked'])
-        self.add_gps_button.setText('Edit location…' if proposal else
-                                    'Edit GPS location…' if snapshot and snapshot.get('existing') and snapshot['existing']['position'] is not None else
-                                    'Add GPS location…')
+        self.add_gps_button.setText(
+            'Edit GPS' if proposal or (
+                snapshot and snapshot.get('existing')
+                and snapshot['existing']['position'] is not None
+            ) else 'Add GPS')
         text = editor_gps_description(snapshot) if snapshot else 'Checking GPS location…' if path else 'Select an image to inspect its GPS location.'
         if proposal:
             from kim_location_ui import position_text
@@ -2253,14 +2326,16 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             problem = proposal_problem(proposal)
             if problem: text += '\n' + problem
             if proposal.get('blocked'): text += '\n' + '\n'.join(proposal['blocked'])
-        self.gps_status.setText(text)
-        self.sources_gps_status.setText(text)
+        visible_gps_status = kimng_source_display_text(text)
+        self.gps_status.setText(visible_gps_status)
+        self.sources_gps_status.setText(visible_gps_status)
         MetadataOverview._clear_layout(self.sources_gps_actions)
         if path:
             context = gps_field(MetadataRecord(path))
             actions = field_actions(self, context)
             self.view_gps_button.setEnabled(actions[0][2])
-            self.view_gps_button.setToolTip(actions[0][3])
+            self.view_gps_button.setToolTip(
+                "View on map\n" + actions[0][3])
             self.add_gps_button.setVisible(True)
             self.add_gps_button.setToolTip(actions[1][3])
             add_field_controls(self.sources_gps_actions, self, context)
@@ -2305,7 +2380,15 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             MetadataOverview._clear_layout(layout)
             for field in fields:
                 row = QHBoxLayout()
-                value = QLabel(field.provenance + ' · ' + (position_text(field.position) if field.position is not None else 'Incomplete coordinate pair'))
+                value = QLabel(
+                    kimng_source_display_text(field.provenance)
+                    + ' · '
+                    + (
+                        position_text(field.position)
+                        if field.position is not None
+                        else 'Incomplete coordinate pair'
+                    )
+                )
                 value.setTextFormat(Qt.PlainText)
                 value.setWordWrap(True)
                 row.addWidget(value, 1)
@@ -2433,19 +2516,43 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._pump_load()
 
     def _new_readonly_pin(self, field):
+        """Compact read-only presentation shared with Browser conventions."""
         card = QFrame()
         card.setFrameShape(QFrame.StyledPanel)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(8, 4, 8, 5)
+        layout.setSpacing(3)
 
         heading = QHBoxLayout()
-        title = QLabel(field.label)
+        heading.setSpacing(12)
+
+        title = QLabel(kimng_simple_field_label(field.label))
         title.setTextFormat(Qt.PlainText)
-        title.setWordWrap(True)
+        title.setWordWrap(False)
         font = title.font()
         font.setBold(True)
         title.setFont(font)
-        heading.addWidget(title, 1)
+        heading.addWidget(title)
+
+        details = QToolButton()
+        details.setIcon(QIcon.fromTheme(
+            "dialog-information",
+            self.style().standardIcon(QStyle.SP_MessageBoxInformation)
+        ))
+        details.setAutoRaise(False)
+        details.setToolTip(f"View {field.label} details")
+        details.setAccessibleName(f"View {field.label} details")
+        details.setEnabled(False)
+        details.clicked.connect(
+            lambda _checked=False, selected=field:
+            self._readonly_pin_details(selected)
+        )
+        heading.addWidget(details)
+
+        gps_actions = QHBoxLayout()
+        gps_actions.setSpacing(10)
+        heading.addLayout(gps_actions)
+        heading.addStretch(1)
 
         pin = QToolButton()
         pin.setIcon(QIcon.fromTheme(
@@ -2460,36 +2567,32 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         heading.addWidget(pin)
         layout.addLayout(heading)
 
-        value = QPlainTextEdit()
-        value.setReadOnly(True)
-        value.setEnabled(False)
-        value.setMaximumHeight(80)
-        value_row = QHBoxLayout()
-        value_row.addWidget(value, 1)
-        gps_actions = QHBoxLayout()
-        value_row.addLayout(gps_actions)
-        layout.addLayout(value_row)
+        value = QLabel("Not present")
+        value.setObjectName("readonlyMetadataValue")
+        value.setTextFormat(Qt.PlainText)
+        value.setWordWrap(True)
+        value.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        value.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Preferred
+        )
+        value.setMaximumHeight(
+            value.fontMetrics().lineSpacing() * 2 + 8
+        )
+        layout.addWidget(value)
 
         provenance = QLabel()
         provenance.setTextFormat(Qt.PlainText)
         provenance.setWordWrap(True)
         layout.addWidget(provenance)
 
-        note = QLabel("Editing not supported in this version.")
-        note.setEnabled(False)
-        layout.addWidget(note)
-
-        details = QPushButton("Details…")
-        details.setEnabled(False)
-        details.clicked.connect(
-            lambda _checked=False, selected=field:
-            self._readonly_pin_details(selected)
-        )
-        layout.addWidget(details, 0, Qt.AlignLeft)
-
         self._readonly_pins[field.key] = {
-            "card": card, "value": value,
-            "source": provenance, "details": details, "gps_actions": gps_actions, "note": note,
+            "card": card,
+            "value": value,
+            "source": provenance,
+            "details": details,
+            "gps_actions": gps_actions,
         }
         return card
 
@@ -2514,6 +2617,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         if fields != self._pin_signature:
             for control in self.field_controls.values():
                 card = control["card"]
+                self.editable_grid.removeWidget(card)
                 self.fields_layout.removeWidget(card)
                 card.hide()
 
@@ -2534,9 +2638,14 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                     self.field_controls[key]["card"]
                     if key else self._new_readonly_pin(field)
                 )
-                self.fields_layout.insertWidget(
-                    self.fields_layout.indexOf(self.capture_section), card
-                )
+                if key in self.editable_positions:
+                    self.editable_grid.addWidget(
+                        card, *self.editable_positions[key])
+                else:
+                    self.fields_layout.insertWidget(
+                        self.fields_layout.indexOf(self.capture_section),
+                        card)
+                card.show()
                 self._pin_order.append((field, card, key))
 
             self._pin_signature = fields
@@ -2564,8 +2673,6 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                 entries = field.entries(record)
                 sources = list(dict.fromkeys(overview_source(entry, record) for entry in entries))
                 text = ' | '.join(formatted) if formatted else 'Not present'
-                if sources:
-                    text += '\nSource: ' + ', '.join(sources)
             value.setText(text)
 
         for field, card, key in self._pin_order:
@@ -2576,6 +2683,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             widgets = self._readonly_pins[field.key]
             value = widgets["value"]
             source = widgets["source"]
+            source.hide()
             details = widgets["details"]
 
             MetadataOverview._clear_layout(widgets['gps_actions'])
@@ -2584,22 +2692,21 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             value.setToolTip("")
 
             if not base or not record:
-                value.setPlainText("Loading…")
+                value.setText("Loading…")
                 continue
             if record.error:
-                value.setPlainText("Metadata unavailable")
+                value.setText("Metadata unavailable")
                 continue
             if any(name in missing for name in field.selectors):
-                value.setPlainText("Loading pinned value…")
+                value.setText("Loading pinned value…")
                 continue
 
             entries = field.entries(record)
             if not entries:
-                value.setPlainText("Not present")
+                value.setText("Not present")
                 if field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude':
                     add_field_controls(widgets['gps_actions'], self, gps_field(record))
                     widgets['gps_actions'].addStretch(1)
-                    widgets['note'].hide()
                 continue
 
             # GPSAltitude's overview selector also retrieves its reference.
@@ -2642,21 +2749,18 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                     else "Multiple representations. See Details."
                 )
             text = str(text)
-            value.setPlainText(
+            value.setText(
                 text[:500] + "…" if len(text) > 500 else text
             )
             value.setToolTip(text[:1000])
 
-            sources = list(dict.fromkeys(
-                overview_source(entry, record)
-                + (f" ({entry.language})" if entry.language else "")
-                for entry in entries
-            ))
-            source.setText("Source: " + ", ".join(sources))
+            # Metadata source details remain available in
+            # All fields and the field-details dialog.
+            source.clear()
+            source.hide()
             actions = widgets['gps_actions']
             MetadataOverview._clear_layout(actions)
             gps_entries = [item for item in entries if is_gps_entry(item)]
-            widgets['note'].setVisible(not gps_entries)
             if gps_entries:
                 context = gps_field(record, chosen) if chosen is not None else GPSField(path, None, False,
                     'Multiple GPS representations', 'Choose an exact representation in All fields to inspect its coordinates. Editing is unavailable for this ambiguous field.')
@@ -2666,7 +2770,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
 
     def _build_fields(self):
         for spec in FIELD_SPECS:
-            card = QFrame()
+            card = QFrame(self.form_content)
             card.setFrameShape(QFrame.StyledPanel)
             box = QVBoxLayout(card)
             box.setContentsMargins(8, 4, 8, 5)
@@ -2718,8 +2822,16 @@ class MetadataEditor(QMainWindow, ListThumbnails):
 
             edit = _input_widget(spec, f"individual_{spec.key}")
             if isinstance(edit, QPlainTextEdit):
-                edit.setMinimumHeight(52 if spec.multiple else 62)
-                edit.setMaximumHeight(86 if spec.multiple else 100)
+                heights = {
+                    "creator": (30, 42),
+                    "usage": (38, 58),
+                    "caption": (68, 120),
+                    "keywords": (58, 100),
+                }
+                minimum, maximum = heights.get(
+                    spec.key, (42, 86))
+                edit.setMinimumHeight(minimum)
+                edit.setMaximumHeight(maximum)
             edit.setEnabled(False)
             box.addWidget(edit)
             note = QLabel()
@@ -2736,8 +2848,6 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             create_counterpart = QCheckBox("Create the missing IPTC or XMP counterpart")
             create_counterpart.hide()
             advanced_box.addWidget(create_counterpart)
-            self.fields_layout.addWidget(card)
-
             control = {"spec": spec, "card": card, "state": state, "clear": clear,
                        "pin": pin,
                        "details": details, "conflict": conflict, "conflict_layout": conflict_layout,
@@ -3513,6 +3623,21 @@ class MetadataEditor(QMainWindow, ListThumbnails):
     def _finish_close(self):
         if self._gps_dialog is None and self._gps_inspection is None and self.worker is None and not self.preview_workers and self._inspection_filter is None and not self.thumbnail_workers:
             self.close()
+
+    def snapshot_execution_contract(self, destination_directory=None):
+        """Create an inspection-only M1 contract, never a publication plan.
+
+        Protected SHA-256 inspection is intentionally not triggered by normal
+        GUI refresh or Review Changes. Later milestones must use a worker.
+        """
+        from kim_metadata_execution_plan import build_execution_contract
+        return build_execution_contract(
+            self._proposal_paths(),
+            self._plan_records(self._descriptive_proposal_paths()),
+            self.drafts, self.batch_sessions, self.source_drafts,
+            self.gps_drafts, self.preferences.priority,
+            destination_directory=destination_directory,
+            locale=QLocale().name())
 
     def review_changes(self):
         if self._closing:

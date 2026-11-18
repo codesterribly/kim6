@@ -3,48 +3,51 @@ Type=Service
 Icon=document-properties
 Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
-MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
+MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;application/pdf;
 X-KDE-Protocol=file
-Actions=00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;05StripMetadata;06ViewMetadata;07EditMetadata;
-_X-KDE-Submenu=KIMng - Organize/Metadata
+Actions=00ViewMetadata;01EditMetadata;02StripMetadata;08SetCopyright;_SEPARATOR_;04Rename;05SetDates;06CheckExtensions;07Overlay;
+_X-KDE-Submenu=KIMng - Metadata/Organize
 X-KIMng-Managed=true
 
-[Desktop Action 01Rename]
-Icon=edit-rename
-_Name=Rename images…
-Exec=kim_all rename interactive -- %F
-
-[Desktop Action 04SetCopyright]
-Icon=document-edit
-_Name=Set creator and copyright…
-Exec=kim_all copyright --interactive -- %F
-
-[Desktop Action 04Overlay]
-Icon=insert-image
-_Name=Add watermark / overlay…
-Exec=kim_all overlay -- %F
-
-[Desktop Action 05StripMetadata]
-Icon=document-properties
-_Name=Strip metadata
-Exec=kim_all stripmeta --interactive -- %F
-
-[Desktop Action 06ViewMetadata]
+[Desktop Action 00ViewMetadata]
 Icon=document-preview
 _Name=View metadata…
 Exec=kim_all metadata-view -- %F
 
-[Desktop Action 07EditMetadata]
+[Desktop Action 01EditMetadata]
 Icon=document-edit
 _Name=Edit metadata…
 Exec=kim_all metadata-edit -- %F
 
-[Desktop Action 00CheckExtensions]
+[Desktop Action 02StripMetadata]
+Icon=document-properties
+_Name=Strip metadata
+Exec=kim_all stripmeta --interactive -- %F
+
+[Desktop Action 04Rename]
+Icon=edit-rename
+_Name=Rename images…
+Exec=kim_all rename interactive -- %F
+
+[Desktop Action 05SetDates]
+Icon=view-calendar-day
+_Name=Set dates…
+Exec=kim_all capturedate --mode unified --interactive -- %F
+
+[Desktop Action 06CheckExtensions]
 Icon=document-preview
 _Name=Check and correct extensions…
 Exec=kim_all checkextensions -- %F
 
-[Desktop Action 02SetDates]
-Icon=view-calendar-day
-_Name=Set dates…
-Exec=kim_all capturedate --mode unified --interactive -- %F
+[Desktop Action 07Overlay]
+Icon=insert-image
+_Name=Add watermark…
+Exec=kim_all overlay -- %F
+
+[Desktop Action 08SetCopyright]
+Icon=document-edit
+_Name=Set creator/copyright/usage…
+Exec=kim_all copyright --interactive -- %F
+
+[Desktop Action _SEPARATOR_]
+Name=Separator

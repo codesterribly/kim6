@@ -806,7 +806,7 @@ def format_plan_row(entry, mode):
 def qt_classes():
     from PySide6.QtCore import QThread,Signal,Qt,QSize,QTimer
     from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,
-                                  QDialog,QApplication,QComboBox,QPushButton,QPlainTextEdit,QLineEdit,QFileDialog,QDialogButtonBox)
+                                  QDialog,QApplication,QComboBox,QPushButton,QPlainTextEdit,QLineEdit,QFileDialog,QDialogButtonBox,QSizePolicy)
 
     from PySide6.QtGui import QPixmap, QIcon
 
@@ -819,6 +819,24 @@ def qt_classes():
             self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             layout.addWidget(self.table)
             self.table.setIconSize(QSize(84, 64))
+
+            self.rights_issue = QLabel(self)
+            self.rights_issue.setWordWrap(True)
+            self.rights_issue.setTextFormat(Qt.PlainText)
+            self.rights_issue.setTextInteractionFlags(
+                Qt.TextSelectableByMouse
+            )
+            self.rights_issue.setMinimumHeight(0)
+            self.rights_issue.setMaximumHeight(160)
+            self.rights_issue.setAlignment(
+                Qt.AlignLeft | Qt.AlignVCenter
+            )
+            self.rights_issue.hide()
+            layout.addWidget(self.rights_issue)
+
+            self.table.itemSelectionChanged.connect(
+                self.show_rights_issue
+            )
 
             self.impact_details = QPlainTextEdit(self)
             self.impact_details.setReadOnly(True)
@@ -918,6 +936,151 @@ def qt_classes():
                     + str(exc)
                 )
 
+        def show_rights_issue(self):
+            if (
+                self.plan is None
+                or self.plan['operation'] != 'copyright'
+            ):
+                return
+
+            row = self.table.currentRow()
+
+            def cell(column):
+                item = (
+                    self.table.item(row, column)
+                    if row >= 0 else None
+                )
+                return item.text() if item else ''
+
+            source_item = (
+                self.table.item(row, 0)
+                if row >= 0 else None
+            )
+
+            if source_item is None:
+                self.rights_issue.hide()
+                self._resize_rights_parent()
+                return
+
+            field = cell(1)
+            proposed = cell(3)
+            status = cell(4)
+
+            source = source_item.data(Qt.UserRole + 2)
+
+            entry = next(
+                (
+                    item
+                    for item in self.plan['entries']
+                    if item['source'] == source
+                ),
+                None,
+            )
+
+            if entry is None:
+                self.rights_issue.hide()
+                self._resize_rights_parent()
+                return
+
+            field_lower = field.casefold()
+
+            if field_lower.startswith('creator'):
+                key, friendly = 'creator', 'Creator'
+            elif field_lower.startswith('copyright'):
+                key, friendly = 'notice', 'Copyright'
+            elif field_lower.startswith('usage'):
+                key, friendly = 'rights', 'Usage terms'
+            else:
+                key, friendly = None, field or 'Metadata'
+
+            target = entry.get('target')
+            config = self.plan['config']
+
+            if status == 'Blocked':
+                explanation = (
+                    'Blocked: ' +
+                    str(
+                        entry.get('error')
+                        or entry.get('skip_reason')
+                        or 'The image cannot be processed safely.'
+                    )
+                )
+
+            elif status == 'Skipped':
+                explanation = (
+                    friendly +
+                    ': Unchanged. No update is needed '
+                    'for this metadata field.'
+                )
+
+            elif status == 'Ready':
+                if proposed == 'Set':
+                    explanation = (
+                        'Set the ' + friendly +
+                        ' metadata field'
+                    )
+                elif proposed == 'Replace':
+                    explanation = (
+                        'Replace the existing ' +
+                        friendly + ' metadata field'
+                    )
+                else:
+                    explanation = (
+                        'Update the ' + friendly +
+                        ' metadata field'
+                    )
+
+                if ' (' in field and field.endswith(')'):
+                    representation = field.rsplit(
+                        ' (', 1
+                    )[1][:-1]
+                    explanation += ' in ' + representation
+
+                value = (
+                    str(config.get(key, ''))
+                    if key else ''
+                )
+
+                if value:
+                    if '{YEAR}' in value:
+                        explanation += (
+                            '. The {YEAR} placeholder will '
+                            'be resolved using this image’s '
+                            'capture year or the configured fallback'
+                        )
+                    else:
+                        explanation += ' to: ' + value
+
+                if target:
+                    if target == source:
+                        explanation += (
+                            '. The reviewed target is the '
+                            'original image.'
+                        )
+                    else:
+                        explanation += (
+                            '. A new copy will be created at '
+                            + str(target) +
+                            '. The original stays unchanged.'
+                        )
+                else:
+                    explanation += '.'
+
+            else:
+                explanation = ''
+
+            self.rights_issue.setText(explanation)
+            self.rights_issue.setVisible(bool(explanation))
+            self._resize_rights_parent()
+
+        def _resize_rights_parent(self):
+            parent = self.parentWidget()
+            if (
+                parent is not None
+                and hasattr(parent, 'resize_rights_review')
+            ):
+                parent.resize_rights_review()
+
         def show_plan(self, plan):
             self.plan = plan
             self._thumbnail_timer.stop()
@@ -925,6 +1088,9 @@ def qt_classes():
 
             operation = plan['operation']
             entries = plan['entries']
+
+            self.rights_issue.clear()
+            self.rights_issue.hide()
 
             self._conversion_rows = []
             self.impact_details.setVisible(
@@ -947,7 +1113,7 @@ def qt_classes():
             labels = {
                 'rename': 'Rename Images',
                 'convert': 'Convert Format',
-                'copyright': 'Set Creator and Copyright',
+                'copyright': 'Set creator/copyright/usage',
                 'strip': 'Remove Metadata',
                 'date': 'Image Capture Dates',
                 'location': 'Image Location Tools',
@@ -1034,6 +1200,15 @@ def qt_classes():
                     'Status',
                 )
 
+            elif operation == 'copyright':
+                headings = (
+                    'Filename',
+                    'Field',
+                    'Current',
+                    'Proposed',
+                    'Status',
+                )
+
             else:
                 headings = (
                     'Current filename',
@@ -1050,7 +1225,16 @@ def qt_classes():
                 len(entries)
                 if operation == 'strip'
                 else sum(
-                    len(entry['rows'])
+                    max(
+                        1,
+                        sum(
+                            bool(plan['config'].get(key))
+                            for key in ('creator', 'notice', 'rights')
+                        ),
+                    )
+                    if operation == 'copyright'
+                    and entry['status'] == 'error'
+                    else len(entry['rows'])
                     for entry in entries
                 )
             )
@@ -1081,15 +1265,27 @@ def qt_classes():
             elif operation == 'strip':
                 self.table.setColumnWidth(1, 210)
                 self.table.setColumnWidth(2, 240)
+            elif operation == 'copyright':
+                self.table.setColumnWidth(0, 245)
+                self.table.setColumnWidth(1, 280)
+                self.table.setColumnWidth(2, 100)
+                self.table.setColumnWidth(3, 100)
+                self.table.setColumnWidth(4, 75)
+                for column in range(5):
+                    header.setSectionResizeMode(
+                        column, QHeaderView.Interactive
+                    )
+                header.setStretchLastSection(False)
             else:
                 self.table.setColumnWidth(1, 150)
                 self.table.setColumnWidth(2, 190)
                 self.table.setColumnWidth(3, 230)
 
-            header.setSectionResizeMode(
-                len(headings) - 1,
-                QHeaderView.ResizeToContents
-            )
+            if operation != 'copyright':
+                header.setSectionResizeMode(
+                    len(headings) - 1,
+                    QHeaderView.ResizeToContents
+                )
 
             row = 0
 
@@ -1102,19 +1298,27 @@ def qt_classes():
                     'error': 'Blocked',
                 }[status]
 
-                tooltip = '\n'.join(filter(None, [
-                    entry['source'],
-                    entry.get('error', ''),
-                    entry.get('skip_reason', ''),
-                    *entry['warnings'],
-                    *(
-                        ' | '.join(
-                            str(value)
-                            for value in values
-                        )
-                        for values in entry['rows']
-                    ),
-                ]))
+                if operation == 'copyright':
+                    tooltip = '\n'.join(filter(None, [
+                        entry['source'],
+                        entry.get('error', ''),
+                        entry.get('skip_reason', ''),
+                        *entry['warnings'],
+                    ]))
+                else:
+                    tooltip = '\n'.join(filter(None, [
+                        entry['source'],
+                        entry.get('error', ''),
+                        entry.get('skip_reason', ''),
+                        *entry['warnings'],
+                        *(
+                            ' | '.join(
+                                str(value)
+                                for value in values
+                            )
+                            for values in entry['rows']
+                        ),
+                    ]))
 
                 if operation == 'strip':
                     rows = [
@@ -1159,6 +1363,84 @@ def qt_classes():
                         for values in entry['rows']
                     ]
 
+                elif operation == 'copyright':
+                    rows = []
+
+                    if status == 'error':
+                        requested = [
+                            ('creator', 'Creator'),
+                            ('notice', 'Copyright'),
+                            ('rights', 'Usage terms'),
+                        ]
+
+                        for key, field_name in requested:
+                            if plan['config'].get(key):
+                                rows.append([
+                                    Path(entry['source']).name,
+                                    field_name,
+                                    '',
+                                    '',
+                                    'Blocked',
+                                ])
+
+                        if not rows:
+                            rows.append([
+                                Path(entry['source']).name,
+                                'Rights metadata',
+                                '',
+                                '',
+                                'Blocked',
+                            ])
+                    else:
+                        for values in entry['rows']:
+                            original_field = str(values[1])
+
+                            field_name = original_field.split(
+                                ' (', 1
+                            )[0]
+
+                            tag = (
+                                original_field.split(' (', 1)[1]
+                                .rstrip(')')
+                                if ' (' in original_field
+                                else ''
+                            )
+
+                            current = (
+                                'Absent'
+                                if values[2] == '(absent)'
+                                else 'Present'
+                            )
+
+                            planned_state = str(values[4])
+
+                            if planned_state in (
+                                'Already correct',
+                                'Preserve unchanged',
+                            ):
+                                planned = 'Unchanged'
+                            elif planned_state == 'Set / replace':
+                                planned = (
+                                    'Set'
+                                    if current == 'Absent'
+                                    else 'Replace'
+                                )
+                            else:
+                                raise ValueError(
+                                    'Unexpected rights plan state: '
+                                    + planned_state
+                                )
+
+                            if tag:
+                                field_name += ' (' + tag + ')'
+
+                            rows.append([
+                                str(values[0]),
+                                field_name,
+                                current,
+                                planned,
+                                status_label,
+                            ])
                 else:
                     rows = [
                         list(values)
@@ -1168,7 +1450,8 @@ def qt_classes():
                 for values in rows:
                     if (
                         operation not in (
-                            'rename', 'convert', 'strip'
+                            'rename', 'convert', 'strip',
+                            'copyright'
                         )
                         and entry['warnings']
                     ):
@@ -1179,6 +1462,20 @@ def qt_classes():
                     for column, value in enumerate(values):
                         item = QTableWidgetItem(str(value))
                         item.setToolTip(tooltip)
+
+                        if operation == 'copyright':
+                            item.setData(
+                                Qt.UserRole + 2,
+                                entry['source'],
+                            )
+
+                        if operation == 'copyright':
+                            item.setData(
+                                Qt.UserRole,
+                                entry.get('error', '')
+                                if status == 'error'
+                                else '',
+                            )
 
                         self.table.setItem(
                             row, column, item
@@ -1210,6 +1507,20 @@ def qt_classes():
                     row += 1
 
             fit_review_table(self.table)
+
+            if operation == 'copyright' and self.table.rowCount():
+                first_blocked = next(
+                    (
+                        index
+                        for index in range(self.table.rowCount())
+                        if self.table.item(index, 4)
+                        and self.table.item(index, 4).text()
+                        == 'Blocked'
+                    ),
+                    0,
+                )
+                self.table.selectRow(first_blocked)
+                self.show_rights_issue()
 
             if operation == 'convert' and self._conversion_rows:
                 self.table.selectRow(0)
@@ -1255,7 +1566,7 @@ def qt_classes():
             review_titles = {
                 'rename': 'Rename images',
                 'convert': 'Convert',
-                'copyright': 'Set creator and copyright',
+                'copyright': 'Set creator/copyright/usage',
                 'strip': 'Strip Metadata',
                 'date': 'Set dates',
             }
@@ -1315,7 +1626,25 @@ def qt_classes():
                 layout.addWidget(note)
 
             self.view = PreviewView()
-            layout.addWidget(self.view)
+            if spec['operation'] == 'copyright':
+                layout.setAlignment(Qt.AlignTop)
+                self.view.layout().setSpacing(4)
+                self.view.layout().setContentsMargins(
+                    0, 0, 0, 0
+                )
+                self.view.summary.setFixedHeight(38)
+                self.view.summary.setAlignment(
+                    Qt.AlignLeft | Qt.AlignVCenter
+                )
+                self.view.setSizePolicy(
+                    QSizePolicy.Expanding,
+                    QSizePolicy.Fixed,
+                )
+                layout.addWidget(
+                    self.view, 0, Qt.AlignTop
+                )
+            else:
+                layout.addWidget(self.view)
 
             self.destination_status = None
 
@@ -1566,6 +1895,50 @@ def qt_classes():
             else:
                 self.start_plan()
 
+        def resize_rights_review(self):
+            if self.spec['operation'] != 'copyright':
+                return
+
+            issue = self.view.rights_issue
+
+            if issue.isVisible():
+                available = max(
+                    200,
+                    self.width() - 65,
+                )
+                text_height = issue.fontMetrics().boundingRect(
+                    0, 0, available, 2000,
+                    Qt.TextWordWrap,
+                    issue.text(),
+                ).height()
+
+                issue.setFixedHeight(
+                    min(160, max(32, text_height + 12))
+                )
+
+            details_height = (
+                issue.height() + 8
+                if issue.isVisible()
+                else 0
+            )
+
+            view_height = (
+                self.view.table.height()
+                + self.view.summary.height()
+                + details_height
+                + 12
+            )
+
+            self.view.setFixedHeight(view_height)
+
+            target_height = max(
+                290,
+                view_height + 62,
+            )
+
+            self.setFixedHeight(target_height)
+            self.resize(900, target_height)
+
         def plan_finished(self):
             worker, self.worker = self.worker, None
 
@@ -1616,16 +1989,19 @@ def qt_classes():
                         )
                     )
 
-                    self.resize(
-                        width,
-                        min(
-                            785,
-                            max(
-                                245,
-                                self.view.table.height() + extra,
+                    if self.spec['operation'] == 'copyright':
+                        self.resize_rights_review()
+                    else:
+                        self.resize(
+                            width,
+                            min(
+                                785,
+                                max(
+                                    245,
+                                    self.view.table.height() + extra,
+                                ),
                             ),
-                        ),
-                    )
+                        )
 
             except Exception as exc:
                 self.show_failure(str(exc))

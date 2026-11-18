@@ -54,6 +54,7 @@ src/bin/kim_metadata_browser.py|bin/kim_metadata_browser.py|0644
 src/bin/kim_metadata_gps_actions.py|bin/kim_metadata_gps_actions.py|0644
 src/bin/kim_metadata_compare.py|bin/kim_metadata_compare.py|0644
 src/bin/kim_metadata_editor.py|bin/kim_metadata_editor.py|0644
+src/bin/kim_metadata_execution_plan.py|bin/kim_metadata_execution_plan.py|0644
 src/bin/kim_metadata_reader.py|bin/kim_metadata_reader.py|0644
 src/bin/kim_metadata_sources.py|bin/kim_metadata_sources.py|0644
 src/bin/kim_recipe_menu.py|bin/kim_recipe_menu.py|0644

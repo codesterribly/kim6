@@ -7791,7 +7791,9 @@ action_copyright() {
   fi
   if [ "$interactive" = true ] || { [ "$provided" != true ] && [ -z "$creator$notice$rights" ]; }; then
     interactive=true
-    policy="$(choose_output_mode "$(gettext 'KIMng')" "$(gettext 'Do you want to create new files?')" "${#files[@]}" originals)"; [ "$policy" != cancel ] || return 1
+    # Open rights settings first. This legacy shortcut creates copies;
+    # publication still requires the existing Review Changes gate.
+    policy=create
     action_options_dialog copyright "${files[@]}" || return 1
     local -a choices=(); mapfile -d '' -t choices < "$KIMDIR/options"
     [ "${#choices[@]}" -eq 3 ] || { progress_error 'The rights editor returned incomplete preview settings. No images were changed.'; return 1; }
@@ -11914,6 +11916,80 @@ Staged output: $stage"
   progress_close "$ref"; report_finish_dialog "$(gettext 'KIMng')"; [ "$rc" -eq 0 ] && [ "$REPORT_FAIL" -eq 0 ] && [ "${REPORT_CANCELLED:-0}" -eq 0 ]
 }
 
+
+# KIMNG_DOLPHIN_MIXED_PDF_SELECTION
+# Dolphin may pass PDFs alongside images after MIME registration.
+# PDF is not an approved image input. Remove only selected PDF files
+# before invoking image-only workflows, without changing file order,
+# source files, action options, review policy, or publication.
+filter_selected_pdfs() {
+  case "$cmd" in
+    album|animate|compress|contactsheet|gallery|collage|print|resize|tiffjoin|\
+    convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend|\
+    crop|overlay|copyright|timeshift|capturedate|datesync|\
+    location-gpx|location-copy|location-apply|location-reduce|location-report|\
+    checkextensions|metadata-view|metadata-edit|recipe|rename|slideshow)
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  local argument filename
+  local -a kept=()
+  local pdf_count=0
+  local image_count=0
+  local past_separator=false
+
+  for argument in "$@"; do
+    if [ "$argument" = "--" ]; then
+      past_separator=true
+      kept+=("$argument")
+      continue
+    fi
+
+    # Only existing selection files are candidates. The actual
+    # command options and unrelated strings are never rewritten.
+    filename="${argument,,}"
+
+    if [ -f "$argument" ] && [[ "$filename" == *.pdf ]]; then
+      pdf_count=$((pdf_count + 1))
+      continue
+    fi
+
+    kept+=("$argument")
+
+    if [ -f "$argument" ] && [ "$past_separator" = true ]; then
+      image_count=$((image_count + 1))
+    fi
+  done
+
+  if [ "$pdf_count" -eq 0 ]; then
+    return 0
+  fi
+
+  if [ "$image_count" -eq 0 ]; then
+    if command -v kdialog >/dev/null 2>&1; then
+      kdialog --title 'KIMng - PDF selection' --sorry \
+        'No supported image files remain in the selection. PDF documents are not supported as image inputs for this action.'
+    else
+      printf '%s\n' \
+        'KIMng: PDF documents are not supported as image inputs for this action.' >&2
+    fi
+    return 125
+  fi
+
+  # Do not interrupt the image operation with an extra modal.
+  if command -v kdialog >/dev/null 2>&1; then
+    kdialog --title 'KIMng - PDF selection' --passivepopup \
+      "Skipping ${pdf_count} selected PDF document(s). The selected images will continue through the normal review." \
+      7 >/dev/null 2>&1 || true
+  fi
+
+  KIMNG_FILTERED_ARGS=("${kept[@]}")
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -12159,6 +12235,76 @@ main() {
   cmd="$1"
   shift || true
   unset KIM_PSD_CACHE
+
+  local -a KIMNG_FILTERED_ARGS=("$@")
+  local pdf_filter_status=0
+
+  if [ "$cmd" = metadata-view ]; then
+    # Browser inspects PDFs as read-only documents.
+    # Preserve the complete Dolphin selection and its order.
+    # No PDF raster conversion or metadata writing occurs here.
+    :
+  elif [ "$cmd" = metadata-edit ]; then
+    # Dolphin supplies local selection paths after --.
+    # Keep every supported selected image in its original order.
+    # PDF is not an image input for Browser or Editor.
+    local -a metadata_args=()
+    local metadata_arg
+    local metadata_operands=0
+    local metadata_pdfs=0
+    local metadata_after_separator=false
+
+    for metadata_arg in "$@"; do
+      if [ "$metadata_arg" = -- ]; then
+        metadata_after_separator=true
+        metadata_args+=("$metadata_arg")
+        continue
+      fi
+
+      if [ "$metadata_after_separator" = true ] &&
+         [[ "${metadata_arg,,}" == *.pdf ]] &&
+         [ -f "$metadata_arg" ]; then
+        metadata_pdfs=$((metadata_pdfs + 1))
+        continue
+      fi
+
+      metadata_args+=("$metadata_arg")
+
+      if [ "$metadata_after_separator" = true ] &&
+         [ -f "$metadata_arg" ]; then
+        metadata_operands=$((metadata_operands + 1))
+      fi
+    done
+
+    if [ "$metadata_pdfs" -gt 0 ] &&
+       [ "$metadata_operands" -eq 0 ]; then
+      if command -v kdialog >/dev/null 2>&1; then
+        kdialog --title 'KIMng - Metadata' --error \
+          'No image files remain after excluding PDF documents. Select at least one image.' || true
+      else
+        printf '%s\\n' \
+          'KIMng: Select at least one image. PDF documents are excluded.' >&2
+      fi
+      return 0
+    fi
+
+    if [ "$metadata_pdfs" -gt 0 ]; then
+      printf 'KIMng: Excluded %s PDF document(s); opening %s image(s).\\n' \
+        "$metadata_pdfs" "$metadata_operands" >&2
+    fi
+
+    set -- "${metadata_args[@]}"
+  else
+    filter_selected_pdfs "$@" || pdf_filter_status=$?
+
+    if [ "$pdf_filter_status" -eq 125 ]; then
+      return 0
+    elif [ "$pdf_filter_status" -ne 0 ]; then
+      return "$pdf_filter_status"
+    fi
+
+    set -- "${KIMNG_FILTERED_ARGS[@]}"
+  fi
 
   case "$cmd" in
     album|animate|compress|contactsheet|gallery|collage|print|resize|tiffjoin)

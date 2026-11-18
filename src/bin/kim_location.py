@@ -684,9 +684,13 @@ def safe_format(path, raw):
     fmt = str(metadata_value(raw, 'File', 'FileType') or '').upper()
     if fmt == 'EXTENDED WEBP': fmt = 'WEBP'
     if fmt not in FORMATS or Path(path).suffix.lower() not in FORMATS[fmt]:
-        raise ValueError('GPS writes require verified JPEG, PNG, WebP, TIFF, HEIC/HEIF or AVIF with a matching extension; PSD, RAW and other containers are read-only')
+        raise ValueError('GPS location changes require verified non-animated still JPEG, PNG, WebP, TIFF, HEIC/HEIF or AVIF with a matching extension. Animated PNG (APNG), animated WebP, PSD, RAW and other containers are read-only.')
     from kim_date_tools import ensure_still_capture_input
-    ensure_still_capture_input(path, preview=True)
+    from kim_recipe_core import RecipeError
+    try:
+        ensure_still_capture_input(path, preview=True)
+    except RecipeError as exc:
+        raise ValueError('Animated PNG (APNG) and animated WebP images cannot receive GPS changes. Select a non-animated still image.') from exc
     if fmt == 'JPEG' and metadata_value(raw, 'File', 'EncodingProcess') == 2:
         raise ValueError('Progressive JPEG scan preservation is not supported by the current metadata container verifier; use a supported baseline JPEG or another verified format')
     return fmt

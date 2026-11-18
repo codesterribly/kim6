@@ -7,6 +7,7 @@ from unittest.mock import patch
 import test_metadata_browser as browser_tests
 from kim_metadata_editor import MetadataEditor
 from PySide6.QtWidgets import QDialogButtonBox, QDialog
+from PySide6.QtCore import Qt
 
 
 class MetadataEditorProgressiveTests(unittest.TestCase):
@@ -229,14 +230,14 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
 
         self.assertEqual(
             "Google Pixel 10 Pro",
-            camera_value.toPlainText()
+            camera_value.text()
         )
         self.assertEqual(
             "4000 × 3000 pixels",
-            dimensions_value.toPlainText()
+            dimensions_value.text()
         )
-        self.assertFalse(camera_value.isEnabled())
-        self.assertFalse(dimensions_value.isEnabled())
+        self.assertTrue(camera_value.textInteractionFlags() & Qt.TextSelectableByMouse)
+        self.assertTrue(dimensions_value.textInteractionFlags() & Qt.TextSelectableByMouse)
         self.assertEqual({}, window.drafts)
         self.assertFalse(window.review_button.isEnabled())
 

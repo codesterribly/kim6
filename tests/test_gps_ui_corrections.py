@@ -54,8 +54,11 @@ class GPSUICorrections(unittest.TestCase):
         field = actions.gps_field(record, record.entries[-1])
         actions.add_field_controls(layout, object(), field)
         buttons = widget.findChildren(QToolButton)
-        self.assertEqual(['View on map…', 'Edit GPS…'], [b.text() for b in buttons])
-        self.assertTrue(all(b.toolButtonStyle() == Qt.ToolButtonTextOnly for b in buttons))
+        self.assertEqual(['View on map…', 'Edit GPS'], [b.text() for b in buttons])
+        self.assertEqual(Qt.ToolButtonIconOnly, buttons[0].toolButtonStyle())
+        self.assertFalse(buttons[0].icon().isNull())
+        self.assertEqual("View on map", buttons[0].accessibleName())
+        self.assertEqual(Qt.ToolButtonTextOnly, buttons[1].toolButtonStyle())
         with patch.object(actions, 'show_field_map') as show:
             buttons[0].click()
         self.assertEqual([12, 34], show.call_args.args[2])
@@ -77,7 +80,7 @@ class GPSUICorrections(unittest.TestCase):
         self.addCleanup(overview.deleteLater)
         overview.set_record(self.record())
         buttons = overview.findChildren(QToolButton, 'gpsFieldAction')
-        self.assertEqual(['View on map…', 'Edit GPS…'], [b.text() for b in buttons])
+        self.assertEqual(['View on map…', 'Edit GPS'], [b.text() for b in buttons])
 
     def test_saved_map_preference_is_independent_of_cache_persistence(self):
         path = self.folder / 'map-test.jpg'

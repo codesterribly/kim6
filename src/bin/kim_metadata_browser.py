@@ -25,6 +25,7 @@ try:
         QWidget, QHeaderView, QAbstractItemView, QFrame, QGridLayout,
         QTreeView, QProgressBar, QStackedWidget, QComboBox, QToolButton, QStyle,
         QDialog, QDialogButtonBox, QMessageBox, QSizePolicy, QFormLayout,
+        QTableWidget, QTableWidgetItem,
         QStyledItemDelegate, QStyleOptionViewItem, QToolTip, QMenu)
 except ModuleNotFoundError as exc:
     if exc.name and exc.name.startswith("PySide6"):
@@ -46,6 +47,31 @@ from kim_metadata_gps_actions import (gps_field, is_gps_entry, entry_key, action
 DISPLAY_LIMIT = 240
 TAG_FLAGS = Qt.ItemIsEnabled | Qt.ItemIsSelectable
 CURRENT_RECORD = object()
+
+
+
+def kimng_simple_field_label(label):
+    """Friendly display name without storage hierarchy."""
+    name = str(label).split(" · ", 1)[0].strip()
+    aliases = {
+        "ExposureTime": "Shutter Speed",
+        "ShutterSpeedValue": "Shutter Speed",
+        "FNumber": "Aperture",
+        "ApertureValue": "Aperture",
+        "PhotographicSensitivity": "ISO",
+        "ISOSpeedRatings": "ISO",
+        "FocalLength": "Focal Length",
+        "DateTimeOriginal": "Capture Date",
+        "CreateDate": "Creation Date",
+        "ImageWidth": "Image Width",
+        "ImageHeight": "Image Height",
+        "ExposureBiasValue": "Exposure Compensation",
+        "ExposureCompensation": "Exposure Compensation",
+        "ExposureProgram": "Exposure Program",
+        "ExposureMode": "Exposure Mode",
+        "WhiteBalance": "White Balance",
+    }
+    return aliases.get(name, name)
 
 
 def metadata_alternatives(entry, record):
@@ -1345,7 +1371,14 @@ class OverviewPresentation:
             self.section_layout.setContentsMargins(0, 0, 0, 0)
             self.section_layout.setSpacing(3)
             heading = QHBoxLayout()
-            heading.addWidget(self._subdued_label(field.label), 1)
+            heading.setSpacing(12)
+            field_heading = QLabel(kimng_simple_field_label(field.label))
+            field_heading.setTextFormat(Qt.PlainText)
+            field_heading.setWordWrap(True)
+            heading_font = field_heading.font()
+            heading_font.setBold(True)
+            field_heading.setFont(heading_font)
+            heading.addWidget(field_heading)
             details = QToolButton()
             details.setIcon(QIcon.fromTheme('dialog-information', self.style().standardIcon(QStyle.SP_MessageBoxInformation)))
             details.setToolTip('View field details')
@@ -1365,6 +1398,8 @@ class OverviewPresentation:
                     values = [position_text(context.position)]
                 elif gps_entry is not None:
                     values = [value_text(gps_entry.value)]
+                else:
+                    values = ['No embedded camera GPS coordinates']
             else:
                 context = gps_field(record, gps_entry) if (is_gps_entry(gps_entry) or
                     field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude') else None
@@ -1383,6 +1418,7 @@ class OverviewPresentation:
                     gps_cards[representation] = (card, self.section_layout)
                     add_field_controls(heading, action_owner(self), context)
                 camera_location_shown |= context.camera
+            heading.addStretch(1)
             self.section_layout.addLayout(heading)
             if camera:
                 if not values:
@@ -1392,8 +1428,8 @@ class OverviewPresentation:
                         self.section_layout.addWidget(self._content_label(value))
             else:
                 self._add_description_field(field.label, entries, subset)
-            if context is not None and not shared_card:
-                self.section_layout.addWidget(self._subdued_label(context.provenance))
+            # Keep provenance in field details, All tags,
+            # and Sources & Targets, not below Overview values.
             shown = ' '.join(values) if camera else _compact(preferred.value) if preferred else ''
             wide = len(shown) > 90 or len(field.label) > 45 or '\n' in shown
             if not shared_card:
@@ -2132,6 +2168,71 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.comparison_content.hide()
         compare_layout.addWidget(self.comparison_content, 1)
         self.tabs.addTab(compare, "Compare")
+
+        sources_panel = QWidget()
+        sources_layout = QVBoxLayout(sources_panel)
+        sources_layout.setContentsMargins(8, 8, 8, 8)
+
+        self.sources_scroll = QScrollArea()
+        self.sources_scroll.setWidgetResizable(True)
+        self.sources_scroll.setFrameShape(QFrame.NoFrame)
+
+        sources_body = QWidget()
+        sources_content = QVBoxLayout(sources_body)
+        sources_content.setContentsMargins(5, 5, 5, 5)
+        sources_content.setSpacing(11)
+
+        def section_heading(caption):
+            label = QLabel(caption)
+            label.setTextFormat(Qt.PlainText)
+            font = label.font()
+            font.setBold(True)
+            label.setFont(font)
+            sources_content.addWidget(label)
+
+        def section_value():
+            label = QLabel()
+            label.setTextFormat(Qt.PlainText)
+            label.setWordWrap(True)
+            label.setTextInteractionFlags(
+                Qt.TextSelectableByMouse
+            )
+            sources_content.addWidget(label)
+            return label
+
+        self.sources_status = section_value()
+
+        section_heading('Metadata reading priority')
+        self.sources_priority = section_value()
+
+        section_heading('Common metadata fields')
+        self.sources_common = section_value()
+
+        section_heading('Camera and GPS')
+        self.sources_gps = section_value()
+
+        section_heading('Associated sidecars')
+        self.sources_sidecars = section_value()
+
+        section_heading('Metadata representations')
+        self.sources_representations = section_value()
+
+        section_heading('Storage targets')
+        self.sources_target_note = section_value()
+        self.sources_target_note.setText(
+            'Browser is read-only. No storage targets or '
+            'metadata changes are proposed. Use the Editor '
+            'to prepare changes and review their targets.'
+        )
+
+        sources_content.addStretch(1)
+
+        self.sources_scroll.setWidget(sources_body)
+        sources_layout.addWidget(self.sources_scroll, 1)
+
+        self.tabs.addTab(
+            sources_panel, 'Sources && Targets'
+        )
         self.tabs.currentChanged.connect(self._tab_changed)
 
     def _comparison_image_header(self, role, side):
@@ -2186,7 +2287,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self._update_slot_headers()
         self.comparison_content.show()
         self.comparison_empty.hide()
-        self.comparison_summary.setText('Loading metadata…' if self.compared_paths else 'Assign a left image and a right image.')
+        self.comparison_summary.setText('Preparing metadata comparison…' if self.compared_paths else 'Assign a left image and a right image.')
         for worker in self.preview_workers:
             if worker.path not in self._wanted_previews():
                 worker.requestInterruption()
@@ -2237,6 +2338,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self._update_compare_button()
 
     def _tab_changed(self, index):
+        self.status_summary.setVisible(index != 2)
         if index != 0:
             self._metadata_prefetch_timer.stop()
             self._metadata_prefetch_ready = False
@@ -2281,6 +2383,9 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                 self.comparison_content.show()
                 self.comparison_empty.hide()
                 self.comparison_summary.setText('Assign a left image and a right image. You can also Ctrl+click two images and choose Compare images.')
+        elif index == 3:
+            self._all_requested_path = self._current_path()
+            self.update_current()
         else:
             self.update_current()
 
@@ -2384,7 +2489,10 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self._comparison_gps_records = records
         if any(record is None for record in records):
             self.comparison_model.set_result(None)
-            self.comparison_summary.setText('Loading all metadata…' if self.compare_scope.currentText() == 'All fields' else 'Loading metadata…')
+            scope = 'full metadata' if self.compare_scope.currentText() == 'All fields' else 'overview fields'
+            ready = sum(record is not None for record in records)
+            names = ' and '.join(Path(path).name for path in self.compared_paths)
+            self.comparison_summary.setText(f'Reading {scope}: {ready} of 2 images ready ({names})…')
             self.compare_progress.show()
             self.compare_cancel.show()
             self._pump_metadata()
@@ -2406,7 +2514,9 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self.pending_comparison_paths = None
             return
         self.comparison_model.set_result(None)
-        self.comparison_summary.setText('Comparing metadata…')
+        scope = 'full metadata' if self.compare_scope.currentText() == 'All fields' else 'overview fields'
+        names = ' and '.join(Path(path).name for path in self.compared_paths)
+        self.comparison_summary.setText(f'Comparing {scope} for {names}…')
         self.compare_progress.show()
         self.compare_cancel.show()
         if self._comparison_worker is not None:
@@ -2597,6 +2707,228 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                 self, "View on map",
                 "Could not open the GPS viewer: " + str(exc)
             )
+
+    def _update_sources_targets(self):
+        """Read-only summary using existing inspected metadata."""
+        if self.tabs.currentIndex() != 3:
+            return
+
+        path = self._current_path()
+
+        for widget in (
+            self.sources_status,
+            self.sources_priority,
+            self.sources_common,
+            self.sources_gps,
+            self.sources_sidecars,
+            self.sources_representations,
+        ):
+            widget.clear()
+
+        if not path:
+            self.sources_status.setText(
+                'Select an image to inspect its metadata.'
+            )
+            return
+
+        record = self._full_record(path)
+
+        if record is None:
+            self.sources_status.setText(
+                'Loading metadata for ' + Path(path).name + '…'
+            )
+            return
+
+        if record.error:
+            self.sources_status.setText(
+                'Metadata unavailable: ' + record.error
+            )
+            return
+
+        from collections import Counter
+
+        self.sources_status.setText(
+            Path(path).name + '\n' +
+            str(len(record.entries)) +
+            ' metadata entries'
+        )
+
+        priority = self.metadata_preferences.priority
+
+        self.sources_priority.setText(
+            ' > '.join(str(item) for item in priority)
+            if isinstance(priority, (tuple, list))
+            else str(priority)
+        )
+
+        common_fields = (
+            ('Title', ('Title', 'ObjectName')),
+            ('Description', (
+                'Description', 'Caption-Abstract',
+                'ImageDescription',
+            )),
+            ('Keywords', ('Subject', 'Keywords')),
+            ('Creator', ('Creator', 'Artist', 'By-line')),
+            ('Copyright', (
+                'Rights', 'Copyright', 'CopyrightNotice',
+            )),
+            ('Usage terms', ('UsageTerms',)),
+        )
+
+        descriptions = []
+
+        for label, aliases in common_fields:
+            entries = self._entries(record, aliases)
+
+            chosen = (
+                self._preferred(record, aliases)
+                if entries else None
+            )
+
+            if chosen is None:
+                descriptions.append(label + ': Not present')
+                continue
+
+            value = _overview_value(chosen.value)
+            text = str(value)
+
+            if len(text) > 180:
+                text = text[:177] + '…'
+
+            alternate_count = len(entries) - 1
+
+            if alternate_count:
+                text += (
+                    ' (' + str(alternate_count) +
+                    ' alternate representation' +
+                    ('s' if alternate_count != 1 else '') +
+                    ')'
+                )
+
+            descriptions.append(label + ': ' + text)
+
+        self.sources_common.setText(
+            '\n'.join(descriptions)
+        )
+
+        camera = self._camera_values(
+            'Camera', ('Make', 'Model'), record
+        )
+
+        from kim_location_ui import position_text
+
+        gps = gps_field(record)
+
+        if gps is not None and gps.position is not None:
+            location = position_text(gps.position)
+            location_source = gps.provenance.replace(
+                'Embedded image · ', ''
+            ).replace('Embedded image', '').strip()
+        else:
+            location = 'No verified embedded camera GPS location'
+            location_source = ''
+
+        camera_text = (
+            ' | '.join(camera)
+            if camera
+            else 'Not present'
+        )
+
+        gps_lines = [
+            'Camera: ' + camera_text,
+            'GPS location: ' + location,
+        ]
+
+        if location_source:
+            gps_lines.append(
+                'Representation: ' + location_source
+            )
+
+        gps_lines.append(
+            'Additional camera and GPS metadata is available '
+            'in Overview and All tags.'
+        )
+
+        self.sources_gps.setText(
+            '\n'.join(gps_lines)
+        )
+
+        sidecars = record.sidecars or ()
+
+        if sidecars:
+            self.sources_sidecars.setText(
+                '\n'.join(str(item) for item in sidecars)
+                + '\nAssociated sidecars are not modified.'
+            )
+        else:
+            self.sources_sidecars.setText(
+                'No associated sidecars.'
+            )
+
+        by_source = {}
+
+        for entry in record.entries:
+            by_source.setdefault(
+                str(entry.source), []
+            ).append(entry)
+
+        summaries = []
+
+        for source in sorted(
+            by_source, key=str.casefold
+        ):
+            entries = by_source[source]
+
+            source_name = (
+                'Image metadata'
+                if source == record.path
+                else 'Sidecar: ' + Path(source).name
+            )
+
+            summaries.append(
+                source_name + ': ' +
+                str(len(entries)) + ' tags'
+            )
+
+            groups = Counter(
+                str(entry.group).split(':', 1)[0]
+                for entry in entries
+            )
+
+            if groups:
+                summaries.append(
+                    'Groups: ' + ', '.join(
+                        group + ' (' + str(count) + ')'
+                        for group, count in sorted(
+                            groups.items(),
+                            key=lambda item: item[0].casefold(),
+                        )
+                    )
+                )
+
+            languages = Counter(
+                str(entry.language)
+                for entry in entries
+                if entry.language
+            )
+
+            if languages:
+                summaries.append(
+                    'Languages: ' + ', '.join(
+                        language + ' (' + str(count) + ')'
+                        for language, count in sorted(
+                            languages.items()
+                        )
+                    )
+                )
+
+            summaries.append('')
+
+        self.sources_representations.setText(
+            '\n'.join(summaries).strip()
+            if summaries else
+            'No metadata representations found.'
+        )
 
     def _current_path(self):
         row = self.image_list.currentRow() if hasattr(self, 'image_list') else -1
@@ -2942,7 +3274,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                 if self._comparison_record(candidate) is None:
                     return ('full' if self.compare_scope.currentText() == 'All fields' else 'overview', candidate)
             return None
-        if self.tabs.currentIndex() == 1 and self._all_requested_path == path and self._full_record(path) is None:
+        if self.tabs.currentIndex() in (1, 3) and self._all_requested_path == path and self._full_record(path) is None:
             return ('full', path)
         selected_record = self._overview_record(path)
 
@@ -3157,7 +3489,7 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self.model.set_record(None)
             self.grouped_model.set_record(None)
             self._cancel_tag_filter()
-            self._all_requested_path = path if self.tabs.currentIndex() == 1 else None
+            self._all_requested_path = path if self.tabs.currentIndex() in (1, 3) else None
         self.filename.set_full_text(Path(path).name)
         self.filename.setToolTip(path)
         self.directory_label.set_full_text(str(Path(path).parent))
@@ -3231,6 +3563,8 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
                                           self.overview_preferences.selectors)
                 self.preview.update()
         self._update_all_tags()
+        if self.tabs.currentIndex() == 3:
+            self._update_sources_targets()
         self._ensure_preview()
         self._pump_metadata()
 

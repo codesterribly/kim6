@@ -203,7 +203,7 @@ class MetadataCompareQtTests(unittest.TestCase):
             window.assign_comparison(0, self.paths[1])
             window.assign_comparison(1, self.paths[2])
             panels = (window.comparison_image_1_header, window.comparison_image_2_header)
-            self.driver.wait_for(lambda: all('Preview dimensions unavailable' in panel.preview.text()
+            self.driver.wait_for(lambda: all('Image decoder: Unsupported image format' in panel.preview.text()
                                              for panel in panels))
             self.driver.wait_for(lambda: not window.preview_workers)
             attempts = [call for call in decode.call_args_list if call.args[0] in self.paths[1:]]

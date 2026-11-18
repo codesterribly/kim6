@@ -7,7 +7,7 @@ from PySide6.QtCore import QTimer, QThread, Qt, QSize
 from PySide6.QtWidgets import (QApplication,QDialog,QVBoxLayout,QFormLayout,QLabel,
     QDialogButtonBox,QComboBox,QSpinBox,QLineEdit,QCheckBox,QPushButton,QFileDialog,QPlainTextEdit,
     QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLayout,QHBoxLayout,QWidget,
-    QGridLayout,QSizePolicy)
+    QGridLayout,QSizePolicy,QToolButton,QStyle)
 from kim_ui import RotationInput, with_help
 from PySide6.QtGui import QPixmap, QTransform
 from kim_recipe_image import copyright_settings
@@ -740,13 +740,71 @@ class ActionDialog(QDialog):
             )
             self.compress_pending=[]
         elif kind=='copyright':
-            self.apply.setText('Review changes…')
-            self.inherited=copyright_settings()
-            for field,label in [('creator','Creator / Artist'),('notice','Copyright Notice'),('rights','Usage Rights')]:
-                self.fields[field]=QLineEdit(self.inherited[field]); self.form.addRow(label,self.fields[field])
-                button=QPushButton('Reset from Settings'); button.clicked.connect(lambda checked=False,k=field:self.reset_setting(k))
-                self.form.addRow('',with_help(button,'settings',context='batch'))
-            self.message.setText('Blank fields stay unchanged. Effective Settings values are shown; edit to override for this batch. Preview changes shows existing values and resolved assignments for every image before you apply them.')
+            self.setWindowTitle(
+                'KIMng - Set creator/copyright/usage'
+            )
+            self.resize(620, 230)
+            self.apply.setText('Review changes')
+            self.apply.setIcon(QIcon.fromTheme(
+                'dialog-ok-apply',
+                self.style().standardIcon(
+                    QStyle.SP_DialogApplyButton
+                ),
+            ))
+            self.inherited = copyright_settings()
+
+            for field, label in (
+                ('creator', 'Creator'),
+                ('notice', 'Copyright'),
+                ('rights', 'Usage terms'),
+            ):
+                row = QWidget(self)
+                controls = QHBoxLayout(row)
+                controls.setContentsMargins(0, 0, 0, 0)
+                controls.setSpacing(6)
+
+                edit = QLineEdit(self.inherited[field])
+                edit.setObjectName(
+                    'copyright_' + field
+                )
+                edit.setClearButtonEnabled(True)
+                self.fields[field] = edit
+                controls.addWidget(edit, 1)
+
+                reset = QToolButton(row)
+                reset.setObjectName(
+                    'reset_copyright_' + field
+                )
+                reset.setIcon(QIcon.fromTheme(
+                    'view-refresh',
+                    self.style().standardIcon(
+                        QStyle.SP_BrowserReload
+                    ),
+                ))
+                reset.setIconSize(QSize(16, 16))
+                reset.setFixedSize(28, 28)
+                reset.setToolTip(
+                    'Reset ' + label.lower()
+                    + ' from KIMng Settings'
+                )
+                reset.setAccessibleName(
+                    'Reset ' + label.lower()
+                    + ' from Settings'
+                )
+                reset.setAutoRaise(False)
+                reset.clicked.connect(
+                    lambda checked=False, key=field:
+                    self.reset_setting(key)
+                )
+                controls.addWidget(reset)
+                self.form.addRow(label, row)
+
+            self.message.setText(
+                'Blank fields remain unchanged. '
+                'Settings values are prefilled; edit or reset them '
+                'for this batch. Review changes before applying.'
+            )
+            self.preview.hide()
         elif kind=='strip':
             self.choice('mode','Remove',[('Descriptive Metadata (keep color and orientation)','all'),('GPS Location','gps'),('Recognized AI Metadata','ai')])
             self.form.addRow('Full removal in Recipes',with_help(QLabel('Recipes also offers Remove All Metadata, including ICC.'),'strip'))
@@ -1598,11 +1656,18 @@ class ActionDialog(QDialog):
                 and len(self.resize_rows) == len(self.files)
             ):
                 self.show_resize_table()
+            elif self.kind == 'copyright':
+                self.preview.hide()
             else:
                 self.set_preview_text('\n'.join(lines))
             self.apply.setEnabled(True)
         except Exception as exc:
-            self.set_preview_text(str(exc)); self.apply.setEnabled(False)
+            if self.kind == 'copyright':
+                self.message.setText(str(exc))
+                self.preview.hide()
+            else:
+                self.set_preview_text(str(exc))
+            self.apply.setEnabled(False)
             if self.kind=='rename': self.rename_table.setRowCount(0)
 
     def start_rename_plan(self):

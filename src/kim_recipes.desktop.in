@@ -3,7 +3,7 @@ Type=Service
 Icon=view-list-details
 Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
-MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;
+MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;application/pdf;
 X-KDE-Protocol=file
 Actions=KIMRecipe0Run;KIMRecipe1Editor;
 _X-KDE-Submenu=KIMng - Recipes
@@ -11,7 +11,7 @@ X-KIMng-Managed=true
 
 [Desktop Action KIMRecipe0Run]
 Icon=view-list-details
-_Name=Choose saved recipe…
+_Name=Run a recipe…
 Exec=kim_all recipe --choose -- %F
 
 [Desktop Action KIMRecipe1Editor]

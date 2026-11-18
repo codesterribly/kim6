@@ -694,7 +694,7 @@ class RecipePackagingTests(unittest.TestCase):
                 self.assertIn('Actions=KIMRecipe0Run;KIMRecipe1Editor;', menu.read_text())
                 self.assertIn('X-KDE-Submenu=KIMng - Recipes', menu.read_text())
                 self.assertNotIn('X-KDE-Priority', menu.read_text())
-                self.assertIn('Name=Choose saved recipe…', menu.read_text())
+                self.assertIn('Name=Run a recipe…', menu.read_text())
                 command = ['bash', str(helper.runtime/'bin/kim_all'), 'recipe', '--list']
                 result = subprocess.run(command, capture_output=True, text=True, env=helper.env)
                 self.assertEqual(result.returncode, 0, result.stderr)

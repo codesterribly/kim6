@@ -45,7 +45,7 @@ def render(library, dispatcher):
         lines += ['', '[Desktop Action KIMRoot-' + r['id'] + ']', 'Name=' + value(label),
                   'Exec=' + command + '--run-id ' + r['id'] + ' -- %F']
     if recipes: lines += ['', '[Desktop Action _SEPARATOR_]', 'Name=Separator']
-    lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Choose saved recipe…',
+    lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Run a recipe…',
               'Icon=view-list-details', 'Exec=' + command + '--choose -- %F',
               '', '[Desktop Action KIMRecipe1Editor]', 'Name=Recipe editor…',
               'Icon=document-edit', 'Exec=' + command + '--editor -- %F', '']

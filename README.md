@@ -18,7 +18,7 @@ Select one file or an entire group of files, right-click, and choose what you wa
 KIMng is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
 <p align="center">
-  <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="KIMng - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Choose saved recipe and Recipe editor" width="760"></a>
+  <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="KIMng - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a recipe and Recipe editor" width="760"></a>
 </p>
 <p align="center"><em>KIMng - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
@@ -34,13 +34,13 @@ KIMng is a modernized rewrite of the KDE Image Menu project, bringing its famili
 
 ## Quick Start
 
-For a reusable photo workflow, select images and open **KIMng - Recipes → Choose saved recipe…** from Dolphin's right-click menu. Select the built-in **Web Export** recipe or another saved recipe in the runner. You can also open **KIMng - Recipes → Recipe editor…** to create your own. Recipes always create separate output files and leave the source images untouched.
+For a reusable photo workflow, select images and open **KIMng - Recipes → Run a recipe…** from Dolphin's right-click menu. Select the built-in **Web Export** recipe or another saved recipe in the runner. You can also open **KIMng - Recipes → Recipe editor…** to create your own. Recipes always create separate output files and leave the source images untouched.
 
 Select one or more images in Dolphin, right-click, and choose a KIMng action. To configure how KIMng handles your files, open **Actions → KIMng - Settings/About → Settings**. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIMng uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is **Create new files (originals untouched)**.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
-| Run the built-in Web Export recipe | KIMng - Recipes → Choose saved recipe… → Web Export | `lake_web.jpg` in a `Web` subfolder beside `lake.jpg` |
+| Run the built-in Web Export recipe | KIMng - Recipes → Run a recipe… → Web Export | `lake_web.jpg` in a `Web` subfolder beside `lake.jpg` |
 | Resize an image | KIMng - Resize/Crop/Rotate → Resize to fit 1600 × 1600 | `lake_resized.jpg` |
 | Compress a JPEG | KIMng - Convert/Compress → Compress recommended | `lake_compressed.jpg` |
 | Convert PNG to JPEG | KIMng - Convert/Compress → Convert to JPEG | `garden.jpg` |
@@ -71,7 +71,7 @@ Video selections expose three video conversion submenus (AV1, H.264, and H.265) 
 
 KIMng includes a dedicated **KIMng - Recipes** submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire selection.
 
-- **Run saved recipes:** Open **Choose saved recipe…** to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.
+- **Run saved recipes:** Open **Run a recipe…** to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.
 - **Build and edit workflows:** Use **Recipe editor…** to create, duplicate, and organize recipes. Give each recipe a meaningful name.
 - **Combine processing steps:** Choose among 25 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.
 - **Enable or disable steps:** Keep operations in a recipe without requiring every step to run each time.
