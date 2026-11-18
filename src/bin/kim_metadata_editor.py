@@ -1358,7 +1358,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._representation_indexes = {}
         self.previews = PreviewImages()
         self.thumbnails = InspectionCache(128, 4 * 1024 * 1024, preview=True)
-        self.thumbnail_worker = None
+        self.thumbnail_workers = set()
         self._thumbnail_seen = {}
         self._thumbnail_cursor = 0
         self._icon_paths = set()
@@ -3197,7 +3197,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self._pump_load()
 
     def _finish_close(self):
-        if self.worker is None and not self.preview_workers and self._inspection_filter is None and self.thumbnail_worker is None:
+        if self.worker is None and not self.preview_workers and self._inspection_filter is None and not self.thumbnail_workers:
             self.close()
 
     def review_changes(self):
@@ -3230,8 +3230,8 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             self.batch_sessions.clear()
         self._closing = True
         self._pending_action = None
-        if self.thumbnail_worker is not None:
-            self.thumbnail_worker.requestInterruption()
+        for worker in tuple(self.thumbnail_workers):
+            worker.requestInterruption()
         for worker in self.preview_workers:
             worker.requestInterruption()
         if self._inspection_filter:
@@ -3241,7 +3241,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             if not self.worker.isRunning():
                 self.worker.deleteLater()
                 self.worker = None
-        if self.worker is not None or self.preview_workers or self._inspection_filter is not None or self.thumbnail_worker is not None:
+        if self.worker is not None or self.preview_workers or self._inspection_filter is not None or self.thumbnail_workers:
             event.ignore()
             return
         self._persist_splitter_sizes()

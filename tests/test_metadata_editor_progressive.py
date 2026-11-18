@@ -265,7 +265,7 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
         heights = [window.file_list.sizeHintForRow(row) for row in range(len(window.paths))]
         self.driver.wait_for(lambda: all(not window.file_list.item(row).icon().isNull()
                                         for row in range(len(window.paths))))
-        self.driver.wait_for(lambda: window.thumbnail_worker is None and window.worker is None)
+        self.driver.wait_for(lambda: not window.thumbnail_workers and window.worker is None)
         self.assertEqual(0, window.file_list.currentRow())
         self.assertEqual(1, len(self.driver.calls()))
         self.assertEqual(heights, [window.file_list.sizeHintForRow(row) for row in range(len(window.paths))])
@@ -274,6 +274,85 @@ class MetadataEditorProgressiveTests(unittest.TestCase):
             self.driver.app.processEvents()
         self.assertLessEqual(len(window.thumbnails), 128)
         self.assertLessEqual(window.thumbnails.bytes, 4 * 1024 * 1024)
+
+    def test_thumbnail_pool_close_interrupts_every_worker_before_widget_deletion(self):
+        from threading import Event
+        from PySide6.QtCore import QSize, QThread, Qt
+        from PySide6.QtGui import QColor, QImage
+        from shiboken6 import isValid
+        from metadata_integrity import sha256_noatime
+
+        self.driver.wait_for(lambda: not self.window.preview_workers and
+                             not self.window.thumbnail_workers)
+        paths = []
+        for number in range(9):
+            path = self.driver.workspace.path(f'pool/{number}.jpg')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image = QImage(800, 600, QImage.Format_RGB32)
+            image.fill(QColor(number * 25, 0, 0))
+            self.assertTrue(image.save(str(path)))
+            paths.append(path)
+
+        def signature(path):
+            info = path.stat()
+            return (sha256_noatime(path), info.st_size, info.st_atime_ns,
+                    info.st_mtime_ns, info.st_ctime_ns)
+
+        before = {path: signature(path) for path in paths}
+        release = Event()
+        decodes = []
+
+        def delayed_decode(path, size, auto_orient=True):
+            decodes.append((path, size))
+            if size == QSize(96, 72):
+                if not release.wait(10):
+                    raise RuntimeError('Test did not release thumbnail workers')
+            return browser_tests.read_thumbnail(path, size, auto_orient=auto_orient)
+
+        with patch('kim_metadata_browser.read_thumbnail', side_effect=delayed_decode):
+            window = MetadataEditor(list(map(str, paths)))
+            self.driver.windows.append(window)
+            window.setAttribute(Qt.WA_DeleteOnClose)
+            window.show()
+            try:
+                self.driver.wait_for(lambda: len(window.thumbnail_workers) == 4)
+                workers = tuple(window.thumbnail_workers)
+                self.assertEqual(4, len({worker.path for worker in workers}))
+                self.assertTrue(all(worker.priority() == QThread.LowPriority for worker in workers))
+                for row in (8, 1, 6, 2, 7):
+                    window.file_list.setCurrentRow(row)
+                    self.driver.app.processEvents()
+                    self.assertLessEqual(len(window.thumbnail_workers), 4)
+                    self.assertLessEqual(len(window.preview_workers), 2)
+                selected = str(paths[7])
+                self.driver.wait_for(lambda: window.current_preview_path == selected and
+                                     window._preview_image(selected) is not None)
+                preview = window._preview_image(selected)
+                self.assertEqual(QSize(640, 480), preview.size())
+                self.assertAlmostEqual(175, preview.pixelColor(0, 0).red(), delta=3)
+                self.assertFalse(window.close())
+                self.assertTrue(window.isVisible())
+                self.assertTrue(all(worker.isInterruptionRequested() for worker in workers))
+                count = len(decodes)
+            finally:
+                release.set()
+            self.driver.wait_for(lambda: not isValid(window))
+            self.driver.windows.remove(window)
+            self.assertEqual(count, len(decodes), 'Shutdown restarted preview or thumbnail work')
+        self.assertEqual(before, {path: signature(path) for path in paths})
+        self.assertEqual(set(paths), set(paths[0].parent.iterdir()), 'Inspection created an output or sidecar')
+
+    def test_single_jpeg_closes_after_all_thumbnail_workers_finish(self):
+        path = self.driver.paths[0]
+        window = MetadataEditor([str(path)])
+        self.driver.windows.append(window)
+        window.show()
+        self.driver.wait_for(lambda: window._preview_image(str(path)) is not None and
+                             not window.thumbnail_workers and not window.preview_workers and
+                             window.worker is None)
+        self.assertFalse(window.file_list.item(0).icon().isNull())
+        self.assertTrue(window.close())
+        self.assertFalse(window.isVisible())
 
     def test_overview_reloads_source_priority_from_another_settings_instance(self):
         from kim_metadata_sources import MetadataSourcePreferences, OverviewField
