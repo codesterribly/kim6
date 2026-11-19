@@ -24,18 +24,18 @@ MANUAL_FILES = (
     "docs/reference/INSTALL.html",
     "docs/reference/LICENSE.html",
     "docs/reference/README.html",
-    "docs/images/kim6-photo-actions.png",
-    "docs/images/kim6-video-conversion.png",
-    "docs/images/kim6-video-utilities.png",
-    "docs/images/kim6-settings-dialog.png",
-    "docs/images/kim6-collage-dialog.png",
-    "docs/images/kim6-animated-gif-dialog.png",
+    "docs/images/screenshots/kim6-photo-actions.png",
+    "docs/images/screenshots/kim6-video-conversion.png",
+    "docs/images/screenshots/kim6-video-utilities.png",
+    "docs/images/screenshots/kim6-settings-dialog.png",
+    "docs/images/screenshots/kim6-collage-dialog.png",
+    "docs/images/screenshots/kim6-animated-gif-dialog.png",
     "docs/reference/RECIPES.html",
-    "docs/images/kim6-recipes-menu.png",
-    "docs/images/kim6-recipe-editor.png",
-    "docs/images/kim6-convert-menu.png",
-    "docs/images/kim6-metadata-menu.png",
-    "docs/images/kim6-settings-general.png",
+    "docs/images/screenshots/kim6-recipes-menu.png",
+    "docs/images/screenshots/kim6-recipe-editor.png",
+    "docs/images/screenshots/kim6-convert-menu.png",
+    "docs/images/screenshots/kim6-metadata-menu.png",
+    "docs/images/screenshots/kim6-settings-general.png",
 )
 
 
@@ -181,11 +181,11 @@ class ManualInstallationTests(unittest.TestCase):
         # five screenshots. Compare bytes so placeholders cannot satisfy this.
         references = (
             'docs/reference/RECIPES.html',
-            'docs/images/kim6-recipes-menu.png',
-            'docs/images/kim6-recipe-editor.png',
-            'docs/images/kim6-convert-menu.png',
-            'docs/images/kim6-metadata-menu.png',
-            'docs/images/kim6-settings-general.png',
+            'docs/images/screenshots/kim6-recipes-menu.png',
+            'docs/images/screenshots/kim6-recipe-editor.png',
+            'docs/images/screenshots/kim6-convert-menu.png',
+            'docs/images/screenshots/kim6-metadata-menu.png',
+            'docs/images/screenshots/kim6-settings-general.png',
         )
         for relative in references:
             with self.subTest(file=relative):
@@ -236,7 +236,7 @@ class ManualInstallationTests(unittest.TestCase):
 
     def test_reject_symlinked_illustration_file(self):
         self.run_installer("install.sh")
-        illustration = self.runtime / "docs/images/kim6-settings-dialog.png"
+        illustration = self.runtime / "docs/images/screenshots/kim6-settings-dialog.png"
         outside = self.base / "do-not-overwrite.png"
         outside.write_bytes(b"unrelated data\n")
         illustration.unlink()

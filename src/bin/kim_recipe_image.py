@@ -161,6 +161,32 @@ COPYRIGHT_TAGS = {
 }
 
 
+_CROP_OPTIONAL_METADATA = contextvars.ContextVar(
+    "kimng_crop_optional_metadata", default=False
+)
+_CROP_CLEAN_RETRY = contextvars.ContextVar(
+    "kimng_crop_clean_retry", default=False
+)
+
+
+@contextlib.contextmanager
+def standalone_crop_metadata_fallback():
+    token = _CROP_OPTIONAL_METADATA.set(True)
+    try:
+        yield
+    finally:
+        _CROP_OPTIONAL_METADATA.reset(token)
+
+
+@contextlib.contextmanager
+def standalone_crop_clean_retry():
+    token = _CROP_CLEAN_RETRY.set(True)
+    try:
+        yield
+    finally:
+        _CROP_CLEAN_RETRY.reset(token)
+
+
 def selected_metadata(path, tags):
     data = json.loads(run(['exiftool', '-json', '-G1'] + ['-' + tag for tag in tags] + [str(path)]))[0]
     # These selected tags have distinct names; ExifTool reports EXIF's IFD group.
@@ -777,7 +803,12 @@ class ImageHandler:
         omit_source_metadata = (
             _OMIT_STANDALONE_OVERLAY_METADATA.get()
         )
-        if omit_source_metadata:
+        # Only the private retry may omit inherited metadata.
+        # The initial Crop attempt preserves metadata normally.
+        omit_source_metadata = (
+            omit_source_metadata or _CROP_CLEAN_RETRY.get()
+        )
+        if _OMIT_STANDALONE_OVERLAY_METADATA.get():
             active = [s["op"] for s in steps]
             if (
                 active.count("image.overlay") != 1
@@ -789,6 +820,18 @@ class ImageHandler:
                 raise RecipeError(
                     "Metadata-free watermark mode requires "
                     "one overlay and no metadata-editing steps."
+                )
+
+        if _CROP_CLEAN_RETRY.get():
+            active = [s["op"] for s in steps]
+            if (
+                active.count("image.crop") != 1
+                or "image.overlay" in active
+                or any(op.startswith("metadata.") for op in active)
+            ):
+                raise RecipeError(
+                    "Metadata-free Crop retry requires one crop "
+                    "and no explicit metadata-editing steps."
                 )
 
         info, fmt, width, height = inspect(source)
@@ -1254,7 +1297,7 @@ class ImageHandler:
                     if state['auto_oriented']:
                         run(['exiftool', '-overwrite_original', '-EXIF:Orientation#=1', '-XMP-tiff:Orientation#=1', str(output)])
 
-            except RecipeError:
+            except RecipeError as metadata_error:
                 # A standalone watermark can still produce a
                 # valid image when optional source metadata
                 # cannot be copied. Never apply this policy to
@@ -1275,19 +1318,42 @@ class ImageHandler:
                     )
                 )
 
+                crop_eligible = (
+                    _CROP_OPTIONAL_METADATA.get()
+                    and not state['omit_source_metadata']
+                    and state['format'] == 'jpeg'
+                    and active.count('image.crop') == 1
+                    and 'image.overlay' not in active
+                    and not any(
+                        op.startswith('metadata.')
+                        for op in active
+                    )
+                    and 'Incomplete extended XMP'
+                        in str(metadata_error)
+                )
+
+                eligible = eligible or crop_eligible
+
                 if not eligible:
                     raise
 
                 from kim_process import checkpoint
                 checkpoint()
                 stage(
+                    'Rebuilding cropped image without source metadata'
+                    if crop_eligible else
                     'Rebuilding watermark without source metadata'
                 )
 
                 # Re-plan from the same private source snapshot.
                 # Metadata removal and sRGB handling use the
                 # existing verified image-planning code.
-                with standalone_overlay_metadata_policy(True):
+                retry_policy = (
+                    standalone_crop_clean_retry()
+                    if crop_eligible
+                    else standalone_overlay_metadata_policy(True)
+                )
+                with retry_policy:
                     clean_state = self.plan(
                         source,
                         steps,
@@ -1327,10 +1393,17 @@ class ImageHandler:
                 # publication.
                 state.clear()
                 state.update(clean_state)
-                state['optional_metadata_warning'] = (
-                    'Image created. Some metadata could not be '
-                    'preserved. Check the final image.'
-                )
+                if crop_eligible:
+                    state['optional_metadata_warning'] = (
+                        'Image saved with reduced metadata. '
+                        'Incomplete extended XMP prevented safe '
+                        'metadata preservation. The original is unchanged.'
+                    )
+                else:
+                    state['optional_metadata_warning'] = (
+                        'Image created. Some metadata could not be '
+                        'preserved. Check the final image.'
+                    )
                 return
         else:
             shutil.copyfile(source, output)

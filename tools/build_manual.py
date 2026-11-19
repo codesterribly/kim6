@@ -33,9 +33,22 @@ def sources():
     for source in MAIN:
         if not source.is_file():
             raise RuntimeError(f"Required source document not found: {source.relative_to(ROOT)}")
-    found = set(ROOT.glob("*.md")) | set(DOC_DIR.glob("*.md"))
-    if (ROOT / "ABOUT").is_file():
-        found.add(ROOT / "ABOUT")
+    # Render only established public reference documents.
+    # Internal design and implementation plans remain Markdown-only.
+    public = (
+        ROOT / "ABOUT",
+        ROOT / "LICENSE.md",
+        DOC_DIR / "RECIPES.md",
+        DOC_DIR / "STEP2_IMPLEMENTATION.md",
+    )
+    found = set(MAIN)
+    found.update(public)
+    for source in found:
+        if not source.is_file():
+            raise RuntimeError(
+                f"Required public document not found: "
+                f"{source.relative_to(ROOT)}"
+            )
     return sorted(found)
 
 

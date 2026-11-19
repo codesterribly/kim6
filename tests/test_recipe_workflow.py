@@ -132,7 +132,7 @@ save_library(RecipeLibrary([b, a], [{'id': 'alpha', 'name': 'Alpha'}, {'id': 'em
 def preview(recipe, files, chosen, start_index):
     return [PreviewRow(files[0], '/planned/' + recipe['id'] + str(start_index) + '.jpg', 'image', 'jpeg')]
 files = ['/Dolphin/photo $one.jpg', '/Dolphin/photo two.jpg']
-with patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute') as execute:
+with patch('kim_recipe_run.approve_rows', return_value=('reviewed',)), patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute') as execute:
     w = RunRecipeDialog(None, files)
     assert w.selected_id is None and w.selector.currentIndex() == -1
     assert w.preflight_worker is None and not w.run_button.isEnabled()
@@ -197,7 +197,7 @@ for i in range(200):
     recipes.append(r)
 recipes[137]['name'] = 'Target preset'
 save_library(RecipeLibrary(recipes, [{'id': 'collection', 'name': 'Collection'}]))
-with patch('kim_recipe_run.preview', return_value=[PreviewRow('/input.jpg')]):
+with patch('kim_recipe_run.approve_rows', return_value=('reviewed',)), patch('kim_recipe_run.preview', return_value=[PreviewRow('/input.jpg')]):
     w = RunRecipeDialog(None, ['/input.jpg']); w.show(); app.processEvents()
     w.search.setFocus()
     QApplication.sendEvent(w.search, QKeyEvent(QEvent.KeyPress, Qt.Key_T, Qt.NoModifier, 'TARGET'))
@@ -229,7 +229,7 @@ def preview(recipe, files, chosen, start_index):
     if len(calls) == 1:
         started.set(); assert release.wait(10)
     return [PreviewRow(files[0], '/planned/' + recipe['id'] + '.jpg', 'image', 'jpeg')]
-with patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute') as execute:
+with patch('kim_recipe_run.approve_rows', return_value=('reviewed',)), patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute') as execute:
     w = RunRecipeDialog(None, ['/selected.jpg'])
     w.selector.setCurrentIndex(w.selector.findData('a'))
     loop = QEventLoop(); timer = QTimer(); timer.setInterval(10)
@@ -381,23 +381,26 @@ from kim_recipe_core import builtins, config_path
 from kim_recipe_run import RunRecipeDialog
 app = QApplication([])
 ''' + WAIT + '''
-base = config_path().parent.parent; source = base/'source.jpg'; occupied = base/'source_1.jpg'
+base = config_path().parent.parent; source = base/'source.jpg'; occupied = base/'source_copy.jpg'
 subprocess.run(['magick', '-size', '40x20', 'xc:red', str(source)], check=True)
 subprocess.run(['exiftool', '-overwrite_original', '-Orientation#=6', str(source)], check=True, capture_output=True)
 original = source.read_bytes(); mtime = source.stat().st_mtime_ns; occupied.write_bytes(b'occupied')
-r = builtins()[0]; r['steps'] = [{'op': 'file.rename_output', 'pattern': '{stem}'}]; r['destination'] = {'mode': 'beside'}
+r = builtins()[0]; r['steps'] = [{'op': 'file.rename_output', 'pattern': '{stem}_copy'}]; r['destination'] = {'mode': 'beside'}
 w = RunRecipeDialog(r, [str(source)]); assert not w.run_button.isEnabled(); settle(w)
+assert not w.run_button.isEnabled() and 'collision' in w.diagnostics.toPlainText()
+assert w.rows[0].output == str(occupied)
+occupied.unlink(); w.start_preflight(); settle(w)
 assert w.run_button.isEnabled() and w.run_button.text() == 'Run Recipe on 1 File'
 values = {w.properties.item(i, 0).text(): w.properties.item(i, 1).text() for i in range(w.properties.rowCount())}
 assert values['Original dimensions'].startswith('20 × 40') and values['Output dimensions'].startswith('20 × 40')
 assert values['File modified'] == 'When exported' and 'Compressed size' not in values
-assert 'plans to save' in values['Publication'] and 'source_2.jpg' in values['Publication']
-assert not (base/'source_2.jpg').exists()
+assert 'exact output path is binding' in values['Publication']
+assert not occupied.exists()
 w.start_execution(); worker = w.worker; w.start_execution(); assert w.worker is worker
 settle(w)
 assert len(w.results) == 1 and w.results[0]['ok']
-assert (base/'source_2.jpg').read_bytes() == original
-assert occupied.read_bytes() == b'occupied' and source.read_bytes() == original and source.stat().st_mtime_ns == mtime
+assert occupied.read_bytes() == original
+assert source.read_bytes() == original and source.stat().st_mtime_ns == mtime
 w.close()
 ''')
 

@@ -356,7 +356,8 @@ class CorrectnessTests(unittest.TestCase):
     def test_single_still_gif_and_jp2_inputs_and_animated_png_rejection(self):
         for fmt in ('gif','jp2'):
             source = self.root/('still.'+fmt);self.cmd('magick',self.source,source)
-            self.execute([step('image.convert',format='png')],source)
+            self.execute([step('image.convert',format='png'),
+                          {'op': 'file.rename_output', 'pattern': '{stem}_' + fmt}],source)
         if not shutil.which('ffmpeg'): self.skipTest('FFmpeg unavailable for actual APNG')
         source = self.root/'animated.png'
         self.cmd('ffmpeg','-v','error','-f','lavfi','-i','color=red:s=32x24:r=2','-frames:v','2','-plays','0','-f','apng',source)

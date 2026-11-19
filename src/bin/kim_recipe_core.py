@@ -3,6 +3,7 @@ from kim_psd_source import source_session, header as psd_header, PSDError
 import argparse
 import contextlib
 import copy
+import errno
 import json
 import os
 from pathlib import Path
@@ -364,9 +365,99 @@ class PreviewRow:
     properties: dict = field(default_factory=dict)
     metadata: list = field(default_factory=list)
     problems: list = field(default_factory=list)
-    certainty: str = 'The filename is checked again when saving and may change if another file appears.'
+    certainty: str = 'This exact output path is binding. A collision blocks publication; review again to change it.'
     warnings: list = field(default_factory=list)
     identity: tuple | None = None
+    approved: 'ApprovedOutput | None' = None
+
+
+@dataclass(frozen=True)
+class ApprovedOutput:
+    """Value snapshot of one reviewed source, destination and operation plan.
+
+    JSON keeps nested recipe/state dictionaries immutable too. Each execution
+    receives its own decoded state; it never consults the planner for a new name.
+    """
+    source: str
+    identity: tuple
+    output: str
+    destination: tuple
+    recipe_json: str
+    state_json: str
+
+
+def source_identity(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def directory_binding(directory):
+    """Bind every path component without following symlinks, including ancestors.
+
+    Only the final component may be absent (a new approved directory). Its
+    existing parent is still bound and mkdir must subsequently create it anew.
+    """
+    directory = Path(directory)
+    fd = os.open(directory.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    identities = [source_identity(os.fstat(fd))[:2]]
+    try:
+        for index, part in enumerate(directory.parts[1:], 1):
+            try:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except FileNotFoundError:
+                if index != len(directory.parts) - 1: raise
+                identities.append(None)
+                break
+            os.close(fd)
+            fd = child
+            identities.append(source_identity(os.fstat(fd))[:2])
+    finally:
+        os.close(fd)
+    return tuple(identities)
+
+
+def output_key(item):
+    path = Path(item.output)
+    identity = item.destination[-1]
+    return ((identity, path.name) if identity is not None
+            else (item.destination[-2], path.parent.name, path.name))
+
+
+def block_output_collisions(rows):
+    """Mark all duplicate destination entries, including aliased directory paths."""
+    outputs = {}
+    for row in rows:
+        if row.approved is None: continue
+        outputs.setdefault(output_key(row.approved), []).append(row)
+    for duplicates in outputs.values():
+        if len(duplicates) > 1:
+            for row in duplicates:
+                issue = 'Output collision: multiple selected sources target ' + row.output
+                if issue not in row.problems: row.problems.append(issue)
+
+
+def approve_rows(recipe, sources, rows, chosen=None):
+    """Freeze precisely the rows shown by Review Changes, without re-planning."""
+    recipe = validate(recipe)
+    rows = list(rows)
+    block_output_collisions(rows)
+    if len(rows) != len(sources) or not rows:
+        raise RecipeError('Review every selected source before applying')
+    approved = []
+    for source, row in zip(sources, rows):
+        item = row.approved
+        if row.problems:
+            raise RecipeError('Publication blocked: ' + '; '.join(row.problems))
+        directory = destination_for(recipe, Path(os.path.abspath(source)), chosen)
+        if directory is None:
+            raise RecipeError('Choose a destination directory before applying')
+        if (item is None or item.source != os.path.abspath(source)
+                or row.output != item.output or row.identity != item.identity
+                or json.loads(item.recipe_json) != recipe):
+            raise RecipeError('Review changed: source, output or operations no longer match the inspected plan')
+        if directory != Path(item.output).parent:
+            raise RecipeError('Review changed: destination no longer matches the inspected plan')
+        approved.append(item)
+    return tuple(approved)
 
 
 @dataclass
@@ -397,8 +488,9 @@ def destination_for(recipe, source, chosen=None, create=False):
             raise RecipeError('Choose a destination directory')
     if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
         raise RecipeError('Unsafe destination directory')
-    if not directory.exists() and not (dest['mode'] == 'subfolder' and not create):
-        raise RecipeError('Destination directory does not exist')
+    if not directory.exists():
+        if create or not directory.parent.is_dir():
+            raise RecipeError('Destination directory does not exist')
     check = directory if directory.exists() else directory.parent
     if not os.access(check, os.W_OK | os.X_OK):
         raise RecipeError('Destination is not writable')
@@ -411,9 +503,12 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     if source.is_symlink() or not source.is_file():
         raise RecipeError('Source must be a regular file, not a symlink')
     directory = destination_for(recipe, source, chosen, create)
-    before = source.stat()
+    binding = directory_binding(directory) if directory is not None else None
+    before = source.lstat()
+    if not stat.S_ISREG(before.st_mode):
+        raise RecipeError('Source must be a regular file, not a symlink')
     state = handler(recipe['media']).plan(source, recipe['steps'], index)
-    after = source.stat()
+    after = source.lstat()
     if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):
         raise RecipeError('Source changed during inspection; try again')
     from kim_process import stage as job_stage
@@ -422,16 +517,16 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     proposed = str(directory / name) if directory is not None else '<choose directory at run>/' + name
     row = PreviewRow(str(source), proposed, recipe['media'], state['format'],
                      state['properties'], state['metadata'])
-    row.identity = (before.st_dev, before.st_ino)
+    row.identity = source_identity(before)
     row.warnings.extend(state.get('warnings', []))
     row.properties['_proposed_output'] = proposed
-    if directory is not None and os.path.lexists(directory / name):
-        candidate = directory / name; number = 0
-        while os.path.lexists(candidate):
-            number += 1
-            candidate = (directory / name).with_name(f'{Path(name).stem}_{number}{Path(name).suffix}')
-        row.output = str(candidate)
-        row.certainty = 'That filename already exists. KIMng plans to save this file as ' + candidate.name + '. The name is checked again when saving.'
+    if directory is not None:
+        if directory_binding(directory) != binding:
+            raise RecipeError('Destination directory changed during inspection; review again')
+        row.approved = ApprovedOutput(str(source), row.identity, proposed,
+                                      binding, json.dumps(recipe), json.dumps(state))
+        if os.path.lexists(directory / name):
+            row.problems.append('Output collision: approved filename already exists: ' + proposed)
     return Plan(recipe, source, directory, name, state, row)
 
 
@@ -441,8 +536,79 @@ def recipe_inspections():
     with logo_inspections(): yield
 
 
+def number_review_outputs(rows):
+    """Choose collision-free names before approval, never during publication.
+
+    This is a planning-only operation. Output publication remains atomic
+    and no-replace, using the exact reviewed target.
+    """
+    reserved = set()
+
+    for row in rows:
+        item = row.approved
+        if item is None:
+            continue
+
+        original = Path(item.output)
+        candidate = original
+        number = 0
+
+        def reserved_key(path):
+            return output_key(
+                ApprovedOutput(
+                    item.source,
+                    item.identity,
+                    str(path),
+                    item.destination,
+                    item.recipe_json,
+                    item.state_json,
+                )
+            )
+
+        while os.path.lexists(candidate) or reserved_key(candidate) in reserved:
+            number += 1
+            if number > 10000:
+                row.problems.append(
+                    "Unable to find a free numbered output filename"
+                )
+                break
+            candidate = original.with_name(
+                f"{original.stem}_{number}{original.suffix}"
+            )
+
+        if number > 10000:
+            continue
+
+        reserved.add(reserved_key(candidate))
+
+        if candidate != original:
+            row.output = str(candidate)
+            row.approved = ApprovedOutput(
+                item.source,
+                item.identity,
+                str(candidate),
+                item.destination,
+                item.recipe_json,
+                item.state_json,
+            )
+            row.problems = [
+                problem for problem in row.problems
+                if not problem.startswith(
+                    "Output collision: approved filename already exists:"
+                )
+            ]
+            row.certainty = (
+                "Existing filename collision resolved during review. "
+                "The numbered filename is binding; a later collision "
+                "requires another review."
+            )
+
+    return rows
+
+
 @recipe_inspections()
-def preview(recipe, sources, chosen=None, start_index=1):
+def preview(recipe, sources, chosen=None, start_index=1,
+            number_collisions=False):
     rows = []
     for index, source in enumerate(sources, start_index):
         with source_session():
@@ -458,98 +624,197 @@ def preview(recipe, sources, chosen=None, start_index=1):
                     pass
                 if getattr(exc,'repair',None): row.properties['_repair'] = exc.repair
                 rows.append(row)
+    if number_collisions:
+        number_review_outputs(rows)
+    block_output_collisions(rows)
     return rows
 
 
 def publish(stage, directory_fd, name):
-    """link(2) is the sole publication primitive: every occupied entry is protected."""
-    stem, extension = os.path.splitext(name)
-    for number in range(10000):
-        candidate = name if number == 0 else f'{stem}_{number}{extension}'
+    """Publish a completed file with one atomic no-replace link; never renumber.
+
+    The private stage remains until caller cleanup. After linking, failures must
+    never remove the final entry: it is already a successfully published output.
+    """
+    component(name)
+    stage_fd = os.open(stage, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(stage_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size == 0 or info.st_nlink != 1:
+            raise RecipeError('Missing or invalid staged output')
+        if info.st_dev != os.fstat(directory_fd).st_dev:
+            raise RecipeError('Unsupported destination filesystem: staging must be on the destination filesystem')
         try:
-            os.link(stage, candidate, dst_dir_fd=directory_fd, follow_symlinks=False)
-            return candidate
-        except FileExistsError:
-            continue
-    raise RecipeError('Too many output filename collisions')
+            os.fsync(stage_fd)
+            # Check directory fsync support before making anything visible.
+            os.fsync(directory_fd)
+        except OSError as exc:
+            if exc.errno in (errno.EINVAL, errno.EOPNOTSUPP, errno.ENOSYS):
+                raise RecipeError('Unsupported destination filesystem: completed-file durability synchronization unavailable: ' + str(exc)) from exc
+            raise
+        if source_identity(os.stat(stage, follow_symlinks=False)) != source_identity(info):
+            raise RecipeError('Staged output changed before publication')
+        from kim_process import checkpoint
+        checkpoint()
+    finally:
+        os.close(stage_fd)
+    # All writers and the synchronization descriptor are closed before linking.
+    try:
+        os.link(stage, name, dst_dir_fd=directory_fd, follow_symlinks=False)
+    except FileExistsError as exc:
+        raise RecipeError('Output collision: approved filename already exists: ' + name) from exc
+    except OSError as exc:
+        if exc.errno in (errno.EPERM, errno.EOPNOTSUPP, errno.ENOSYS, errno.EXDEV, errno.EINVAL):
+            raise RecipeError('Unsupported destination filesystem: atomic no-replace hard-link publication unavailable: ' + str(exc)) from exc
+        raise
+    return name
+
+
+def verify_directory_binding(directory, binding):
+    try:
+        if directory_binding(directory) == binding: return
+    except OSError:
+        pass
+    raise RecipeError('Destination directory changed since review; review again')
+
+
+def open_approved_directory(item, cache, stack):
+    directory = Path(item.output).parent
+    key = str(directory)
+    if key in cache:
+        fd, binding, reviewed = cache[key]
+        if reviewed != item.destination:
+            raise RecipeError('Destination directory changed between reviewed sources')
+    else:
+        verify_directory_binding(directory, item.destination)
+        if item.destination[-1] is None:
+            parent_fd = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                if (directory_binding(directory.parent) != item.destination[:-1]
+                        or source_identity(os.fstat(parent_fd))[:2] != item.destination[-2]):
+                    raise RecipeError('Destination directory changed since review')
+                # An independently created entry requires renewed review.
+                os.mkdir(directory.name, mode=0o700, dir_fd=parent_fd)
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        stack.callback(os.close, fd)
+        binding = directory_binding(directory)
+        expected = item.destination
+        if ((binding[:-1] != expected[:-1])
+                or (expected[-1] is not None and binding[-1] != expected[-1])
+                or source_identity(os.fstat(fd))[:2] != binding[-1]):
+            raise RecipeError('Destination directory changed since review')
+        cache[key] = fd, binding, item.destination
+    verify_directory_binding(directory, binding)
+    return fd, binding
 
 
 @recipe_inspections()
-def execute(recipe, sources, chosen=None, progress=None, start_index=1):
+def execute(recipe, sources, chosen=None, progress=None, start_index=1,
+            approved_plan=None, started=None, stop_on_error=False):
+    """Execute immutable reviewed outputs, or bind a direct/CLI batch once.
+
+    GUI callers must supply their review snapshot. Direct callers retain their
+    existing interface, with one complete preflight before any publication.
+    """
     recipe = validate(recipe)
-    from kim_image_ops import has_image_operations, preflight_batch
-    if len(sources) > 1 and has_image_operations(recipe):
-        try:
-            preflight_batch(recipe, sources, chosen, start_index)
-        except (OSError, RecipeError, PSDError) as exc:
-            from kim_process import cancelled
-            return [{'source': str(source), 'ok': False, 'error': str(exc), 'cancelled': cancelled()} for source in sources]
+    sources = list(sources)
+    from kim_process import cancelled, checkpoint, stage as job_stage, ProcessError
+    try:
+        if approved_plan is None:
+            approved_plan = approve_rows(recipe, sources,
+                preview(recipe, sources, chosen, start_index), chosen)
+        approved_plan = tuple(approved_plan)
+        if len(approved_plan) != len(sources):
+            raise RecipeError('Approved plan does not match the selected sources')
+        outputs = set()
+        for source, item in zip(sources, approved_plan):
+            if (not isinstance(item, ApprovedOutput) or item.source != os.path.abspath(source)
+                    or json.loads(item.recipe_json) != recipe):
+                raise RecipeError('Approved plan changed; review the source and operations again')
+            directory = destination_for(recipe, Path(item.source), chosen)
+            if directory is None or directory != Path(item.output).parent:
+                raise RecipeError('Approved destination changed; review again')
+            key = output_key(item)
+            if key in outputs: raise RecipeError('Output collision in approved batch')
+            outputs.add(key)
+    except (OSError, RecipeError, PSDError, ProcessError) as exc:
+        results = [{'source': str(source), 'ok': False, 'error': str(exc),
+                    'cancelled': cancelled()} for source in sources]
+        if progress:
+            for index, result in enumerate(results, start_index):
+                progress(result, index, len(sources))
+        return results
     results = []
-    for index, source in enumerate(sources, start_index):
-        from kim_process import cancelled, checkpoint, stage as job_stage
-        if cancelled(): break
-        with source_session():
+    directories = {}
+    with contextlib.ExitStack() as stack:
+        for index, (source, item) in enumerate(zip(sources, approved_plan), start_index):
+            if cancelled(): break
+            if started: started(str(source), index)
+            result = None
             try:
-                checkpoint()
-                job_stage('Inspecting source')
-                source_path = Path(os.path.abspath(source))
-                if source_path.is_symlink() or not source_path.is_file():
-                    raise RecipeError('Source must be a regular file, not a symlink')
-                directory = destination_for(recipe, source_path, chosen, create=True)
-                # Pin the destination directory; stages and link publication use that inode.
-                fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                try:
+                with source_session():
+                    checkpoint()
+                    job_stage('Checking approved source')
+                    source_path = Path(item.source)
+                    before_path = os.stat(source_path, follow_symlinks=False)
+                    if not stat.S_ISREG(before_path.st_mode) or source_identity(before_path) != item.identity:
+                        raise RecipeError('Source changed since review; review again')
+                    directory = Path(item.output).parent
+                    fd, binding = open_approved_directory(item, directories, stack)
                     pinned = Path(f'/proc/{os.getpid()}/fd/{fd}')
                     with tempfile.TemporaryDirectory(prefix='.kimng-stage.', dir=pinned) as tmp:
                         original = Path(tmp) / 'input'
                         srcfd = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                         with os.fdopen(srcfd, 'rb') as inp, original.open('xb') as out:
-                            if not stat.S_ISREG(os.fstat(inp.fileno()).st_mode):
-                                raise RecipeError('Source changed type')
-                            import shutil
                             before = os.fstat(inp.fileno())
-                            # Retain PSD header/resource rejection before copying
-                            # without performing the old duplicate full decode.
+                            if not stat.S_ISREG(before.st_mode) or source_identity(before) != item.identity:
+                                raise RecipeError('Source changed before copying; review again')
                             try: psd_header(Path(f'/proc/{os.getpid()}/fd/{inp.fileno()}'))
                             except PSDError as exc: raise RecipeError(str(exc)) from exc
-                            # Check between chunks so a large source copy can be
-                            # cancelled before decoding or destination publication.
                             while block := inp.read(1024*1024):
                                 checkpoint(); out.write(block)
-                            after = os.fstat(inp.fileno())
-                            if (before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_size,after.st_mtime_ns,after.st_ctime_ns):
-                                raise RecipeError('Source changed while copying; try again')
+                            if source_identity(os.fstat(inp.fileno())) != item.identity:
+                                raise RecipeError('Source changed while copying; review again')
                         os.utime(original, ns=(before.st_atime_ns,before.st_mtime_ns))
-                        # Inspect the private snapshot again so processing and planning agree.
                         media_handler = handler(recipe['media'])
-                        state = media_handler.plan(original, recipe['steps'], index, stem=source_path.stem)
+                        state = json.loads(item.state_json)
+                        # JSON arrays preserve all state values; overlay identities
+                        # use tuples when compared with fresh filesystem identities.
+                        for overlay in state.get('overlays', []):
+                            if overlay.get('identity') is not None:
+                                overlay['identity'] = tuple(overlay['identity'])
+                        if state.get('_source_stem') is None:
+                            state['_source_stem'] = source_path.stem
                         output = Path(tmp) / ('output.' + state['extension'])
                         media_handler.execute(original, output, enabled_steps(recipe['steps']), state)
                         if not output.is_file() or output.is_symlink() or output.stat().st_size == 0:
                             raise RecipeError('Missing or invalid staged output')
                         media_handler.verify(output, state)
-                        current = os.stat(directory, follow_symlinks=False)
-                        pinned_stat = os.fstat(fd)
-                        if (current.st_dev, current.st_ino) != (pinned_stat.st_dev, pinned_stat.st_ino):
-                            raise RecipeError('Destination directory changed during execution')
-                        name = component(state['name']) + '.' + state['extension']
+                        verify_directory_binding(directory, binding)
+                        current = os.stat(source_path, follow_symlinks=False)
+                        if not stat.S_ISREG(current.st_mode) or source_identity(current) != item.identity:
+                            raise RecipeError('Source changed during execution; review again')
                         job_stage('Writing / publishing output')
                         checkpoint()
-                        published = publish(output, fd, name)
-                        results.append({
-                            'source': str(source),
-                            'output': str(directory / published),
-                            'ok': True,
-                            'warning': state.get(
-                                'optional_metadata_warning', ''
-                            ),
-                        })
-                finally:
-                    os.close(fd)
-            except (OSError, RecipeError, PSDError) as exc:
-                results.append({'source': str(source), 'error': str(exc), 'ok': False, 'cancelled': cancelled()})
-        if progress:
-            progress(results[-1], index, len(sources))
+                        publish(output, fd, Path(item.output).name)
+                        # Publication has succeeded. A later durability or cleanup
+                        # failure is an advisory, never a false unpublished result.
+                        result = {'source': str(source), 'output': item.output, 'ok': True,
+                                  'warning': state.get('optional_metadata_warning', '')}
+                        try: os.fsync(fd)
+                        except OSError as exc:
+                            result['warning'] = (result['warning'] + '\nOutput published; directory durability sync failed: ' + str(exc)).strip()
+            except (OSError, RecipeError, PSDError, ProcessError) as exc:
+                if result is not None and result.get('ok'):
+                    result['warning'] = (result.get('warning', '') + '\nOutput published; stage cleanup failed: ' + str(exc)).strip()
+                else:
+                    result = {'source': str(source), 'error': str(exc), 'ok': False, 'cancelled': cancelled()}
+            results.append(result)
+            if progress: progress(result, index, len(sources))
+            if cancelled() or (stop_on_error and not result['ok']): break
     return results
 
 
@@ -586,6 +851,7 @@ def main():
         if args.preview:
             from dataclasses import asdict
             result = [asdict(row) for row in preview(recipe, args.files, args.destination)]
+            for row in result: row.pop('approved', None)
             print(json.dumps(result, indent=2)); return int(any(r['problems'] for r in result))
         result = execute(recipe, args.files, args.destination)
         print(json.dumps(result, indent=2))

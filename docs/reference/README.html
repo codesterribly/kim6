@@ -44,7 +44,7 @@
 <p>Select one file or an entire group of files, right-click, and choose what you want to do.</p>
 <p>KIMng is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.</p>
 <p align="center">
-  <a href="../images/screenshots/06-recipes.png"><img src="../images/screenshots/06-recipes.png" alt="KIMng - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Choose saved recipe and Recipe editor" width="760"></a>
+  <a href="../images/screenshots/06-recipes.png"><img src="../images/screenshots/06-recipes.png" alt="KIMng - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a recipe and Recipe editor" width="760"></a>
 </p>
 <p align="center"><em>KIMng - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
@@ -59,7 +59,7 @@
 <p align="center"><em>KIMng in Dolphin's Actions menu.</em></p>
 
 <h2 id="quick-start">Quick Start</h2>
-<p>For a reusable photo workflow, select images and open <strong>KIMng - Recipes → Choose saved recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIMng - Recipes → Recipe editor…</strong> to create your own. Recipes always create separate output files and leave the source images untouched.</p>
+<p>For a reusable photo workflow, select images and open <strong>KIMng - Recipes → Run a recipe…</strong> from Dolphin's right-click menu. Select the built-in <strong>Web Export</strong> recipe or another saved recipe in the runner. You can also open <strong>KIMng - Recipes → Recipe editor…</strong> to create your own. Recipes always create separate output files and leave the source images untouched.</p>
 <p>Select one or more images in Dolphin, right-click, and choose a KIMng action. To configure how KIMng handles your files, open <strong>Actions → KIMng - Settings/About → Settings</strong>. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIMng uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is <strong>Create new files (originals untouched)</strong>.</p>
 <table>
 <thead>
@@ -72,7 +72,7 @@
 <tbody>
 <tr>
 <td>Run the built-in Web Export recipe</td>
-<td>KIMng - Recipes → Choose saved recipe… → Web Export</td>
+<td>KIMng - Recipes → Run a recipe… → Web Export</td>
 <td><code>lake_web.jpg</code> in a <code>Web</code> subfolder beside <code>lake.jpg</code></td>
 </tr>
 <tr>
@@ -102,7 +102,7 @@
 </tr>
 </tbody>
 </table>
-<p>These examples assume default suffix naming. KIMng numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.</p>
+<p>These examples assume default suffix naming. KIMng numbers output names when collisions occur in these legacy actions. Recipes and standalone Crop block collisions and retain exact reviewed filenames. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.</p>
 <p>GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.</p>
 <p>Use <strong>KIMng - Settings/About → Settings</strong> to change your defaults. For advanced configuration and command-line overrides, see <a href="commandconfig.html#configuration-and-defaults">Command and Configuration Reference</a>.</p>
 <h2 id="features">Features</h2>
@@ -116,7 +116,7 @@
 
 <p>KIMng includes a dedicated <strong>KIMng - Recipes</strong> submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire selection.</p>
 <ul>
-<li><strong>Run saved recipes:</strong> Open <strong>Choose saved recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
+<li><strong>Run saved recipes:</strong> Open <strong>Run a recipe…</strong> to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.</li>
 <li><strong>Build and edit workflows:</strong> Use <strong>Recipe editor…</strong> to create, duplicate, and organize recipes. Give each recipe a meaningful name.</li>
 <li><strong>Combine processing steps:</strong> Choose among 25 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.</li>
 <li><strong>Enable or disable steps:</strong> Keep operations in a recipe without requiring every step to run each time.</li>
@@ -183,7 +183,7 @@
 <p>KIMng can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under <strong>Actions → KIMng - Settings/About → Settings</strong>. Replacing original files requires an additional confirmation, so KIMng won't silently overwrite them.</p>
 <p>Resizing, compression, conversion, rotation, and flipping follow these settings where supported. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.</p>
 <p><strong>Filenames and batch processing</strong></p>
-<p>When KIMng creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. Open <strong>Settings → Output Filenames</strong> to customize descriptive labels, such as changing <code>photo_compressed.jpg</code> to <code>photo_com.jpg</code>. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use <code>{filename}</code> to represent the original filename without its extension. For example, <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The Recipe Editor previews the resulting names.</p>
+<p>Legacy actions avoid overwriting an existing file by adding a number to the output filename when necessary. Recipes and standalone Crop instead block occupied or duplicate batch targets and publish only the exact reviewed names, including when another file appears after review. Open <strong>Settings → Output Filenames</strong> to customize descriptive labels, such as changing <code>photo_compressed.jpg</code> to <code>photo_com.jpg</code>. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use <code>{filename}</code> to represent the original filename without its extension. For example, <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The Recipe Editor previews the resulting names.</p>
 <p>When processing several files, KIMng keeps the results that completed successfully, even if a later file fails. Failed or invalid results are not published as completed files.</p>
 <p>For examples, see <a href="#quick-start">Getting Started</a>. More detailed information about file protection and settings is available under <a href="commandconfig.html#output-and-file-handling">Safe Handling</a>, while <a href="FORMATS.html">Supported Formats</a> explains format compatibility, encoder requirements, and restrictions.</p>
 <h2 id="installation">Installation</h2>

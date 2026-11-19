@@ -79,6 +79,7 @@ kimng_report_dependencies() {
   # FFprobe is supplied by the FFmpeg package.
   kimng_suggest_package() {
     case "$manager:$1" in
+      apt:pdftoppm) echo poppler-utils ;;
       apt:magick) echo imagemagick-7.q16 ;;
       apt:exiftool) echo libimage-exiftool-perl ;;
       apt:kdialog) echo kdialog ;;
@@ -92,6 +93,7 @@ kimng_report_dependencies() {
       apt:pandoc) echo pandoc ;;
       apt:kbuildsycoca6) echo libkf6service-bin ;;
 
+      dnf:pdftoppm) echo poppler-utils ;;
       dnf:magick) echo ImageMagick ;;
       dnf:exiftool) echo perl-Image-ExifTool ;;
       dnf:kdialog) echo kdialog ;;
@@ -104,6 +106,7 @@ kimng_report_dependencies() {
       dnf:pandoc) echo pandoc ;;
       dnf:kbuildsycoca6) echo kf6-kservice ;;
 
+      pacman:pdftoppm) echo poppler ;;
       pacman:magick) echo imagemagick ;;
       pacman:exiftool) echo perl-image-exiftool ;;
       pacman:kdialog) echo kdialog ;;
@@ -200,6 +203,7 @@ required|qtwidgets|PySide6 Qt Widgets|Graphical dialogs
 required|qtnetwork|Qt map support|Maps and networking
 required|xdg-open|xdg-open|Open output files
 optional|qtwebenginewidgets|PySide6 WebEngine|Embedded HTML guide
+optional|pdftoppm|Poppler PDF rendering|PDF pages to images
 optional|pandoc|Pandoc|HTML documentation
 optional|kbuildsycoca6|KDE service cache|Menu cache refresh
 KIMNG_DEPENDENCIES

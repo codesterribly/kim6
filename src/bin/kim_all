@@ -12323,6 +12323,8 @@ main() {
 
   case "$cmd" in
     crop|overlay)    python3 "$DISPATCHER_DIR/kim_image_ops_dialog.py" "$cmd" "$@" ;;
+    pdf-pages)       python3 "$DISPATCHER_DIR/kim_pdf_pages.py" "$@" ;;
+    pdf-extract)     python3 "$DISPATCHER_DIR/kim_pdf_extract.py" "$@" ;;
     recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
     metadata-view)   action_metadata_ui browser "$@" ;;
     metadata-edit)   action_metadata_ui editor "$@" ;;

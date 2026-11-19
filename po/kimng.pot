@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: KIMng development\n"
 "Report-Msgid-Bugs-To: https://github.com/codesterribly/kim6/issues\n"
-"POT-Creation-Date: 2026-11-17 22:12+0000\n"
+"POT-Creation-Date: 2026-11-18 19:58+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -50,43 +50,43 @@ msgstr ""
 msgid "720p • Smallest file • MP4"
 msgstr ""
 
-#: src/bin/kim_all:11696
+#: src/bin/kim_all:11698
 msgid "A slideshow can contain at most 200 images."
 msgstr ""
 
-#: src/bin/kim_all:8148
+#: src/bin/kim_all:8150
 msgid "A timezone-less camera value is not assumed to be UTC."
 msgstr ""
 
-#: src/bin/kim_all:10001
+#: src/bin/kim_all:10003
 msgid "AV1 CRF must be between 0 and 63."
 msgstr ""
 
-#: src/bin/kim_all:9999
+#: src/bin/kim_all:10001
 msgid "AV1 CRF quality (0-63):"
 msgstr ""
 
-#: src/bin/kim_all:9989
+#: src/bin/kim_all:9991
 msgid "AV1 quality options require --codec av1."
 msgstr ""
 
-#: src/bin/kim_all:9969
+#: src/bin/kim_all:9971
 msgid "AV1 quality was specified more than once."
 msgstr ""
 
-#: src/bin/kim_all:10004
+#: src/bin/kim_all:10006
 msgid "AV1 requires --av1-quality high, balanced, smallest or custom."
 msgstr ""
 
-#: src/bin/kim_all:10000
+#: src/bin/kim_all:10002
 msgid "AV1 speed preset (0-13; lower is slower):"
 msgstr ""
 
-#: src/bin/kim_all:10002
+#: src/bin/kim_all:10004
 msgid "AV1 speed preset must be between -2 and 13."
 msgstr ""
 
-#: src/bin/kim_all:9993
+#: src/bin/kim_all:9995
 msgid "AV1 uses --av1-quality; do not pass the H.264/H.265 --crf option."
 msgstr ""
 
@@ -106,7 +106,7 @@ msgstr ""
 msgid "AVIF · Thumbnail (128 × 128)"
 msgstr ""
 
-#: src/bin/kim_all:9589
+#: src/bin/kim_all:9591
 msgid "About KIMng"
 msgstr ""
 
@@ -126,15 +126,15 @@ msgstr ""
 msgid "Add suffix"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:24
-msgid "Add watermark / overlay…"
+#: src/kim_metadata.desktop.in:44
+msgid "Add watermark…"
 msgstr ""
 
 #: src/bin/kim_all:447
 msgid "After the renamed files have been published, the old selected filenames will be removed. KIMng cannot undo this operation."
 msgstr ""
 
-#: src/bin/kim_all:7921
+#: src/bin/kim_all:7923
 msgid "After:"
 msgstr ""
 
@@ -194,11 +194,11 @@ msgstr ""
 msgid "An inspected source changed. Inspect it again before creating copies."
 msgstr ""
 
-#: src/bin/kim_all:11751
+#: src/bin/kim_all:11753
 msgid "An installed Rec. 709 ICC profile is required for slideshow color conversion."
 msgstr ""
 
-#: src/bin/kim_all:11743
+#: src/bin/kim_all:11745
 msgid "An installed sRGB ICC profile is required for slideshow color conversion."
 msgstr ""
 
@@ -210,31 +210,31 @@ msgstr ""
 msgid "Animated PNG resizing is unavailable: the original animation is unchanged."
 msgstr ""
 
-#: src/bin/kim_all:8790
+#: src/bin/kim_all:8792
 msgid "Animated PNG web export is unavailable: the original animation is unchanged."
 msgstr ""
 
-#: src/bin/kim_all:7922
+#: src/bin/kim_all:7924
 msgid "Apply this fixed local-clock offset? Timezone offsets are not converted."
 msgstr ""
 
-#: src/bin/kim_all:10994
+#: src/bin/kim_all:10996
 msgid "Audio format must be m4a, mp3, flac or wav."
 msgstr ""
 
-#: src/bin/kim_all:11001
+#: src/bin/kim_all:11003
 msgid "Audio mode must be extract or mute."
 msgstr ""
 
-#: src/bin/kim_all:10955
+#: src/bin/kim_all:10957
 msgid "Audio options require values."
 msgstr ""
 
-#: src/bin/kim_all:10986
+#: src/bin/kim_all:10988
 msgid "Audio output format:"
 msgstr ""
 
-#: src/bin/kim_all:11285
+#: src/bin/kim_all:11287
 msgid "Audio validation"
 msgstr ""
 
@@ -246,11 +246,11 @@ msgstr ""
 msgid "Auto-rotate using EXIF"
 msgstr ""
 
-#: src/bin/kim_all:9372
+#: src/bin/kim_all:9374
 msgid "Background color:"
 msgstr ""
 
-#: src/bin/kim_all:7920
+#: src/bin/kim_all:7922
 msgid "Before:"
 msgstr ""
 
@@ -258,7 +258,7 @@ msgstr ""
 msgid "Below image"
 msgstr ""
 
-#: src/bin/kim_all:9342
+#: src/bin/kim_all:9344
 msgid "Black"
 msgstr ""
 
@@ -278,11 +278,11 @@ msgstr ""
 msgid "Camera and lens"
 msgstr ""
 
-#: src/bin/kim_all:8144
+#: src/bin/kim_all:8146
 msgid "Camera capture time:"
 msgstr ""
 
-#: src/bin/kim_all:8147
+#: src/bin/kim_all:8149
 msgid "Camera offset:"
 msgstr ""
 
@@ -338,7 +338,7 @@ msgstr ""
 msgid "Cannot update the progress value. Processing stopped."
 msgstr ""
 
-#: src/bin/kim_all:9326
+#: src/bin/kim_all:9328
 msgid "Canvas dimensions (WIDTHxHEIGHT):"
 msgstr ""
 
@@ -366,7 +366,7 @@ msgstr ""
 msgid "Captions beneath each image require single-frame sources. Set Caption source to None and uncheck Include image capture date and Include camera and lens to retain every frame of a multi-frame input."
 msgstr ""
 
-#: src/kim_metadata.desktop.in:44
+#: src/kim_metadata.desktop.in:39
 msgid "Check and correct extensions…"
 msgstr ""
 
@@ -374,7 +374,7 @@ msgstr ""
 msgid "Choose a rename method:"
 msgstr ""
 
-#: src/bin/kim_all:8114
+#: src/bin/kim_all:8116
 msgid "Choose date synchronization direction:"
 msgstr ""
 
@@ -386,19 +386,15 @@ msgstr ""
 msgid "Choose folder…"
 msgstr ""
 
-#: src/bin/kim_all:8407
+#: src/bin/kim_all:8409
 msgid "Choose output format:"
-msgstr ""
-
-#: src/kim_recipes.desktop.in:14
-msgid "Choose saved recipe…"
 msgstr ""
 
 #: src/bin/kim_ui.py:25
 msgid "Choose which dates inside the image to update. This doesn't change the file's modification date unless you also select that operation."
 msgstr ""
 
-#: src/bin/kim_all:9320
+#: src/bin/kim_all:9322
 msgid "Classic 3:2 (3840 × 2560)"
 msgstr ""
 
@@ -406,153 +402,153 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-#: src/bin/kim_all:9347
+#: src/bin/kim_all:9349
 msgid "Collage background color:"
 msgstr ""
 
-#: src/bin/kim_all:9340
+#: src/bin/kim_all:9342
 msgid "Collage background:"
 msgstr ""
 
-#: src/bin/kim_all:9319
+#: src/bin/kim_all:9321
 msgid "Collage canvas size:"
 msgstr ""
 
-#: src/bin/kim_all:9453
+#: src/bin/kim_all:9455
 msgid "Collage: ImageMagick failed or produced an invalid tile."
 msgstr ""
 
-#: src/bin/kim_all:9286
+#: src/bin/kim_all:9288
 msgid "Collage: approved image selection is invalid."
 msgstr ""
 
-#: src/bin/kim_all:9386
+#: src/bin/kim_all:9388
 msgid "Collage: border must be from 0 to 50 percent."
 msgstr ""
 
-#: src/bin/kim_all:9044 src/bin/kim_all:9417
+#: src/bin/kim_all:9046 src/bin/kim_all:9419
 msgid "Collage: cannot create destination-local staging."
 msgstr ""
 
-#: src/bin/kim_all:9419
+#: src/bin/kim_all:9421
 msgid "Collage: cannot create private staging."
 msgstr ""
 
-#: src/bin/kim_all:9051
+#: src/bin/kim_all:9053
 msgid "Collage: cannot create staging."
 msgstr ""
 
-#: src/bin/kim_all:9192
+#: src/bin/kim_all:9194
 msgid "Collage: cannot finalize the PNG."
 msgstr ""
 
-#: src/bin/kim_all:9057
+#: src/bin/kim_all:9059
 msgid "Collage: cannot initialize canvas."
 msgstr ""
 
-#: src/bin/kim_all:9002
+#: src/bin/kim_all:9004
 msgid "Collage: canvas dimensions must be 100–8192 pixels."
 msgstr ""
 
-#: src/bin/kim_all:9179
+#: src/bin/kim_all:9181
 msgid "Collage: could not composite an image tile."
 msgstr ""
 
-#: src/bin/kim_all:9170
+#: src/bin/kim_all:9172
 msgid "Collage: could not render a shadow."
 msgstr ""
 
-#: src/bin/kim_all:9156
+#: src/bin/kim_all:9158
 msgid "Collage: could not render an image tile."
 msgstr ""
 
-#: src/bin/kim_all:9206
+#: src/bin/kim_all:9208
 msgid "Collage: generated output failed validation or was cancelled."
 msgstr ""
 
-#: src/bin/kim_all:9473
+#: src/bin/kim_all:9475
 msgid "Collage: generated output failed validation."
 msgstr ""
 
-#: src/bin/kim_all:9091 src/bin/kim_all:9161 src/bin/kim_all:9187
-#: src/bin/kim_all:9426 src/bin/kim_all:9442 src/bin/kim_all:9460
-#: src/bin/kim_all:9476
+#: src/bin/kim_all:9093 src/bin/kim_all:9163 src/bin/kim_all:9189
+#: src/bin/kim_all:9428 src/bin/kim_all:9444 src/bin/kim_all:9462
+#: src/bin/kim_all:9478
 msgid "Collage: interrupted before publication."
 msgstr ""
 
-#: src/bin/kim_all:9402
+#: src/bin/kim_all:9404
 msgid "Collage: invalid background color."
 msgstr ""
 
-#: src/bin/kim_all:9367
+#: src/bin/kim_all:9369
 msgid "Collage: invalid layout."
 msgstr ""
 
-#: src/bin/kim_all:9036
+#: src/bin/kim_all:9038
 msgid "Collage: invalid or source-aliasing destination."
 msgstr ""
 
-#: src/bin/kim_all:9279
+#: src/bin/kim_all:9281
 msgid "Collage: invalid settings or empty image selection."
 msgstr ""
 
-#: src/bin/kim_all:9235
+#: src/bin/kim_all:9237
 msgid "Collage: missing layout option value."
 msgstr ""
 
-#: src/bin/kim_all:9227
+#: src/bin/kim_all:9229
 msgid "Collage: missing option value."
 msgstr ""
 
-#: src/bin/kim_all:9291
+#: src/bin/kim_all:9293
 msgid "Collage: no approved images remain."
 msgstr ""
 
-#: src/bin/kim_all:9411
+#: src/bin/kim_all:9413
 msgid "Collage: output destination is invalid or aliases a selected image."
 msgstr ""
 
-#: src/bin/kim_all:9383
+#: src/bin/kim_all:9385
 msgid "Collage: overlap must be from 0 to 90 percent."
 msgstr ""
 
-#: src/bin/kim_all:9210 src/bin/kim_all:9479
+#: src/bin/kim_all:9212 src/bin/kim_all:9481
 msgid "Collage: publication failed; existing files were preserved."
 msgstr ""
 
-#: src/bin/kim_all:9389
+#: src/bin/kim_all:9391
 msgid "Collage: random rotation must be from 0 to 180 degrees."
 msgstr ""
 
-#: src/bin/kim_all:9393
+#: src/bin/kim_all:9395
 msgid "Collage: rotation must be from -180 to 180 degrees."
 msgstr ""
 
-#: src/bin/kim_all:9397
+#: src/bin/kim_all:9399
 msgid "Collage: seed must be an integer."
 msgstr ""
 
-#: src/bin/kim_all:9017
+#: src/bin/kim_all:9019
 msgid "Collage: select between 1 and 100 images."
 msgstr ""
 
-#: src/bin/kim_all:9261
+#: src/bin/kim_all:9263
 msgid "Collage: select regular, unambiguous image files."
 msgstr ""
 
-#: src/bin/kim_all:9375
+#: src/bin/kim_all:9377
 msgid "Collage: size must be WIDTHxHEIGHT."
 msgstr ""
 
-#: src/bin/kim_all:9379
+#: src/bin/kim_all:9381
 msgid "Collage: tile layout must be COLUMNSxROWS."
 msgstr ""
 
-#: src/bin/kim_all:9145
+#: src/bin/kim_all:9147
 msgid "Collage: too many images for the chosen canvas."
 msgstr ""
 
-#: src/bin/kim_all:9248
+#: src/bin/kim_all:9250
 msgid "Collage: unknown option."
 msgstr ""
 
@@ -612,11 +608,11 @@ msgstr ""
 msgid "Compression settings:"
 msgstr ""
 
-#: src/bin/kim_all:10676
+#: src/bin/kim_all:10678
 msgid "Contact grid must be 3x3, 4x4 or 5x5."
 msgstr ""
 
-#: src/bin/kim_all:10908
+#: src/bin/kim_all:10910
 msgid "Contact sheet"
 msgstr ""
 
@@ -694,6 +690,10 @@ msgstr ""
 
 #: src/bin/kim_all:1329
 msgid "Convert Images"
+msgstr ""
+
+#: src/kim_convertandrotate.desktop.in:97
+msgid "Convert PDF pages to images…"
 msgstr ""
 
 #: src/bin/kim_all:2791
@@ -824,11 +824,11 @@ msgstr ""
 msgid "Correctly named copies require distinct regular files without symlinks or hardlink aliases."
 msgstr ""
 
-#: src/bin/kim_all:9653
+#: src/bin/kim_all:9655
 msgid "Could not open the KIMng license."
 msgstr ""
 
-#: src/bin/kim_all:9637
+#: src/bin/kim_all:9639
 msgid "Could not open the metadata application. Check the diagnostic below and reinstall KIMng if an installed component is missing."
 msgstr ""
 
@@ -880,7 +880,7 @@ msgstr ""
 msgid "Create dated copies or explicitly update the selected originals?"
 msgstr ""
 
-#: src/bin/kim_all:8173
+#: src/bin/kim_all:8175
 msgid "Create dated copies or update the selected files?"
 msgstr ""
 
@@ -908,7 +908,7 @@ msgstr ""
 msgid "Current Extension"
 msgstr ""
 
-#: src/bin/kim_all:8146 src/bin/kim_all:8151
+#: src/bin/kim_all:8148 src/bin/kim_all:8153
 msgid "Current file time:"
 msgstr ""
 
@@ -916,11 +916,11 @@ msgstr ""
 msgid "Custom"
 msgstr ""
 
-#: src/bin/kim_all:9324
+#: src/bin/kim_all:9326
 msgid "Custom canvas size"
 msgstr ""
 
-#: src/bin/kim_all:9344
+#: src/bin/kim_all:9346
 msgid "Custom color"
 msgstr ""
 
@@ -940,19 +940,19 @@ msgstr ""
 msgid "Date Fields / All Dates"
 msgstr ""
 
-#: src/bin/kim_all:7901
+#: src/bin/kim_all:7903
 msgid "Date fields to shift:"
 msgstr ""
 
-#: src/bin/kim_all:8099
+#: src/bin/kim_all:8101
 msgid "Date sync: select local, unambiguous regular files."
 msgstr ""
 
-#: src/bin/kim_all:8119
+#: src/bin/kim_all:8121
 msgid "DateTimeOriginal only"
 msgstr ""
 
-#: src/bin/kim_all:8119
+#: src/bin/kim_all:8121
 msgid "DateTimeOriginal, CreateDate and ModifyDate"
 msgstr ""
 
@@ -964,17 +964,16 @@ msgstr ""
 msgid "Detected Format"
 msgstr ""
 
-#: src/bin/kim_all:9352
+#: src/bin/kim_all:9354
 msgid "Disabled"
 msgstr ""
 
 #: src/bin/kim_all:2744 src/bin/kim_all:4839 src/bin/kim_all:6613
-#: src/bin/kim_all:7392 src/bin/kim_all:7794 src/bin/kim_all:7804
-#: src/bin/kim_all:7927
+#: src/bin/kim_all:7392 src/bin/kim_all:7806 src/bin/kim_all:7929
 msgid "Do you want to create new files?"
 msgstr ""
 
-#: src/bin/kim_all:9350
+#: src/bin/kim_all:9352
 msgid "Drop shadows:"
 msgstr ""
 
@@ -986,11 +985,11 @@ msgstr ""
 msgid "EXIF date rename pattern:"
 msgstr ""
 
-#: src/bin/kim_all:8118
+#: src/bin/kim_all:8120
 msgid "EXIF fields to update:"
 msgstr ""
 
-#: src/bin/kim_all:8151
+#: src/bin/kim_all:8153
 msgid "EXIF timestamp preview"
 msgstr ""
 
@@ -998,11 +997,11 @@ msgstr ""
 msgid "Edit GPS on images…"
 msgstr ""
 
-#: src/bin/kim_all:9612
+#: src/bin/kim_all:9614
 msgid "Edit metadata"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:39
+#: src/kim_metadata.desktop.in:19
 msgid "Edit metadata…"
 msgstr ""
 
@@ -1026,11 +1025,11 @@ msgstr ""
 msgid "Embedded caption"
 msgstr ""
 
-#: src/bin/kim_all:9351
+#: src/bin/kim_all:9353
 msgid "Enabled"
 msgstr ""
 
-#: src/bin/kim_all:11834
+#: src/bin/kim_all:11836
 msgid "Encoding MP4 slideshow"
 msgstr ""
 
@@ -1038,7 +1037,7 @@ msgstr ""
 msgid "ExifTool is required for EXIF-date renaming."
 msgstr ""
 
-#: src/bin/kim_all:7895
+#: src/bin/kim_all:7897
 msgid "ExifTool is required for camera timestamp editing."
 msgstr ""
 
@@ -1046,7 +1045,7 @@ msgstr ""
 msgid "ExifTool is required for copyright metadata editing."
 msgstr ""
 
-#: src/bin/kim_all:8110
+#: src/bin/kim_all:8112
 msgid "ExifTool is required for date synchronization."
 msgstr ""
 
@@ -1070,7 +1069,7 @@ msgstr ""
 msgid "Export a single-page PDF with sRGB pixels at 72 pixels per inch, without camera/descriptive metadata or an embedded ICC profile? Choose No to select JPEG, PNG or TIFF instead. The Photoshop source stays unchanged."
 msgstr ""
 
-#: src/bin/kim_all:11183
+#: src/bin/kim_all:11185
 msgid "Exporting the first audio stream only; additional streams are omitted:"
 msgstr ""
 
@@ -1086,27 +1085,31 @@ msgstr ""
 msgid "Extract automatic thumbnail"
 msgstr ""
 
+#: src/kim_convertandrotate.desktop.in:102
+msgid "Extract embedded images from PDF…"
+msgstr ""
+
 #: src/kim_videoutilities.desktop.in:19
 msgid "Extract frame at timestamp…"
 msgstr ""
 
-#: src/bin/kim_all:10019
+#: src/bin/kim_all:10021
 msgid "FFmpeg and ffprobe are required for video transcoding."
 msgstr ""
 
-#: src/bin/kim_all:10555
+#: src/bin/kim_all:10557
 msgid "FFmpeg and ffprobe are required for video utilities."
 msgstr ""
 
-#: src/bin/kim_all:11683
+#: src/bin/kim_all:11685
 msgid "FFmpeg encoder capabilities could not be queried for slideshow creation."
 msgstr ""
 
-#: src/bin/kim_all:10022
+#: src/bin/kim_all:10024
 msgid "FFmpeg encoder capabilities could not be queried."
 msgstr ""
 
-#: src/bin/kim_all:10332
+#: src/bin/kim_all:10334
 msgid "FFmpeg failed or produced no complete output"
 msgstr ""
 
@@ -1118,7 +1121,7 @@ msgstr ""
 msgid "Failed:"
 msgstr ""
 
-#: src/bin/kim_all:8153
+#: src/bin/kim_all:8155
 msgid "Fields:"
 msgstr ""
 
@@ -1150,15 +1153,15 @@ msgstr ""
 msgid "Files successfully processed:"
 msgstr ""
 
-#: src/bin/kim_all:8144
+#: src/bin/kim_all:8146
 msgid "Filesystem modification time preview"
 msgstr ""
 
-#: src/bin/kim_all:9330
+#: src/bin/kim_all:9332
 msgid "Fill and crop"
 msgstr ""
 
-#: src/bin/kim_all:9329
+#: src/bin/kim_all:9331
 msgid "Fit entire image"
 msgstr ""
 
@@ -1174,19 +1177,19 @@ msgstr ""
 msgid "Flip vertically"
 msgstr ""
 
-#: src/bin/kim_all:10608
+#: src/bin/kim_all:10610
 msgid "Frame extraction mode:"
 msgstr ""
 
-#: src/bin/kim_all:10690
+#: src/bin/kim_all:10692
 msgid "Frame format must be png or jpg."
 msgstr ""
 
-#: src/bin/kim_all:10682
+#: src/bin/kim_all:10684
 msgid "Frame mode must be single, thumbnail or contact."
 msgstr ""
 
-#: src/bin/kim_all:10573
+#: src/bin/kim_all:10575
 msgid "Frame options require values."
 msgstr ""
 
@@ -1194,47 +1197,47 @@ msgstr ""
 msgid "Full metadata stripping also removes ordinary metadata fields, but signed C2PA / Content Credentials may remain because ExifTool cannot guarantee their removal."
 msgstr ""
 
-#: src/bin/kim_all:11397
+#: src/bin/kim_all:11399
 msgid "GIF duration must be greater than 0 and at most 15 seconds."
 msgstr ""
 
-#: src/bin/kim_all:11401
+#: src/bin/kim_all:11403
 msgid "GIF frame rate must be 10, 12, 15 or 24."
 msgstr ""
 
-#: src/bin/kim_all:11439
+#: src/bin/kim_all:11441
 msgid "GIF interval exceeds video duration; shorten the requested interval"
 msgstr ""
 
-#: src/bin/kim_all:11409
+#: src/bin/kim_all:11411
 msgid "GIF loop must be infinite or once."
 msgstr ""
 
-#: src/bin/kim_all:11337
+#: src/bin/kim_all:11339
 msgid "GIF options require values."
 msgstr ""
 
-#: src/bin/kim_all:11519
+#: src/bin/kim_all:11521
 msgid "GIF output is invalid or contains fewer than two frames"
 msgstr ""
 
-#: src/bin/kim_all:11411
+#: src/bin/kim_all:11413
 msgid "GIF request exceeds 360 frames; shorten the duration or lower the frame rate."
 msgstr ""
 
-#: src/bin/kim_all:11459
+#: src/bin/kim_all:11461
 msgid "GIF request exceeds the 200 million output pixel-frame work limit; lower the frame rate, width or duration"
 msgstr ""
 
-#: src/bin/kim_all:11395
+#: src/bin/kim_all:11397
 msgid "GIF start must be HH:MM:SS[.sss]."
 msgstr ""
 
-#: src/bin/kim_all:11495
+#: src/bin/kim_all:11497
 msgid "GIF validation"
 msgstr ""
 
-#: src/bin/kim_all:11405
+#: src/bin/kim_all:11407
 msgid "GIF width must be 320, 480, 640 or 800."
 msgstr ""
 
@@ -1334,7 +1337,7 @@ msgstr ""
 msgid "Image Capture Dates"
 msgstr ""
 
-#: src/bin/kim_all:9336
+#: src/bin/kim_all:9338
 msgid "Image borders:"
 msgstr ""
 
@@ -1342,23 +1345,23 @@ msgstr ""
 msgid "Image capture date update failed; no incomplete output was published."
 msgstr ""
 
-#: src/bin/kim_all:7901
+#: src/bin/kim_all:7903
 msgid "Image capture time only"
 msgstr ""
 
-#: src/bin/kim_all:7901
+#: src/bin/kim_all:7903
 msgid "Image capture, creation and modification dates"
 msgstr ""
 
-#: src/bin/kim_all:9354
+#: src/bin/kim_all:9356
 msgid "Image order:"
 msgstr ""
 
-#: src/bin/kim_all:9328
+#: src/bin/kim_all:9330
 msgid "Image placement:"
 msgstr ""
 
-#: src/bin/kim_all:11691
+#: src/bin/kim_all:11693
 msgid "ImageMagick, ExifTool and setsid are required to prepare cancellable color-managed slideshow frames."
 msgstr ""
 
@@ -1390,19 +1393,19 @@ msgstr ""
 msgid "Interrupted:"
 msgstr ""
 
-#: src/bin/kim_all:10655
+#: src/bin/kim_all:10657
 msgid "Invalid frame extraction options."
 msgstr ""
 
-#: src/bin/kim_all:10645
+#: src/bin/kim_all:10647
 msgid "Invalid per-video timestamps."
 msgstr ""
 
-#: src/bin/kim_all:11385
+#: src/bin/kim_all:11387
 msgid "Invalid video GIF settings."
 msgstr ""
 
-#: src/bin/kim_all:10623
+#: src/bin/kim_all:10625
 msgid "Invalid video contact sheet settings."
 msgstr ""
 
@@ -1426,7 +1429,7 @@ msgstr ""
 msgid "JPEG quality:"
 msgstr ""
 
-#: src/bin/kim_all:2648 src/bin/kim_all:8444
+#: src/bin/kim_all:2648 src/bin/kim_all:8446
 msgid "JPEG scan and optimization options require JPEG output."
 msgstr ""
 
@@ -1442,7 +1445,7 @@ msgstr ""
 msgid "JPEG · Thumbnail (128 × 128)"
 msgstr ""
 
-#: src/bin/kim_all:8831
+#: src/bin/kim_all:8833
 msgid "JPEG-specific options cannot be used with this keep-format input:"
 msgstr ""
 
@@ -1481,39 +1484,39 @@ msgstr ""
 #: src/bin/kim_all:5990 src/bin/kim_all:6009 src/bin/kim_all:6129
 #: src/bin/kim_all:6414 src/bin/kim_all:6604 src/bin/kim_all:6612
 #: src/bin/kim_all:6645 src/bin/kim_all:6841 src/bin/kim_all:7386
-#: src/bin/kim_all:7392 src/bin/kim_all:7513 src/bin/kim_all:7794
-#: src/bin/kim_all:7804 src/bin/kim_all:7858 src/bin/kim_all:7900
-#: src/bin/kim_all:7901 src/bin/kim_all:7923 src/bin/kim_all:7927
-#: src/bin/kim_all:7976 src/bin/kim_all:8114 src/bin/kim_all:8118
-#: src/bin/kim_all:8304 src/bin/kim_all:8378 src/bin/kim_all:8390
-#: src/bin/kim_all:8400 src/bin/kim_all:8414 src/bin/kim_all:8440
-#: src/bin/kim_all:8449 src/bin/kim_all:8745 src/bin/kim_all:8763
-#: src/bin/kim_all:8803 src/bin/kim_all:8981 src/bin/kim_all:9002
-#: src/bin/kim_all:9017 src/bin/kim_all:9036 src/bin/kim_all:9090
-#: src/bin/kim_all:9214 src/bin/kim_all:9227 src/bin/kim_all:9235
-#: src/bin/kim_all:9248 src/bin/kim_all:9261 src/bin/kim_all:9367
-#: src/bin/kim_all:9375 src/bin/kim_all:9379 src/bin/kim_all:9383
-#: src/bin/kim_all:9386 src/bin/kim_all:9389 src/bin/kim_all:9393
-#: src/bin/kim_all:9397 src/bin/kim_all:9402 src/bin/kim_all:9411
-#: src/bin/kim_all:9426 src/bin/kim_all:9442 src/bin/kim_all:9453
-#: src/bin/kim_all:9460 src/bin/kim_all:9473 src/bin/kim_all:9476
-#: src/bin/kim_all:9479 src/bin/kim_all:9482 src/bin/kim_all:9649
-#: src/bin/kim_all:9653 src/bin/kim_all:10231 src/bin/kim_all:10235
-#: src/bin/kim_all:10254 src/bin/kim_all:10263 src/bin/kim_all:10277
-#: src/bin/kim_all:10300 src/bin/kim_all:10306 src/bin/kim_all:10327
-#: src/bin/kim_all:10334 src/bin/kim_all:10339 src/bin/kim_all:10346
-#: src/bin/kim_all:10356 src/bin/kim_all:10361 src/bin/kim_all:10362
-#: src/bin/kim_all:10369 src/bin/kim_all:10393 src/bin/kim_all:10396
-#: src/bin/kim_all:10548 src/bin/kim_all:10849 src/bin/kim_all:10865
-#: src/bin/kim_all:10919 src/bin/kim_all:10934 src/bin/kim_all:10941
-#: src/bin/kim_all:11155 src/bin/kim_all:11171 src/bin/kim_all:11185
-#: src/bin/kim_all:11254 src/bin/kim_all:11314 src/bin/kim_all:11321
-#: src/bin/kim_all:11420 src/bin/kim_all:11436 src/bin/kim_all:11479
-#: src/bin/kim_all:11503 src/bin/kim_all:11530 src/bin/kim_all:11537
-#: src/bin/kim_all:11761 src/bin/kim_all:11765 src/bin/kim_all:11775
-#: src/bin/kim_all:11790 src/bin/kim_all:11795 src/bin/kim_all:11804
-#: src/bin/kim_all:11808 src/bin/kim_all:11817 src/bin/kim_all:11842
-#: src/bin/kim_all:11865 src/bin/kim_all:11895 src/bin/kim_all:11914
+#: src/bin/kim_all:7392 src/bin/kim_all:7513 src/bin/kim_all:7806
+#: src/bin/kim_all:7860 src/bin/kim_all:7902 src/bin/kim_all:7903
+#: src/bin/kim_all:7925 src/bin/kim_all:7929 src/bin/kim_all:7978
+#: src/bin/kim_all:8116 src/bin/kim_all:8120 src/bin/kim_all:8306
+#: src/bin/kim_all:8380 src/bin/kim_all:8392 src/bin/kim_all:8402
+#: src/bin/kim_all:8416 src/bin/kim_all:8442 src/bin/kim_all:8451
+#: src/bin/kim_all:8747 src/bin/kim_all:8765 src/bin/kim_all:8805
+#: src/bin/kim_all:8983 src/bin/kim_all:9004 src/bin/kim_all:9019
+#: src/bin/kim_all:9038 src/bin/kim_all:9092 src/bin/kim_all:9216
+#: src/bin/kim_all:9229 src/bin/kim_all:9237 src/bin/kim_all:9250
+#: src/bin/kim_all:9263 src/bin/kim_all:9369 src/bin/kim_all:9377
+#: src/bin/kim_all:9381 src/bin/kim_all:9385 src/bin/kim_all:9388
+#: src/bin/kim_all:9391 src/bin/kim_all:9395 src/bin/kim_all:9399
+#: src/bin/kim_all:9404 src/bin/kim_all:9413 src/bin/kim_all:9428
+#: src/bin/kim_all:9444 src/bin/kim_all:9455 src/bin/kim_all:9462
+#: src/bin/kim_all:9475 src/bin/kim_all:9478 src/bin/kim_all:9481
+#: src/bin/kim_all:9484 src/bin/kim_all:9651 src/bin/kim_all:9655
+#: src/bin/kim_all:10233 src/bin/kim_all:10237 src/bin/kim_all:10256
+#: src/bin/kim_all:10265 src/bin/kim_all:10279 src/bin/kim_all:10302
+#: src/bin/kim_all:10308 src/bin/kim_all:10329 src/bin/kim_all:10336
+#: src/bin/kim_all:10341 src/bin/kim_all:10348 src/bin/kim_all:10358
+#: src/bin/kim_all:10363 src/bin/kim_all:10364 src/bin/kim_all:10371
+#: src/bin/kim_all:10395 src/bin/kim_all:10398 src/bin/kim_all:10550
+#: src/bin/kim_all:10851 src/bin/kim_all:10867 src/bin/kim_all:10921
+#: src/bin/kim_all:10936 src/bin/kim_all:10943 src/bin/kim_all:11157
+#: src/bin/kim_all:11173 src/bin/kim_all:11187 src/bin/kim_all:11256
+#: src/bin/kim_all:11316 src/bin/kim_all:11323 src/bin/kim_all:11422
+#: src/bin/kim_all:11438 src/bin/kim_all:11481 src/bin/kim_all:11505
+#: src/bin/kim_all:11532 src/bin/kim_all:11539 src/bin/kim_all:11763
+#: src/bin/kim_all:11767 src/bin/kim_all:11777 src/bin/kim_all:11792
+#: src/bin/kim_all:11797 src/bin/kim_all:11806 src/bin/kim_all:11810
+#: src/bin/kim_all:11819 src/bin/kim_all:11844 src/bin/kim_all:11867
+#: src/bin/kim_all:11897 src/bin/kim_all:11916
 msgid "KIMng"
 msgstr ""
 
@@ -1565,34 +1568,34 @@ msgstr ""
 msgid "KIMng - Create/Publish"
 msgstr ""
 
-#: src/bin/kim_all:11413
+#: src/bin/kim_all:11415
 msgid "KIMng - Creating video GIFs…"
 msgstr ""
 
-#: src/bin/kim_all:8143 src/bin/kim_all:8150 src/bin/kim_all:8173
+#: src/bin/kim_all:8145 src/bin/kim_all:8152 src/bin/kim_all:8175
 msgid "KIMng - Date synchronization"
 msgstr ""
 
-#: src/bin/kim_all:8761
+#: src/bin/kim_all:8763
 msgid "KIMng - Exporting file: "
 msgstr ""
 
-#: src/bin/kim_all:10986
+#: src/bin/kim_all:10988
 msgid "KIMng - Extract audio"
 msgstr ""
 
-#: src/bin/kim_all:10842
+#: src/bin/kim_all:10844
 msgid "KIMng - Extracting video frames…"
 msgstr ""
 
 #: src/bin/kim_all:2821 src/bin/kim_all:3376 src/bin/kim_all:5410
 #: src/bin/kim_all:5726 src/bin/kim_all:6620 src/bin/kim_all:7401
-#: src/bin/kim_all:7808 src/bin/kim_all:7929 src/bin/kim_all:9041
-#: src/bin/kim_all:9415
+#: src/bin/kim_all:7810 src/bin/kim_all:7931 src/bin/kim_all:9043
+#: src/bin/kim_all:9417
 msgid "KIMng - Initialising ..."
 msgstr ""
 
-#: src/bin/kim_all:10223
+#: src/bin/kim_all:10225
 msgid "KIMng - Initializing video transcode…"
 msgstr ""
 
@@ -1601,7 +1604,7 @@ msgid "KIMng - Location/GPS"
 msgstr ""
 
 #: src/kim_metadata.desktop.in:9
-msgid "KIMng - Organize/Metadata"
+msgid "KIMng - Metadata/Organize"
 msgstr ""
 
 #: src/bin/kim_all:3037
@@ -1620,20 +1623,20 @@ msgstr ""
 msgid "KIMng - Preparing email image: "
 msgstr ""
 
-#: src/bin/kim_all:11758
+#: src/bin/kim_all:11760
 msgid "KIMng - Preparing image:"
 msgstr ""
 
-#: src/bin/kim_all:11753
+#: src/bin/kim_all:11755
 msgid "KIMng - Preparing slideshow…"
 msgstr ""
 
-#: src/bin/kim_all:3456 src/bin/kim_all:6192 src/bin/kim_all:9088
-#: src/bin/kim_all:9425
+#: src/bin/kim_all:3456 src/bin/kim_all:6192 src/bin/kim_all:9090
+#: src/bin/kim_all:9427
 msgid "KIMng - Processing file: "
 msgstr ""
 
-#: src/bin/kim_all:11148
+#: src/bin/kim_all:11150
 msgid "KIMng - Processing video audio…"
 msgstr ""
 
@@ -1657,7 +1660,7 @@ msgstr ""
 msgid "KIMng - Set dates"
 msgstr ""
 
-#: src/bin/kim_all:7811
+#: src/bin/kim_all:7813
 msgid "KIMng - Setting rights: "
 msgstr ""
 
@@ -1665,7 +1668,7 @@ msgstr ""
 msgid "KIMng - Settings/About"
 msgstr ""
 
-#: src/bin/kim_all:7932
+#: src/bin/kim_all:7934
 msgid "KIMng - Shifting camera time: "
 msgstr ""
 
@@ -1673,15 +1676,15 @@ msgstr ""
 msgid "KIMng - Stripping metadata from file: "
 msgstr ""
 
-#: src/bin/kim_all:8189
+#: src/bin/kim_all:8191
 msgid "KIMng - Synchronizing date: "
 msgstr ""
 
-#: src/bin/kim_all:8176
+#: src/bin/kim_all:8178
 msgid "KIMng - Synchronizing image capture dates…"
 msgstr ""
 
-#: src/bin/kim_all:10228
+#: src/bin/kim_all:10230
 msgid "KIMng - Transcoding video:"
 msgstr ""
 
@@ -1697,7 +1700,7 @@ msgstr ""
 msgid "KIMng - Validating animated PNG: "
 msgstr ""
 
-#: src/bin/kim_all:11418
+#: src/bin/kim_all:11420
 msgid "KIMng - Video GIF:"
 msgstr ""
 
@@ -1705,19 +1708,19 @@ msgstr ""
 msgid "KIMng - Video Utilities"
 msgstr ""
 
-#: src/bin/kim_all:11153
+#: src/bin/kim_all:11155
 msgid "KIMng - Video audio:"
 msgstr ""
 
-#: src/bin/kim_all:10847
+#: src/bin/kim_all:10849
 msgid "KIMng - Video frame:"
 msgstr ""
 
-#: src/bin/kim_all:8407
+#: src/bin/kim_all:8409
 msgid "KIMng - Web Export"
 msgstr ""
 
-#: src/bin/kim_all:8727
+#: src/bin/kim_all:8729
 msgid "KIMng - Web exporting images ..."
 msgstr ""
 
@@ -1737,7 +1740,7 @@ msgstr ""
 msgid "Keep originals unchanged"
 msgstr ""
 
-#: src/bin/kim_all:9335
+#: src/bin/kim_all:9337
 msgid "Large"
 msgstr ""
 
@@ -1745,11 +1748,11 @@ msgstr ""
 msgid "License"
 msgstr ""
 
-#: src/bin/kim_all:10262
+#: src/bin/kim_all:10264
 msgid "MP4 cannot replace a source with a different filename extension; choose Create new files"
 msgstr ""
 
-#: src/bin/kim_all:8411
+#: src/bin/kim_all:8413
 msgid "Max image size (e.g. 1600x1600):"
 msgstr ""
 
@@ -1757,7 +1760,7 @@ msgstr ""
 msgid "Maximum"
 msgstr ""
 
-#: src/bin/kim_all:9334
+#: src/bin/kim_all:9336
 msgid "Medium"
 msgstr ""
 
@@ -1773,7 +1776,7 @@ msgstr ""
 msgid "No"
 msgstr ""
 
-#: src/bin/kim_all:9337
+#: src/bin/kim_all:9339
 msgid "No borders"
 msgstr ""
 
@@ -1781,11 +1784,11 @@ msgstr ""
 msgid "No outputs were successfully published; size savings are not applicable."
 msgstr ""
 
-#: src/bin/kim_all:11811
+#: src/bin/kim_all:11813
 msgid "No slideshow frames prepared."
 msgstr ""
 
-#: src/bin/kim_all:10030
+#: src/bin/kim_all:10032
 msgid "No supported AV1 encoder is available (libsvtav1 or libaom-av1)."
 msgstr ""
 
@@ -1793,11 +1796,11 @@ msgstr ""
 msgid "No supported mail client was found. Prepared images are kept here; attach them manually and delete the folder when finished:"
 msgstr ""
 
-#: src/bin/kim_all:8139
+#: src/bin/kim_all:8141
 msgid "No valid destination date can be calculated. No date was changed. Use Set Image Capture Date… or choose an explicit camera timezone."
 msgstr ""
 
-#: src/bin/kim_all:9332
+#: src/bin/kim_all:9334
 msgid "None"
 msgstr ""
 
@@ -1809,7 +1812,7 @@ msgstr ""
 msgid "Not scheduled:"
 msgstr ""
 
-#: src/bin/kim_all:9370
+#: src/bin/kim_all:9372
 msgid "Number of rows and columns:"
 msgstr ""
 
@@ -1817,7 +1820,7 @@ msgstr ""
 msgid "Optimize JPEG Huffman Coding"
 msgstr ""
 
-#: src/bin/kim_all:8407
+#: src/bin/kim_all:8409
 msgid "Original Format"
 msgstr ""
 
@@ -1837,7 +1840,7 @@ msgstr ""
 msgid "Output total size:"
 msgstr ""
 
-#: src/bin/kim_all:9371
+#: src/bin/kim_all:9373
 msgid "Overlapping ratio in percent:"
 msgstr ""
 
@@ -1897,11 +1900,11 @@ msgstr ""
 msgid "Planning date change:"
 msgstr ""
 
-#: src/bin/kim_all:9339
+#: src/bin/kim_all:9341
 msgid "Polaroid frame"
 msgstr ""
 
-#: src/bin/kim_all:9323
+#: src/bin/kim_all:9325
 msgid "Portrait 4:5 (3200 × 4000)"
 msgstr ""
 
@@ -1921,7 +1924,7 @@ msgstr ""
 msgid "Preparing source images…"
 msgstr ""
 
-#: src/bin/kim_all:7919
+#: src/bin/kim_all:7921
 msgid "Preview camera-time adjustment"
 msgstr ""
 
@@ -1965,11 +1968,11 @@ msgstr ""
 msgid "Progressive JPEG:"
 msgstr ""
 
-#: src/bin/kim_all:8152
+#: src/bin/kim_all:8154
 msgid "Proposed DateTimeOriginal:"
 msgstr ""
 
-#: src/bin/kim_all:8145
+#: src/bin/kim_all:8147
 msgid "Proposed local filesystem time:"
 msgstr ""
 
@@ -1981,11 +1984,11 @@ msgstr ""
 msgid "Publishing completed output…"
 msgstr ""
 
-#: src/bin/kim_all:9631
+#: src/bin/kim_all:9633
 msgid "Python 3 with PySide6 is required. Install PySide6 for the python3 on PATH, then try again."
 msgstr ""
 
-#: src/bin/kim_all:8247
+#: src/bin/kim_all:8249
 msgid "RAW metadata editing is unsupported"
 msgstr ""
 
@@ -2033,7 +2036,7 @@ msgstr ""
 msgid "Rename destination"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:14
+#: src/kim_metadata.desktop.in:29
 msgid "Rename images…"
 msgstr ""
 
@@ -2149,6 +2152,10 @@ msgstr ""
 msgid "Rotate custom…"
 msgstr ""
 
+#: src/kim_recipes.desktop.in:14
+msgid "Run a recipe…"
+msgstr ""
+
 #: src/bin/kim_all:3750
 msgid "Saved copies:"
 msgstr ""
@@ -2177,11 +2184,11 @@ msgstr ""
 msgid "Select an ordinary file with no symlinks or hardlink aliases"
 msgstr ""
 
-#: src/bin/kim_all:9617
+#: src/bin/kim_all:9619
 msgid "Select at least one image."
 msgstr ""
 
-#: src/bin/kim_all:11694
+#: src/bin/kim_all:11696
 msgid "Select local, unambiguous image files for the slideshow."
 msgstr ""
 
@@ -2189,11 +2196,11 @@ msgstr ""
 msgid "Select local, unambiguous image files."
 msgstr ""
 
-#: src/bin/kim_all:10548
+#: src/bin/kim_all:10550
 msgid "Select local, unambiguous regular video files."
 msgstr ""
 
-#: src/bin/kim_all:8359 src/bin/kim_all:8367
+#: src/bin/kim_all:8361 src/bin/kim_all:8369
 msgid "Select only one JPEG scan mode."
 msgstr ""
 
@@ -2219,7 +2226,7 @@ msgstr ""
 msgid "Selected source changed"
 msgstr ""
 
-#: src/bin/kim_all:9355
+#: src/bin/kim_all:9357
 msgid "Selection order"
 msgstr ""
 
@@ -2235,19 +2242,19 @@ msgstr ""
 msgid "Set Creator and Copyright"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:19
-msgid "Set creator and copyright…"
+#: src/kim_metadata.desktop.in:49
+msgid "Set creator/copyright/usage…"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:49
+#: src/kim_metadata.desktop.in:34
 msgid "Set dates…"
 msgstr ""
 
-#: src/bin/kim_all:8115
+#: src/bin/kim_all:8117
 msgid "Set file modification time from DateTimeOriginal"
 msgstr ""
 
-#: src/bin/kim_all:8116
+#: src/bin/kim_all:8118
 msgid "Set image capture time from file modification time"
 msgstr ""
 
@@ -2255,11 +2262,11 @@ msgstr ""
 msgid "Settings…"
 msgstr ""
 
-#: src/bin/kim_all:9356
+#: src/bin/kim_all:9358
 msgid "Shuffle images"
 msgstr ""
 
-#: src/bin/kim_all:7900
+#: src/bin/kim_all:7902
 msgid "Signed camera-time offset (±HH:MM:SS):"
 msgstr ""
 
@@ -2267,7 +2274,7 @@ msgstr ""
 msgid "Size increase:"
 msgstr ""
 
-#: src/bin/kim_all:9369
+#: src/bin/kim_all:9371
 msgid "Size of small images:"
 msgstr ""
 
@@ -2287,87 +2294,87 @@ msgstr ""
 msgid "Skipped:"
 msgstr ""
 
-#: src/bin/kim_all:11679
+#: src/bin/kim_all:11681
 msgid "Slideshow background must be a supported color name or #RRGGBB."
 msgstr ""
 
-#: src/bin/kim_all:11728
+#: src/bin/kim_all:11730
 msgid "Slideshow destination is occupied; choose a new path."
 msgstr ""
 
-#: src/bin/kim_all:11675
+#: src/bin/kim_all:11677
 msgid "Slideshow dimensions must be even and no larger than 1920x1080."
 msgstr ""
 
-#: src/bin/kim_all:11698
+#: src/bin/kim_all:11700
 msgid "Slideshow duration is limited to 600 seconds and 18,000 frames."
 msgstr ""
 
-#: src/bin/kim_all:11855 src/bin/kim_all:11859
+#: src/bin/kim_all:11857 src/bin/kim_all:11861
 msgid "Slideshow encoder failed or produced no output."
 msgstr ""
 
-#: src/bin/kim_all:11893
+#: src/bin/kim_all:11895
 msgid "Slideshow failed container, frame, duration or full-decode validation."
 msgstr ""
 
-#: src/bin/kim_all:11700
+#: src/bin/kim_all:11702
 msgid "Slideshow filenames cannot contain newlines."
 msgstr ""
 
-#: src/bin/kim_all:11671
+#: src/bin/kim_all:11673
 msgid "Slideshow frame rate must be 1-30 fps."
 msgstr ""
 
-#: src/bin/kim_all:11677
+#: src/bin/kim_all:11679
 msgid "Slideshow frame size exceeds the 1080p resource limit."
 msgstr ""
 
-#: src/bin/kim_all:11815
+#: src/bin/kim_all:11817
 msgid "Slideshow interrupted before encoding."
 msgstr ""
 
-#: src/bin/kim_all:11840
+#: src/bin/kim_all:11842
 msgid "Slideshow interrupted during encoding."
 msgstr ""
 
-#: src/bin/kim_all:11586
+#: src/bin/kim_all:11588
 msgid "Slideshow options require a value."
 msgstr ""
 
-#: src/bin/kim_all:11726
+#: src/bin/kim_all:11728
 msgid "Slideshow output cannot alias a selected source."
 msgstr ""
 
-#: src/bin/kim_all:11722 src/bin/kim_all:11724
+#: src/bin/kim_all:11724 src/bin/kim_all:11726
 msgid "Slideshow output directory is unavailable."
 msgstr ""
 
-#: src/bin/kim_all:11721
+#: src/bin/kim_all:11723
 msgid "Slideshow output must use the .mp4 extension."
 msgstr ""
 
-#: src/bin/kim_all:11910
+#: src/bin/kim_all:11912
 msgid "Slideshow publication failed or was interrupted."
 msgstr ""
 
-#: src/bin/kim_all:11902
+#: src/bin/kim_all:11904
 msgid "Slideshow publication failed; destination was preserved."
 msgstr ""
 
-#: src/bin/kim_all:11670
+#: src/bin/kim_all:11672
 msgid "Slideshow seconds per image must be 1–30."
 msgstr ""
 
-#: src/bin/kim_all:11672
+#: src/bin/kim_all:11674
 msgid "Slideshow size must be WIDTHxHEIGHT."
 msgstr ""
 
-#: src/bin/kim_all:11755
+#: src/bin/kim_all:11757
 msgid "Slideshow staging failed."
 msgstr ""
 
-#: src/bin/kim_all:9333
+#: src/bin/kim_all:9335
 msgid "Small"
 msgstr ""
 
@@ -2399,11 +2406,11 @@ msgstr ""
 msgid "Spaces to Underscores"
 msgstr ""
 
-#: src/bin/kim_all:9331
+#: src/bin/kim_all:9333
 msgid "Spacing between images:"
 msgstr ""
 
-#: src/bin/kim_all:9322
+#: src/bin/kim_all:9324
 msgid "Square (3200 × 3200)"
 msgstr ""
 
@@ -2423,7 +2430,7 @@ msgstr ""
 msgid "Status"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:29
+#: src/kim_metadata.desktop.in:24
 msgid "Strip metadata"
 msgstr ""
 
@@ -2479,7 +2486,7 @@ msgstr ""
 msgid "Text to overwrite:"
 msgstr ""
 
-#: src/bin/kim_all:11687
+#: src/bin/kim_all:11689
 msgid "The FFmpeg libx264 encoder is required to create an H.264 slideshow."
 msgstr ""
 
@@ -2499,11 +2506,11 @@ msgstr ""
 msgid "The installed ImageMagick JPEG XL encoder is unavailable."
 msgstr ""
 
-#: src/bin/kim_all:9649
+#: src/bin/kim_all:9651
 msgid "The installed license or xdg-open is unavailable."
 msgstr ""
 
-#: src/bin/kim_all:9626
+#: src/bin/kim_all:9628
 msgid "The installed metadata component is missing or unreadable. Reinstall KIMng:"
 msgstr ""
 
@@ -2511,11 +2518,11 @@ msgstr ""
 msgid "The same file was selected more than once. Nothing was changed."
 msgstr ""
 
-#: src/bin/kim_all:10034
+#: src/bin/kim_all:10036
 msgid "The selected AV1 encoder accepts custom CPU speed values from 0 to 8."
 msgstr ""
 
-#: src/bin/kim_all:10037
+#: src/bin/kim_all:10039
 msgid "The selected FFmpeg video encoder is unavailable:"
 msgstr ""
 
@@ -2527,7 +2534,7 @@ msgstr ""
 msgid "The timezone where the image was taken. If you don't know it, choose Unknown. KIMng won't guess based on your computer's timezone."
 msgstr ""
 
-#: src/bin/kim_all:9338
+#: src/bin/kim_all:9340
 msgid "Thin white border"
 msgstr ""
 
@@ -2539,7 +2546,7 @@ msgstr ""
 msgid "This action replaces selected original images, not copies."
 msgstr ""
 
-#: src/bin/kim_all:9343
+#: src/bin/kim_all:9345
 msgid "Transparent"
 msgstr ""
 
@@ -2551,11 +2558,11 @@ msgstr ""
 msgid "Unexpected progress cancellation reply. Processing stopped."
 msgstr ""
 
-#: src/bin/kim_all:10974
+#: src/bin/kim_all:10976
 msgid "Unknown audio option:"
 msgstr ""
 
-#: src/bin/kim_all:10596
+#: src/bin/kim_all:10598
 msgid "Unknown frame option:"
 msgstr ""
 
@@ -2563,15 +2570,15 @@ msgstr ""
 msgid "Unknown or unsupported format"
 msgstr ""
 
-#: src/bin/kim_all:11608
+#: src/bin/kim_all:11610
 msgid "Unknown slideshow option:"
 msgstr ""
 
-#: src/bin/kim_all:11361
+#: src/bin/kim_all:11363
 msgid "Unknown video GIF option:"
 msgstr ""
 
-#: src/bin/kim_all:9979
+#: src/bin/kim_all:9981
 msgid "Unknown video option:"
 msgstr ""
 
@@ -2587,7 +2594,7 @@ msgstr ""
 msgid "Unsafe staged copy"
 msgstr ""
 
-#: src/bin/kim_all:10667
+#: src/bin/kim_all:10669
 msgid "Use a timestamp formatted HH:MM:SS[.sss]."
 msgstr ""
 
@@ -2603,7 +2610,7 @@ msgstr ""
 msgid "Uses more efficient lossless coding of the JPEG's compressed data. It can reduce file size without changing the decoded image pixels or selected JPEG quality. It may take slightly longer to encode."
 msgstr ""
 
-#: src/bin/kim_all:11889
+#: src/bin/kim_all:11891
 msgid "Validating slideshow decode"
 msgstr ""
 
@@ -2619,63 +2626,63 @@ msgstr ""
 msgid "Verifying resulting PDF…"
 msgstr ""
 
-#: src/bin/kim_all:9990
+#: src/bin/kim_all:9992
 msgid "Video CRF must be 17, 23 or 29."
 msgstr ""
 
-#: src/bin/kim_all:9966
+#: src/bin/kim_all:9968
 msgid "Video CRF was specified more than once."
 msgstr ""
 
-#: src/bin/kim_all:11474
+#: src/bin/kim_all:11476
 msgid "Video GIF"
 msgstr ""
 
-#: src/bin/kim_all:11249
+#: src/bin/kim_all:11251
 msgid "Video audio"
 msgstr ""
 
-#: src/bin/kim_all:10985
+#: src/bin/kim_all:10987
 msgid "Video audio operation:"
 msgstr ""
 
-#: src/bin/kim_all:10007
+#: src/bin/kim_all:10009
 msgid "Video codec must be libx264, libx265 or av1."
 msgstr ""
 
-#: src/bin/kim_all:9967
+#: src/bin/kim_all:9969
 msgid "Video codec was specified more than once."
 msgstr ""
 
-#: src/bin/kim_all:10014
+#: src/bin/kim_all:10016
 msgid "Video container must be orig or mp4."
 msgstr ""
 
-#: src/bin/kim_all:9968
+#: src/bin/kim_all:9970
 msgid "Video container was specified more than once."
 msgstr ""
 
-#: src/bin/kim_all:10913
+#: src/bin/kim_all:10915
 msgid "Video frame"
 msgstr ""
 
-#: src/bin/kim_all:9962
+#: src/bin/kim_all:9964
 msgid "Video options require a value."
 msgstr ""
 
-#: src/bin/kim_all:10040
+#: src/bin/kim_all:10042
 msgid "Video selection is empty or contains an unsafe, aliased, linked or invalid source."
 msgstr ""
 
-#: src/bin/kim_all:9986
+#: src/bin/kim_all:9988
 msgid "Video size must be hd720 or hd1080."
 msgstr ""
 
-#: src/bin/kim_all:9965
+#: src/bin/kim_all:9967
 msgid "Video size was specified more than once."
 msgstr ""
 
-#: src/bin/kim_all:11298
+#: src/bin/kim_all:11300
 msgid "Video validation"
 msgstr ""
 
@@ -2683,11 +2690,11 @@ msgstr ""
 msgid "View GPS metadata…"
 msgstr ""
 
-#: src/bin/kim_all:9611
+#: src/bin/kim_all:9613
 msgid "View metadata"
 msgstr ""
 
-#: src/kim_metadata.desktop.in:34
+#: src/kim_metadata.desktop.in:14
 msgid "View metadata…"
 msgstr ""
 
@@ -2707,11 +2714,11 @@ msgstr ""
 msgid "WebP · Thumbnail (128 × 128)"
 msgstr ""
 
-#: src/bin/kim_all:9341
+#: src/bin/kim_all:9343
 msgid "White"
 msgstr ""
 
-#: src/bin/kim_all:9321
+#: src/bin/kim_all:9323
 msgid "Widescreen 16:9 (3840 × 2160)"
 msgstr ""
 
@@ -2739,7 +2746,7 @@ msgstr ""
 msgid "Yes, replace existing outputs"
 msgstr ""
 
-#: src/bin/kim_all:11303
+#: src/bin/kim_all:11305
 msgid "audio output validation failed"
 msgstr ""
 
@@ -2747,27 +2754,27 @@ msgstr ""
 msgid "bytes"
 msgstr ""
 
-#: src/bin/kim_all:11222
+#: src/bin/kim_all:11224
 msgid "cannot select a safe output container for this video"
 msgstr ""
 
-#: src/bin/kim_all:10299
+#: src/bin/kim_all:10301
 msgid "could not create destination-local staging"
 msgstr ""
 
-#: src/bin/kim_all:10234
+#: src/bin/kim_all:10236
 msgid "could not inspect a valid video stream and container"
 msgstr ""
 
-#: src/bin/kim_all:8236
+#: src/bin/kim_all:8238
 msgid "could not set modification time"
 msgstr ""
 
-#: src/bin/kim_all:8217
+#: src/bin/kim_all:8219
 msgid "date copy preparation failed"
 msgstr ""
 
-#: src/bin/kim_all:10275
+#: src/bin/kim_all:10277
 msgid "destination is no longer available"
 msgstr ""
 
@@ -2779,119 +2786,119 @@ msgstr ""
 msgid "email attachment storage"
 msgstr ""
 
-#: src/bin/kim_all:11793
+#: src/bin/kim_all:11795
 msgid "frame preparation failed"
 msgstr ""
 
-#: src/bin/kim_all:10923
+#: src/bin/kim_all:10925
 msgid "frame production or validation failed"
 msgstr ""
 
-#: src/bin/kim_all:10338
+#: src/bin/kim_all:10340
 msgid "interrupted after encoding; no output was published"
 msgstr ""
 
-#: src/bin/kim_all:11434
+#: src/bin/kim_all:11436
 msgid "interrupted before GIF encoding"
 msgstr ""
 
-#: src/bin/kim_all:11169
+#: src/bin/kim_all:11171
 msgid "interrupted before audio processing"
 msgstr ""
 
-#: src/bin/kim_all:10305
+#: src/bin/kim_all:10307
 msgid "interrupted before encoding"
 msgstr ""
 
-#: src/bin/kim_all:10863
+#: src/bin/kim_all:10865
 msgid "interrupted before frame extraction"
 msgstr ""
 
-#: src/bin/kim_all:11759
+#: src/bin/kim_all:11761
 msgid "interrupted before frame preparation"
 msgstr ""
 
-#: src/bin/kim_all:10230
+#: src/bin/kim_all:10232
 msgid "interrupted before processing"
 msgstr ""
 
-#: src/bin/kim_all:10326
+#: src/bin/kim_all:10328
 msgid "interrupted during encoding; no output was published"
 msgstr ""
 
-#: src/bin/kim_all:11788
+#: src/bin/kim_all:11790
 msgid "interrupted during frame preparation"
 msgstr ""
 
-#: src/bin/kim_all:10355
+#: src/bin/kim_all:10357
 msgid "interrupted during output validation; no output was published"
 msgstr ""
 
-#: src/bin/kim_all:10367
+#: src/bin/kim_all:10369
 msgid "interrupted immediately before publication"
 msgstr ""
 
-#: src/bin/kim_all:8220
+#: src/bin/kim_all:8222
 msgid "interrupted or publication failed"
 msgstr ""
 
-#: src/bin/kim_all:11476 src/bin/kim_all:11500
+#: src/bin/kim_all:11478 src/bin/kim_all:11502
 msgid "interrupted; no GIF was published"
 msgstr ""
 
-#: src/bin/kim_all:11251
+#: src/bin/kim_all:11253
 msgid "interrupted; no audio artifact was published"
 msgstr ""
 
-#: src/bin/kim_all:10916
+#: src/bin/kim_all:10918
 msgid "interrupted; no frame was published"
 msgstr ""
 
-#: src/bin/kim_all:8264
+#: src/bin/kim_all:8266
 msgid "invalid CreateDate timezone offset"
 msgstr ""
 
-#: src/bin/kim_all:8265
+#: src/bin/kim_all:8267
 msgid "invalid ModifyDate timezone offset"
 msgstr ""
 
-#: src/bin/kim_all:8251
+#: src/bin/kim_all:8253
 msgid "invalid timezone offset"
 msgstr ""
 
-#: src/bin/kim_all:10853 src/bin/kim_all:11159 src/bin/kim_all:11424
+#: src/bin/kim_all:10855 src/bin/kim_all:11161 src/bin/kim_all:11426
 msgid "invalid video"
 msgstr ""
 
-#: src/bin/kim_all:8144 src/bin/kim_all:8145
+#: src/bin/kim_all:8146 src/bin/kim_all:8147
 msgid "missing or invalid"
 msgstr ""
 
-#: src/bin/kim_all:8194
+#: src/bin/kim_all:8196
 msgid "missing or invalid image capture date"
 msgstr ""
 
-#: src/bin/kim_all:11177
+#: src/bin/kim_all:11179
 msgid "no audio stream"
 msgstr ""
 
-#: src/bin/kim_all:7920
+#: src/bin/kim_all:7922
 msgid "no capture time"
 msgstr ""
 
-#: src/bin/kim_all:10858 src/bin/kim_all:11164 src/bin/kim_all:11429
+#: src/bin/kim_all:10860 src/bin/kim_all:11166 src/bin/kim_all:11431
 msgid "no video stream"
 msgstr ""
 
-#: src/bin/kim_all:8147
+#: src/bin/kim_all:8149
 msgid "none; interpreted in system local time"
 msgstr ""
 
-#: src/bin/kim_all:10359
+#: src/bin/kim_all:10361
 msgid "output did not fully decode or processing was interrupted"
 msgstr ""
 
-#: src/bin/kim_all:10344
+#: src/bin/kim_all:10346
 msgid "output validation failed: wrong container, codec, dimensions, streams, duration or incomplete decode"
 msgstr ""
 
@@ -2903,7 +2910,7 @@ msgstr ""
 msgid "pages"
 msgstr ""
 
-#: src/bin/kim_all:11802
+#: src/bin/kim_all:11804
 msgid "prepared frame failed validation"
 msgstr ""
 
@@ -2911,11 +2918,11 @@ msgstr ""
 msgid "processing failed."
 msgstr ""
 
-#: src/bin/kim_all:10931 src/bin/kim_all:11311 src/bin/kim_all:11527
+#: src/bin/kim_all:10933 src/bin/kim_all:11313 src/bin/kim_all:11529
 msgid "publication failed or operation interrupted"
 msgstr ""
 
-#: src/bin/kim_all:10389
+#: src/bin/kim_all:10391
 msgid "publication failed; existing files were preserved"
 msgstr ""
 
@@ -2923,75 +2930,75 @@ msgstr ""
 msgid "required dependency is unavailable:"
 msgstr ""
 
-#: src/bin/kim_all:8182
+#: src/bin/kim_all:8184
 msgid "selected original changed before processing"
 msgstr ""
 
-#: src/bin/kim_all:8228
+#: src/bin/kim_all:8230
 msgid "selected original changed before timestamp update"
 msgstr ""
 
-#: src/bin/kim_all:8214 src/bin/kim_all:10888 src/bin/kim_all:11233
-#: src/bin/kim_all:11465
+#: src/bin/kim_all:8216 src/bin/kim_all:10890 src/bin/kim_all:11235
+#: src/bin/kim_all:11467
 msgid "staging failed"
 msgstr ""
 
-#: src/bin/kim_all:10252
+#: src/bin/kim_all:10254
 msgid "the original container cannot be identified safely from the file extension"
 msgstr ""
 
-#: src/bin/kim_all:10250
+#: src/bin/kim_all:10252
 msgid "the selected codec is incompatible with the original container; choose MP4 explicitly"
 msgstr ""
 
-#: src/bin/kim_all:11765
+#: src/bin/kim_all:11767
 msgid "this layered, raw, vector or HDR input requires an explicit development/color workflow"
 msgstr ""
 
-#: src/bin/kim_all:8241
+#: src/bin/kim_all:8243
 msgid "timestamp changed but original access time could not be restored"
 msgstr ""
 
-#: src/bin/kim_all:10873
+#: src/bin/kim_all:10875
 msgid "timestamp is outside the video"
 msgstr ""
 
-#: src/bin/kim_all:7921
+#: src/bin/kim_all:7923
 msgid "unavailable"
 msgstr ""
 
-#: src/bin/kim_all:11773
+#: src/bin/kim_all:11775
 msgid "unsupported, ambiguous or multi-frame image"
 msgstr ""
 
-#: src/bin/kim_all:8449
+#: src/bin/kim_all:8451
 msgid "webexport: --color must be srgb or preserve."
 msgstr ""
 
-#: src/bin/kim_all:8745
+#: src/bin/kim_all:8747
 msgid "webexport: an installed sRGB ICC profile is required for color-managed export."
 msgstr ""
 
-#: src/bin/kim_all:8378
+#: src/bin/kim_all:8380
 msgid "webexport: option value missing."
 msgstr ""
 
-#: src/bin/kim_all:8440
+#: src/bin/kim_all:8442
 msgid "webexport: quality must be between 1 and 100."
 msgstr ""
 
-#: src/bin/kim_all:8400
+#: src/bin/kim_all:8402
 msgid "webexport: select regular, unambiguous image files."
 msgstr ""
 
-#: src/bin/kim_all:8414
+#: src/bin/kim_all:8416
 msgid "webexport: size must be positive WIDTHxHEIGHT."
 msgstr ""
 
-#: src/bin/kim_all:8804
+#: src/bin/kim_all:8806
 msgid "webexport: untagged CMYK has ambiguous color and was not converted."
 msgstr ""
 
-#: src/bin/kim_all:8390
+#: src/bin/kim_all:8392
 msgid "webexport: use -- before input files."
 msgstr ""

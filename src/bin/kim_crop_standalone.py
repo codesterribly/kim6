@@ -6,7 +6,7 @@ import copy
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, QSettings
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QStyle,
@@ -25,7 +26,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from kim_recipe_core import preview, execute
+from kim_recipe_core import preview, execute, approve_rows, RecipeError
+from kim_review_ui import restore_review_geometry, clamp_review_geometry
 
 
 class CropPreflight(QThread):
@@ -40,12 +42,85 @@ class CropPreflight(QThread):
 
     def run(self):
         try:
-            from kim_process import inspection_context
+            import contextvars
+            from concurrent.futures import ThreadPoolExecutor
+
+            from kim_process import inspection_context, checkpoint
+            from kim_recipe_core import (
+                number_review_outputs,
+                block_output_collisions,
+            )
 
             with inspection_context(
                 cancelled=self.isInterruptionRequested
             ):
-                self.rows = preview(self.recipe, self.files)
+                # One-image reviews retain the established code path.
+                if len(self.files) <= 1:
+                    self.rows = preview(
+                        self.recipe,
+                        self.files,
+                        number_collisions=True,
+                    )
+                    return
+
+                rows = [None] * len(self.files)
+
+                def inspect_one(position, source):
+                    checkpoint()
+                    result = preview(
+                        self.recipe,
+                        [source],
+                        start_index=position + 1,
+                    )
+                    checkpoint()
+
+                    if len(result) != 1:
+                        raise RecipeError(
+                            "Crop inspection returned an invalid row count"
+                        )
+
+                    return position, result[0]
+
+                # Each task receives its own contextvars context.
+                # No mutable inspection context is shared between tasks.
+                with ThreadPoolExecutor(
+                    max_workers=min(3, len(self.files)),
+                    thread_name_prefix="kimng-crop-review",
+                ) as pool:
+                    futures = []
+
+                    for position, source in enumerate(self.files):
+                        checkpoint()
+                        context = contextvars.copy_context()
+                        futures.append(
+                            pool.submit(
+                                context.run,
+                                inspect_one,
+                                position,
+                                source,
+                            )
+                        )
+
+                    for future in futures:
+                        checkpoint()
+                        position, row = future.result()
+                        rows[position] = row
+
+                checkpoint()
+
+                if any(row is None for row in rows):
+                    raise RecipeError(
+                        "Crop review did not inspect every selected image"
+                    )
+
+                # Resolve numbering in original selection order.
+                # The displayed filename becomes the approved filename.
+                number_review_outputs(rows)
+
+                # Retain existing duplicate-target safety checks.
+                block_output_collisions(rows)
+
+                self.rows = rows
 
         except Exception as exc:
             self.error = str(exc)
@@ -62,6 +137,8 @@ class CropReview(QDialog):
         self.worker = None
         self.closing = False
         self.approved = None
+        self.approved_plan = None
+        self.review_rows = []
 
         self.setWindowTitle("KIMng - Crop - Review Changes")
         self.resize(
@@ -109,10 +186,9 @@ class CropReview(QDialog):
         )
         destination_row.addWidget(self.destination_button)
 
-        self.table = QTableWidget(len(files), 6)
+        self.table = QTableWidget(len(files), 5)
         self.table.setHorizontalHeaderLabels([
-            "Image", "Original", "Planned",
-            "Output filename", "Destination", "Status",
+            "Image", "Original", "Planned", "Output", "Status",
         ])
         self.table.setEditTriggers(
             QAbstractItemView.NoEditTriggers
@@ -121,17 +197,40 @@ class CropReview(QDialog):
             QAbstractItemView.SelectRows
         )
         self.table.verticalHeader().hide()
+        self.table.setAlternatingRowColors(True)
+        self.table.setWordWrap(False)
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
 
+        self.settings = QSettings('KIMng', 'CropReview')
         header = self.table.horizontalHeader()
-        for column, width in enumerate(
-            (165, 105, 105, 215, 205, 90)
-        ):
+        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(56)
+        for column in range(5):
             header.setSectionResizeMode(
                 column, QHeaderView.Interactive
             )
-            self.table.setColumnWidth(column, width)
 
+        self._setting_columns = False
+        self._custom_columns = False
+        widths = self.settings.value('column_widths')
+        if isinstance(widths, list) and len(widths) == 5:
+            try:
+                widths = [max(56, min(1200, int(width))) for width in widths]
+                self._custom_columns = True
+                for column, width in enumerate(widths):
+                    self.table.setColumnWidth(column, width)
+            except (TypeError, ValueError):
+                pass
+
+        header.sectionResized.connect(self.column_resized)
         layout.addWidget(self.table, 1)
+        self.output_label = QLabel("Output: ")
+        self.output_label.setTextFormat(Qt.PlainText)
+        self.output_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.output_label.setWordWrap(True)
+        self.output_label.setAccessibleName("Selected output filename")
+        layout.addWidget(self.output_label)
+        self.table.currentCellChanged.connect(self.show_selected_output)
 
         self.status = QLabel(
             "Checking selected images…"
@@ -139,6 +238,16 @@ class CropReview(QDialog):
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
+
+        self.details_button = QPushButton("Show details")
+        self.details_button.setVisible(False)
+        self.details_button.clicked.connect(self.toggle_details)
+        layout.addWidget(self.details_button)
+        self.details = QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setMaximumHeight(125)
+        self.details.setVisible(False)
+        layout.addWidget(self.details)
 
         layout.addWidget(self.destination)
         layout.addLayout(destination_row)
@@ -193,8 +302,66 @@ class CropReview(QDialog):
         )
 
         self.refresh_destination()
+        restore_review_geometry(self, self.settings, (1050, min(650, 480 + 24 * max(1, len(files)))))
+        self.finished.connect(self.save_display_preferences)
 
         QTimer.singleShot(0, self.recheck)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        clamp_review_geometry(self)
+        self.fit_default_columns()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_custom_columns'):
+            QTimer.singleShot(0, self.fit_default_columns)
+
+    def column_resized(self, *_):
+        if not self._setting_columns:
+            self._custom_columns = True
+
+    def fit_default_columns(self):
+        available = self.table.viewport().width()
+        if available <= 0:
+            return
+        if not self._custom_columns:
+            # Give the source and output names equal room, with compact
+            # dimensions and status columns. The proportions use the actual
+            # viewport so the default never needs horizontal scrolling.
+            widths = [int(available * ratio) for ratio in (.30, .15, .15, .30, .10)]
+            widths[0] += available - sum(widths)
+        else:
+            widths = [self.table.columnWidth(i) for i in range(5)]
+            total = sum(widths)
+            if total > available:
+                scale = available / total
+                widths = [max(56, int(width * scale)) for width in widths]
+                widths[0] += max(0, available - sum(widths))
+        self._setting_columns = True
+        try:
+            for column, width in enumerate(widths):
+                self.table.setColumnWidth(column, width)
+        finally:
+            self._setting_columns = False
+
+    def save_display_preferences(self, *_):
+        self.settings.setValue('geometry', self.saveGeometry())
+        self.settings.setValue('column_widths', [self.table.columnWidth(i) for i in range(5)])
+
+    def show_selected_output(self, *_):
+        index = self.table.currentRow()
+        row = self.review_rows[index] if 0 <= index < len(self.review_rows) else None
+        output = Path(row.output) if row and row.output else None
+        filename = output.name if output else ""
+        self.output_label.setText("Output: " + filename)
+        self.output_label.setToolTip(filename)
+        self.refresh_destination()
+
+    def toggle_details(self):
+        visible = not self.details.isVisible()
+        self.details.setVisible(visible)
+        self.details_button.setText("Hide details" if visible else "Show details")
 
     def refresh_destination(self):
         dest = self.recipe["destination"]
@@ -213,9 +380,12 @@ class CropReview(QDialog):
                 "path", "No directory selected"
             )
 
-        self.destination.setText(
-            "Destination: " + label
-        )
+        text = "Destination: " + label
+        index = self.table.currentRow() if hasattr(self, "table") else -1
+        row = self.review_rows[index] if 0 <= index < len(self.review_rows) else None
+        if row and row.output and dest["mode"] != "directory":
+            text += "\nSelected image destination: " + str(Path(row.output).parent)
+        self.destination.setText(text)
 
     def change_destination(self):
         if self.worker is not None:
@@ -256,16 +426,17 @@ class CropReview(QDialog):
             if (
                 not folder.is_absolute()
                 or folder.is_symlink()
-                or not folder.is_dir()
+                or (folder.exists() and not folder.is_dir())
+                or (not folder.exists() and not folder.parent.is_dir())
             ):
                 self.status.setText(
-                    "Choose an existing absolute destination directory."
+                    "Choose an absolute destination directory whose parent exists."
                 )
                 self.apply_button.setEnabled(False)
                 return
             self.recipe["destination"] = {
                 "mode": "directory",
-                "path": str(folder.resolve(strict=True)),
+                "path": str(folder.resolve(strict=False)),
                 "ask": False,
             }
         else:
@@ -281,6 +452,9 @@ class CropReview(QDialog):
             return
 
         self.apply_button.setEnabled(False)
+        self.approved_plan = None
+        self.review_rows = []
+        self.show_selected_output()
         self.destination_button.setEnabled(False)
         self.destination_entry.setEnabled(False)
         self.back_button.setEnabled(False)
@@ -320,8 +494,12 @@ class CropReview(QDialog):
             worker.deleteLater()
             return
 
-        seen = set()
-        problems = []
+        self.review_rows = worker.rows
+        diagnostic_lines = []
+        existing_count = 0
+        duplicate_count = 0
+        validation_count = 0
+        ready_count = 0
 
         for index, (source, row) in enumerate(
             zip(self.files, worker.rows)
@@ -334,36 +512,19 @@ class CropReview(QDialog):
                 )
 
             if errors:
-                planned = "Blocked"
-                problems.extend(
-                    f"{Path(source).name}: {issue}"
-                    for issue in errors
-                )
+                planned = row.output or "Blocked"
+                text = "; ".join(errors)
+                diagnostic_lines.append(f"{Path(source).name}: {text}")
+                if any("already exists" in issue.lower() for issue in errors):
+                    existing_count += 1
+                if any("multiple selected sources" in issue.lower() for issue in errors):
+                    duplicate_count += 1
+                if not any("output collision:" in issue.lower() for issue in errors):
+                    validation_count += 1
 
             else:
-                output = Path(
-                    row.properties.get(
-                        "_proposed_output",
-                        row.output,
-                    )
-                )
-
-                candidate = output
-                number = 0
-
-                while (
-                    str(candidate) in seen
-                    or candidate.exists()
-                    or candidate.is_symlink()
-                ):
-                    number += 1
-                    candidate = output.with_name(
-                        f"{output.stem}_{number}"
-                        f"{output.suffix}"
-                    )
-
-                seen.add(str(candidate))
-                planned = str(candidate)
+                planned = row.output
+                ready_count += 1
 
             properties = row.properties
 
@@ -391,7 +552,6 @@ class CropReview(QDialog):
                 original_size,
                 planned_size,
                 output_path.name if output_path else "No output",
-                str(output_path.parent) if output_path else "No output",
                 "Blocked" if errors else "Ready",
             )
 
@@ -404,21 +564,57 @@ class CropReview(QDialog):
                     index, column, item
                 )
 
+        if self.files and self.table.currentRow() < 0:
+            self.table.setCurrentCell(0, 3)
+        self.show_selected_output()
+
         if len(worker.rows) != len(self.files):
-            problems.append(
-                "Not all selected images were inspected."
+            diagnostic_lines.append("Review: Not all selected images were inspected.")
+
+        blocked_count = len(self.files) - ready_count
+        selected_count = len(self.files)
+        summary = (
+            f"{selected_count} image{'s' if selected_count != 1 else ''} selected, "
+            f"{ready_count} ready, {blocked_count} blocked."
+        )
+        explanations = []
+        if existing_count:
+            explanations.append(
+                f"{existing_count} planned output{'s' if existing_count != 1 else ''} "
+                f"already {'exist' if existing_count != 1 else 'exists'}."
+            )
+        if duplicate_count:
+            explanations.append(
+                f"{duplicate_count} image{'s' if duplicate_count != 1 else ''} "
+                f"{'share' if duplicate_count != 1 else 'shares'} a planned output path."
+            )
+        if validation_count:
+            explanations.append(
+                f"{validation_count} image{'s' if validation_count != 1 else ''} "
+                f"{'have' if validation_count != 1 else 'has'} other validation problems."
+            )
+        if explanations:
+            summary += "\n" + "\n".join(explanations)
+            summary += "\nChoose a different destination or change the selected images, then review again."
+        if any(
+            Path(source).suffix.lower() in (".jpg", ".jpeg")
+            for source in self.files
+        ):
+            summary += (
+                "\nMetadata notice: JPEG metadata will be preserved "
+                "where possible. If source metadata is malformed, "
+                "KIMng may omit it from a cropped copy. "
+                "Original images remain unchanged."
             )
 
-        if problems:
-            self.status.setText(
-                "\n".join(problems)
-            )
-
-        else:
-            self.status.setText("")
+        self.status.setText(summary)
+        self.details.setPlainText("\n".join(diagnostic_lines))
+        self.details_button.setVisible(bool(diagnostic_lines))
+        self.details_button.setText(f"Show details ({len(diagnostic_lines)})")
+        self.details.setVisible(False)
 
         self.apply_button.setEnabled(
-            not problems and bool(self.files)
+            not diagnostic_lines and bool(self.files)
         )
 
         worker.deleteLater()
@@ -430,9 +626,13 @@ class CropReview(QDialog):
         ):
             return
 
-        self.approved = copy.deepcopy(
-            self.recipe
-        )
+        try:
+            self.approved_plan = approve_rows(self.recipe, self.files, self.review_rows)
+        except (OSError, RecipeError) as exc:
+            self.status.setText(str(exc))
+            self.apply_button.setEnabled(False)
+            return
+        self.approved = copy.deepcopy(self.recipe)
         super().accept()
 
     def reject(self):
@@ -452,6 +652,7 @@ class CropReview(QDialog):
             self.reject()
             event.ignore()
         else:
+            self.save_display_preferences()
             event.accept()
 
 
@@ -460,11 +661,13 @@ class CropExecution(QThread):
 
     started_file = Signal(str, int)
     finished_file = Signal(dict, int)
+    stage_changed = Signal(str)
 
-    def __init__(self, recipe, files):
+    def __init__(self, recipe, files, approved_plan=None):
         super().__init__()
 
         self.recipe = copy.deepcopy(recipe)
+        self.approved_plan = approved_plan
         self.files = list(files)
         self.results = []
         self.error = ""
@@ -473,53 +676,20 @@ class CropExecution(QThread):
     def run(self):
         try:
             from kim_process import inspection_context
-            from kim_image_ops import preflight_batch
-
-            # Repeat validation immediately before
-            # the first output is published.
-            with inspection_context(
-                cancelled=self.isInterruptionRequested
-            ):
-                preflight_batch(
-                    self.recipe,
-                    self.files,
-                )
-
-            for index, source in enumerate(
-                self.files, 1
-            ):
-                if self.isInterruptionRequested():
-                    self.cancelled = True
-                    break
-
-                self.started_file.emit(
-                    str(source), index
-                )
-
-                with inspection_context(
-                    cancelled=self.isInterruptionRequested
-                ):
-                    result = execute(
-                        self.recipe,
-                        [source],
-                        start_index=index,
-                    )[0]
-
+            from kim_recipe_image import standalone_crop_metadata_fallback
+            if self.approved_plan is None:
+                raise RecipeError('Missing approved publication plan; review again')
+            def completed(result, index, total):
                 self.results.append(result)
-                self.finished_file.emit(
-                    result, index
-                )
-
-                if (
-                    not result.get("ok")
-                    or result.get("cancelled")
-                    or self.isInterruptionRequested()
-                ):
-                    self.cancelled = bool(
-                        result.get("cancelled")
-                        or self.isInterruptionRequested()
-                    )
-                    break
+                self.finished_file.emit(result, index)
+            with inspection_context(
+                progress=self.stage_changed.emit,
+                cancelled=self.isInterruptionRequested
+            ), standalone_crop_metadata_fallback():
+                execute(self.recipe, self.files, progress=completed,
+                        approved_plan=self.approved_plan,
+                        started=self.started_file.emit, stop_on_error=True)
+            self.cancelled = self.isInterruptionRequested() or any(r.get('cancelled') for r in self.results)
 
         except Exception as exc:
             self.cancelled = (
@@ -539,7 +709,7 @@ class CropProgress(QDialog):
         self.completed = False
 
         self.setWindowTitle(
-            "KIMng - Job progress"
+            "KIMng - Crop - Progress"
         )
         self.resize(640, 175)
 
@@ -551,6 +721,12 @@ class CropProgress(QDialog):
         self.label.setWordWrap(True)
         self.label.setTextFormat(Qt.PlainText)
         layout.addWidget(self.label)
+
+        self.stage_label = QLabel("Preparing image…")
+        self.stage_label.setWordWrap(True)
+        self.stage_label.setTextFormat(Qt.PlainText)
+        self.stage_label.setAccessibleName("Current processing stage")
+        layout.addWidget(self.stage_label)
 
         self.bar = QProgressBar()
         self.bar.setRange(0, total)
@@ -572,6 +748,7 @@ class CropProgress(QDialog):
         worker.finished_file.connect(
             self.file_finished
         )
+        worker.stage_changed.connect(self.stage_changed)
         worker.finished.connect(
             self.execution_finished
         )
@@ -580,7 +757,12 @@ class CropProgress(QDialog):
             0, worker.start
         )
 
+    def stage_changed(self, message):
+        if not self.completed:
+            self.stage_label.setText(str(message))
+
     def file_started(self, source, index):
+        self.stage_label.setText("Preparing image…")
         self.label.setText(
             f"Cropping {index} of "
             f"{self.bar.maximum()}: "
@@ -600,6 +782,7 @@ class CropProgress(QDialog):
 
     def cancel(self):
         self.cancel_button.setEnabled(False)
+        self.stage_label.setText("Cancellation requested")
         self.label.setText(
             "Cancelling after the current operation…"
         )
@@ -639,6 +822,7 @@ def run_standalone_crop(recipe, files):
     worker = CropExecution(
         review.approved,
         files,
+        approved_plan=review.approved_plan,
     )
 
     progress = CropProgress(
@@ -675,5 +859,35 @@ def run_standalone_crop(recipe, files):
                     + str(result.get("error")),
                     file=sys.stderr,
                 )
+
+    from PySide6.QtWidgets import QMessageBox
+
+    succeeded = [
+        result for result in worker.results
+        if result.get("ok")
+    ]
+    failures = [
+        result for result in worker.results
+        if not result.get("ok")
+    ]
+    if not success and not worker.cancelled:
+        details = [
+            Path(str(result.get("source", ""))).name + ": "
+            + str(result.get("error", "Unknown error"))
+            for result in failures
+        ]
+
+        if worker.error:
+            details.insert(0, worker.error)
+
+        QMessageBox.critical(
+            None,
+            "KIMng - Crop - Failed",
+            f"{len(succeeded)} of {len(files)} images created.\\n"
+            "Original images were not overwritten.\\n\\n"
+            + "\\n\\n".join(
+                details or ["Processing stopped unexpectedly."]
+            )
+        )
 
     return 0 if success else 1

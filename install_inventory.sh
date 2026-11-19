@@ -60,6 +60,7 @@ src/bin/kim_metadata_sources.py|bin/kim_metadata_sources.py|0644
 src/bin/kim_recipe_menu.py|bin/kim_recipe_menu.py|0644
 src/bin/kim_desktop_exec.py|bin/kim_desktop_exec.py|0644
 src/bin/kim_recipe_run.py|bin/kim_recipe_run.py|0644
+src/bin/kim_review_ui.py|bin/kim_review_ui.py|0644
 src/bin/kim_recipe_core.py|bin/kim_recipe_core.py|0644
 src/bin/kim_recipe_image.py|bin/kim_recipe_image.py|0644
 src/bin/kim_recipe_dates.py|bin/kim_recipe_dates.py|0644
@@ -100,18 +101,18 @@ docs/reference/FORMATS.html|docs/reference/FORMATS.html|0644
 docs/reference/INSTALL.html|docs/reference/INSTALL.html|0644
 docs/reference/LICENSE.html|docs/reference/LICENSE.html|0644
 docs/reference/README.html|docs/reference/README.html|0644
-docs/images/kim6-photo-actions.png|docs/images/kim6-photo-actions.png|0644
-docs/images/kim6-video-conversion.png|docs/images/kim6-video-conversion.png|0644
-docs/images/kim6-video-utilities.png|docs/images/kim6-video-utilities.png|0644
-docs/images/kim6-settings-dialog.png|docs/images/kim6-settings-dialog.png|0644
-docs/images/kim6-collage-dialog.png|docs/images/kim6-collage-dialog.png|0644
-docs/images/kim6-animated-gif-dialog.png|docs/images/kim6-animated-gif-dialog.png|0644
+docs/images/screenshots/kim6-photo-actions.png|docs/images/screenshots/kim6-photo-actions.png|0644
+docs/images/screenshots/kim6-video-conversion.png|docs/images/screenshots/kim6-video-conversion.png|0644
+docs/images/screenshots/kim6-video-utilities.png|docs/images/screenshots/kim6-video-utilities.png|0644
+docs/images/screenshots/kim6-settings-dialog.png|docs/images/screenshots/kim6-settings-dialog.png|0644
+docs/images/screenshots/kim6-collage-dialog.png|docs/images/screenshots/kim6-collage-dialog.png|0644
+docs/images/screenshots/kim6-animated-gif-dialog.png|docs/images/screenshots/kim6-animated-gif-dialog.png|0644
 docs/reference/RECIPES.html|docs/reference/RECIPES.html|0644
-docs/images/kim6-recipes-menu.png|docs/images/kim6-recipes-menu.png|0644
-docs/images/kim6-recipe-editor.png|docs/images/kim6-recipe-editor.png|0644
-docs/images/kim6-convert-menu.png|docs/images/kim6-convert-menu.png|0644
-docs/images/kim6-metadata-menu.png|docs/images/kim6-metadata-menu.png|0644
-docs/images/kim6-settings-general.png|docs/images/kim6-settings-general.png|0644
+docs/images/screenshots/kim6-recipes-menu.png|docs/images/screenshots/kim6-recipes-menu.png|0644
+docs/images/screenshots/kim6-recipe-editor.png|docs/images/screenshots/kim6-recipe-editor.png|0644
+docs/images/screenshots/kim6-convert-menu.png|docs/images/screenshots/kim6-convert-menu.png|0644
+docs/images/screenshots/kim6-metadata-menu.png|docs/images/screenshots/kim6-metadata-menu.png|0644
+docs/images/screenshots/kim6-settings-general.png|docs/images/screenshots/kim6-settings-general.png|0644
 src/bin/kim_process.py|bin/kim_process.py|0644
 src/bin/kim_settings_file.py|bin/kim_settings_file.py|0644
 docs/images/screenshots/01-main-menu.png|docs/images/screenshots/01-main-menu.png|0644
@@ -148,4 +149,14 @@ runtime_modes+=("0644")
 # Phase 2: Web Export review-before-processing dialog.
 runtime_sources+=("src/bin/kim_webexport_review.py")
 runtime_files+=("bin/kim_webexport_review.py")
+runtime_modes+=("0644")
+
+# PDF page rendering, independent of Recipes.
+runtime_sources+=("src/bin/kim_pdf_pages.py")
+runtime_files+=("bin/kim_pdf_pages.py")
+runtime_modes+=("0644")
+
+# PDF embedded-image extraction.
+runtime_sources+=("src/bin/kim_pdf_extract.py")
+runtime_files+=("bin/kim_pdf_extract.py")
 runtime_modes+=("0644")

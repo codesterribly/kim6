@@ -150,15 +150,19 @@ class RecipeContracts(unittest.TestCase):
             os.link(original, base/'out_1.jpg')
             fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY)
             self.addCleanup(os.close, fd)
+            for name in ('out.jpg', 'out_1.jpg'):
+                with self.assertRaisesRegex(core.RecipeError, 'collision'):
+                    core.publish(staged, fd, name)
             real_link = os.link
             def race(src, dst, **kwargs):
-                if dst == 'out_2.jpg': (base/dst).write_bytes(b'racer')
+                (base/dst).write_bytes(b'racer')
                 return real_link(src, dst, **kwargs)
             with patch.object(core.os, 'link', side_effect=race):
-                self.assertEqual(core.publish(staged, fd, 'out.jpg'), 'out_3.jpg')
+                with self.assertRaisesRegex(core.RecipeError, 'collision'):
+                    core.publish(staged, fd, 'out_2.jpg')
             self.assertEqual(original.read_bytes(), b'old')
             self.assertEqual((base/'out_2.jpg').read_bytes(), b'racer')
-            self.assertEqual((base/'out_3.jpg').read_bytes(), b'new')
+            self.assertFalse((base/'out_3.jpg').exists())
 
     def test_install_registration(self):
         inventory = (ROOT / 'install_inventory.sh').read_text()
@@ -234,15 +238,16 @@ class RealRecipeTests(unittest.TestCase):
         rows = core.preview(r, [self.source]); self.assertEqual(rows[0].properties['width'], 5)
         self.assertIn('nonstandard', '; '.join(rows[0].metadata))
         results = core.execute(r, [self.source, self.base/'missing.jpg'])
-        self.assertTrue(results[0]['ok'], results); self.assertFalse(results[1]['ok'])
-        self.assertEqual(Path(results[0]['output']).name, 'source_1.png')
+        self.assertTrue(all(not result['ok'] for result in results), results)
+        self.assertFalse((self.base/'source_1.png').exists())
         self.assertEqual(occupied.read_bytes(), b'occupied'); self.assert_original()
 
-    def test_rename_only_byte_copy_source_alias(self):
+    def test_rename_only_source_alias_is_blocked(self):
         r = recipe([{'op': 'file.rename_output', 'pattern': '{stem}'}])
-        results = core.execute(r, [self.source]); self.assertTrue(results[0]['ok'], results)
-        self.assertEqual(Path(results[0]['output']).read_bytes(), self.before)
-        self.assertNotEqual(Path(results[0]['output']).stat().st_ino, self.source.stat().st_ino)
+        row = core.preview(r, [self.source])[0]
+        self.assertEqual(row.output, str(self.source))
+        self.assertTrue(row.problems)
+        self.assertFalse(core.execute(r, [self.source])[0]['ok'])
         self.assert_original()
 
     def test_cross_folder_collision(self):
@@ -250,8 +255,8 @@ class RealRecipeTests(unittest.TestCase):
         duplicate.write_bytes(self.before)
         r = recipe(); r['destination'] = {'mode': 'directory', 'ask': True}
         results = core.execute(r, [self.source, duplicate], self.base)
-        self.assertTrue(all(row['ok'] for row in results), results)
-        self.assertNotEqual(results[0]['output'], results[1]['output']); self.assert_original()
+        self.assertTrue(all(not row['ok'] for row in results), results)
+        self.assertFalse((self.base/'source_copy.jpg').exists()); self.assert_original()
 
     def test_missing_dependency_failure_and_symlinks(self):
         with patch('kim_recipe_image.shutil.which', return_value=None):
@@ -308,6 +313,7 @@ class RealRecipeTests(unittest.TestCase):
         r = recipe([{'op': 'metadata.copyright', 'creator': 'Discarded'}, {'op': 'metadata.strip_all'},
                     {'op': 'metadata.copyright', 'creator': 'Final'}])
         result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
+        Path(result[0]['output']).unlink()
         r = recipe([{'op': 'metadata.shift_capture', 'seconds': 60}, {'op': 'file.sync_date'}])
         result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
         self.assertEqual(Path(result[0]['output']).stat().st_mtime, 1577934305)
@@ -322,7 +328,8 @@ class RealRecipeTests(unittest.TestCase):
                 raise core.RecipeError('Injected verification failure')
             return real_verify(handler, output, state)
         with patch.object(ImageHandler, 'verify', verify):
-            result = core.execute(recipe(), [self.source, self.source])
+            second = self.base/'second.jpg'; second.write_bytes(self.before)
+            result = core.execute(recipe(), [self.source, second])
         self.assertTrue(result[0]['ok']); self.assertFalse(result[1]['ok'])
         self.assertTrue(Path(result[0]['output']).exists())
         self.assertFalse((self.base/'source_copy_1.jpg').exists()); self.assert_original()
@@ -352,6 +359,7 @@ class RealRecipeTests(unittest.TestCase):
             self.assertTrue(result[0]['ok'], result)
             if fmt == 'webp':
                 self.assertFalse(core.preview(recipe(), [Path(result[0]['output'])])[0].problems)
+            Path(result[0]['output']).unlink()
         r = recipe([{'op': 'image.convert', 'format': 'avif', 'quality': 85}])
         self.assertTrue(core.execute(r, [self.source])[0]['ok'])
         from kim_recipe_image import srgb_profile
@@ -390,7 +398,7 @@ class RealRecipeTests(unittest.TestCase):
         shift = {'op': 'metadata.shift_capture', 'seconds': -3 * 86400}
         notice = {'op': 'metadata.copyright', 'notice': 'Copyright {YEAR} Example'}
         for steps, year in (([shift, notice], '2019'), ([notice, shift], '2020')):
-            r = recipe(steps)
+            r = recipe(steps + [{'op': 'file.rename_output', 'pattern': '{stem}_' + year}])
             row = core.preview(r, [self.source])[0]
             self.assertIn('Copyright ' + year + ' Example', '; '.join(row.metadata))
             result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
@@ -415,7 +423,8 @@ class RealRecipeTests(unittest.TestCase):
                 ({'op': 'image.rotate', 'degrees': 90}, ['-rotate', '90'], (40, 20)),
                 ({'op': 'image.flip', 'axis': 'horizontal'}, ['-flop'], (20, 40)),
                 ({'op': 'image.flip', 'axis': 'vertical'}, ['-flip'], (20, 40))):
-            r = recipe([step, {'op': 'image.convert', 'format': 'png', 'quality': 90}])
+            r = recipe([step, {'op': 'image.convert', 'format': 'png', 'quality': 90},
+                        {'op': 'file.rename_output', 'pattern': '{stem}_' + str(step.get('axis', step.get('degrees')))}])
             row = core.preview(r, [self.source])[0]
             self.assertFalse(row.problems, row.problems)
             self.assertEqual((row.properties['width'], row.properties['height']), dimensions)
@@ -477,7 +486,8 @@ class RealRecipeTests(unittest.TestCase):
         self.assertNotEqual(output, str(self.source))
         self.assertEqual(subprocess.check_output(['magick', 'identify', '-format', '%wx%h', output], text=True), '20x40')
         self.assertEqual(subprocess.check_output(['exiftool', '-s3', '-Orientation', output], text=True), '')
-        equivalent = recipe([{'op': 'image.rotate', 'degrees': 90}, strip])
+        equivalent = recipe([{'op': 'image.rotate', 'degrees': 90}, strip,
+                             {'op': 'file.rename_output', 'pattern': '{stem}_rotated'}])
         self.assertFalse(core.preview(equivalent, [self.source])[0].problems)
         self.assert_original()
 
@@ -498,8 +508,8 @@ class RealRecipeTests(unittest.TestCase):
         self.assertEqual((row.format, row.properties['width'], row.properties['height']), ('png', 20, 10))
         self.assertIn('Image capture time: absent', row.metadata)
         occupied = self.base/'source_custom.png'; occupied.write_bytes(b'occupied')
-        result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
-        self.assertTrue(result[0]['output'].endswith('source_custom_1.png'))
+        result = core.execute(r, [self.source]); self.assertFalse(result[0]['ok'], result)
+        self.assertFalse((self.base/'source_custom_1.png').exists())
         self.assertEqual(occupied.read_bytes(), b'occupied')
         default = core.preview(recipe([{'op': 'image.resize_percent', 'percent': 50}]), [self.source])[0]
         self.assertEqual(default.properties['width'], 20)
@@ -533,6 +543,7 @@ class RealRecipeTests(unittest.TestCase):
             self.assertTrue(all(v is None for v in selected_metadata(output, tags + private).values()))
             for field, op in (('creator', 'metadata.creator'), ('notice', 'metadata.copyright_notice'), ('rights', 'metadata.usage_rights')):
                 r = copy.deepcopy(base)
+                r['destination']['folder'] = 'Web-' + field
                 next(s for s in r['steps'] if s['op'] == op)['enabled'] = True
                 result = core.execute(r, [self.source]); self.assertTrue(result[0]['ok'], result)
                 actual = selected_metadata(Path(result[0]['output']), tags + private)
@@ -543,6 +554,7 @@ class RealRecipeTests(unittest.TestCase):
                         self.assertEqual(value, expected, tag)
                 self.assertTrue(all(actual[tag] is None for tag in private))
             r = copy.deepcopy(base)
+            r['destination']['folder'] = 'Web-shifted'
             r['steps'].insert(4, {'op': 'metadata.shift_capture', 'seconds': -3*86400})
             for step in r['steps']:
                 if step['op'] in ('metadata.creator', 'metadata.copyright_notice', 'metadata.usage_rights'):
@@ -602,18 +614,19 @@ class RealRecipeTests(unittest.TestCase):
                             {'op': 'metadata.copyright_notice', 'value': 'Copyright {YEAR} Custom'},
                             {'op': 'metadata.usage_rights', 'value': 'Custom license'}])
         inherited['id'] = 'inherited-test'
+        inherited['steps'].append({'op': 'file.rename_output', 'pattern': '{stem}_{index}'})
         with patch.dict(os.environ, env, clear=True):
             core.save_users([inherited])
             stored = core.config_path().read_bytes()
             outputs = []
-            for creator in ('Settings One', 'Settings Two'):
+            for index, creator in enumerate(('Settings One', 'Settings Two'), 1):
                 settings.write_text('KIM_COPYRIGHT_CREATOR=' + creator + '\nKIM_COPYRIGHT_NOTICE=Global notice\nKIM_COPYRIGHT_USAGE_RIGHTS=Global license\n')
                 before = settings.read_bytes()
                 saved = core.load_users()[0]
-                row = core.preview(saved, [self.source])[0]
+                row = core.preview(saved, [self.source], start_index=index)[0]
                 self.assertIn(creator, '; '.join(row.metadata))
                 self.assertIn('Copyright 2020 Custom', '; '.join(row.metadata))
-                result = core.execute(saved, [self.source]); self.assertTrue(result[0]['ok'], result)
+                result = core.execute(saved, [self.source], start_index=index); self.assertTrue(result[0]['ok'], result)
                 output = Path(result[0]['output']); outputs.append((output, output.read_bytes()))
                 actual = selected_metadata(output, ('EXIF:Artist', 'IPTC:By-line', 'XMP-dc:Creator',
                     'EXIF:Copyright', 'XMP-xmpRights:UsageTerms', 'EXIF:DateTimeOriginal', 'GPS:GPSLatitude'))
@@ -649,12 +662,14 @@ class RealRecipeTests(unittest.TestCase):
             self.assertIsNone(actual['EXIF:DateTimeOriginal']); self.assertIsNone(actual['GPS:GPSLatitude'])
             creator = next(s for s in r['steps'] if s['op'] == 'metadata.creator')
             creator['value'] = ''
+            next(s for s in r['steps'] if s['op'] == 'file.rename_output')['pattern'] = '{stem}_blank'
             row = core.preview(r, [self.source])[0]
             self.assertFalse(row.problems)
             blank_result=core.execute(r, [self.source]); self.assertTrue(blank_result[0]['ok'], blank_result)
             self.assertIsNone(selected_metadata(Path(blank_result[0]['output']), ('EXIF:Artist',))['EXIF:Artist'])
             self.assertEqual(output.read_bytes(), payload)
             creator['enabled'] = False
+            next(s for s in r['steps'] if s['op'] == 'file.rename_output')['pattern'] = '{stem}_disabled'
             self.assertFalse(core.preview(r, [self.source])[0].problems)
             self.assertEqual(settings.read_bytes(), before)
         self.assert_original()
@@ -795,15 +810,18 @@ from kim_recipe_core import builtins, PreviewRow, config_path
 app = QApplication([])
 started = threading.Event(); release = threading.Event(); calls = []
 published = config_path().parent.parent/'completed-output'
-def execute(recipe, files, chosen, start_index):
+def execute(recipe, files, chosen, progress, approved_plan, **kwargs):
+    assert approved_plan == ('reviewed',)
     assert QThread.currentThread() != app.thread()
-    calls.append((files, start_index)); started.set()
+    calls.append((files, 1)); started.set()
     assert release.wait(10)
     published.write_text('completed')
-    return [{'source': files[0], 'output': str(published), 'ok': True}]
+    result = {'source': files[0], 'output': str(published), 'ok': True}
+    progress(result, 1, len(files))
+    return [result]
 def preview(recipe, files, chosen, start_index):
     return [PreviewRow(files[0], '/output/photo.jpg', 'image', 'jpeg')]
-with patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute', side_effect=execute):
+with patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run.execute', side_effect=execute), patch('kim_recipe_run.approve_rows', return_value=('reviewed',)):
     w = RunRecipeDialog(builtins()[0], ['authorized-first.jpg', 'authorized-second.jpg'])
     loop = QEventLoop(); watchdog = QTimer(); watchdog.setSingleShot(True); watchdog.timeout.connect(loop.quit); watchdog.start(15000)
     ticks = []
@@ -817,7 +835,7 @@ with patch('kim_recipe_run.preview', side_effect=preview), patch('kim_recipe_run
             loop.quit()
     heartbeat = QTimer(); heartbeat.setInterval(10); heartbeat.timeout.connect(tick); heartbeat.start()
     loop.exec(); heartbeat.stop(); watchdog.stop()
-    assert len(ticks) >= 3 and calls == [(['authorized-first.jpg'], 1)], calls
+    assert len(ticks) >= 3 and calls == [(['authorized-first.jpg', 'authorized-second.jpg'], 1)], calls
     assert published.read_text() == 'completed'
     assert 'cancelled before remaining files' in w.summary.text() and 'skipped: 1' in w.summary.text()
     assert 'authorized-second.jpg' in w.diagnostics.toPlainText()

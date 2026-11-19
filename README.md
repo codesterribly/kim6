@@ -47,7 +47,7 @@ Select one or more images in Dolphin, right-click, and choose a KIMng action. To
 | Remove GPS coordinates | KIMng - Location/GPS → Remove GPS metadata… | `trip_gps.jpg` |
 | Resize several images | KIMng - Resize/Crop/Rotate → Resize to fit 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
 
-These examples assume default suffix naming. KIMng numbers output names when collisions occur. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
+These examples assume default suffix naming. KIMng numbers output names when collisions occur in these legacy actions. Recipes and standalone Crop block collisions and retain exact reviewed filenames. Resize presets preserve aspect ratio and can enlarge smaller images. JPEG compression is lossy, and JPEG does not support PNG transparency.
 
 GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.
 
@@ -151,7 +151,7 @@ Resizing, compression, conversion, rotation, and flipping follow these settings 
 
 **Filenames and batch processing**
 
-When KIMng creates a new file, it avoids overwriting an existing file by adding a number to the output filename when necessary. Open **Settings → Output Filenames** to customize descriptive labels, such as changing `photo_compressed.jpg` to `photo_com.jpg`. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use `{filename}` to represent the original filename without its extension. For example, `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The Recipe Editor previews the resulting names.
+Legacy actions avoid overwriting an existing file by adding a number to the output filename when necessary. Recipes and standalone Crop instead block occupied or duplicate batch targets and publish only the exact reviewed names, including when another file appears after review. Open **Settings → Output Filenames** to customize descriptive labels, such as changing `photo_compressed.jpg` to `photo_com.jpg`. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use `{filename}` to represent the original filename without its extension. For example, `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The Recipe Editor previews the resulting names.
 
 When processing several files, KIMng keeps the results that completed successfully, even if a later file fails. Failed or invalid results are not published as completed files.
 

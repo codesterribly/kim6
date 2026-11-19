@@ -33,10 +33,10 @@
 <h1 id="recipes-reusable-photo-workflows">Recipes: Reusable Photo Workflows</h1>
 <p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIMng - Recipes menu</strong>. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and <strong>recipes never modify the source images</strong>.</p>
 <h2 id="start-in-dolphin">Start in Dolphin</h2>
-<p><img src="../images/screenshots/06-recipes.png" alt="KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Choose saved recipe…, and Recipe editor…" /></p>
+<p><img src="../images/screenshots/06-recipes.png" alt="KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Run a recipe…, and Recipe editor…" /></p>
 <ol type="1">
 <li>Select one or more supported images and right-click.</li>
-<li>Open <strong>KIMng - Recipes → Choose saved recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
+<li>Open <strong>KIMng - Recipes → Run a recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
 <li>Review the selected images and the <strong>Run a Recipe</strong> window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.</li>
 <li>When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.</li>
 </ol>
@@ -66,7 +66,7 @@
 <p>KIMng provides two distinct Web Export workflows:</p>
 <ul>
 <li><strong>KIMng - Web Export</strong> offers twelve direct Dolphin presets, covering JPEG, PNG, WebP, and AVIF at three maximum image sizes (1600, 800, and 128 pixels).</li>
-<li><strong>KIMng - Recipes → Choose saved recipe… → Web Export</strong> runs the built-in, multi-step recipe.</li>
+<li><strong>KIMng - Recipes → Run a recipe… → Web Export</strong> runs the built-in, multi-step recipe.</li>
 </ul>
 <p>The built-in recipe auto-orients images, fits them within 1600 × 1600 without enlargement, applies sRGB handling, converts to JPEG at quality <strong>95</strong>, strips metadata, and writes <code>{filename}_web.jpg</code> into a <code>Web</code> subfolder.</p>
 <p>These workflows have different configuration and processing paths. Do not assume their output settings are identical.</p>
@@ -223,7 +223,7 @@
 <p><strong>JPEG quality is not a separate operation.</strong> Configure quality through <strong>Convert Format</strong> or <strong>Compress Image</strong>. The final encoding options are applied during output creation. Step order matters, especially for orientation, metadata removal, date operations and naming. All operations can be enabled or disabled independently.</p>
 <h3 id="output-filename-patterns">Output filename patterns</h3>
 <p>In <strong>Rename Output File</strong>, <code>{filename}</code> means the original name without its extension. A pattern of <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.</p>
-<p>Previously saved patterns using <code>{stem}</code> continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. When a destination filename already exists, KIMng assigns a collision-safe name rather than replacing that file.</p>
+<p>Previously saved patterns using <code>{stem}</code> continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. An occupied destination filename blocks the recipe. Change the output pattern or destination and review the updated paths before applying.</p>
 <h2 id="preflight-and-output-preview">Preflight and output preview</h2>
 <p><strong>Run a Recipe</strong> lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Problem</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
 <p>The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.</p>
@@ -233,7 +233,8 @@
 <p>After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.</p>
 <p>PSD inputs are treated as rendered image sources rather than editable Photoshop documents with preserved layers. Color-profile and precision handling depend on the input and the selected output format. See <a href="FORMATS.html#photoshop-psd-inputs">Image and Video Format Support</a> for details.</p>
 <h2 id="destinations-safety-and-cancellation">Destinations, safety, and cancellation</h2>
-<p>Recipes are <strong>derivative-only</strong>. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and planned output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Occupied output filenames are numbered rather than overwritten.</p>
+<p>Recipes are <strong>derivative-only</strong>. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Existing targets and duplicate batch targets block approval. Execution uses the frozen reviewed source identities, paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.</p>
+<p>Recipes and standalone Crop stage complete derivatives privately on the destination filesystem and publish them with an atomic no-replace hard link. Filesystems or permissions that cannot support this publication fail closed; KIMng does not write a partial image directly to the final filename. Source or destination identity changes require a new review. Cancellation and failures remove private stages while retaining published outputs; a durability-sync failure after publication is reported as a warning alongside the created path. Support for exFAT, FAT32, NTFS and network destinations must be verified individually.</p>
 <p>File inspection, required encoder checks, and the preflight plan must succeed before a run begins. A failed or cancelled operation must not be reported as a completed publication. Successfully committed outputs can remain available if a later file in the batch fails or the user cancels.</p>
 <h2 id="completion-messages-and-diagnostic-details">Completion messages and diagnostic details</h2>
 <p>Publication tools such as PDF Album can show a compact completion window with the saved output path, <strong>Open Folder</strong>, and <strong>Done</strong>. Where there is additional information about the source files, <strong>Details (N)</strong> expands to grouped, selectable diagnostics with <strong>Copy Details</strong>. The details control is omitted when there is nothing to disclose. Informational details are not necessarily failures.</p>

@@ -112,7 +112,7 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 
 In **Rename Output File**, `{filename}` means the original name without its extension. A pattern of `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.
 
-Previously saved patterns using `{stem}` continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. When a destination filename already exists, KIMng assigns a collision-safe name rather than replacing that file.
+Previously saved patterns using `{stem}` continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. An occupied destination filename blocks the recipe. Change the output pattern or destination and review the updated paths before applying.
 
 ## Preflight and output preview
 
@@ -132,7 +132,9 @@ PSD inputs are treated as rendered image sources rather than editable Photoshop 
 
 ## Destinations, safety, and cancellation
 
-Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and planned output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Occupied output filenames are numbered rather than overwritten.
+Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Existing targets and duplicate batch targets block approval. Execution uses the frozen reviewed source identities, paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.
+
+Recipes and standalone Crop stage complete derivatives privately on the destination filesystem and publish them with an atomic no-replace hard link. Filesystems or permissions that cannot support this publication fail closed; KIMng does not write a partial image directly to the final filename. Source or destination identity changes require a new review. Cancellation and failures remove private stages while retaining published outputs; a durability-sync failure after publication is reported as a warning alongside the created path. Support for exFAT, FAT32, NTFS and network destinations must be verified individually.
 
 File inspection, required encoder checks, and the preflight plan must succeed before a run begins. A failed or cancelled operation must not be reported as a completed publication. Successfully committed outputs can remain available if a later file in the batch fails or the user cancels.
 

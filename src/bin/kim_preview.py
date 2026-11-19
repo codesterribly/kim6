@@ -1185,9 +1185,9 @@ def qt_classes():
 
             elif operation == 'convert':
                 headings = (
-                    'Image / filename',
-                    'Proposed filename',
-                    'Destination directory',
+                    'Input',
+                    'Output',
+                    'Destination',
                     'Action',
                     'Status',
                 )
@@ -1259,9 +1259,9 @@ def qt_classes():
                 self.table.setColumnWidth(1, 190)
                 self.table.setColumnWidth(2, 175)
             elif operation == 'convert':
-                self.table.setColumnWidth(1, 210)
+                self.table.setColumnWidth(1, 230)
                 self.table.setColumnWidth(2, 200)
-                self.table.setColumnWidth(3, 190)
+                self.table.setColumnWidth(3, 95)
             elif operation == 'strip':
                 self.table.setColumnWidth(1, 210)
                 self.table.setColumnWidth(2, 240)

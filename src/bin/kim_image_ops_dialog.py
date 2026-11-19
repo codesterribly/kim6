@@ -453,8 +453,10 @@ class CropCanvas(QWidget):
 class VisualWorker(QThread):
     stage_changed = Signal(str)
 
-    def __init__(self, recipe, files, sample, prefix, step, generation, parent):
+    def __init__(self, recipe, files, sample, prefix, step, generation, parent,
+                 fast_crop=False):
         super().__init__(parent)
+        self.fast_crop = fast_crop
         self.recipe, self.files, self.sample = copy.deepcopy(recipe), list(files), sample
         self.prefix, self.step, self.generation = copy.deepcopy(prefix), copy.deepcopy(step), generation
         self.rows = []; self.image = QImage(); self.dimensions = None; self.error = None; self.rendered_overlay = False
@@ -467,6 +469,57 @@ class VisualWorker(QThread):
         from kim_image_ops import overlay_arguments
         try:
             with inspection_context(self.stage_changed.emit, self.isInterruptionRequested):
+                if self.fast_crop:
+                    # Standalone Crop settings are a visual editor.
+                    # Do not run full metadata/publication planning here.
+                    # Review Changes remains the mandatory validation gate.
+                    if not self.sample:
+                        return
+                    checkpoint()
+                    with source_session(), tempfile.TemporaryDirectory(
+                        prefix='kimng-crop-visual-'
+                    ) as workspace:
+                        source = Path(self.sample)
+                        if source.is_symlink() or not source.is_file():
+                            raise RecipeError(
+                                'Preview source must be a regular image'
+                            )
+                        before = source.stat()
+                        from kim_recipe_image import inspect
+                        info, fmt, width, height = inspect(source)
+                        orientation = int(info.get('Orientation') or 1)
+                        if orientation in (5, 6, 7, 8):
+                            width, height = height, width
+                        self.dimensions = width, height
+                        checkpoint()
+                        output = Path(workspace) / 'preview.png'
+                        run([
+                            'magick', str(source), '-auto-orient',
+                            '-profile', srgb_profile(),
+                            '-thumbnail', '1000x750>',
+                            '-strip', 'PNG:' + str(output)
+                        ])
+                        after = source.stat()
+                        if (
+                            before.st_dev, before.st_ino,
+                            before.st_size, before.st_mtime_ns,
+                            before.st_ctime_ns
+                        ) != (
+                            after.st_dev, after.st_ino,
+                            after.st_size, after.st_mtime_ns,
+                            after.st_ctime_ns
+                        ):
+                            raise RecipeError(
+                                'Preview source changed; select it again'
+                            )
+                        checkpoint()
+                        self.image = QImage(str(output))
+                        if self.image.isNull():
+                            raise RecipeError(
+                                'Cannot display the rendered crop preview'
+                            )
+                    return
+
                 self.rows = preview(self.recipe, self.files)
                 checkpoint()
                 if not self.sample: return
@@ -857,6 +910,37 @@ class ImageOperationDialog(QDialog):
 
     def schedule(self, *_):
         if self.loading or self.closing: return
+
+        if (
+            self.standalone and self.crop
+            and self.worker is None
+            and not self.canvas.image.isNull()
+            and getattr(self, '_crop_preview_source', None)
+                == self.images.currentData()
+        ):
+            self.timer.stop()
+            self.pending = False
+            self.generation += 1
+            self.checked_generation = None
+            self.sync_visibility()
+            try:
+                self.build_recipe()
+                from kim_image_ops import crop_plan
+                crop_plan(
+                    *self.dimensions,
+                    dict(self.step, resize=False)
+                )
+                self.update_crop_boundary()
+            except (RecipeError, OSError, ValueError) as exc:
+                self.status.setText(str(exc))
+                self.apply.setEnabled(False)
+                return
+
+            self.checked_generation = self.generation
+            self.apply.setEnabled(True)
+            self.status.setText('')
+            return
+
         self.generation += 1; self.checked_generation = None; self.apply.setEnabled(False)
         if self.canvas.image.isNull():
             self.canvas.message = 'Loading image preview…'
@@ -885,9 +969,19 @@ class ImageOperationDialog(QDialog):
                 self.status.setText('Choose an example image for a visual preview. Recipe execution will check every selected image.')
                 self.apply.setEnabled(not self.standalone); self.checked_generation = self.generation
                 return
-            self.worker = VisualWorker(recipe, files, sample, prefix, dict(self.step, enabled=True), self.generation, self)
-            self.worker.stage_changed.connect(self.stage); self.worker.finished.connect(self.finished_preview); self.worker.start()
-            self.status.setText('Checking each selected image and rendering the preview…')
+            self.worker = VisualWorker(
+                recipe, files, sample, prefix,
+                dict(self.step, enabled=True), self.generation, self,
+                fast_crop=self.standalone and self.crop
+            )
+            self.worker.stage_changed.connect(self.stage)
+            self.worker.finished.connect(self.finished_preview)
+            self.worker.start()
+            self.status.setText(
+                'Loading selected image preview…'
+                if self.standalone and self.crop else
+                'Checking each selected image and rendering the preview…'
+            )
         except (RecipeError, OSError) as exc:
             self.status.setText(str(exc)); self.apply.setEnabled(False)
 
@@ -899,6 +993,46 @@ class ImageOperationDialog(QDialog):
         if self.closing: worker.deleteLater(); super().reject(); return
         if worker.generation != self.generation:
             worker.deleteLater(); self.refresh(); return
+
+        if worker.fast_crop:
+            self.table.setRowCount(0)
+            if not worker.image.isNull() and not worker.error:
+                self.canvas.image = worker.image
+                self.dimensions = worker.dimensions
+                self._crop_preview_source = worker.sample
+                self.canvas.message = ''
+                self.canvas.update()
+                self.update_crop_boundary()
+
+                self.batch_summary.setText(
+                    f'{len(self.files)} images selected. '
+                    'Final validation occurs in Review Changes.'
+                )
+                self.status.setText('')
+                self.checked_generation = self.generation
+                self.apply.setEnabled(True)
+            else:
+                self._crop_preview_source = None
+                self.canvas.image = QImage()
+                self.canvas.message = (
+                    'Image preview failed:\n'
+                    + (worker.error or 'No preview available')
+                )
+                self.canvas.update()
+                self.batch_summary.setText(
+                    f'{len(self.files)} images selected'
+                )
+                self.status.setText(
+                    worker.error or 'Cannot load image preview'
+                )
+                self.apply.setEnabled(False)
+
+            worker.deleteLater()
+            if self.pending:
+                self.pending = False
+                self.refresh()
+            return
+
         self.table.setRowCount(len(worker.rows)); problems = []; warnings = []
         for index, row in enumerate(worker.rows):
             p = row.properties

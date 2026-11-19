@@ -31,7 +31,7 @@
       <div class="reference-source">KIMng DOCUMENTATION · docs/ACTIONS.md</div>
       <article class="markdown-body">
 <h1 id="kimng-dolphin-menu-actions">KIMng Dolphin Menu Actions</h1>
-<p>KIMng integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>91 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.</p>
+<p>KIMng integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>93 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.</p>
 <p>The action inventory below is derived directly from the current <code>.desktop.in</code> files in <code>src/</code>. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.</p>
 <p>Saved recipes assigned to Root may also appear dynamically in the Recipes submenu. They are not part of the static service-menu definitions.</p>
 <h2 id="image-menus">Image menus</h2>
@@ -243,7 +243,7 @@
 </thead>
 <tbody>
 <tr>
-<td>Choose saved recipe…</td>
+<td>Run a recipe…</td>
 <td><code>kim_all recipe --choose -- %F</code></td>
 </tr>
 <tr>
@@ -438,6 +438,617 @@
 <li><a href="commandconfig.html">Commands and configuration</a></li>
 <li><a href="INSTALL.html">Installation</a></li>
 </ul>
+<h2 id="authoritative-static-action-inventory">Authoritative static action inventory</h2>
+<p>The following inventory is derived from the current KDE service-menu definitions. It records the exact action IDs, labels, and dispatcher commands.</p>
+<h3 id="kim_compressandresizedesktopin"><code>kim_compressandresize.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01Resize1600</code></td>
+<td>Resize to fit 1600 × 1600</td>
+<td><code>kim_all resize --size 1600x1600 -- %F</code></td>
+</tr>
+<tr>
+<td><code>02Resize1280</code></td>
+<td>Resize to fit 1280 × 1280</td>
+<td><code>kim_all resize --size 1280x1280 -- %F</code></td>
+</tr>
+<tr>
+<td><code>03Resize1024</code></td>
+<td>Resize to fit 1024 × 1024</td>
+<td><code>kim_all resize --size 1024x1024 -- %F</code></td>
+</tr>
+<tr>
+<td><code>05ResizeCustom</code></td>
+<td>Resize custom…</td>
+<td><code>kim_all resize --custom -- %F</code></td>
+</tr>
+<tr>
+<td><code>06Crop</code></td>
+<td>Crop image…</td>
+<td><code>kim_all crop -- %F</code></td>
+</tr>
+<tr>
+<td><code>14Rotateexif</code></td>
+<td>Auto-rotate using EXIF</td>
+<td><code>kim_all rotate --preview --exif -- %F</code></td>
+</tr>
+<tr>
+<td><code>10Rotate90</code></td>
+<td>Rotate 90° clockwise</td>
+<td><code>kim_all rotate --preview --angle 90 -- %F</code></td>
+</tr>
+<tr>
+<td><code>11Rotate270</code></td>
+<td>Rotate 90° counterclockwise</td>
+<td><code>kim_all rotate --preview --angle 270 -- %F</code></td>
+</tr>
+<tr>
+<td><code>12Rotate180</code></td>
+<td>Rotate 180°</td>
+<td><code>kim_all rotate --preview --angle 180 -- %F</code></td>
+</tr>
+<tr>
+<td><code>13RotateCustom</code></td>
+<td>Rotate custom…</td>
+<td><code>kim_all rotate --custom -- %F</code></td>
+</tr>
+<tr>
+<td><code>20FlipHorizontal</code></td>
+<td>Flip horizontally</td>
+<td><code>kim_all flipflop flop -- %F</code></td>
+</tr>
+<tr>
+<td><code>21FlipVertical</code></td>
+<td>Flip vertically</td>
+<td><code>kim_all flipflop flip -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_compressandresizevideodesktopin"><code>kim_compressandresizevideo.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Videohd108017265mp4</code></td>
+<td>1080p • High quality • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108023265mp4</code></td>
+<td>1080p • Balanced • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108029265mp4</code></td>
+<td>1080p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72017265mp4</code></td>
+<td>720p • High quality • MP4</td>
+<td><code>kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72023265mp4</code></td>
+<td>720p • Balanced • MP4</td>
+<td><code>kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72029265mp4</code></td>
+<td>720p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_convertandrotatedesktopin"><code>kim_convertandrotate.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>07ConvertJPG</code></td>
+<td>Convert to JPEG</td>
+<td><code>kim_all convert --preview --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>10ConvertPNG</code></td>
+<td>Convert to PNG</td>
+<td><code>kim_all convert --preview --format png -- %F</code></td>
+</tr>
+<tr>
+<td><code>12ConvertWEBP</code></td>
+<td>Convert to WebP</td>
+<td><code>kim_all convert --preview --format webp -- %F</code></td>
+</tr>
+<tr>
+<td><code>01ConvertAVIF</code></td>
+<td>Convert to AVIF</td>
+<td><code>kim_all convert --preview --format avif -- %F</code></td>
+</tr>
+<tr>
+<td><code>11ConvertTIFF</code></td>
+<td>Convert to TIFF</td>
+<td><code>kim_all convert --preview --format tiff -- %F</code></td>
+</tr>
+<tr>
+<td><code>03ConvertGIF</code></td>
+<td>Convert to GIF</td>
+<td><code>kim_all convert --preview --format gif -- %F</code></td>
+</tr>
+<tr>
+<td><code>04ConvertHEIC</code></td>
+<td>Convert to HEIC/HEIF</td>
+<td><code>kim_all convert --preview --format heic -- %F</code></td>
+</tr>
+<tr>
+<td><code>09ConvertPDF</code></td>
+<td>Convert to PDF</td>
+<td><code>kim_all convert --preview --format pdf -- %F</code></td>
+</tr>
+<tr>
+<td><code>08ConvertJXL</code></td>
+<td>Convert to JPEG XL</td>
+<td><code>kim_all convert --preview --format jxl -- %F</code></td>
+</tr>
+<tr>
+<td><code>05ConvertJP2Lossless</code></td>
+<td>Convert to JPEG 2000 (lossless)</td>
+<td><code>kim_all convert --preview --format jp2 --jp2-mode lossless -- %F</code></td>
+</tr>
+<tr>
+<td><code>06ConvertJP2Lossy</code></td>
+<td>Convert to JPEG 2000 (lossy)</td>
+<td><code>kim_all convert --preview --format jp2 --jp2-mode lossy -- %F</code></td>
+</tr>
+<tr>
+<td><code>02ConvertBMP</code></td>
+<td>Convert to BMP</td>
+<td><code>kim_all convert --preview --format bmp --bmp5 -- %F</code></td>
+</tr>
+<tr>
+<td><code>13ConvertCustom</code></td>
+<td>Custom convert…</td>
+<td><code>kim_all convert --preview --custom-format -- %F</code></td>
+</tr>
+<tr>
+<td><code>14PDFPages</code></td>
+<td>Convert PDF pages to images…</td>
+<td><code>kim_all pdf-pages -- %F</code></td>
+</tr>
+<tr>
+<td><code>15PDFExtract</code></td>
+<td>Extract embedded images from PDF…</td>
+<td><code>kim_all pdf-extract -- %F</code></td>
+</tr>
+<tr>
+<td><code>2001CompressRecommended</code></td>
+<td>Compress recommended</td>
+<td><code>kim_all compress --recommended --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>2102CompressMaximum</code></td>
+<td>Compress maximum</td>
+<td><code>kim_all compress --maximum --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>2203CompressCustom</code></td>
+<td>Compress custom…</td>
+<td><code>kim_all compress --custom -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_informationdesktopin"><code>kim_information.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01Settings</code></td>
+<td>Settings…</td>
+<td><code>kim_all settings -- %F</code></td>
+</tr>
+<tr>
+<td><code>02About</code></td>
+<td>About KIMng</td>
+<td><code>kim_all about -- %F</code></td>
+</tr>
+<tr>
+<td><code>03License</code></td>
+<td>License</td>
+<td><code>kim_all license -- %F</code></td>
+</tr>
+<tr>
+<td><code>04Manual</code></td>
+<td>KIMng User Guide</td>
+<td><code>kim_all manual -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_locationdesktopin"><code>kim_location.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>04Report</code></td>
+<td>View GPS metadata…</td>
+<td><code>kim_all location-report -- %F</code></td>
+</tr>
+<tr>
+<td><code>03Apply</code></td>
+<td>Edit GPS on images…</td>
+<td><code>kim_all location-apply -- %F</code></td>
+</tr>
+<tr>
+<td><code>05Reduce</code></td>
+<td>Reduce exact GPS location…</td>
+<td><code>kim_all location-reduce -- %F</code></td>
+</tr>
+<tr>
+<td><code>07StripGPS</code></td>
+<td>Remove GPS metadata…</td>
+<td><code>kim_all stripmeta --mode gps --interactive -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_metadatadesktopin"><code>kim_metadata.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>00ViewMetadata</code></td>
+<td>View metadata…</td>
+<td><code>kim_all metadata-view -- %F</code></td>
+</tr>
+<tr>
+<td><code>01EditMetadata</code></td>
+<td>Edit metadata…</td>
+<td><code>kim_all metadata-edit -- %F</code></td>
+</tr>
+<tr>
+<td><code>02StripMetadata</code></td>
+<td>Strip metadata</td>
+<td><code>kim_all stripmeta --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>08SetCopyright</code></td>
+<td>Set creator/copyright/usage…</td>
+<td><code>kim_all copyright --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>04Rename</code></td>
+<td>Rename images…</td>
+<td><code>kim_all rename interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>05SetDates</code></td>
+<td>Set dates…</td>
+<td><code>kim_all capturedate --mode unified --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>06CheckExtensions</code></td>
+<td>Check and correct extensions…</td>
+<td><code>kim_all checkextensions -- %F</code></td>
+</tr>
+<tr>
+<td><code>07Overlay</code></td>
+<td>Add watermark…</td>
+<td><code>kim_all overlay -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_publicationdesktopin"><code>kim_publication.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Gallery</code></td>
+<td>Create an HTML gallery…</td>
+<td><code>kim_all gallery -- %F</code></td>
+</tr>
+<tr>
+<td><code>Collage</code></td>
+<td>Create a collage…</td>
+<td><code>kim_all collage -- %F</code></td>
+</tr>
+<tr>
+<td><code>ContactSheet</code></td>
+<td>Create a contact sheet…</td>
+<td><code>kim_all contactsheet -- %F</code></td>
+</tr>
+<tr>
+<td><code>Album</code></td>
+<td>Create a PDF album…</td>
+<td><code>kim_all album -- %F</code></td>
+</tr>
+<tr>
+<td><code>Print</code></td>
+<td>Create a print-layout PDF…</td>
+<td><code>kim_all print -- %F</code></td>
+</tr>
+<tr>
+<td><code>Slideshow</code></td>
+<td>Create a video slideshow…</td>
+<td><code>kim_all slideshow --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>Animation</code></td>
+<td>Create an animated image…</td>
+<td><code>kim_all animate -- %F</code></td>
+</tr>
+<tr>
+<td><code>TiffJoin</code></td>
+<td>Create a multi-page TIFF…</td>
+<td><code>kim_all tiffjoin -- %F</code></td>
+</tr>
+<tr>
+<td><code>Emailfull</code></td>
+<td>Send via email…</td>
+<td><code>kim_all resizeandsend --size full -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_recipesdesktopin"><code>kim_recipes.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KIMRecipe0Run</code></td>
+<td>Run a recipe…</td>
+<td><code>kim_all recipe --choose -- %F</code></td>
+</tr>
+<tr>
+<td><code>KIMRecipe1Editor</code></td>
+<td>Recipe editor…</td>
+<td><code>kim_all recipe --editor -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_video_av1desktopin"><code>kim_video_av1.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01Av1hd1080High</code></td>
+<td>1080p • High quality • MP4</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>02Av1hd1080Balanced</code></td>
+<td>1080p • Balanced • MP4</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>03Av1hd1080Smallest</code></td>
+<td>1080p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd1080 --codec av1 --av1-quality smallest --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>04Av1hd720High</code></td>
+<td>720p • High quality • MP4</td>
+<td><code>kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>05Av1hd720Balanced</code></td>
+<td>720p • Balanced • MP4</td>
+<td><code>kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>06Av1hd720Smallest</code></td>
+<td>720p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd720 --codec av1 --av1-quality smallest --container mp4 -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_video_h264desktopin"><code>kim_video_h264.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Videohd108017264mp4</code></td>
+<td>1080p • High quality • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108023264mp4</code></td>
+<td>1080p • Balanced • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd108029264mp4</code></td>
+<td>1080p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72017264mp4</code></td>
+<td>720p • High quality • MP4</td>
+<td><code>kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72023264mp4</code></td>
+<td>720p • Balanced • MP4</td>
+<td><code>kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+<tr>
+<td><code>Videohd72029264mp4</code></td>
+<td>720p • Smallest file • MP4</td>
+<td><code>kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_videoutilitiesdesktopin"><code>kim_videoutilities.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>A01ExtractVideoAudio</code></td>
+<td>Extract audio…</td>
+<td><code>kim_all videoaudio --mode extract --format m4a --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>A02VideoFrameAt</code></td>
+<td>Extract frame at timestamp…</td>
+<td><code>kim_all videoframes --mode single --format png --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>A03VideoThumbnail</code></td>
+<td>Extract automatic thumbnail</td>
+<td><code>kim_all videoframes --mode thumbnail --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>A04MuteVideo</code></td>
+<td>Remove audio (copy video)</td>
+<td><code>kim_all videoaudio --mode mute -- %F</code></td>
+</tr>
+<tr>
+<td><code>z01VideoContactSheet</code></td>
+<td>Create video contact sheet…</td>
+<td><code>kim_all videoframes --mode contact --format jpg --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>z02VideoToGif</code></td>
+<td>Create animated GIF from video…</td>
+<td><code>kim_all videogif --interactive -- %F</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="kim_webemaildesktopin"><code>kim_webemail.desktop.in</code></h3>
+<table>
+<thead>
+<tr>
+<th>Action ID</th>
+<th>Label</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0101WebExport</code></td>
+<td>JPEG · Large (1600 × 1600)</td>
+<td><code>kim_all webexport --size 1600x1600 --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>0102WebExport</code></td>
+<td>JPEG · Medium (800 × 800)</td>
+<td><code>kim_all webexport --size 800x800 --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>0103WebExport</code></td>
+<td>JPEG · Thumbnail (128 × 128)</td>
+<td><code>kim_all webexport --size 128x128 --format jpg -- %F</code></td>
+</tr>
+<tr>
+<td><code>0201WebExport</code></td>
+<td>PNG · Large (1600 × 1600)</td>
+<td><code>kim_all webexport --size 1600x1600 --format png -- %F</code></td>
+</tr>
+<tr>
+<td><code>0202WebExport</code></td>
+<td>PNG · Medium (800 × 800)</td>
+<td><code>kim_all webexport --size 800x800 --format png -- %F</code></td>
+</tr>
+<tr>
+<td><code>0203WebExport</code></td>
+<td>PNG · Thumbnail (128 × 128)</td>
+<td><code>kim_all webexport --size 128x128 --format png -- %F</code></td>
+</tr>
+<tr>
+<td><code>0301WebExport</code></td>
+<td>WebP · Large (1600 × 1600)</td>
+<td><code>kim_all webexport --size 1600x1600 --format webp -- %F</code></td>
+</tr>
+<tr>
+<td><code>0302WebExport</code></td>
+<td>WebP · Medium (800 × 800)</td>
+<td><code>kim_all webexport --size 800x800 --format webp -- %F</code></td>
+</tr>
+<tr>
+<td><code>0303WebExport</code></td>
+<td>WebP · Thumbnail (128 × 128)</td>
+<td><code>kim_all webexport --size 128x128 --format webp -- %F</code></td>
+</tr>
+<tr>
+<td><code>0401WebExport</code></td>
+<td>AVIF · Large (1600 × 1600)</td>
+<td><code>kim_all webexport --size 1600x1600 --format avif -- %F</code></td>
+</tr>
+<tr>
+<td><code>0402WebExport</code></td>
+<td>AVIF · Medium (800 × 800)</td>
+<td><code>kim_all webexport --size 800x800 --format avif -- %F</code></td>
+</tr>
+<tr>
+<td><code>0403WebExport</code></td>
+<td>AVIF · Thumbnail (128 × 128)</td>
+<td><code>kim_all webexport --size 128x128 --format avif -- %F</code></td>
+</tr>
+</tbody>
+</table>
 
       </article>
     </main>

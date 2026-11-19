@@ -108,16 +108,16 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertNotIn("conceptual examples, not actual application screenshots", manual)
 
         for name in (
-            "kim6-photo-actions.png",
-            "kim6-video-conversion.png",
-            "kim6-video-utilities.png",
-            "kim6-settings-dialog.png",
-            "kim6-collage-dialog.png",
-            "kim6-animated-gif-dialog.png",
+            "01-main-menu.png",
+            "21-video-menu-overview.png",
+            "23-video-utilities.png",
+            "10-settings-menu.png",
+            "19-create-collage.png",
+            "17-crop-image.png",
         ):
-            self.assertIn(f'images/{name}', manual)
+            self.assertIn(f'images/screenshots/{name}', manual)
             self.assertTrue(
-                (Path(__file__).resolve().parents[1] / "docs/images" / name).is_file(),
+                (Path(__file__).resolve().parents[1] / "docs/images/screenshots" / name).is_file(),
                 f"Missing manual illustration: {name}",
             )
 
@@ -137,11 +137,11 @@ class DocumentationContractTests(unittest.TestCase):
                 entries.append((submenu.group(1), label, command))
 
         cases = (
-            ("Resize a photograph", "kim_all resize --size 1600x1600 -- %F", "lake_resized.jpg"),
+            ("Resize an image", "kim_all resize --size 1600x1600 -- %F", "lake_resized.jpg"),
             ("Compress a JPEG", "kim_all compress ", "lake_compressed.jpg"),
             ("Convert PNG to JPEG", "kim_all convert --preview --format jpg -- %F", "garden.jpg"),
             ("Remove GPS coordinates", "kim_all stripmeta --mode gps --interactive -- %F", "trip_gps.jpg"),
-            ("Resize several photographs", "kim_all resize --size 1280x1280 -- %F", "portrait_resized.jpg"),
+            ("Resize several images", "kim_all resize --size 1280x1280 -- %F", "portrait_resized.jpg"),
         )
         for task, command, output in cases:
             with self.subTest(task=task):
@@ -192,7 +192,7 @@ class DocumentationContractTests(unittest.TestCase):
                               for action_id, label, command in rows], menu.name)
             total += len(actual)
 
-        self.assertEqual(91, total)
+        self.assertEqual(93, total)
 
     def test_cli_reference_covers_every_dispatcher_route(self):
         dispatcher = (ROOT / "src/bin/kim_all").read_text(encoding="utf-8")

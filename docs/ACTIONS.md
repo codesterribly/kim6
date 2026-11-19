@@ -1,7 +1,7 @@
 # KIMng Dolphin Menu Actions
 
 KIMng integrates image and video operations into KDE Dolphin.
-Its 12 service-menu definitions expose **91 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
+Its 12 service-menu definitions expose **93 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
 
 The action inventory below is derived directly from the current `.desktop.in` files in `src/`. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.
 
@@ -202,3 +202,160 @@ The top-level Web Export submenu provides twelve format-and-size presets (JPEG, 
 - [Supported formats](FORMATS.md)
 - [Commands and configuration](commandconfig.md)
 - [Installation](../INSTALL.md)
+
+## Authoritative static action inventory
+
+The following inventory is derived from the current KDE service-menu definitions. It records the exact action IDs, labels, and dispatcher commands.
+
+### `kim_compressandresize.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `01Resize1600` | Resize to fit 1600 × 1600 | `kim_all resize --size 1600x1600 -- %F` |
+| `02Resize1280` | Resize to fit 1280 × 1280 | `kim_all resize --size 1280x1280 -- %F` |
+| `03Resize1024` | Resize to fit 1024 × 1024 | `kim_all resize --size 1024x1024 -- %F` |
+| `05ResizeCustom` | Resize custom… | `kim_all resize --custom -- %F` |
+| `06Crop` | Crop image… | `kim_all crop -- %F` |
+| `14Rotateexif` | Auto-rotate using EXIF | `kim_all rotate --preview --exif -- %F` |
+| `10Rotate90` | Rotate 90° clockwise | `kim_all rotate --preview --angle 90 -- %F` |
+| `11Rotate270` | Rotate 90° counterclockwise | `kim_all rotate --preview --angle 270 -- %F` |
+| `12Rotate180` | Rotate 180° | `kim_all rotate --preview --angle 180 -- %F` |
+| `13RotateCustom` | Rotate custom… | `kim_all rotate --custom -- %F` |
+| `20FlipHorizontal` | Flip horizontally | `kim_all flipflop flop -- %F` |
+| `21FlipVertical` | Flip vertically | `kim_all flipflop flip -- %F` |
+
+### `kim_compressandresizevideo.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `Videohd108017265mp4` | 1080p • High quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx265 --container mp4 -- %F` |
+| `Videohd108023265mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx265 --container mp4 -- %F` |
+| `Videohd108029265mp4` | 1080p • Smallest file • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx265 --container mp4 -- %F` |
+| `Videohd72017265mp4` | 720p • High quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx265 --container mp4 -- %F` |
+| `Videohd72023265mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx265 --container mp4 -- %F` |
+| `Videohd72029265mp4` | 720p • Smallest file • MP4 | `kim_all video --size hd720 --crf 29 --codec libx265 --container mp4 -- %F` |
+
+### `kim_convertandrotate.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `07ConvertJPG` | Convert to JPEG | `kim_all convert --preview --format jpg -- %F` |
+| `10ConvertPNG` | Convert to PNG | `kim_all convert --preview --format png -- %F` |
+| `12ConvertWEBP` | Convert to WebP | `kim_all convert --preview --format webp -- %F` |
+| `01ConvertAVIF` | Convert to AVIF | `kim_all convert --preview --format avif -- %F` |
+| `11ConvertTIFF` | Convert to TIFF | `kim_all convert --preview --format tiff -- %F` |
+| `03ConvertGIF` | Convert to GIF | `kim_all convert --preview --format gif -- %F` |
+| `04ConvertHEIC` | Convert to HEIC/HEIF | `kim_all convert --preview --format heic -- %F` |
+| `09ConvertPDF` | Convert to PDF | `kim_all convert --preview --format pdf -- %F` |
+| `08ConvertJXL` | Convert to JPEG XL | `kim_all convert --preview --format jxl -- %F` |
+| `05ConvertJP2Lossless` | Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
+| `06ConvertJP2Lossy` | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
+| `02ConvertBMP` | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
+| `13ConvertCustom` | Custom convert… | `kim_all convert --preview --custom-format -- %F` |
+| `14PDFPages` | Convert PDF pages to images… | `kim_all pdf-pages -- %F` |
+| `15PDFExtract` | Extract embedded images from PDF… | `kim_all pdf-extract -- %F` |
+| `2001CompressRecommended` | Compress recommended | `kim_all compress --recommended --interactive -- %F` |
+| `2102CompressMaximum` | Compress maximum | `kim_all compress --maximum --interactive -- %F` |
+| `2203CompressCustom` | Compress custom… | `kim_all compress --custom -- %F` |
+
+### `kim_information.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `01Settings` | Settings… | `kim_all settings -- %F` |
+| `02About` | About KIMng | `kim_all about -- %F` |
+| `03License` | License | `kim_all license -- %F` |
+| `04Manual` | KIMng User Guide | `kim_all manual -- %F` |
+
+### `kim_location.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `04Report` | View GPS metadata… | `kim_all location-report -- %F` |
+| `03Apply` | Edit GPS on images… | `kim_all location-apply -- %F` |
+| `05Reduce` | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
+| `07StripGPS` | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+
+### `kim_metadata.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `00ViewMetadata` | View metadata… | `kim_all metadata-view -- %F` |
+| `01EditMetadata` | Edit metadata… | `kim_all metadata-edit -- %F` |
+| `02StripMetadata` | Strip metadata | `kim_all stripmeta --interactive -- %F` |
+| `08SetCopyright` | Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
+| `04Rename` | Rename images… | `kim_all rename interactive -- %F` |
+| `05SetDates` | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
+| `06CheckExtensions` | Check and correct extensions… | `kim_all checkextensions -- %F` |
+| `07Overlay` | Add watermark… | `kim_all overlay -- %F` |
+
+### `kim_publication.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `Gallery` | Create an HTML gallery… | `kim_all gallery -- %F` |
+| `Collage` | Create a collage… | `kim_all collage -- %F` |
+| `ContactSheet` | Create a contact sheet… | `kim_all contactsheet -- %F` |
+| `Album` | Create a PDF album… | `kim_all album -- %F` |
+| `Print` | Create a print-layout PDF… | `kim_all print -- %F` |
+| `Slideshow` | Create a video slideshow… | `kim_all slideshow --interactive -- %F` |
+| `Animation` | Create an animated image… | `kim_all animate -- %F` |
+| `TiffJoin` | Create a multi-page TIFF… | `kim_all tiffjoin -- %F` |
+| `Emailfull` | Send via email… | `kim_all resizeandsend --size full -- %F` |
+
+### `kim_recipes.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `KIMRecipe0Run` | Run a recipe… | `kim_all recipe --choose -- %F` |
+| `KIMRecipe1Editor` | Recipe editor… | `kim_all recipe --editor -- %F` |
+
+### `kim_video_av1.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `01Av1hd1080High` | 1080p • High quality • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `02Av1hd1080Balanced` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `03Av1hd1080Smallest` | 1080p • Smallest file • MP4 | `kim_all video --size hd1080 --codec av1 --av1-quality smallest --container mp4 -- %F` |
+| `04Av1hd720High` | 720p • High quality • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality high --container mp4 -- %F` |
+| `05Av1hd720Balanced` | 720p • Balanced • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality balanced --container mp4 -- %F` |
+| `06Av1hd720Smallest` | 720p • Smallest file • MP4 | `kim_all video --size hd720 --codec av1 --av1-quality smallest --container mp4 -- %F` |
+
+### `kim_video_h264.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `Videohd108017264mp4` | 1080p • High quality • MP4 | `kim_all video --size hd1080 --crf 17 --codec libx264 --container mp4 -- %F` |
+| `Videohd108023264mp4` | 1080p • Balanced • MP4 | `kim_all video --size hd1080 --crf 23 --codec libx264 --container mp4 -- %F` |
+| `Videohd108029264mp4` | 1080p • Smallest file • MP4 | `kim_all video --size hd1080 --crf 29 --codec libx264 --container mp4 -- %F` |
+| `Videohd72017264mp4` | 720p • High quality • MP4 | `kim_all video --size hd720 --crf 17 --codec libx264 --container mp4 -- %F` |
+| `Videohd72023264mp4` | 720p • Balanced • MP4 | `kim_all video --size hd720 --crf 23 --codec libx264 --container mp4 -- %F` |
+| `Videohd72029264mp4` | 720p • Smallest file • MP4 | `kim_all video --size hd720 --crf 29 --codec libx264 --container mp4 -- %F` |
+
+### `kim_videoutilities.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `A01ExtractVideoAudio` | Extract audio… | `kim_all videoaudio --mode extract --format m4a --interactive -- %F` |
+| `A02VideoFrameAt` | Extract frame at timestamp… | `kim_all videoframes --mode single --format png --interactive -- %F` |
+| `A03VideoThumbnail` | Extract automatic thumbnail | `kim_all videoframes --mode thumbnail --format jpg -- %F` |
+| `A04MuteVideo` | Remove audio (copy video) | `kim_all videoaudio --mode mute -- %F` |
+| `z01VideoContactSheet` | Create video contact sheet… | `kim_all videoframes --mode contact --format jpg --interactive -- %F` |
+| `z02VideoToGif` | Create animated GIF from video… | `kim_all videogif --interactive -- %F` |
+
+### `kim_webemail.desktop.in`
+
+| Action ID | Label | Command |
+|---|---|---|
+| `0101WebExport` | JPEG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format jpg -- %F` |
+| `0102WebExport` | JPEG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format jpg -- %F` |
+| `0103WebExport` | JPEG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format jpg -- %F` |
+| `0201WebExport` | PNG · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format png -- %F` |
+| `0202WebExport` | PNG · Medium (800 × 800) | `kim_all webexport --size 800x800 --format png -- %F` |
+| `0203WebExport` | PNG · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format png -- %F` |
+| `0301WebExport` | WebP · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format webp -- %F` |
+| `0302WebExport` | WebP · Medium (800 × 800) | `kim_all webexport --size 800x800 --format webp -- %F` |
+| `0303WebExport` | WebP · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format webp -- %F` |
+| `0401WebExport` | AVIF · Large (1600 × 1600) | `kim_all webexport --size 1600x1600 --format avif -- %F` |
+| `0402WebExport` | AVIF · Medium (800 × 800) | `kim_all webexport --size 800x800 --format avif -- %F` |
+| `0403WebExport` | AVIF · Thumbnail (128 × 128) | `kim_all webexport --size 128x128 --format avif -- %F` |
