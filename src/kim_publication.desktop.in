@@ -5,7 +5,7 @@ Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;application/pdf;
 X-KDE-Protocol=file
-Actions=Gallery;Collage;ContactSheet;Album;Print;Slideshow;Animation;TiffJoin;Emailfull;
+Actions=GalleryChooser;Collage;ContactSheet;Album;Print;Slideshow;Animation;TiffJoin;Emailfull;
 _X-KDE-Submenu=KIMng - Create/Publish
 X-KIMng-Managed=true
 
@@ -29,10 +29,10 @@ Icon=view-grid
 _Name=Create a contact sheet…
 Exec=kim_all contactsheet -- %F
 
-[Desktop Action Gallery]
-Icon=internet-web-browser
-_Name=Create an HTML gallery…
-Exec=kim_all gallery -- %F
+[Desktop Action GalleryChooser]
+Icon=folder-pictures
+_Name=Create a gallery…
+Exec=kim_all gallery-choose -- %F
 
 [Desktop Action Print]
 Icon=image-x-generic

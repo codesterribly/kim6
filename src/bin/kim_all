@@ -11922,7 +11922,7 @@ filter_selected_pdfs() {
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend|\
     crop|overlay|copyright|timeshift|capturedate|datesync|\
     location-gpx|location-copy|location-apply|location-reduce|location-report|\
-    checkextensions|metadata-view|metadata-edit|recipe|rename|slideshow)
+    checkextensions|metadata-view|metadata-edit|recipe|rename|slideshow|photo-story|gallery-choose)
       ;;
     *)
       return 0
@@ -12319,6 +12319,9 @@ main() {
     crop|overlay)    python3 "$DISPATCHER_DIR/kim_image_ops_dialog.py" "$cmd" "$@" ;;
     pdf-pages)       python3 "$DISPATCHER_DIR/kim_pdf_pages.py" "$@" ;;
     pdf-extract)     python3 "$DISPATCHER_DIR/kim_pdf_extract.py" "$@" ;;
+    photo-story)
+      if [ "${1:-}" = -- ]; then shift; fi
+      python3 "$DISPATCHER_DIR/kim_photo_story_dialog.py" "$@" ;;
     recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
     metadata-view)   action_metadata_ui browser "$@" ;;
     metadata-edit)   action_metadata_ui editor "$@" ;;
@@ -12338,6 +12341,27 @@ main() {
     datesync)        mk_workdir; action_datesync "$@" ;;
     flipflop)        mk_workdir; action_flipflop "$@" ;;
     gallery)         mk_workdir; action_gallery "$@" ;;
+    gallery-choose)
+      local chooser_status=0
+      local -a chooser_files=("$@")
+      if [ "${chooser_files[0]:-}" = -- ]; then
+        chooser_files=("${chooser_files[@]:1}")
+      fi
+
+      python3 "$DISPATCHER_DIR/kim_gallery_chooser.py"         "${chooser_files[@]}" || chooser_status=$?
+
+      case "$chooser_status" in
+        10)
+          mk_workdir
+          action_gallery -- "${chooser_files[@]}"
+          ;;
+        11)
+          python3 "$DISPATCHER_DIR/kim_photo_story_dialog.py"             "${chooser_files[@]}"
+          ;;
+        130) return 130 ;;
+        *) return "$chooser_status" ;;
+      esac
+      ;;
     collage)        mk_workdir; action_collage "$@" ;;
     print)           mk_workdir; action_print "$@" ;;
     rename)          mk_workdir; action_rename "$@" ;;

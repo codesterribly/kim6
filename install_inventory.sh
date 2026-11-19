@@ -141,6 +141,16 @@ docs/images/screenshots/23-video-utilities.png|docs/images/screenshots/23-video-
 docs/reference/STEP2_IMPLEMENTATION.html|docs/reference/STEP2_IMPLEMENTATION.html|0644
 KIMNG_RUNTIME_FILES
 
+# Gallery presentation chooser.
+runtime_sources+=("src/bin/kim_gallery_chooser.py")
+runtime_files+=("bin/kim_gallery_chooser.py")
+runtime_modes+=("0644")
+
+# Photo Story editor, currently preview-only.
+runtime_sources+=("src/bin/kim_photo_story_dialog.py")
+runtime_files+=("bin/kim_photo_story_dialog.py")
+runtime_modes+=("0644")
+
 # Phase 2: review-before-processing UI for video transcode presets.
 # Keep the source, installed path and mode arrays index-aligned.
 runtime_sources+=("src/bin/kim_video_review.py")
