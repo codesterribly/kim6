@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -546,6 +547,30 @@ class SlideshowDialog(OrderedImageDialog):
         self.ordered = OrderedImages(self)
         layout.addWidget(self.ordered)
 
+        # Static preview using the existing thumbnail cache.
+        preview_row = QHBoxLayout()
+
+        self.slide_preview = QLabel('Select an image')
+        self.slide_preview.setObjectName('slideshowSelectedPreview')
+        self.slide_preview.setAccessibleName(
+            'Selected slideshow image preview'
+        )
+        self.slide_preview.setAlignment(Qt.AlignCenter)
+        self.slide_preview.setFrameShape(QFrame.StyledPanel)
+        self.slide_preview.setFixedSize(280, 158)
+
+        preview_row.addWidget(self.slide_preview)
+
+        self.slide_details = QLabel()
+        self.slide_details.setObjectName('slideshowSlideDetails')
+        self.slide_details.setWordWrap(True)
+        self.slide_details.setAlignment(
+            Qt.AlignLeft | Qt.AlignVCenter
+        )
+
+        preview_row.addWidget(self.slide_details, 1)
+        layout.addLayout(preview_row)
+
         form = QFormLayout()
 
         self.seconds = QSpinBox()
@@ -672,7 +697,13 @@ class SlideshowDialog(OrderedImageDialog):
         buttons.rejected.connect(self.reject)
 
         self.ordered.changed.connect(self.update_controls)
+        self.ordered.changed.connect(self.refresh_slide_preview)
+        self.ordered.thumbnail_changed.connect(self.refresh_slide_preview)
+        self.ordered.images.currentRowChanged.connect(
+            self.refresh_slide_preview
+        )
         self.ordered.resized.connect(self.fit_images)
+        self.seconds.valueChanged.connect(self.refresh_slide_preview)
 
         for control in (
             self.seconds,
@@ -727,6 +758,72 @@ class SlideshowDialog(OrderedImageDialog):
             self.output.setText(str(initial))
 
         self.update_controls()
+        self.refresh_slide_preview()
+
+    def refresh_slide_preview(self, *_):
+        paths = self.ordered.ordered_paths()
+        count = len(paths)
+
+        if not count:
+            self.slide_preview.setPixmap(QPixmap())
+            self.slide_preview.setText('No images selected')
+            self.slide_details.setText(
+                'Add images to build your slideshow.'
+            )
+            return
+
+        index = self.ordered.images.currentRow()
+
+        if index < 0 or index >= count:
+            index = 0
+
+        path = paths[index]
+        seconds = self.seconds.value()
+
+        start = index * seconds
+        end = start + seconds
+
+        def timestamp(value):
+            return f'{value // 60:02d}:{value % 60:02d}'
+
+        self.slide_details.setText(
+            f'Slide {index + 1} of {count}\n'
+            f'{Path(path).name}\n\n'
+            f'On screen: {seconds} seconds\n'
+            f'Playback position: '
+            f'{timestamp(start)} to {timestamp(end)}'
+        )
+
+        thumbnail = self.ordered.thumbnails.get(path)
+
+        if thumbnail is not None and not thumbnail.isNull():
+            pixmap = QPixmap.fromImage(thumbnail)
+
+            self.slide_preview.setPixmap(
+                pixmap.scaled(
+                    self.slide_preview.size() - QSize(12, 12),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
+            self.slide_preview.setText('')
+
+        else:
+            self.slide_preview.setPixmap(QPixmap())
+
+            status = self.ordered.states.get(
+                path, ('Inspecting', '', None)
+            )[0]
+
+            if status == 'Blocked':
+                message = 'Image unavailable'
+            elif path in self.ordered.unavailable:
+                message = 'Preview unavailable'
+            else:
+                message = 'Loading preview…'
+                self.ordered.request_preview(path)
+
+            self.slide_preview.setText(message)
 
     def ordered_paths(self):
         return self.ordered.ordered_paths()
