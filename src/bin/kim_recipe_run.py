@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, QHBo
 from kim_job import JobStatus, grouped_warnings, WarningGroups
 from kim_recipe_core import (RecipeError, PreviewRow, builtins, load_library, lookup_recipe,
                              recipe_title, RecipeLibrary, library_groups, handler, preview, execute, validate,
-                             approve_rows, block_output_collisions, output_key)
+                             approve_rows, block_output_collisions, number_review_outputs, output_key)
 
 from kim_review_ui import (exact_field, set_exact, restore_review_geometry,
                            clamp_review_geometry, restore_splitter)
@@ -361,35 +361,94 @@ class PreflightWorker(QThread):
             self.inspect_files()
 
     def inspect_files(self):
-        outputs = {}
+        inspected_rows = []
+
         for index, source in enumerate(self.files, 1):
             if self.isInterruptionRequested():
-                self.cancelled = True; break
-            self.file_started.emit(str(source),index,len(self.files))
+                self.cancelled = True
+                break
+
+            self.file_started.emit(
+                str(source), index, len(self.files)
+            )
+
             try:
                 from kim_process import inspection_context
                 from kim_recipe_image import checked_input_headers
-                with inspection_context(self.stage_changed.emit,self.isInterruptionRequested), checked_input_headers(self.checked_inputs):
-                    row = preview(self.recipe, [source], self.chosen, start_index=index)[0]
+
+                with (
+                    inspection_context(
+                        self.stage_changed.emit,
+                        self.isInterruptionRequested
+                    ),
+                    checked_input_headers(self.checked_inputs)
+                ):
+                    row = preview(
+                        self.recipe,
+                        [source],
+                        self.chosen,
+                        start_index=index
+                    )[0]
+
                 if self.binding_error:
                     row.problems.append(self.binding_error)
-                if self.recipe['destination'].get('ask') and not self.chosen:
-                    row.problems.append('Choose an output directory before running.')
-                if row.approved is not None:
-                    duplicates = outputs.setdefault(output_key(row.approved), [])
-                    previous_problems = [len(previous.problems) for _, previous in duplicates]
-                    duplicates.append((index - 1, row))
-                    block_output_collisions([previous for _, previous in duplicates])
-                    for (previous_index, previous), count in zip(duplicates, previous_problems):
-                        if len(previous.problems) != count:
-                            self.inspected.emit(copy.deepcopy(previous), previous_index)
+
+                if (
+                    self.recipe['destination'].get('ask')
+                    and not self.chosen
+                ):
+                    row.problems.append(
+                        'Choose an output directory before running.'
+                    )
+
             except Exception as exc:
-                row = PreviewRow(str(source), problems=[str(exc)])
+                row = PreviewRow(
+                    str(source), problems=[str(exc)]
+                )
+
             if self.isInterruptionRequested():
-                self.cancelled=True
-                row=PreviewRow(str(source),properties={'_cancelled':True})
-            self.inspected.emit(copy.deepcopy(row), index - 1)
-            if self.cancelled: break
+                self.cancelled = True
+                row = PreviewRow(
+                    str(source),
+                    properties={'_cancelled': True}
+                )
+
+            inspected_rows.append(row)
+
+            # Show inspection progress normally.
+            # The completed batch will replace these provisional
+            # rows with its final, collision-resolved output plan.
+            self.inspected.emit(
+                copy.deepcopy(row), index - 1
+            )
+
+            if self.cancelled:
+                break
+
+        if (
+            not self.cancelled
+            and not self.isInterruptionRequested()
+            and len(inspected_rows) == len(self.files)
+        ):
+            # Resolve occupied filenames AND collisions between
+            # selected images in a single batch-wide namespace.
+            #
+            # This runs before approve_rows() binds the exact
+            # output filenames. Publication never renumbers.
+            number_review_outputs(inspected_rows)
+
+            # Retain fail-closed duplicate detection, including
+            # destination aliases and other unresolved conflicts.
+            block_output_collisions(inspected_rows)
+
+            for index, row in enumerate(inspected_rows):
+                if self.isInterruptionRequested():
+                    self.cancelled = True
+                    break
+
+                self.inspected.emit(
+                    copy.deepcopy(row), index
+                )
 
 
 def confirmation_snapshot(recipe):

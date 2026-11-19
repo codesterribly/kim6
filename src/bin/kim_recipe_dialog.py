@@ -6,12 +6,12 @@ import sys
 import uuid
 from pathlib import Path
 from kim_photo_selection import choose_images, RECIPE_IMAGE_EXTENSIONS
-from PySide6.QtCore import QTimer, Qt, QThread, Signal, Slot, QDate, QTime
+from PySide6.QtCore import QTimer, Qt, QThread, Signal, Slot, QDate, QTime, QSettings
 from PySide6.QtGui import QIcon, QPalette, QKeySequence
 from PySide6.QtWidgets import (QApplication, QWidget, QDialog, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QLabel, QPushButton, QComboBox, QLineEdit, QListWidget, QListWidgetItem, QSpinBox,
+    QFormLayout, QGridLayout, QLabel, QPushButton, QComboBox, QLineEdit, QListWidget, QListWidgetItem, QSpinBox,
     QCheckBox, QTableWidget, QTableWidgetItem, QMessageBox, QFileDialog, QInputDialog,
-    QProgressDialog, QHeaderView, QGroupBox, QSplitter, QSizePolicy, QToolButton, QTreeWidget, QTreeWidgetItem, QDialogButtonBox,
+    QProgressDialog, QHeaderView, QGroupBox, QSplitter, QSizePolicy, QToolButton, QTreeWidget, QTreeWidgetItem, QDialogButtonBox, QMenu, QScrollArea, QStyle,
     QDateEdit, QTimeEdit, QDoubleSpinBox)
 from kim_recipe_core import (folder_label, ROOT_FOLDER, RecipeError, builtins,
                              save_users, load_users, load_library, save_library, RecipeLibrary, library_groups, recipe_title, validate, preview, execute, handler, format_output_pattern, display_output_pattern)
@@ -39,7 +39,12 @@ class ExamplePreviewWorker(QThread):
         from kim_recipe_image import checked_input_headers
         try:
             with inspection_context(self.stage_changed.emit,self.isInterruptionRequested), checked_input_headers(self.checked_inputs):
-                self.row = preview(self.recipe,[self.sample],start_index=self.index)[0]
+                self.row = preview(
+                    self.recipe,
+                    [self.sample],
+                    start_index=self.index,
+                    number_collisions=True
+                )[0]
         except Exception as exc:
             self.row = PreviewRow(str(self.sample),problems=[str(exc)])
 
@@ -96,6 +101,272 @@ class OperationPicker(QDialog):
         super().keyPressEvent(event)
 
 
+
+class RecipePreviewTree(QTreeWidget):
+    """Read-only grouping of the existing Recipe planner properties."""
+
+    GROUPS = (
+        "Files",
+        "Image details",
+        "Metadata",
+        "Publication details",
+    )
+
+    FILE_FIELDS = {
+        "source filename", "source folder", "source image",
+        "output filename", "output folder", "output directory",
+    }
+
+    PUBLICATION_FIELDS = {
+        "publication", "originals", "output plan",
+        "validation problem", "warning", "warnings",
+    }
+
+    METADATA_TERMS = (
+        "metadata", "exif", "iptc", "xmp", "gps",
+        "capture date", "capture time", "file modified",
+        "copyright", "creator", "artist", "rights",
+        "keywords", "headline", "caption", "description",
+        "ai fields", "provenance", "sidecar",
+        "date created", "date original",
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        from PySide6.QtCore import QSettings
+
+        self.setColumnCount(2)
+        self.setHeaderLabels(["Property", "Planned value"])
+        self.setHeaderHidden(True)
+        self.setRootIsDecorated(True)
+        self.setAlternatingRowColors(True)
+        self.setSelectionMode(QTreeWidget.ExtendedSelection)
+        self.setEditTriggers(QTreeWidget.NoEditTriggers)
+        self.setAccessibleName("Grouped Recipe preview properties")
+
+        header = self.header()
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        self.setColumnWidth(0, 155)
+
+        self.settings = QSettings("KIMng", "RecipeEditor")
+        self._populating = False
+        self.groups = {}
+
+        self.expanded_preferences = {
+            name: self.settings.value(
+                "preview_group_" + name.lower().replace(" ", "_"),
+                name in ("Files", "Image details"),
+                type=bool,
+            )
+            for name in self.GROUPS
+        }
+
+        self.itemExpanded.connect(self.remember_expansion)
+        self.itemCollapsed.connect(self.remember_expansion)
+
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_copy_menu)
+
+    @classmethod
+    def category(cls, name):
+        lower = name.casefold()
+
+        if lower in cls.FILE_FIELDS:
+            return "Files"
+
+        if lower in cls.PUBLICATION_FIELDS:
+            return "Publication details"
+
+        if any(term in lower for term in cls.METADATA_TERMS):
+            return "Metadata"
+
+        # New and unfamiliar planner fields must remain visible.
+        return "Image details"
+
+    @staticmethod
+    def display_value(name, value):
+        value = str(value)
+
+        if name == "Output dimensions":
+            value = value.replace(" pixels (planned)", "")
+            value = value.replace(" (planned)", "")
+
+        if name == "Originals" and value == "Always unchanged":
+            value = "Not being changed"
+
+        return value
+
+    def set_fields(self, fields):
+        grouped = {name: [] for name in self.GROUPS}
+
+        for name, value in fields:
+            name = str(name)
+            grouped[self.category(name)].append(
+                (name, self.display_value(name, value))
+            )
+
+        # Presentation order only. All planner fields are preserved.
+        # Python's stable sort retains the original relative order
+        # of fields that are not explicitly prioritized.
+        priorities = {
+            "Files": (
+                "source filename",
+                "output filename",
+                "source folder",
+                "output folder",
+            ),
+            "Image details": (
+                "original dimensions",
+                "output dimensions",
+                "source format",
+                "final format",
+                "quality",
+                "orientation",
+                "icc",
+                "sample precision",
+            ),
+        }
+
+        for category, names in priorities.items():
+            rank = {
+                name: index
+                for index, name in enumerate(names)
+            }
+            grouped[category].sort(
+                key=lambda field: rank.get(
+                    field[0].casefold(), len(rank)
+                )
+            )
+
+        has_problem = any(
+            name == "Validation problem"
+            for name, _ in grouped["Publication details"]
+        )
+
+        icons = {
+            "Files": "folder-documents",
+            "Image details": "image-x-generic",
+            "Metadata": "document-properties",
+            "Publication details": "document-save",
+        }
+
+        self._populating = True
+        self.setUpdatesEnabled(False)
+
+        try:
+            self.clear()
+            self.groups.clear()
+
+            for title in self.GROUPS:
+                group = QTreeWidgetItem([title, ""])
+                group.setData(0, Qt.UserRole, title)
+                group.setFlags(
+                    group.flags() & ~Qt.ItemIsSelectable
+                )
+
+                icon_name = (
+                    "dialog-warning"
+                    if title == "Publication details" and has_problem
+                    else icons[title]
+                )
+
+                icon = QIcon.fromTheme(icon_name)
+                if not icon.isNull():
+                    group.setIcon(0, icon)
+
+                font = group.font(0)
+                font.setBold(True)
+                group.setFont(0, font)
+
+                self.addTopLevelItem(group)
+                self.groups[title] = group
+
+                for name, value in grouped[title]:
+                    item = QTreeWidgetItem([name, value])
+                    item.setToolTip(0, name)
+                    item.setToolTip(1, value)
+                    group.addChild(item)
+
+                expanded = self.expanded_preferences[title]
+
+                if title == "Publication details" and has_problem:
+                    expanded = True
+
+                group.setExpanded(expanded)
+
+        finally:
+            self.setUpdatesEnabled(True)
+            self._populating = False
+
+    def remember_expansion(self, item):
+        if self._populating:
+            return
+
+        title = item.data(0, Qt.UserRole)
+
+        if title not in self.GROUPS:
+            return
+
+        expanded = item.isExpanded()
+        self.expanded_preferences[title] = expanded
+
+        key = "preview_group_" + title.lower().replace(" ", "_")
+        self.settings.setValue(key, expanded)
+
+    def copy_selected_rows(self):
+        lines = []
+
+        for item in self.selectedItems():
+            if item.parent() is None:
+                continue
+
+            lines.append(
+                item.text(0) + "\t" + item.text(1)
+            )
+
+        if lines:
+            QApplication.clipboard().setText(
+                "\n".join(lines)
+            )
+
+    def show_copy_menu(self, position):
+        item = self.itemAt(position)
+        menu = QMenu(self)
+
+        copy_value = menu.addAction("Copy value")
+        copy_value.setEnabled(
+            item is not None and item.parent() is not None
+        )
+
+        copy_rows = menu.addAction("Copy selected rows")
+        copy_rows.setEnabled(
+            any(
+                selected.parent() is not None
+                for selected in self.selectedItems()
+            )
+        )
+
+        action = menu.exec(
+            self.viewport().mapToGlobal(position)
+        )
+
+        if action == copy_value and item is not None:
+            QApplication.clipboard().setText(item.text(1))
+
+        elif action == copy_rows:
+            self.copy_selected_rows()
+
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.Copy):
+            self.copy_selected_rows()
+            event.accept()
+            return
+
+        super().keyPressEvent(event)
+
+
 class RecipeWidget(QWidget):
     """Embeddable manager; files are optional and preview is always text-only."""
     def __init__(self, files=(), parent=None, from_run=False):
@@ -121,25 +392,143 @@ class RecipeWidget(QWidget):
         self.editor = QWidget(self)
         root.addWidget(self.editor)
         layout = QVBoxLayout(self.editor)
+        # Three-panel Recipe Editor:
+        # navigation | steps and settings | read-only preview.
         self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
         layout.addWidget(self.splitter)
-        left = QWidget(); right = QGroupBox('Preview')
-        left.setMinimumWidth(0); right.setMinimumWidth(0)
-        self.splitter.addWidget(left); self.splitter.addWidget(right)
-        self.splitter.setStretchFactor(0, 3); self.splitter.setStretchFactor(1, 2)
-        self.splitter.setSizes([660, 440])
-        controls = QVBoxLayout(left)
+
+        navigation = QGroupBox('Recipes')
+        center = QWidget()
+        right = QGroupBox('Preview')
+
+        navigation.setMinimumWidth(235)
+        center.setMinimumWidth(350)
+        right.setMinimumWidth(280)
+
+        self.splitter.addWidget(navigation)
+        self.splitter.addWidget(center)
+        self.splitter.addWidget(right)
+
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 4)
+        self.splitter.setStretchFactor(2, 3)
+
+        navigation_layout = QVBoxLayout(navigation)
+        controls = QVBoxLayout(center)
+        controls.setContentsMargins(6, 0, 6, 0)
+
+        # Preserve the existing selector as an internal compatibility
+        # control. The visible navigation is the native Recipe tree.
         self.selector = QComboBox()
-        controls.addWidget(self.selector)
-        bar = QHBoxLayout()
+        self.selector.hide()
+        navigation_layout.addWidget(self.selector)
+
+        self.recipe_search = QLineEdit()
+        self.recipe_search.setPlaceholderText('Search recipes…')
+        self.recipe_search.setClearButtonEnabled(True)
+        self.recipe_search.setAccessibleName('Search recipes')
+        navigation_layout.addWidget(self.recipe_search)
+
+        self.recipe_tree = QTreeWidget()
+        self.recipe_tree.setHeaderHidden(True)
+        self.recipe_tree.setRootIsDecorated(True)
+        self.recipe_tree.setUniformRowHeights(True)
+        self.recipe_tree.setAnimated(True)
+        self.recipe_tree.setAccessibleName(
+            'Built-in Recipes and user Recipe folders'
+        )
+        navigation_layout.addWidget(self.recipe_tree, 1)
+
+        self.recipe_search.textChanged.connect(
+            self.refresh_recipe_tree
+        )
+        self.recipe_tree.currentItemChanged.connect(
+            self.recipe_tree_selection_changed
+        )
+        self.recipe_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.recipe_tree.customContextMenuRequested.connect(
+            self.show_recipe_tree_menu
+        )
+        self.recipe_tree.itemExpanded.connect(
+            self.save_recipe_tree_expansion
+        )
+        self.recipe_tree.itemCollapsed.connect(
+            self.save_recipe_tree_expansion
+        )
+
+        # Creation actions belong above the Recipe tree.
+        creation = QHBoxLayout()
+        creation.setSpacing(8)
+
         self.management_buttons = {}
-        for label, icon, callback in [('New', 'document-new', self.new),
-            ('Duplicate to Edit', 'edit-copy', self.duplicate), ('Rename', 'edit-rename', self.rename),
-            ('Delete', 'edit-delete', self.remove), ('Save', 'document-save', self.save)]:
-            button = QPushButton(QIcon.fromTheme(icon), label)
-            button.clicked.connect(callback); bar.addWidget(button)
-            self.management_buttons[label] = button
-        controls.addLayout(bar)
+
+        new_recipe = QPushButton(
+            QIcon.fromTheme('document-new'), 'New Recipe'
+        )
+        new_recipe.setToolTip('Create a new Recipe')
+        new_recipe.clicked.connect(
+            lambda checked=False: self.create_recipe_from_tree()
+        )
+        self.management_buttons['New'] = new_recipe
+        creation.addWidget(new_recipe, 1)
+
+        new_folder = QPushButton(
+            QIcon.fromTheme('folder-new'), 'New Folder'
+        )
+        new_folder.setToolTip('Create a Recipe folder')
+        new_folder.clicked.connect(self.create_folder)
+        creation.addWidget(new_folder, 1)
+
+        navigation_layout.insertLayout(
+            navigation_layout.indexOf(self.recipe_tree),
+            creation
+        )
+
+        # Selected-item actions belong below the tree.
+        navigation_layout.addSpacing(8)
+
+        self.tree_action_label = QLabel('Selected Recipe')
+        navigation_layout.addWidget(self.tree_action_label)
+
+        duplicate = QPushButton(
+            QIcon.fromTheme('edit-copy'), 'Duplicate Recipe'
+        )
+        duplicate.clicked.connect(self.duplicate)
+        duplicate.setToolTip('Create an editable Recipe copy')
+        navigation_layout.addWidget(duplicate)
+        self.management_buttons['Duplicate to Edit'] = duplicate
+
+        selected_actions = QHBoxLayout()
+        selected_actions.setSpacing(8)
+
+        rename = QPushButton(
+            QIcon.fromTheme('edit-rename'), 'Rename'
+        )
+        rename.clicked.connect(
+            lambda checked=False: self.rename_selected_tree_item()
+        )
+        selected_actions.addWidget(rename, 1)
+        self.management_buttons['Rename'] = rename
+
+        delete = QPushButton(
+            QIcon.fromTheme('edit-delete'), 'Delete'
+        )
+        delete.clicked.connect(
+            lambda checked=False: self.delete_selected_tree_item()
+        )
+        selected_actions.addWidget(delete, 1)
+        self.management_buttons['Delete'] = delete
+
+        navigation_layout.addLayout(selected_actions)
+
+        # Save belongs to the editing panel, not the navigation tree.
+        save = QPushButton(
+            QIcon.fromTheme('document-save'), 'Save'
+        )
+        save.clicked.connect(self.save)
+        self.management_buttons['Save'] = save
+
         name_form = QFormLayout()
         self.name = QLineEdit(); self.name.textEdited.connect(self.changed)
         name_row = QWidget(); name_layout = QHBoxLayout(name_row)
@@ -152,11 +541,35 @@ class RecipeWidget(QWidget):
         self.library_folder.currentIndexChanged.connect(self.folder_changed)
         name_form.addRow('Recipe folder', self.library_folder)
         controls.addLayout(name_form)
-        folder_bar = QHBoxLayout()
-        for text, callback in [('Create Folder…', self.create_folder), ('Rename Folder…', self.rename_folder), ('Delete Folder…', self.delete_folder)]:
-            button = QPushButton(text); button.clicked.connect(callback); folder_bar.addWidget(button)
-        controls.addLayout(folder_bar)
-        controls.addWidget(QLabel('Recipe Steps'))
+        save_row = QHBoxLayout()
+        save_row.addStretch(1)
+        save_row.addWidget(self.management_buttons['Save'])
+        controls.addLayout(save_row)
+        self.recipe_guidance = QLabel(
+            'Built-in Recipe. Duplicate to create an editable copy.'
+        )
+        self.recipe_guidance.setWordWrap(True)
+        controls.addWidget(self.recipe_guidance)
+        # Keep destination outside the resizable editing workspace.
+        # Steps and selected-step settings can now be sized independently.
+        self.edit_splitter = QSplitter(Qt.Vertical)
+        self.edit_splitter.setChildrenCollapsible(False)
+        controls.addWidget(self.edit_splitter, 1)
+
+        steps_section = QWidget()
+        steps_section.setMinimumHeight(130)
+        steps_layout = QVBoxLayout(steps_section)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
+
+        heading = QHBoxLayout()
+        heading.addWidget(QLabel('Recipe steps'))
+        heading.addStretch(1)
+        self.step_count = QLabel()
+        heading.addWidget(self.step_count)
+        steps_layout.addLayout(heading)
+
+        self.edit_splitter.addWidget(steps_section)
+
         self.steps = QListWidget()
         self.steps.setAccessibleName('Ordered recipe steps; check to enable')
         self.steps.currentRowChanged.connect(self.edit_step)
@@ -168,7 +581,7 @@ class RecipeWidget(QWidget):
         button = QPushButton(QIcon.fromTheme('list-remove'), 'Remove')
         button.clicked.connect(self.remove_step); bar.addWidget(button); self.step_buttons.append(button)
         self.operation_bar = bar
-        controls.addLayout(bar)
+        steps_layout.addLayout(bar)
         self.steps_row = QHBoxLayout()
         self.steps_row.addWidget(self.steps, 1)
         self.move_controls = QWidget()
@@ -189,10 +602,23 @@ class RecipeWidget(QWidget):
             moves.addWidget(button)
         moves.addStretch(1)
         self.steps_row.addWidget(self.move_controls)
-        controls.addLayout(self.steps_row, 2)
-        self.parameters = QGroupBox('Step Parameters')
+        steps_layout.addLayout(self.steps_row, 1)
+
+        self.parameters = QGroupBox('Step settings')
         self.form = QFormLayout(self.parameters)
-        controls.addWidget(self.parameters)
+
+        self.parameter_scroll = QScrollArea()
+        self.parameter_scroll.setWidgetResizable(True)
+        self.parameter_scroll.setFrameShape(QScrollArea.NoFrame)
+        self.parameter_scroll.setMinimumHeight(115)
+        self.parameter_scroll.setWidget(self.parameters)
+        self.edit_splitter.addWidget(self.parameter_scroll)
+
+        self.edit_splitter.setStretchFactor(0, 3)
+        self.edit_splitter.setStretchFactor(1, 2)
+
+        self.edit_splitter_settings = None
+        self.edit_splitter.setSizes([330, 220])
         self.destination_group = QGroupBox('Destination')
         self.destinations = QFormLayout(self.destination_group)
         self.mode = QComboBox()
@@ -219,11 +645,11 @@ class RecipeWidget(QWidget):
         self.example_selector.setMinimumWidth(0)
         self.example_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.example_selector.currentIndexChanged.connect(self.update_preview)
-        self.example_label = QLabel('Example image (preview only)')
-        self.example_label.setBuddy(self.example_selector)
-        preview_layout.addWidget(self.example_label)
-        preview_layout.addWidget(with_help(self.example_selector, 'psd'))
-        self.choose_example_button = QPushButton(QIcon.fromTheme('document-open'), 'Choose Example Image…')
+        preview_layout.addWidget(self.example_selector)
+        self.choose_example_button = QPushButton(
+            QIcon.fromTheme('document-open'),
+            'Choose images for preview…'
+        )
         self.choose_example_button.clicked.connect(self.choose_examples)
         preview_layout.addWidget(self.choose_example_button)
         self.reset_examples = QPushButton(QIcon.fromTheme('edit-undo'), 'Reset to Selected Images')
@@ -233,9 +659,10 @@ class RecipeWidget(QWidget):
         self.status = QLabel(); self.status.setWordWrap(True)
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         preview_layout.addWidget(self.status)
+
         self.cancel_preview = QPushButton('Cancel preview'); self.cancel_preview.setVisible(False)
         self.cancel_preview.clicked.connect(self.stop_preview); preview_layout.addWidget(self.cancel_preview)
-        self.table = PropertyView()
+        self.table = RecipePreviewTree(self)
         preview_layout.addWidget(self.table, 1)
         self.warning_view=WarningView(); self.warning_view.hide(); preview_layout.addWidget(self.warning_view)
         safety = QLabel('Originals are not being changed. Outputs are being created as new files.')
@@ -248,14 +675,444 @@ class RecipeWidget(QWidget):
         self.refresh_examples()
         self.refresh()
 
+        # Remember the three independent panel widths.
+        self.panel_settings = QSettings('KIMng', 'RecipeEditor')
+        saved = self.panel_settings.value('three_panel_sizes')
+        sizes = [270, 382, 468]
+        if isinstance(saved, (list, tuple)) and len(saved) == 3:
+            try:
+                candidate = [int(value) for value in saved]
+                if all(value > 0 for value in candidate):
+                    sizes = candidate
+            except (TypeError, ValueError):
+                pass
+        self.splitter.setSizes(sizes)
+        self.splitter.splitterMoved.connect(self.save_panel_sizes)
+
+        stored_inner = self.panel_settings.value(
+            'step_settings_splitter', [330, 220]
+        )
+        try:
+            inner_sizes = [int(value) for value in stored_inner]
+            if (
+                len(inner_sizes) != 2
+                or any(value <= 0 for value in inner_sizes)
+            ):
+                inner_sizes = [330, 220]
+        except (TypeError, ValueError):
+            inner_sizes = [330, 220]
+
+        self.edit_splitter.setSizes(inner_sizes)
+        self.edit_splitter.splitterMoved.connect(
+            self.save_step_settings_sizes
+        )
+
+    def save_panel_sizes(self, *_):
+        self.panel_settings.setValue(
+            'three_panel_sizes', self.splitter.sizes()
+        )
+
+    def refresh_recipe_tree(self, *_):
+        if not hasattr(self, 'recipe_tree'):
+            return
+
+        tree = self.recipe_tree
+        query = self.recipe_search.text().casefold().split()
+        previous = (
+            self.recipe['id'] if self.recipe is not None else None
+        )
+
+        expanded = getattr(self, '_recipe_expanded', None)
+        if expanded is None:
+            from PySide6.QtCore import QSettings
+            settings = QSettings('KIMng', 'RecipeEditor')
+            expanded = settings.value('expanded_recipe_folders', None)
+            if not isinstance(expanded, list):
+                expanded = None
+
+        tree.blockSignals(True)
+        tree.clear()
+        self.recipe_tree_items = {}
+
+        folder_icon = QIcon.fromTheme('folder')
+        if folder_icon.isNull():
+            folder_icon = QApplication.style().standardIcon(
+                QStyle.SP_DirIcon
+            )
+
+        recipe_icon = QIcon.fromTheme('text-x-generic')
+        if recipe_icon.isNull():
+            recipe_icon = QApplication.style().standardIcon(
+                QStyle.SP_FileIcon
+            )
+
+        def group(title, parent=None, folder_id=None):
+            item = QTreeWidgetItem([title])
+            item.setIcon(0, folder_icon)
+            item.setData(0, Qt.UserRole + 1, 'folder')
+            item.setData(0, Qt.UserRole + 2, folder_id)
+            if parent is None:
+                item.setFlags(
+                    item.flags() & ~Qt.ItemIsSelectable
+                )
+            if parent is None:
+                tree.addTopLevelItem(item)
+            else:
+                parent.addChild(item)
+            return item
+
+        def add_recipe(parent, recipe):
+            item = QTreeWidgetItem([recipe['name']])
+            item.setIcon(0, recipe_icon)
+            item.setData(0, Qt.UserRole, recipe['id'])
+            item.setData(0, Qt.UserRole + 1, 'recipe')
+            item.setToolTip(0, recipe['name'])
+            parent.addChild(item)
+            self.recipe_tree_items[recipe['id']] = item
+
+        def matches(recipe, folder_name=''):
+            haystack = (
+                recipe['name'] + ' ' + folder_name
+            ).casefold()
+            return all(word in haystack for word in query)
+
+        builtin = group('Built-in Recipes')
+        for recipe in sorted(
+            self.shipped,
+            key=lambda item: item['name'].casefold()
+        ):
+            if matches(recipe, 'Built-in Recipes'):
+                add_recipe(builtin, recipe)
+
+        mine = group('My Recipes')
+        root = group('Root', mine, ROOT_FOLDER)
+        unfiled = group('Unfiled', mine, '')
+
+        folders = {}
+        for definition in sorted(
+            self.folders,
+            key=lambda item: item['name'].casefold()
+        ):
+            folders[definition['id']] = group(
+                definition['name'], mine, definition['id']
+            )
+
+        for recipe in sorted(
+            self.users,
+            key=lambda item: item['name'].casefold()
+        ):
+            folder_id = recipe.get('folder')
+            folder_name = (
+                next(
+                    (
+                        definition['name']
+                        for definition in self.folders
+                        if definition['id'] == folder_id
+                    ),
+                    'Root' if folder_id == ROOT_FOLDER
+                    else 'Unfiled'
+                )
+            )
+            if not matches(recipe, folder_name):
+                continue
+
+            if folder_id == ROOT_FOLDER:
+                parent = root
+            elif folder_id in folders:
+                parent = folders[folder_id]
+            else:
+                parent = unfiled
+            add_recipe(parent, recipe)
+
+        if query:
+            # Hide empty branches during search.
+            for parent in (builtin, root, unfiled):
+                parent.setHidden(parent.childCount() == 0)
+            for item in folders.values():
+                item.setHidden(item.childCount() == 0)
+            mine.setHidden(
+                all(
+                    child.isHidden()
+                    for child in (
+                        [root, unfiled] + list(folders.values())
+                    )
+                )
+            )
+        else:
+            # Keep real user folders visible, even if empty.
+            root.setHidden(root.childCount() == 0)
+            unfiled.setHidden(unfiled.childCount() == 0)
+
+        groups = {
+            'built-in': builtin,
+            'my-recipes': mine,
+            'root': root,
+            'unfiled': unfiled,
+        }
+        groups.update({
+            'folder:' + str(folder_id): item
+            for folder_id, item in folders.items()
+        })
+
+        if expanded is None:
+            expanded = list(groups)
+
+        if query:
+            for item in groups.values():
+                item.setExpanded(True)
+        else:
+            for key, item in groups.items():
+                item.setExpanded(key in expanded)
+
+        self._recipe_tree_groups = groups
+        self._recipe_expanded = list(expanded)
+
+        if previous in self.recipe_tree_items:
+            tree.setCurrentItem(
+                self.recipe_tree_items[previous]
+            )
+
+        tree.blockSignals(False)
+        self.update_tree_management()
+
+    def save_recipe_tree_expansion(self, *_):
+        if self.recipe_search.text().strip():
+            return
+
+        groups = getattr(self, '_recipe_tree_groups', {})
+        expanded = [
+            key for key, item in groups.items()
+            if item.isExpanded()
+        ]
+
+        self._recipe_expanded = expanded
+        from PySide6.QtCore import QSettings
+        QSettings('KIMng', 'RecipeEditor').setValue(
+            'expanded_recipe_folders', expanded
+        )
+
+    def show_recipe_tree_menu(self, position):
+        item = self.recipe_tree.itemAt(position)
+        if item is None:
+            return
+
+        kind = item.data(0, Qt.UserRole + 1)
+        menu = QMenu(self.recipe_tree)
+
+        if kind == 'recipe':
+            recipe_id = item.data(0, Qt.UserRole)
+            index = next(
+                (i for i, recipe in enumerate(self.shipped + self.users)
+                 if recipe['id'] == recipe_id), -1
+            )
+            if index < 0:
+                return
+
+            menu.addAction(
+                'Duplicate to Edit',
+                lambda: self.select_id(recipe_id) or self.duplicate()
+            )
+
+            if index >= len(self.shipped):
+                menu.addSeparator()
+                menu.addAction(
+                    'Rename…',
+                    lambda: self.select_id(recipe_id) or self.rename()
+                )
+                menu.addAction(
+                    'Delete…',
+                    lambda: self.select_id(recipe_id) or self.remove()
+                )
+
+        elif kind == 'folder':
+            folder_id = item.data(0, Qt.UserRole + 2)
+            if item is self.recipe_tree.topLevelItem(0):
+                return
+
+            menu.addAction(
+                'New Recipe here',
+                lambda: self.new_recipe_in_folder(folder_id)
+            )
+
+            if folder_id not in (None, '', ROOT_FOLDER):
+                menu.addSeparator()
+                menu.addAction(
+                    'Rename folder…',
+                    lambda: self.rename_tree_folder(folder_id)
+                )
+                menu.addAction(
+                    'Delete folder…',
+                    lambda: self.delete_tree_folder(folder_id)
+                )
+
+        if not menu.isEmpty():
+            menu.exec(
+                self.recipe_tree.viewport().mapToGlobal(position)
+            )
+
+    def new_recipe_in_folder(self, folder_id):
+        before = len(self.users)
+        self.new()
+        if len(self.users) == before:
+            return
+        target = ROOT_FOLDER if folder_id is None else folder_id
+        if target == '':
+            target = None
+        self.library_folder.setCurrentIndex(
+            self.library_folder.findData(target)
+        )
+
+    def rename_tree_folder(self, folder_id):
+        folder = next(
+            (item for item in self.folders if item['id'] == folder_id),
+            None
+        )
+        if folder is None:
+            return
+        name, ok = QInputDialog.getText(
+            self, 'Rename Recipe folder', 'New name',
+            text=folder['name']
+        )
+        if ok:
+            self.change_folders(
+                lambda library: library.rename_folder(folder_id, name)
+            )
+
+    def delete_tree_folder(self, folder_id):
+        folder = next(
+            (item for item in self.folders if item['id'] == folder_id),
+            None
+        )
+        if folder is None:
+            return
+        answer = QMessageBox.question(
+            self, 'Delete Recipe folder',
+            'Delete folder “' + folder['name'] + '”? '
+            'Its Recipes will move to Unfiled.',
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel
+        )
+        if answer == QMessageBox.Yes:
+            self.change_folders(
+                lambda library: library.delete_folder(folder_id)
+            )
+
+    def selected_tree_folder_id(self):
+        item = self.recipe_tree.currentItem()
+        if item is None:
+            return None, False
+        if item.data(0, Qt.UserRole + 1) != 'folder':
+            return None, False
+
+        return item.data(0, Qt.UserRole + 2), True
+
+    def update_tree_management(self):
+        if not hasattr(self, 'tree_action_label'):
+            return
+
+        folder_id, is_folder = self.selected_tree_folder_id()
+
+        duplicate = self.management_buttons['Duplicate to Edit']
+        rename = self.management_buttons['Rename']
+        delete = self.management_buttons['Delete']
+
+        if is_folder:
+            self.tree_action_label.setText('Selected Folder')
+            duplicate.setVisible(False)
+
+            editable_folder = folder_id not in (
+                None, '', ROOT_FOLDER
+            )
+
+            rename.setText('Rename Folder')
+            delete.setText('Delete Folder')
+            rename.setEnabled(editable_folder)
+            delete.setEnabled(editable_folder)
+        else:
+            self.tree_action_label.setText('Selected Recipe')
+            duplicate.setVisible(True)
+            duplicate.setEnabled(self.recipe is not None)
+
+            rename.setText('Rename')
+            delete.setText('Delete')
+
+            editable = (
+                self.recipe is not None
+                and not self.immutable
+            )
+            rename.setEnabled(editable)
+            delete.setEnabled(editable)
+
+    def create_recipe_from_tree(self):
+        folder_id, is_folder = self.selected_tree_folder_id()
+        if is_folder:
+            self.new_recipe_in_folder(folder_id)
+        else:
+            self.new()
+
+    def rename_selected_tree_item(self):
+        folder_id, is_folder = self.selected_tree_folder_id()
+        if is_folder:
+            if folder_id not in (None, '', ROOT_FOLDER):
+                self.rename_tree_folder(folder_id)
+        else:
+            self.rename()
+
+    def delete_selected_tree_item(self):
+        folder_id, is_folder = self.selected_tree_folder_id()
+        if is_folder:
+            if folder_id not in (None, '', ROOT_FOLDER):
+                self.delete_tree_folder(folder_id)
+        else:
+            self.remove()
+
+    def recipe_tree_selection_changed(self, current, previous):
+        if current is None:
+            return
+
+        recipe_id = current.data(0, Qt.UserRole)
+        if recipe_id is None:
+            self.update_tree_management()
+            return
+
+        if self.recipe is not None and (
+            recipe_id == self.recipe['id']
+        ):
+            self.update_tree_management()
+            return
+
+        self.select_id(recipe_id)
+
+        # Restore the visible selection if Save/Discard/Cancel
+        # prevented switching away from the current Recipe.
+        active = (
+            self.recipe['id'] if self.recipe is not None else None
+        )
+        item = self.recipe_tree_items.get(active)
+        if item is not None and item is not current:
+            self.recipe_tree.blockSignals(True)
+            self.recipe_tree.setCurrentItem(item)
+            self.recipe_tree.blockSignals(False)
+        self.update_tree_management()
+
+    def save_step_settings_sizes(self, *_):
+        self.panel_settings.setValue(
+            'step_settings_splitter',
+            self.edit_splitter.sizes()
+        )
+
     def refresh(self, selected=0):
         self.selector.blockSignals(True); self.selector.clear()
         recipes = self.shipped + self.users
         for folder_id, name, grouped in library_groups(RecipeLibrary(self.users, self.folders), self.shipped):
             for r in grouped:
                 self.selector.addItem(name + ' / ' + r['name'], r['id'])
-        self.selector.setCurrentIndex(self.selector.findData(recipes[selected]['id'])); self.selector.blockSignals(False)
+        self.selector.setCurrentIndex(
+            self.selector.findData(recipes[selected]['id'])
+        )
+        self.selector.blockSignals(False)
         self.select(selected, force=True)
+        self.refresh_recipe_tree()
 
     def select_id(self, recipe_id):
         index = next((i for i, r in enumerate(self.shipped + self.users) if r['id'] == recipe_id), -1)
@@ -277,6 +1134,7 @@ class RecipeWidget(QWidget):
         self.media_handler = handler(self.recipe['media'])
         self.definitions = self.media_handler.operation_definitions()
         self.immutable = index < len(self.shipped)
+        self.recipe_guidance.setVisible(self.immutable)
         self.name.setText(self.recipe['name']); self.name.setReadOnly(self.immutable)
         self.library_folder.blockSignals(True); self.library_folder.clear(); self.library_folder.addItem('Unfiled', None)
         self.library_folder.addItem('Root', ROOT_FOLDER)
@@ -297,7 +1155,14 @@ class RecipeWidget(QWidget):
         self.reload_steps()
         self.loading = False
         self.update_modified()
+        if hasattr(self, 'recipe_tree_items'):
+            item = self.recipe_tree_items.get(self.recipe['id'])
+            if item is not None:
+                self.recipe_tree.blockSignals(True)
+                self.recipe_tree.setCurrentItem(item)
+                self.recipe_tree.blockSignals(False)
         self.update_preview()
+        self.update_tree_management()
 
     def reselect_builtin(self, index):
         if self.immutable and index == self.active_index and self.is_dirty():
@@ -321,7 +1186,15 @@ class RecipeWidget(QWidget):
             label += ' [modified for this run]' if dirty else ' [built-in]'
         elif dirty:
             label += ' *'
-        self.selector.setItemText(self.selector.findData(self.recipe['id']), label)
+        self.selector.setItemText(
+            self.selector.findData(self.recipe['id']), label
+        )
+        if hasattr(self, 'recipe_tree_items'):
+            item = self.recipe_tree_items.get(self.recipe['id'])
+            if item is not None:
+                item.setText(0, self.recipe['name'] + (
+                    ' *' if dirty and not self.immutable else ''
+                ))
         self.management_buttons['Save'].setEnabled(not self.immutable and dirty)
         self.reset_builtin.setVisible(self.immutable)
         self.reset_builtin.setEnabled(self.immutable and dirty)
@@ -354,6 +1227,9 @@ class RecipeWidget(QWidget):
             self.style_step_item(item, step.get('enabled', True))
             self.steps.addItem(item)
         self.steps.blockSignals(False)
+        self.step_count.setText(
+            f"{len(self.recipe['steps'])} operations"
+        )
         self.steps.setCurrentRow(min(row, len(self.recipe['steps']) - 1))
         if not self.recipe['steps']:
             self.edit_step(-1)
@@ -381,11 +1257,22 @@ class RecipeWidget(QWidget):
             return
         step = self.recipe['steps'][row]
         definition = self.definitions[step['op']]
-        self.parameters.setTitle(definition.get('label', 'Step Parameters'))
+        self.parameters.setTitle(
+            'Step settings: ' + definition.get('label', 'Operation')
+        )
         if definition.get('description'):
-            hint = QLabel(definition['description']); hint.setWordWrap(True)
+            hint = QLabel(definition['description'])
+            hint.setWordWrap(True)
             self.form.addRow(hint)
         definitions = definition['parameters']
+        if (
+            not definitions
+            and definition.get('editor') != 'image_ops'
+            and not definition.get('description')
+        ):
+            self.form.addRow(
+                QLabel('This operation has no additional settings.')
+            )
         if definition.get('editor') == 'image_ops':
             from kim_image_ops import step_details
             for title, value in step_details(step):
@@ -825,6 +1712,7 @@ class RecipeWidget(QWidget):
             self.set_examples(files)
 
     def show_preview_fields(self, fields):
+        # Display every existing planner field exactly once.
         self.table.set_fields(fields)
 
     def refresh_inherited_parameters(self):
@@ -860,7 +1748,7 @@ class RecipeWidget(QWidget):
                 self.refresh_inherited_parameters()
                 self.media_handler.validate_context(self.recipe['steps'])
                 self.status.setText('Choose an example image to inspect this recipe.')
-                self.show_preview_fields(fields + [('Originals', 'Always unchanged')])
+                self.show_preview_fields(fields + [('Originals', 'Not being changed')])
                 return
             index = self.files.index(sample) + 1 if sample in self.files else 1
             self.refresh_inherited_parameters()
@@ -874,7 +1762,7 @@ class RecipeWidget(QWidget):
             worker.start()
         except (OSError, RecipeError, UnicodeError) as exc:
             self.status.setText(str(exc))
-            self.show_preview_fields(fields + [('Validation problem', str(exc)), ('Originals', 'Always unchanged')])
+            self.show_preview_fields(fields + [('Validation problem', str(exc)), ('Originals', 'Not being changed')])
 
     def preview_stage(self, message):
         worker = self.sender()
@@ -891,7 +1779,9 @@ class RecipeWidget(QWidget):
             self.checked_inputs.update(worker.checked_inputs)
             self.show_preview_fields(property_fields(worker.recipe,worker.row))
             self.warning_view.set_rows([worker.row])
-            self.status.setText(worker.row.problems[0] if worker.row.problems else '')
+            # The Planned output summary already shows the
+            # blocking problem. Do not repeat it above the summary.
+            self.status.setText('')
         worker.deleteLater()
         if self.preview_closing:
             QTimer.singleShot(0,self.window().close)
@@ -988,7 +1878,7 @@ class RecipeDialog(QDialog):
 
 
 def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repair=False):
-    dialog = RecipeDialog(parent); dialog.setWindowTitle('Recipe Editor'); dialog.resize(1150, 850)
+    dialog = RecipeDialog(parent); dialog.setWindowTitle('KIMng - Recipe Editor'); dialog.resize(1150, 850)
     layout = QVBoxLayout(dialog)
     if repair:
         hint=QLabel('Photoshop files need Convert Format. Add it and choose an output format. '
