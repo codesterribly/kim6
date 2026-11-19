@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QDialog, QVBoxLayout, QHBo
     QFormLayout, QGridLayout, QLabel, QPushButton, QComboBox, QLineEdit, QListWidget, QListWidgetItem, QSpinBox,
     QCheckBox, QTableWidget, QTableWidgetItem, QMessageBox, QFileDialog, QInputDialog,
     QProgressDialog, QHeaderView, QGroupBox, QSplitter, QSizePolicy, QToolButton, QTreeWidget, QTreeWidgetItem, QDialogButtonBox, QMenu, QScrollArea, QStyle,
-    QDateEdit, QTimeEdit, QDoubleSpinBox)
+    QDateEdit, QTimeEdit, QDoubleSpinBox, QTextEdit)
 from kim_recipe_core import (folder_label, ROOT_FOLDER, RecipeError, builtins,
                              save_users, load_users, load_library, save_library, RecipeLibrary, library_groups, recipe_title, validate, preview, execute, handler, format_output_pattern, display_output_pattern)
 
@@ -367,6 +367,186 @@ class RecipePreviewTree(QTreeWidget):
         super().keyPressEvent(event)
 
 
+
+from PySide6.QtCore import QMimeData
+from PySide6.QtGui import QDrag
+
+
+class RecipeLibraryTree(QTreeWidget):
+    """Folder-only drops, with native Move feedback."""
+
+    MIME = 'application/x-kimng-recipe-id'
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.move_handler = None
+        self._hover_item = None
+        self._hover_background = None
+        self._hover_foreground = None
+
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+        self.setDragDropMode(QTreeWidget.DragDrop)
+        self.setDefaultDropAction(Qt.MoveAction)
+
+        # We highlight the destination folder rather than display
+        # insertion lines suggesting that Recipes can be reordered.
+        self.setDropIndicatorShown(False)
+        self.setAutoExpandDelay(700)
+
+    def supportedDropActions(self):
+        return Qt.MoveAction
+
+    def startDrag(self, supported_actions):
+        item = self.currentItem()
+        if (
+            item is None
+            or item.data(0, Qt.UserRole + 1) != 'recipe'
+            or not (item.flags() & Qt.ItemIsDragEnabled)
+        ):
+            return
+
+        recipe_id = item.data(0, Qt.UserRole)
+        if not isinstance(recipe_id, str):
+            return
+
+        mime = QMimeData()
+        mime.setData(self.MIME, recipe_id.encode('utf-8'))
+
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+
+        icon = item.icon(0)
+        if not icon.isNull():
+            drag.setPixmap(icon.pixmap(24, 24))
+
+        # Advertise Move as both the only supported action and the
+        # preferred action. Never request Copy or Link.
+        try:
+            drag.exec(Qt.MoveAction, Qt.MoveAction)
+        finally:
+            self.clear_drop_highlight()
+
+    def valid_drop_item(self, event):
+        if (
+            event.source() is not self
+            or not event.mimeData().hasFormat(self.MIME)
+        ):
+            return None
+
+        item = self.itemAt(event.position().toPoint())
+        if (
+            item is None
+            or item.data(0, Qt.UserRole + 1) != 'folder'
+            or not (item.flags() & Qt.ItemIsDropEnabled)
+        ):
+            return None
+
+        # Root and Unfiled are valid. Top-level category headings
+        # have no destination identifier and remain prohibited.
+        if item.data(0, Qt.UserRole + 2) is None:
+            return None
+
+        return item
+
+    def clear_drop_highlight(self):
+        if self._hover_item is not None:
+            self._hover_item.setBackground(
+                0, self._hover_background
+            )
+            self._hover_item.setForeground(
+                0, self._hover_foreground
+            )
+        self._hover_item = None
+        self._hover_background = None
+        self._hover_foreground = None
+
+    def highlight_drop_target(self, item):
+        if item is self._hover_item:
+            return
+
+        self.clear_drop_highlight()
+
+        if item is None:
+            return
+
+        self._hover_item = item
+        self._hover_background = item.background(0)
+        self._hover_foreground = item.foreground(0)
+
+        palette = self.palette()
+        item.setBackground(
+            0, palette.brush(QPalette.Active, QPalette.Highlight)
+        )
+        item.setForeground(
+            0, palette.brush(
+                QPalette.Active, QPalette.HighlightedText
+            )
+        )
+
+    def dragEnterEvent(self, event):
+        if (
+            event.source() is self
+            and event.mimeData().hasFormat(self.MIME)
+        ):
+            event.setDropAction(Qt.MoveAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        item = self.valid_drop_item(event)
+        self.highlight_drop_target(item)
+
+        if item is None:
+            event.ignore()
+            return
+
+        # Qt must receive a valid action during hover, not only
+        # when dropEvent runs.
+        event.setDropAction(Qt.MoveAction)
+        event.accept()
+
+    def dragLeaveEvent(self, event):
+        self.clear_drop_highlight()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        item = self.valid_drop_item(event)
+
+        if item is None:
+            self.clear_drop_highlight()
+            event.ignore()
+            return
+
+        destination = item.data(0, Qt.UserRole + 2)
+
+        try:
+            recipe_id = bytes(
+                event.mimeData().data(self.MIME)
+            ).decode('utf-8')
+        except UnicodeError:
+            self.clear_drop_highlight()
+            event.ignore()
+            return
+
+        self.clear_drop_highlight()
+
+        if not callable(self.move_handler):
+            event.ignore()
+            return
+
+        # Keep the established validated, persistent library move.
+        # Never invoke the default QTreeWidget drop implementation.
+        if self.move_handler(recipe_id, destination):
+            event.setDropAction(Qt.MoveAction)
+            event.accept()
+        else:
+            event.ignore()
+
+
+
 class RecipeWidget(QWidget):
     """Embeddable manager; files are optional and preview is always text-only."""
     def __init__(self, files=(), parent=None, from_run=False):
@@ -430,7 +610,7 @@ class RecipeWidget(QWidget):
         self.recipe_search.setAccessibleName('Search recipes')
         navigation_layout.addWidget(self.recipe_search)
 
-        self.recipe_tree = QTreeWidget()
+        self.recipe_tree = RecipeLibraryTree()
         self.recipe_tree.setHeaderHidden(True)
         self.recipe_tree.setRootIsDecorated(True)
         self.recipe_tree.setUniformRowHeights(True)
@@ -446,6 +626,7 @@ class RecipeWidget(QWidget):
         self.recipe_tree.currentItemChanged.connect(
             self.recipe_tree_selection_changed
         )
+        self.recipe_tree.move_handler = self.move_recipe_to_folder
         self.recipe_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.recipe_tree.customContextMenuRequested.connect(
             self.show_recipe_tree_menu
@@ -499,6 +680,18 @@ class RecipeWidget(QWidget):
         navigation_layout.addWidget(duplicate)
         self.management_buttons['Duplicate to Edit'] = duplicate
 
+        self.move_recipe_button = QPushButton(
+            QIcon.fromTheme('folder-move'),
+            'Move to Folder…'
+        )
+        self.move_recipe_button.setToolTip(
+            'Move the selected Recipe into another folder'
+        )
+        self.move_recipe_button.clicked.connect(
+            lambda checked=False: self.choose_recipe_destination()
+        )
+        navigation_layout.addWidget(self.move_recipe_button)
+
         selected_actions = QHBoxLayout()
         selected_actions.setSpacing(8)
 
@@ -541,6 +734,22 @@ class RecipeWidget(QWidget):
         self.library_folder.currentIndexChanged.connect(self.folder_changed)
         name_form.addRow('Recipe folder', self.library_folder)
         controls.addLayout(name_form)
+
+        self.description = QTextEdit()
+        self.description.setPlaceholderText(
+            'Describe what this Recipe does and when to use it.'
+        )
+        self.description.setAcceptRichText(False)
+        self.description.setMinimumHeight(65)
+        self.description.setMaximumHeight(125)
+        self.description.setAccessibleName('Recipe description')
+        self.description.textChanged.connect(self.changed)
+
+        description_label = QLabel('Description')
+        description_label.setBuddy(self.description)
+        controls.addWidget(description_label)
+        controls.addWidget(self.description)
+
         save_row = QHBoxLayout()
         save_row.addStretch(1)
         save_row.addWidget(self.management_buttons['Save'])
@@ -751,6 +960,17 @@ class RecipeWidget(QWidget):
             item.setIcon(0, folder_icon)
             item.setData(0, Qt.UserRole + 1, 'folder')
             item.setData(0, Qt.UserRole + 2, folder_id)
+
+            # Only real destination folders accept Recipe drops.
+            if folder_id is None:
+                item.setFlags(
+                    item.flags() & ~Qt.ItemIsDropEnabled
+                )
+            else:
+                item.setFlags(
+                    item.flags() | Qt.ItemIsDropEnabled
+                )
+
             if parent is None:
                 item.setFlags(
                     item.flags() & ~Qt.ItemIsSelectable
@@ -766,13 +986,32 @@ class RecipeWidget(QWidget):
             item.setIcon(0, recipe_icon)
             item.setData(0, Qt.UserRole, recipe['id'])
             item.setData(0, Qt.UserRole + 1, 'recipe')
-            item.setToolTip(0, recipe['name'])
+
+            movable = (
+                any(user['id'] == recipe['id'] for user in self.users)
+                and recipe['id'] not in self.draft_ids
+            )
+            if movable:
+                item.setFlags(
+                    item.flags() | Qt.ItemIsDragEnabled
+                )
+            else:
+                item.setFlags(
+                    item.flags() & ~Qt.ItemIsDragEnabled
+                )
+            item.setToolTip(
+                0,
+                recipe['name'] +
+                ('\\n\\n' + recipe['description']
+                 if recipe['description'] else '')
+            )
             parent.addChild(item)
             self.recipe_tree_items[recipe['id']] = item
 
         def matches(recipe, folder_name=''):
             haystack = (
-                recipe['name'] + ' ' + folder_name
+                recipe['name'] + ' ' +
+                recipe['description'] + ' ' + folder_name
             ).casefold()
             return all(word in haystack for word in query)
 
@@ -915,6 +1154,14 @@ class RecipeWidget(QWidget):
 
             if index >= len(self.shipped):
                 menu.addSeparator()
+                move_action = menu.addAction(
+                    'Move to Folder…',
+                    lambda rid=recipe_id:
+                        self.choose_recipe_destination(rid)
+                )
+                move_action.setEnabled(
+                    recipe_id not in self.draft_ids
+                )
                 menu.addAction(
                     'Rename…',
                     lambda: self.select_id(recipe_id) or self.rename()
@@ -997,6 +1244,125 @@ class RecipeWidget(QWidget):
                 lambda library: library.delete_folder(folder_id)
             )
 
+    def choose_recipe_destination(self, recipe_id=None):
+        if recipe_id is None:
+            if self.recipe is None:
+                return
+            recipe_id = self.recipe['id']
+
+        recipe = next(
+            (r for r in self.users if r['id'] == recipe_id),
+            None
+        )
+        if recipe is None:
+            return
+
+        if recipe_id in self.draft_ids:
+            QMessageBox.information(
+                self, 'Move Recipe',
+                'Save this new Recipe before moving it.'
+            )
+            return
+
+        destinations = [
+            ('Root', ROOT_FOLDER),
+            ('Unfiled', None),
+        ]
+        destinations.extend(
+            (folder['name'], folder['id'])
+            for folder in sorted(
+                self.folders,
+                key=lambda f: f['name'].casefold()
+            )
+        )
+
+        names = [name for name, _ in destinations]
+        current = recipe.get('folder')
+
+        current_index = next(
+            (i for i, (_, folder_id) in enumerate(destinations)
+             if folder_id == current),
+            0
+        )
+
+        chosen, accepted = QInputDialog.getItem(
+            self, 'Move Recipe', 'Destination folder',
+            names, current_index, False
+        )
+        if not accepted:
+            return
+
+        destination = destinations[names.index(chosen)][1]
+        self.move_recipe_to_folder(recipe_id, destination)
+
+    def move_recipe_to_folder(self, recipe_id, folder_id):
+        recipe = next(
+            (r for r in self.users if r['id'] == recipe_id),
+            None
+        )
+        if recipe is None:
+            return False
+
+        if recipe_id in self.draft_ids:
+            QMessageBox.information(
+                self, 'Move Recipe',
+                'Save this new Recipe before moving it.'
+            )
+            return False
+
+        # Unfiled is represented by no folder assignment.
+        if folder_id == '':
+            folder_id = None
+
+        if folder_id not in (None, ROOT_FOLDER) and not any(
+            folder['id'] == folder_id for folder in self.folders
+        ):
+            return False
+
+        if recipe.get('folder') == folder_id:
+            return True
+
+        if self.recipe is None or self.recipe['id'] != recipe_id:
+            self.select_id(recipe_id)
+            if (
+                self.recipe is None
+                or self.recipe['id'] != recipe_id
+            ):
+                return False
+
+        succeeded = self.change_folders(
+            lambda library: library.move_recipe(
+                recipe_id, folder_id
+            )
+        )
+        if not succeeded:
+            return False
+
+        # A search filter must not make the moved Recipe
+        # appear to have vanished from the library.
+        if self.recipe_search.text():
+            self.recipe_search.clear()
+
+        item = self.recipe_tree_items.get(recipe_id)
+        if item is None:
+            self.refresh_recipe_tree()
+            item = self.recipe_tree_items.get(recipe_id)
+
+        if item is not None:
+            parent = item.parent()
+            while parent is not None:
+                parent.setHidden(False)
+                parent.setExpanded(True)
+                parent = parent.parent()
+
+            self.recipe_tree.blockSignals(True)
+            self.recipe_tree.setCurrentItem(item)
+            self.recipe_tree.blockSignals(False)
+            self.recipe_tree.scrollToItem(item)
+
+        self.update_tree_management()
+        return True
+
     def selected_tree_folder_id(self):
         item = self.recipe_tree.currentItem()
         if item is None:
@@ -1019,6 +1385,7 @@ class RecipeWidget(QWidget):
         if is_folder:
             self.tree_action_label.setText('Selected Folder')
             duplicate.setVisible(False)
+            self.move_recipe_button.setVisible(False)
 
             editable_folder = folder_id not in (
                 None, '', ROOT_FOLDER
@@ -1032,6 +1399,12 @@ class RecipeWidget(QWidget):
             self.tree_action_label.setText('Selected Recipe')
             duplicate.setVisible(True)
             duplicate.setEnabled(self.recipe is not None)
+            self.move_recipe_button.setVisible(True)
+            self.move_recipe_button.setEnabled(
+                self.recipe is not None
+                and not self.immutable
+                and self.recipe['id'] not in self.draft_ids
+            )
 
             rename.setText('Rename')
             delete.setText('Delete')
@@ -1136,6 +1509,8 @@ class RecipeWidget(QWidget):
         self.immutable = index < len(self.shipped)
         self.recipe_guidance.setVisible(self.immutable)
         self.name.setText(self.recipe['name']); self.name.setReadOnly(self.immutable)
+        self.description.setPlainText(self.recipe['description'])
+        self.description.setReadOnly(self.immutable)
         self.library_folder.blockSignals(True); self.library_folder.clear(); self.library_folder.addItem('Unfiled', None)
         self.library_folder.addItem('Root', ROOT_FOLDER)
         for folder in sorted(self.folders, key=lambda f: f['name'].casefold()):
@@ -1498,6 +1873,7 @@ class RecipeWidget(QWidget):
     def changed(self, *args):
         if not self.loading and self.recipe and not self.immutable:
             self.recipe['name'] = self.name.text()
+            self.recipe['description'] = self.description.toPlainText()
             mode = self.mode.currentData()
             dest = {'mode': mode}
             if mode == 'subfolder': dest['folder'] = self.folder.text()
@@ -1557,23 +1933,61 @@ class RecipeWidget(QWidget):
         self.update_modified()
 
     def change_folders(self, change):
-        if not self.protect_unsaved(): return
+        if not self.protect_unsaved():
+            return False
+
         if not self.immutable and self.is_dirty():
             self.select(self.active_index, force=True)
-        snapshot = copy.deepcopy(self.recipe) if self.immutable else None
+
+        snapshot = (
+            copy.deepcopy(self.recipe)
+            if self.immutable else None
+        )
         selected_id = self.recipe['id']
-        library = RecipeLibrary(copy.deepcopy([r for r in self.users if r['id'] not in self.draft_ids]), copy.deepcopy(self.folders))
+
+        library = RecipeLibrary(
+            copy.deepcopy([
+                r for r in self.users
+                if r['id'] not in self.draft_ids
+            ]),
+            copy.deepcopy(self.folders),
+        )
+
         try:
             change(library)
             warning = save_library(library)
-            if warning: self.error(warning)
-            self.users, self.folders = library.recipes, library.folders
-            index = next((i for i, r in enumerate(self.shipped + self.users) if r['id'] == selected_id), 0)
+
+            # The library has been saved. Refresh the UI before
+            # displaying any ancillary shortcut-sync warning.
+            self.users, self.folders = (
+                library.recipes, library.folders
+            )
+
+            index = next(
+                (
+                    i for i, recipe in enumerate(
+                        self.shipped + self.users
+                    )
+                    if recipe['id'] == selected_id
+                ),
+                0
+            )
             self.refresh(index)
+
             if snapshot is not None:
-                self.recipe = snapshot; self.reload_steps(); self.update_modified(); self.update_preview()
+                self.recipe = snapshot
+                self.reload_steps()
+                self.update_modified()
+                self.update_preview()
+
+            if warning:
+                self.error(warning)
+
+            return True
+
         except (OSError, RecipeError) as exc:
             self.error(exc)
+            return False
 
     def create_folder(self):
         name, ok = QInputDialog.getText(self, 'Create Recipe Folder', 'Folder name (one level)')
@@ -1603,7 +2017,7 @@ class RecipeWidget(QWidget):
 
     def new(self):
         if not self.protect_unsaved(): return
-        self.append_recipe({'schema': 1, 'id': 'user-' + uuid.uuid4().hex, 'name': 'New Recipe',
+        self.append_recipe({'schema': 3, 'id': 'user-' + uuid.uuid4().hex, 'name': 'New Recipe', 'description': '',
             'media': 'image', 'steps': [{'op': 'file.rename_output', 'pattern': '{filename}_recipe'}],
             'destination': {'mode': 'beside'}})
 

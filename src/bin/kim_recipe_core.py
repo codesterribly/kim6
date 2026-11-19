@@ -113,8 +113,8 @@ def enabled_steps(steps):
 
 
 def validate(recipe):
-    keys(recipe, ('schema', 'id', 'name', 'media', 'steps', 'destination'), ('folder',))
-    if type(recipe['schema']) is not int or recipe['schema'] != 1:
+    keys(recipe, ('schema', 'id', 'name', 'description', 'media', 'steps', 'destination'), ('folder',))
+    if type(recipe['schema']) is not int or recipe['schema'] != 3:
         raise RecipeError('Unsupported recipe schema')
     if not isinstance(recipe['id'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', recipe['id']):
         raise RecipeError('Invalid recipe id')
@@ -122,6 +122,18 @@ def validate(recipe):
         raise RecipeError('Invalid recipe folder id')
     if not text(recipe['name'], 100).strip():
         raise RecipeError('Recipe name is empty')
+    description = recipe['description']
+    if (
+        not isinstance(description, str)
+        or len(description) > 5000
+        or any(
+            ord(character) < 32 and ord(character) not in (9, 10, 13)
+            for character in description
+        )
+    ):
+        raise RecipeError(
+            'Recipe description must be text of at most 5000 characters'
+        )
     destination = recipe['destination']
     keys(destination, ('mode',), ('folder', 'path', 'ask'))
     mode = destination['mode']
@@ -226,9 +238,9 @@ class RecipeLibrary:
 
 def validate_library(data):
     if isinstance(data, list):
-        data = {'schema': 1, 'recipes': data, 'folders': []}
+        data = {'schema': 3, 'recipes': data, 'folders': []}
     keys(data, ('schema', 'recipes', 'folders'))
-    if type(data['schema']) is not int or data['schema'] != 1:
+    if type(data['schema']) is not int or data['schema'] != 3:
         raise RecipeError('Unsupported recipe library schema')
     if not isinstance(data['recipes'], list) or len(data['recipes']) > 500:
         raise RecipeError('Invalid recipe collection')
@@ -319,7 +331,7 @@ def library_groups(library, shipped=None):
 
 def save_library(library, path=None):
     path = Path(path or config_path())
-    data = {'schema': 1, 'recipes': library.recipes, 'folders': library.folders}
+    data = {'schema': 3, 'recipes': library.recipes, 'folders': library.folders}
     validated = validate_library(data)
     if {r['id'] for r in validated.recipes} & {r['id'] for r in builtins()}:
         raise RecipeError('Duplicate or reserved recipe id')

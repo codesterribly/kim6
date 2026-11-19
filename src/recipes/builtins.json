@@ -1,6 +1,6 @@
 [
   {
-    "schema": 1,
+    "schema": 3,
     "id": "web-export",
     "name": "Web Export",
     "media": "image",
@@ -46,6 +46,7 @@
     "destination": {
       "mode": "subfolder",
       "folder": "Web"
-    }
+    },
+    "description": "Prepare images for web publishing. Auto-orient, resize to fit within 1600 × 1600 pixels, convert to sRGB JPEG, remove metadata, and create renamed copies in a Web subfolder."
   }
 ]

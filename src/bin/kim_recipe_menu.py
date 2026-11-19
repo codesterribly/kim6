@@ -28,7 +28,7 @@ def exec_argument(text):
 
 def render(library, dispatcher):
     from kim_recipe_core import validate_library
-    library = validate_library({'schema': 1, 'recipes': library.recipes, 'folders': library.folders})
+    library = validate_library({'schema': 3, 'recipes': library.recipes, 'folders': library.folders})
     recipes = sorted((r for r in library.recipes if r.get('folder') == ROOT_FOLDER),
                      key=lambda r: (r['name'].casefold(), r['id']))
     actions = ['KIMRoot-' + r['id'] for r in recipes]
