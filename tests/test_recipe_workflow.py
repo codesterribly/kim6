@@ -71,10 +71,10 @@ class RecipeMenuTests(unittest.TestCase):
         parser.read(ROOT/'src/kim_recipes.desktop.in')
         entry = parser['Desktop Entry']
         self.assertEqual(entry['Actions'], 'KIMRecipe0Run;KIMRecipe1Editor;')
-        self.assertEqual(entry['_X-KDE-Submenu'], 'KIMng Recipes')
+        self.assertEqual(entry['_X-KDE-Submenu'], 'KIMng - Recipes')
         self.assertNotIn('X-KDE-Priority', entry)
         self.assertEqual(parser['Desktop Action KIMRecipe0Run']['Exec'], 'kim_all recipe --choose -- %F')
-        self.assertEqual(parser['Desktop Action KIMRecipe1Editor']['Exec'], 'kim_all recipe --editor')
+        self.assertEqual(parser['Desktop Action KIMRecipe1Editor']['Exec'], 'kim_all recipe --editor -- %F')
         self.assertEqual(len(parser.sections()), 3)
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'XDG_CONFIG_HOME': tmp}):
             core.save_library(core.RecipeLibrary([base.recipe()]))
@@ -289,23 +289,23 @@ from kim_recipe_core import config_path
 app = QApplication([])
 w = RecipeWidget(); w.set_examples(['/example-only.jpg']); w.duplicate()
 w.name.setText('Changed'); w.changed()
-with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Cancel), patch('kim_recipe_dialog.QFileDialog.getOpenFileNames') as picker:
+with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Cancel), patch('kim_recipe_dialog.choose_images') as picker:
     w.load_photos_and_run(); assert not picker.called
-with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Save), patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=(['/selected-one.jpg', '/selected-two.jpg'], '')), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation, patch('kim_recipe_run.execute') as execute:
+with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Save), patch('kim_recipe_dialog.choose_images', return_value=['/selected-one.jpg', '/selected-two.jpg']), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation, patch('kim_recipe_run.execute') as execute:
     confirmation.return_value.exec.return_value = QDialog.Rejected
     w.load_photos_and_run()
     assert confirmation.call_args.args[0]['name'] == 'Changed'
     assert confirmation.call_args.args[1] == ['/selected-one.jpg', '/selected-two.jpg']
     assert not execute.called
 w.name.setText('Discarded'); w.changed()
-with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Discard), patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=(['/selected.jpg'], '')), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
+with patch('kim_recipe_dialog.QMessageBox.question', return_value=QMessageBox.Discard), patch('kim_recipe_dialog.choose_images', return_value=['/selected.jpg']), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
     w.load_photos_and_run(); assert confirmation.call_args.args[0]['name'] == 'Changed'
 assert not w.is_dirty()
-with patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=([], '')), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
+with patch('kim_recipe_dialog.choose_images', return_value=[]), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
     w.load_photos_and_run(); assert not confirmation.called
 w.selector.setCurrentIndex(0); w.parameter(3, 'quality', 88)
 stored = config_path().read_bytes()
-with patch('kim_recipe_dialog.QFileDialog.getOpenFileNames', return_value=(['/selected.jpg'], '')), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
+with patch('kim_recipe_dialog.choose_images', return_value=['/selected.jpg']), patch('kim_recipe_dialog.RunRecipeDialog') as confirmation:
     w.load_photos_and_run(); assert confirmation.call_args.args[0]['steps'][3]['quality'] == 88
 assert config_path().read_bytes() == stored
 w.close()
@@ -357,8 +357,10 @@ w = RunRecipeDialog(r, files, [{'id': 'portfolio', 'name': 'Portfolio'}]); settl
 assert w.heading.text() == 'Recipe: Portfolio / Client Proofs'
 assert w.inputs.topLevelItemCount() == 3 and w.files == files
 assert '1 ready; 2 problems' in w.summary.text() and not w.run_button.isEnabled()
-assert 'Copyright {YEAR} needs a capture date' in w.diagnostics.toPlainText()
-assert 'Set Capture Date' in w.diagnostics.toPlainText()
+diagnostic = w.diagnostics.toPlainText()
+assert 'Copyright {YEAR}' in diagnostic, diagnostic
+assert 'image capture date' in diagnostic, diagnostic
+assert 'Set Image Capture Date' in diagnostic, diagnostic
 assert w.operations.topLevelItemCount() == 3 and 'Disabled' in w.operations.topLevelItem(1).text(0)
 assert 'Not included' in w.operations.topLevelItem(1).child(0).text(0)
 w.inputs.setCurrentItem(w.inputs.topLevelItem(1))

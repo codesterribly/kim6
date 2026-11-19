@@ -40,10 +40,11 @@ class CorrectnessTests(unittest.TestCase):
         return Path(result['output'])
 
     def test_set_dateless_date_subseconds_offsets_and_file_sync(self):
-        for zone in ('unknown','UTC','+05:30','-04:00'):
+        for zone_index, zone in enumerate(('unknown','UTC','+05:30','-04:00')):
             with self.subTest(zone=zone):
                 steps = [step('metadata.set_capture',datetime='2024-02-29 00:00:00.123456789',timezone=zone,fields='all')]
                 if zone != 'unknown': steps.append({'op':'file.sync_date'})
+                steps.append({'op':'file.rename_output','pattern':'{stem}_zone_' + str(zone_index)})
                 output = self.execute(steps)
                 self.assertEqual(self.cmd('exiftool','-s3','-EXIF:DateTimeOriginal',output).strip(),b'2024:02:29 00:00:00')
                 self.assertEqual(self.cmd('exiftool','-s3','-EXIF:SubSecTimeOriginal',output).strip(),b'')
@@ -71,9 +72,10 @@ class CorrectnessTests(unittest.TestCase):
         output = self.execute([{'op':'metadata.strip_all'},date,step('metadata.shift_capture',seconds=86400)])
         self.assertEqual(self.cmd('exiftool','-s3','-EXIF:DateTimeOriginal',output).strip(),b'2024:03:01 12:00:00')
         self.assertEqual(self.cmd('exiftool','-s3','-EXIF:SubSecTimeOriginal',output).strip(),b'')
-        output = self.execute([date,{'op':'metadata.strip_all'}])
+        output = self.execute([date,{'op':'metadata.strip_all'},
+                               {'op':'file.rename_output','pattern':'{stem}_stripped'}])
         self.assertFalse(self.cmd('exiftool','-s3','-DateTimeOriginal',output).strip())
-        for operations, expected in [([step('metadata.shift_capture')],'Add Set Capture Date'),([date,{'op':'metadata.strip_all'},step('metadata.shift_capture')],'Step 2 removes capture metadata before Step 3')]:
+        for operations, expected in [([step('metadata.shift_capture')],'Add Set Image Capture Date'),([date,{'op':'metadata.strip_all'},step('metadata.shift_capture')],'Step 2 removes capture metadata before Step 3')]:
             row = core.preview(base.recipe(operations),[self.source])[0]
             self.assertIn(expected,row.problems[0])
         operations = [date,step('metadata.shift_capture',enabled=False),{'op':'metadata.strip_all'},step('metadata.shift_capture')]
@@ -102,9 +104,13 @@ class CorrectnessTests(unittest.TestCase):
     def test_escaped_date_pattern_needs_no_capture_and_numbers_collisions(self):
         occupied = self.root / '{date}.png'
         occupied.write_bytes(b'occupied')
-        output = self.execute([{'op': 'file.rename_output', 'pattern': '{{date}}'}])
-        self.assertEqual(output.name, '{date}_1.png')
-        self.assertEqual(occupied.read_bytes(), b'occupied')
+        original = occupied.read_bytes()
+        result = core.execute(base.recipe([
+            {'op': 'file.rename_output', 'pattern': '{{date}}'}
+        ]), [self.source])[0]
+        self.assertFalse(result['ok'], result)
+        self.assertIn('Output collision', result['error'])
+        self.assertEqual(occupied.read_bytes(), original)
         self.assertFalse(list(self.root.rglob('.kimng-stage.*')))
 
     def test_real_date_token_requires_capture_before_publication(self):
@@ -112,11 +118,11 @@ class CorrectnessTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 operations = [{'op': 'file.rename_output', 'pattern': pattern}]
                 row = core.preview(base.recipe(operations), [self.source])[0]
-                self.assertTrue(any('needs a capture date' in p for p in row.problems), row)
+                self.assertTrue(any('needs an image capture date' in p for p in row.problems), row)
                 before = set(self.root.iterdir())
                 result = core.execute(base.recipe(operations), [self.source])[0]
                 self.assertFalse(result['ok'], result)
-                self.assertIn('needs a capture date', result['error'])
+                self.assertIn('needs an image capture date', result['error'])
                 self.assertEqual(set(self.root.iterdir()), before)
         output = self.execute([
             step('metadata.set_capture', datetime='2024-02-29 12:00:00', timezone='unknown'),
@@ -253,7 +259,7 @@ class CorrectnessTests(unittest.TestCase):
                     def trace(args,**kw):
                         if args[0] == 'magick' and args[-1].startswith(fmt.upper()+':'): calls.append(args)
                         return real(args,**kw)
-                    operations = [step('image.convert',format=fmt),step('image.compress',preset=preset,quality=43,png_level=3,jpeg_optimize=True)]
+                    operations = [step('image.convert',format=fmt),step('image.compress',preset=preset,quality=43,png_level=3,jpeg_optimize=True), {'op': 'file.rename_output', 'pattern': '{stem}_' + preset}]
                     with patch.object(image,'run',side_effect=trace): output = self.execute(operations)
                     self.assertEqual(len(calls),1)
                     self.assertEqual(self.cmd('exiftool','-b','-ICC_Profile',output),self.cmd('exiftool','-b','-ICC_Profile',self.source))
@@ -351,7 +357,8 @@ class CorrectnessTests(unittest.TestCase):
         date = step('metadata.set_capture',datetime='2024-02-29 12:00:00',timezone='UTC')
         row = core.preview(base.recipe([step('image.convert'),date]),[source])[0]
         self.assertIn('Manifest',row.problems[0])
-        self.execute([step('image.convert'),{'op':'metadata.strip_descriptive'},date],source)
+        self.execute([step('image.convert'),{'op':'metadata.strip_descriptive'},date,
+                      {'op':'file.rename_output','pattern':'{stem}_stripped'}],source)
 
     def test_single_still_gif_and_jp2_inputs_and_animated_png_rejection(self):
         for fmt in ('gif','jp2'):
@@ -438,7 +445,10 @@ with tempfile.TemporaryDirectory() as tmp:
         output.setText(str(root/'another.png'));assert label.isHidden()
         output.setText(str(root/'collage'));assert 'collage_4.png' in label.text()
         return QDialog.Rejected
-    with patch.object(collage.sys,'argv',['collage',str(root/'options'),str(source)]),patch.object(QDialog,'exec',inspect):
+    # Test filename collision advice without starting image inspection workers.
+    with patch.object(collage.CreationImages, 'add_paths'), \
+         patch.object(collage.sys,'argv',['collage',str(root/'options'),str(source)]), \
+         patch.object(QDialog,'exec',inspect):
         assert collage.main()==1
     assert (root/'collage.png').read_bytes()==b'occupied'
 ''')

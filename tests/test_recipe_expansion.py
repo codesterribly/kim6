@@ -93,14 +93,18 @@ class RecipeFormatTests(unittest.TestCase):
                 self.assertTrue(result['ok'],result)
                 output=Path(result['output'])
                 self.assertEqual(self.cmd('magick','identify','-format','%n|%w|%h',output),b'1|40|30')
-                numbered=core.execute(r,[self.source])[0]
-                self.assertTrue(numbered['ok'],numbered);self.assertNotEqual(numbered['output'],str(output))
+                original_output = output.read_bytes()
+                collision = core.execute(r,[self.source])[0]
+                self.assertFalse(collision['ok'], collision)
+                self.assertIn('Output collision', collision['error'])
+                self.assertEqual(output.read_bytes(), original_output)
         self.assertEqual((self.source.read_bytes(),self.source.stat().st_mtime_ns),self.before)
 
     def test_options_persist_lossless_lossy_depth_and_metadata_policy(self):
-        for fmt,options in (('jp2',{'jp2_mode':'lossless','depth':'16'}),('jp2',{'jp2_mode':'lossy'}),
-                            ('tiff',{'tiff_compression':'lzw','depth':'16'}),('jpeg',{'jpeg_progressive':True})):
-            r=base.recipe([{'op':'image.convert','format':fmt,'quality':81,**options}])
+        for option_index,(fmt,options) in enumerate((('jp2',{'jp2_mode':'lossless','depth':'16'}),('jp2',{'jp2_mode':'lossy'}),
+                            ('tiff',{'tiff_compression':'lzw','depth':'16'}),('jpeg',{'jpeg_progressive':True}))):
+            r=base.recipe([{'op':'image.convert','format':fmt,'quality':81,**options},
+                           {'op':'file.rename_output','pattern':'{stem}_option_' + str(option_index)}])
             self.assertEqual(core.validate(json.loads(json.dumps(r))),r)
             result=core.execute(r,[self.source])[0];self.assertTrue(result['ok'],result)
             if options.get('depth')=='16': self.assertEqual(self.cmd('magick','identify','-format','%z',result['output']),b'16')
@@ -109,10 +113,13 @@ class RecipeFormatTests(unittest.TestCase):
             r=base.recipe([{'op':'image.convert','format':fmt,'quality':90}])
             result=core.execute(r,[self.source])[0];self.assertFalse(result['ok']);self.assertIn('Remove All Metadata',result['error'])
             r['steps'].append({'op':'metadata.strip_all'})
+            r['steps'].append({'op':'file.rename_output','pattern':'{stem}_stripped_' + fmt})
             result=core.execute(r,[self.source])[0];self.assertTrue(result['ok'],result)
             self.assertFalse(self.cmd('exiftool','-s3','-EXIF:all','-XMP:all','-IPTC:all',result['output']))
         for fmt in ('jpeg','png','webp','avif','tiff','heic','heif','jp2'):
-            r=base.recipe([{'op':'image.auto_orient'},{'op':'image.convert','format':fmt,'quality':90}, {'op':'metadata.creator','value':'Recipe Author'}])
+            r=base.recipe([{'op':'image.auto_orient'},{'op':'image.convert','format':fmt,'quality':90},
+                           {'op':'metadata.creator','value':'Recipe Author'},
+                           {'op':'file.rename_output','pattern':'{stem}_author'}])
             result=core.execute(r,[self.source])[0];self.assertTrue(result['ok'],result)
             self.assertEqual(self.cmd('exiftool','-s3','-XMP-dc:Creator',result['output']).strip(),b'Recipe Author')
         self.cmd('exiftool','-overwrite_original','-IPTC:By-line=Legacy',self.source)
@@ -120,7 +127,8 @@ class RecipeFormatTests(unittest.TestCase):
             steps=[{'op':'image.convert','format':fmt,'quality':90}]
             result=core.execute(base.recipe(steps),[self.source])[0]
             self.assertFalse(result['ok']); self.assertIn('legacy IPTC',result['error'])
-            steps += [{'op':'metadata.strip_all'},{'op':'metadata.creator','value':'New Author'}]
+            steps += [{'op':'metadata.strip_all'},{'op':'metadata.creator','value':'New Author'},
+                      {'op':'file.rename_output','pattern':'{stem}_new_author'}]
             result=core.execute(base.recipe(steps),[self.source])[0];self.assertTrue(result['ok'],result)
             self.assertEqual(self.cmd('exiftool','-s3','-XMP-dc:Creator',result['output']).strip(),b'New Author')
             self.assertFalse(self.cmd('exiftool','-s3','-IPTC:all',result['output']))
@@ -157,7 +165,8 @@ class RecipeFormatTests(unittest.TestCase):
             if fmt in ('jpeg','bmp','pdf'): self.assertEqual(self.cmd('magick',*(['-density','144'] if fmt=='pdf' else []),result['output'],'-format','%[fx:mean]','info:'),b'1')
             else: self.assertEqual(self.cmd('magick',result['output'],'-format','%[fx:p{0,0}.a]','info:'),b'0')
         self.cmd('exiftool','-overwrite_original','-Artist=Existing',self.source)
-        r=base.recipe([{'op':'metadata.creator','value':''}])
+        r=base.recipe([{'op':'metadata.creator','value':''},
+                       {'op':'file.rename_output','pattern':'{stem}_blank_creator'}])
         result=core.execute(r,[self.source])[0];self.assertTrue(result['ok'],result)
         self.assertEqual(self.cmd('exiftool','-s3','-Artist',result['output']).strip(),b'Existing')
 

@@ -26,16 +26,19 @@ from kim_ui import CaptureDateInput, CaptureDateOptions, CaptureAdjustment, Rota
 class ExamplePreviewWorker(QThread):
     stage_changed = Signal(str)
 
-    def __init__(self, recipe, sample, index, generation, parent):
+    def __init__(self, recipe, sample, index, generation, parent, checked_inputs=None):
         super().__init__(parent)
         self.recipe, self.sample, self.index = copy.deepcopy(recipe), sample, index
         self.generation, self.row = generation, None
+        # Workers own their cache copies; never share mutable Qt worker state.
+        self.checked_inputs = copy.deepcopy(checked_inputs or {})
 
     def run(self):
         from kim_process import inspection_context
         from kim_recipe_core import PreviewRow
+        from kim_recipe_image import checked_input_headers
         try:
-            with inspection_context(self.stage_changed.emit,self.isInterruptionRequested):
+            with inspection_context(self.stage_changed.emit,self.isInterruptionRequested), checked_input_headers(self.checked_inputs):
                 self.row = preview(self.recipe,[self.sample],start_index=self.index)[0]
         except Exception as exc:
             self.row = PreviewRow(str(self.sample),problems=[str(exc)])
@@ -112,6 +115,7 @@ class RecipeWidget(QWidget):
         self.users, self.folders = library.recipes, library.folders
         self.recipe = None
         self.preview_worker = None; self.preview_generation = 0; self.preview_pending = False; self.preview_closing = False
+        self.checked_inputs = {}
         self.loading = False
         root = QVBoxLayout(self)
         self.editor = QWidget(self)
@@ -192,7 +196,7 @@ class RecipeWidget(QWidget):
         self.destination_group = QGroupBox('Destination')
         self.destinations = QFormLayout(self.destination_group)
         self.mode = QComboBox()
-        for label, mode in [('Beside each original', 'beside'), ('Subfolder beside each original', 'subfolder'), ('One directory', 'directory')]:
+        for label, mode in [('Same directory as each original', 'beside'), ('Beside each original', 'subfolder'), ('One directory', 'directory')]:
             self.mode.addItem(label, mode)
         self.folder = QLineEdit(); self.path = QLineEdit()
         self.ask = QCheckBox('Ask for directory on every run')
@@ -201,7 +205,7 @@ class RecipeWidget(QWidget):
         directory_layout.addWidget(self.path)
         browse = QPushButton(QIcon.fromTheme('folder-open'), 'Choose…')
         browse.clicked.connect(self.browse); directory_layout.addWidget(browse)
-        self.destinations.addRow('Location', with_help(self.mode, 'output'))
+        self.destinations.addRow('Directory', self.mode)
         self.destinations.addRow('Subfolder', self.folder)
         self.destinations.addRow('', self.ask)
         self.destinations.addRow('Directory', self.directory_row)
@@ -234,7 +238,7 @@ class RecipeWidget(QWidget):
         self.table = PropertyView()
         preview_layout.addWidget(self.table, 1)
         self.warning_view=WarningView(); self.warning_view.hide(); preview_layout.addWidget(self.warning_view)
-        safety = QLabel('Originals are never changed. Outputs are always new files.')
+        safety = QLabel('Originals are not being changed. Outputs are being created as new files.')
         safety.setWordWrap(True); safety.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         preview_layout.addWidget(safety)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(300)
@@ -477,7 +481,7 @@ class RecipeWidget(QWidget):
         topics = {'metadata.set_capture':(), 'metadata.shift_capture':('capture','dates'),
                   'image.convert':('quality','color'), 'image.compress':('quality',), 'image.color':('color',),
                   'image.resize':('resize',), 'image.resize_exact':('resize',), 'image.resize_geometry':('resize',),
-                  'metadata.strip_all':('strip',), 'file.rename_output':('output',), 'file.name_transform':('output',)}
+                  'metadata.strip_all':('strip',), 'file.rename_output':(), 'file.name_transform':('output',)}
         for topic in topics.get(step['op'],()):
             from kim_ui import HELP
             self.form.addRow(HELP[topic][0], HelpButton(topic))
@@ -794,6 +798,12 @@ class RecipeWidget(QWidget):
     def refresh_examples(self):
         previous = self.example_selector.currentData()
         samples = self.files if self.example_files is None else self.example_files
+        # Bound retained headers to the currently selected example collection.
+        allowed = {str(Path(sample).absolute()) for sample in samples}
+        self.checked_inputs = {
+            path: entry for path, entry in self.checked_inputs.items()
+            if path in allowed
+        }
         self.example_selector.blockSignals(True)
         self.example_selector.clear()
         for sample in samples:
@@ -854,7 +864,8 @@ class RecipeWidget(QWidget):
                 return
             index = self.files.index(sample) + 1 if sample in self.files else 1
             self.refresh_inherited_parameters()
-            worker = ExamplePreviewWorker(self.recipe,sample,index,self.preview_generation,self)
+            worker = ExamplePreviewWorker(self.recipe,sample,index,self.preview_generation,self,
+                                          checked_inputs=self.checked_inputs)
             self.preview_worker = worker
             self.status.setText('Validating recipe…'); self.show_preview_fields(fields)
             self.cancel_preview.setVisible(True)
@@ -875,7 +886,9 @@ class RecipeWidget(QWidget):
         self.cancel_preview.setVisible(False)
         current = (worker.generation == self.preview_generation and worker.recipe == self.recipe
                    and worker.sample == self.example_selector.currentData())
-        if current and worker.row is not None:
+        if current and worker.row is not None and not worker.isInterruptionRequested():
+            # Accept cache observations only from the current completed preview.
+            self.checked_inputs.update(worker.checked_inputs)
             self.show_preview_fields(property_fields(worker.recipe,worker.row))
             self.warning_view.set_rows([worker.row])
             self.status.setText(worker.row.problems[0] if worker.row.problems else '')
@@ -893,7 +906,7 @@ class RecipeWidget(QWidget):
     def error(self, exc):
         QMessageBox.warning(self, 'Recipes', str(exc))
 
-    def load_photos_and_run(self):
+    def load_photos_and_run(self, files=None):
         if self.from_run: return
         if not self.protect_unsaved(): return
         if not self.immutable and self.is_dirty():
@@ -906,8 +919,16 @@ class RecipeWidget(QWidget):
             else:
                 self.select(self.active_index, force=True)
         snapshot = copy.deepcopy(self.recipe)
-        files = choose_images(self, title='Load Images for Recipe Execution',
-                               extensions=RECIPE_IMAGE_EXTENSIONS, accept_label='Load Images')
+        if files is None:
+            files = choose_images(
+                self,
+                title='Choose images for Recipe',
+                extensions=RECIPE_IMAGE_EXTENSIONS,
+                accept_label='Use Selected Images'
+            )
+        else:
+            # Preserve the image selection supplied when the Editor opened.
+            files = list(files)
         if not files: return
         try:
             self.run_dialog = RunRecipeDialog(snapshot, files, self.folders, self)
@@ -991,21 +1012,52 @@ def make_editor_dialog(parent=None, from_run=False, files=(), recipe=None, repai
     from kim_dialog_buttons import style_button
 
     buttons = QHBoxLayout()
-    buttons.addStretch(1)
-    if not from_run:
-        run = QPushButton('Load images && run…')
-        style_button(run, 'apply')
-        run.clicked.connect(widget.load_photos_and_run)
-        buttons.addWidget(run)
 
-    close = QPushButton(
-        'Return to recipe runner' if from_run else 'Close'
-    )
-    style_button(
-        close, 'back' if from_run else 'cancel'
-    )
-    close.clicked.connect(dialog.accept)
-    buttons.addWidget(close)
+    if from_run:
+        back = QPushButton('Back')
+        style_button(back, 'back')
+        back.clicked.connect(dialog.accept)
+        buttons.addWidget(back)
+        buttons.addStretch(1)
+
+    else:
+        buttons.addStretch(1)
+
+        # Keep the original Dolphin selection separate from the
+        # example-image dropdown used only for preview.
+        selected_images = list(widget.files)
+
+        if selected_images:
+            choose_other = QPushButton('Choose other images && run…')
+            style_button(choose_other, 'review')
+            choose_other.clicked.connect(lambda checked=False: widget.load_photos_and_run())
+            buttons.addWidget(choose_other)
+
+            count = len(selected_images)
+            selected_label = (
+                f'Run with {count} selected image'
+                + ('' if count == 1 else 's')
+            )
+            run_selected = QPushButton(selected_label)
+            style_button(run_selected, 'apply')
+            run_selected.clicked.connect(
+                lambda checked=False: widget.load_photos_and_run(
+                    selected_images
+                )
+            )
+            buttons.addWidget(run_selected)
+
+        else:
+            choose = QPushButton('Choose images && run…')
+            style_button(choose, 'apply')
+            choose.clicked.connect(lambda checked=False: widget.load_photos_and_run())
+            buttons.addWidget(choose)
+
+        close = QPushButton('Close')
+        style_button(close, 'cancel')
+        close.clicked.connect(dialog.accept)
+        buttons.addWidget(close)
+
     layout.addLayout(buttons)
     return dialog
 

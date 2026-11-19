@@ -11,7 +11,7 @@ from PySide6.QtCore import QThread, Signal, Slot, Qt, QTimer, QStandardPaths, QS
 from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QPlainTextEdit, QFileDialog, QProgressDialog, QMessageBox, QProgressBar, QScrollArea)
+    QTableWidgetItem, QHeaderView, QPlainTextEdit, QFileDialog, QProgressDialog, QMessageBox, QProgressBar, QScrollArea, QSizePolicy)
 from kim_job import JobStatus, grouped_warnings, WarningGroups
 from kim_recipe_core import (RecipeError, PreviewRow, builtins, load_library, lookup_recipe,
                              recipe_title, RecipeLibrary, library_groups, handler, preview, execute, validate,
@@ -19,6 +19,16 @@ from kim_recipe_core import (RecipeError, PreviewRow, builtins, load_library, lo
 
 from kim_review_ui import (exact_field, set_exact, restore_review_geometry,
                            clamp_review_geometry, restore_splitter)
+
+
+def set_recipe_output_text(field, value):
+    # Standalone Review Changes still uses its existing exact fields.
+    if isinstance(field, QLabel):
+        field.setText(value)
+        field.setToolTip(value)
+    else:
+        set_exact(field, value)
+
 
 
 class JobProgressDialog(QDialog):
@@ -482,7 +492,7 @@ class RunRecipeDialog(QDialog):
         self.edit_button.clicked.connect(self.edit_recipe)
         selection.addWidget(self.edit_button)
         selection.addWidget(self.create_button); layout.addLayout(selection)
-        self.selection_hint=QLabel('Choose a recipe to check these images and preview the results.')
+        self.selection_hint=QLabel('Select a recipe to preview its outputs and operations. Choose the output location below before running.')
         self.selection_hint.setWordWrap(True); self.selection_hint.setVisible(recipe is None); layout.addWidget(self.selection_hint)
         self.search.textChanged.connect(self.refresh_selector)
         self.selector.currentIndexChanged.connect(self.select_recipe)
@@ -510,11 +520,11 @@ class RunRecipeDialog(QDialog):
         self.inputs.setAccessibleName('Selected images and review status')
         self.inputs.header().setStretchLastSection(False)
         self.inputs.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.inputs.header().setSectionResizeMode(1, QHeaderView.Interactive)
-        self.inputs.setColumnWidth(1, 100)
+        self.inputs.header().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.inputs.setColumnWidth(1, 175)
         self.inputs.setRootIsDecorated(False)
         for source in self.files:
-            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Waiting for recipe']); item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
+            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Select recipe']); item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.inputs.currentItemChanged.connect(self.show_selected)
         inp_layout.addWidget(self.inputs)
         actions = QHBoxLayout()
@@ -533,6 +543,8 @@ class RunRecipeDialog(QDialog):
         self.operations = QTreeWidget(); self.operations.setHeaderHidden(True); self.operations.setWordWrap(True)
         self.fill_operations()
         op_layout.addWidget(self.operations)
+        if not operation_title:
+            operations.setMinimumHeight(260)
         self.operations_panel = operations
 
         # Internal Recipe steps remain available to the engine,
@@ -544,13 +556,33 @@ class RunRecipeDialog(QDialog):
         )
         right_layout = QVBoxLayout(right)
         right.setMinimumWidth(0)
-        self.output_filename = exact_field(right_layout, 'Output filename')
-        self.output_directory = exact_field(right_layout, 'Destination directory')
-        self.output_path = exact_field(right_layout, 'Exact target path')
+        if operation_title:
+            self.output_filename = exact_field(right_layout, 'Filename')
+            self.output_directory = exact_field(right_layout, 'Output Directory')
+        else:
+            # Display planned information as text, not input controls.
+            for caption, attribute in (
+                ('Filename', 'output_filename'),
+                ('Output Directory', 'output_directory'),
+            ):
+                right_layout.addWidget(QLabel(caption))
+                value = QLabel()
+                value.setTextFormat(Qt.PlainText)
+                value.setTextInteractionFlags(
+                    Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+                )
+                value.setSizePolicy(
+                    QSizePolicy.Ignored, QSizePolicy.Preferred
+                )
+                value.setAccessibleName(caption)
+                setattr(self, attribute, value)
+                right_layout.addWidget(value)
         self.properties_button = QPushButton('Show output properties')
         self.properties_button.setCheckable(True)
         right_layout.addWidget(self.properties_button)
-        self.properties = PropertyView(); self.properties.setMinimumHeight(160)
+        self.properties = PropertyView(); self.properties.setMinimumHeight(140)
+        if not operation_title:
+            self.properties.setMaximumHeight(220)
         right_layout.addWidget(self.properties)
         self.properties_button.toggled.connect(self.properties.setVisible)
         self.properties_button.toggled.connect(lambda expanded: self.properties_button.setText(
@@ -560,21 +592,24 @@ class RunRecipeDialog(QDialog):
         self.operations_button = QPushButton()
         self.operations_button.setCheckable(True)
         right_layout.addWidget(self.operations_button)
-        right_layout.addWidget(operations)
+        right_layout.addWidget(operations, 1 if not operation_title else 0)
         self.operations_button.toggled.connect(operations.setVisible)
         self.operations_button.toggled.connect(self.update_operation_summary)
-        self.operations_button.setChecked(self.settings.value('operations_expanded', False, type=bool))
-        operations.setVisible(self.operations_button.isChecked() and not operation_title)
-        self.operations_button.setVisible(not operation_title)
+        self.operations_button.setChecked(not operation_title)
+        operations.setVisible(self.operations_button.isChecked() and not operation_title and self.recipe is not None)
+        self.operations_button.setVisible(not operation_title and self.recipe is not None)
         self.update_operation_summary()
-        right_layout.addStretch(1)
-        preview_scroll = QScrollArea(); preview_scroll.setWidgetResizable(True)
+        if operation_title:
+            right_layout.addStretch(1)
+        preview_scroll = self.preview_scroll = QScrollArea(); preview_scroll.setWidgetResizable(True)
         preview_scroll.setMinimumWidth(220); preview_scroll.setWidget(right)
         split.addWidget(preview_scroll)
+        preview_scroll.setVisible(recipe is not None)
         split.setSizes(
             [390, 730] if operation_title else [460, 640]
         )
         dest = QHBoxLayout()
+        dest.addWidget(QLabel('Output location:'))
         self.destination_label = QLabel(); self.destination_label.setTextFormat(Qt.PlainText)
         self.destination_label.setWordWrap(True)
         self.choose_destination = QPushButton(QIcon.fromTheme('folder-open'), 'Choose output directory…')
@@ -588,11 +623,12 @@ class RunRecipeDialog(QDialog):
         self.destination_choice.addItem('Choose another directory…', 'directory')
         self.destination_choice.currentIndexChanged.connect(self.change_destination_mode)
         self.destination_choice.setVisible(not operation_title)
+        self.destination_choice.setEnabled(bool(recipe))
         dest.addWidget(self.destination_choice)
         dest.addWidget(self.destination_label, 1)
         dest.addWidget(self.choose_destination)
         if not operation_title:
-            layout.addLayout(dest)
+            layout.insertLayout(layout.indexOf(split), dest)
         self.summary = QLabel()
         self.summary.setTextFormat(Qt.PlainText)
         layout.addWidget(self.summary)
@@ -647,7 +683,7 @@ class RunRecipeDialog(QDialog):
 
         if operation_title:
             layout.addLayout(dest)
-        safety = QLabel('Originals are never overwritten. KIMng saves only the exact reviewed filenames. A collision blocks publication and requires a new review. Finished results stay put if you cancel or something fails.')
+        safety = QLabel('Originals are not being changed. KIMng saves only the exact reviewed filenames. A collision blocks publication and requires a new review. Finished results stay put if you cancel or something fails.')
         safety.setWordWrap(True); layout.addWidget(safety)
         from kim_dialog_buttons import style_button
 
@@ -861,7 +897,7 @@ class RunRecipeDialog(QDialog):
         self.checked_inputs={key:value for key,value in self.checked_inputs.items() if key in selected}
         self.inputs.clear()
         for source in self.files:
-            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Waiting for recipe'])
+            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Select recipe'])
             item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.count.setText('Inputs: ' + file_count(len(self.files)))
         self.run_button.setText(
@@ -948,6 +984,13 @@ class RunRecipeDialog(QDialog):
         self.recipe = copy.deepcopy(recipe)
         self.selected_id = recipe['id'] if recipe else None
         self.selection_hint.setVisible(recipe is None)
+        self.preview_scroll.setVisible(recipe is not None)
+        self.destination_choice.setEnabled(recipe is not None)
+        self.operations_button.setVisible(recipe is not None and not self.operation_title)
+        self.operations_panel.setVisible(
+            recipe is not None and not self.operation_title
+            and self.operations_button.isChecked()
+        )
         self.execution_recipe, self.binding_error = confirmation_snapshot(recipe) if recipe else (None, None)
         self.base_execution_recipe = copy.deepcopy(self.execution_recipe)
         self.refresh_selector()
@@ -1047,11 +1090,11 @@ class RunRecipeDialog(QDialog):
         self.problem_messages.clear(); self._last_problem_index = -1; self._selected_presentation = None
         self.rows.clear(); self.properties.set_fields([]); self.diagnostics.clear(); self.warning_view.set_rows([])
         self.blocking_summary.clear(); self.blocking_summary.hide()
-        for field in (self.output_filename, self.output_directory, self.output_path): set_exact(field, '')
+        for field in (self.output_filename, self.output_directory): set_recipe_output_text(field, '')
         if not self.operation_title: self.sync_diagnostics()
         self.fix_recipe_button.hide()
         for index in range(len(self.files)):
-            self.inputs.topLevelItem(index).setText(1, 'Queued' if self.recipe else 'Waiting for recipe')
+            self.inputs.topLevelItem(index).setText(1, 'Queued' if self.recipe else 'Select recipe')
             self.inputs.topLevelItem(index).setToolTip(1, '')
         if self.preflight_worker is not None:
             self.preflight_worker.requestInterruption()
@@ -1219,9 +1262,8 @@ class RunRecipeDialog(QDialog):
         if previous is not None and previous[0] == (self.generation, index) and previous[1] is row and previous[2] is self.execution_recipe: return
         self._selected_presentation = ((self.generation, index), row, self.execution_recipe)
         output = Path(row.output) if row and row.output else None
-        set_exact(self.output_filename, output.name if output else '')
-        set_exact(self.output_directory, str(output.parent) if output else '')
-        set_exact(self.output_path, str(output) if output else '')
+        set_recipe_output_text(self.output_filename, output.name if output else '')
+        set_recipe_output_text(self.output_directory, str(output.parent) if output else '')
         self.properties.set_fields(
             (
                 operation_review_fields(
@@ -1367,6 +1409,11 @@ class RunRecipeDialog(QDialog):
         if worker.error: report.append(worker.error)
         self.diagnostics.setPlainText('\n'.join(report))
         self.diagnostics.setMaximumHeight(200)
+        # The existing bottom panel becomes the completion report.
+        # No popup or additional report window.
+        if not self.operation_title:
+            self.technical_details_button.setChecked(True)
+            self.sync_diagnostics()
         if worker.error or not self.execution_succeeded:
             if self.operation_title: self.diagnostics.show()
             else: self.sync_diagnostics()

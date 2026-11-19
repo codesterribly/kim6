@@ -1105,7 +1105,6 @@ class ImageHandler:
             if not any(len(parts := line.split()) >= 3 and parts[0].rstrip('*') == CODERS[fmt] and 'w' in parts[2] for line in formats.splitlines()):
                 raise RecipeError('ImageMagick ' + CODERS[fmt] + ' writer unavailable')
         stage('Checking metadata')
-        descriptive = json.loads(run(['exiftool','-json','-EXIF:all','-XMP:all','-IPTC:all',str(source)]))[0]
         pixel_export = fmt in PIXEL_EXPORTS
         strip_requested = (
             omit_source_metadata
@@ -1131,8 +1130,10 @@ class ImageHandler:
                     raise RecipeError('Embedded XMP is malformed. Remove Descriptive Metadata before editing dates or copyright, or keep it unchanged.') from exc
         if pixel_export and any(edit != ['-all='] for edit in edits):
             raise RecipeError(fmt.upper() + ' output cannot retain the selected capture-date/copyright metadata fields. Choose PNG, TIFF, JPEG, WebP or HEIC, or disable those metadata steps.')
-        if pixel_export and len(descriptive) > 1 and not strip_requested:
-            raise RecipeError(fmt.upper() + ' cannot guarantee descriptive metadata preservation; add Remove All Metadata after Convert Format')
+        if pixel_export and not strip_requested:
+            descriptive = json.loads(run(['exiftool','-json','-EXIF:all','-XMP:all','-IPTC:all',str(source)]))[0]
+            if len(descriptive) > 1:
+                raise RecipeError(fmt.upper() + ' cannot guarantee descriptive metadata preservation; add Remove All Metadata after Convert Format')
         if fmt in NO_LEGACY_IPTC and not (strip_requested or descriptive_removed) and run(['exiftool','-s3','-IPTC:all',str(source)]).strip():
             raise RecipeError(fmt.upper() + ' cannot retain legacy IPTC; add Remove Descriptive Metadata / Remove All Metadata or choose TIFF/PNG/JPEG')
         # Opaque / non-profile containers require sRGB pixels before metadata
