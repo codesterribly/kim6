@@ -174,6 +174,218 @@ def validate(recipe):
     return copy.deepcopy(recipe)
 
 
+
+def read_portable_recipe(path):
+    """Read a bounded, validated individual schema 3 Recipe."""
+    fd = os.open(
+        path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    )
+    with os.fdopen(fd, 'rb') as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise RecipeError('Recipe import requires a regular file')
+        payload = stream.read(131073)
+
+    if len(payload) > 131072:
+        raise RecipeError('Recipe file exceeds 128 KiB')
+
+    try:
+        decoded = payload.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise RecipeError('Recipe file is not UTF-8') from exc
+
+    recipe = strict_json(decoded)
+    if not isinstance(recipe, dict):
+        raise RecipeError('Expected one Recipe JSON object')
+    if 'folder' in recipe:
+        raise RecipeError(
+            'Individual Recipe files cannot assign a library folder'
+        )
+    return validate(recipe)
+
+
+def write_portable_recipe(recipe, path):
+    """Export one Recipe without overwriting an existing file."""
+    portable = validate(copy.deepcopy(recipe))
+    portable.pop('folder', None)
+
+    data = (
+        json.dumps(portable, indent=2, ensure_ascii=False) + '\n'
+    ).encode('utf-8')
+
+    if len(data) > 131072:
+        raise RecipeError('Recipe file exceeds 128 KiB')
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        # Only remove our newly created, incomplete output.
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+
+
+
+BUNDLE_KIND = 'kimng-recipe-bundle'
+BUNDLE_LIMIT = 2 * 1024 * 1024
+
+
+def validate_recipe_bundle(data):
+    keys(data, ('schema', 'kind', 'recipes', 'folders'))
+    if type(data['schema']) is not int or data['schema'] != 3:
+        raise RecipeError('Unsupported Recipe bundle schema')
+    if data['kind'] != BUNDLE_KIND:
+        raise RecipeError('Not a KIMng Recipe bundle')
+
+    library = validate_library({
+        'schema': 3,
+        'recipes': data['recipes'],
+        'folders': data['folders'],
+    })
+    if not library.recipes:
+        raise RecipeError('Recipe bundle contains no Recipes')
+    return library
+
+
+def read_recipe_bundle(path):
+    """Read and fully validate one bounded schema 3 JSON bundle."""
+    fd = os.open(
+        path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    )
+    with os.fdopen(fd, 'rb') as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise RecipeError('Bundle must be a regular file')
+        payload = stream.read(BUNDLE_LIMIT + 1)
+
+    if len(payload) > BUNDLE_LIMIT:
+        raise RecipeError('Recipe bundle exceeds 2 MiB')
+
+    try:
+        decoded = payload.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise RecipeError('Bundle must be UTF-8 JSON') from exc
+
+    return validate_recipe_bundle(strict_json(decoded))
+
+
+def write_recipe_bundle(library, path):
+    """Export the saved user library without overwriting any file."""
+    contents = {
+        'schema': 3,
+        'kind': BUNDLE_KIND,
+        'folders': copy.deepcopy(library.folders),
+        'recipes': copy.deepcopy(library.recipes),
+    }
+    validate_recipe_bundle(contents)
+
+    payload = (
+        json.dumps(contents, ensure_ascii=False, indent=2) + '\n'
+    ).encode('utf-8')
+
+    if len(payload) > BUNDLE_LIMIT:
+        raise RecipeError('Recipe bundle exceeds 2 MiB')
+
+    fd = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+
+
+def merge_recipe_bundle(existing, imported, shipped=()):
+    """Return a new validated library without changing existing data."""
+    existing = validate_library({
+        'schema': 3,
+        'recipes': existing.recipes,
+        'folders': existing.folders,
+    })
+    imported = validate_library({
+        'schema': 3,
+        'recipes': imported.recipes,
+        'folders': imported.folders,
+    })
+
+    result = copy.deepcopy(existing)
+    folder_map = {}
+    existing_folders = {
+        name_key(folder['name']): folder['id']
+        for folder in result.folders
+    }
+
+    # Matching folder names reuse the destination library's folder.
+    # Other folders receive fresh IDs.
+    for folder in imported.folders:
+        normalized = name_key(folder['name'])
+        if normalized in existing_folders:
+            destination_id = existing_folders[normalized]
+        else:
+            destination_id = 'folder-' + uuid.uuid4().hex
+            result.folders.append({
+                'id': destination_id,
+                'name': folder['name'],
+            })
+            existing_folders[normalized] = destination_id
+        folder_map[folder['id']] = destination_id
+
+    occupied_names = {
+        name_key(recipe['name'])
+        for recipe in result.recipes + list(shipped)
+    }
+    imported_ids = []
+
+    for recipe in imported.recipes:
+        item = copy.deepcopy(recipe)
+        original_name = item['name']
+        candidate = original_name
+        number = 1
+
+        while name_key(candidate) in occupied_names:
+            suffix = (
+                ' (imported)' if number == 1
+                else f' (imported {number})'
+            )
+            candidate = original_name[:100 - len(suffix)] + suffix
+            number += 1
+
+        item['name'] = candidate
+        occupied_names.add(name_key(candidate))
+
+        # Imported IDs must never collide with existing or built-in IDs.
+        item['id'] = 'user-' + uuid.uuid4().hex
+        imported_ids.append(item['id'])
+
+        original_folder = item.get('folder')
+        if original_folder not in (None, ROOT_FOLDER):
+            item['folder'] = folder_map[original_folder]
+
+        result.recipes.append(validate(item))
+
+    result = validate_library({
+        'schema': 3,
+        'recipes': result.recipes,
+        'folders': result.folders,
+    })
+    return result, imported_ids
+
+
 def config_path():
     return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kimng' / 'recipes.json'
 

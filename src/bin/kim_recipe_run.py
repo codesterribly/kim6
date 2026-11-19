@@ -565,6 +565,27 @@ class RunRecipeDialog(QDialog):
                 'Review the exact planned outputs before applying.'
             )
         layout.addWidget(self.heading)
+
+        self.recipe_description_group = QGroupBox('About this recipe')
+        description_layout = QVBoxLayout(
+            self.recipe_description_group
+        )
+        self.recipe_description = QPlainTextEdit()
+        self.recipe_description.setReadOnly(True)
+        self.recipe_description.setMaximumHeight(100)
+        self.recipe_description.setAccessibleName(
+            'Selected Recipe description'
+        )
+        description_layout.addWidget(self.recipe_description)
+        layout.addWidget(self.recipe_description_group)
+
+        description = (
+            recipe.get('description', '').strip()
+            if recipe and not operation_title else ''
+        )
+        self.recipe_description.setPlainText(description)
+        self.recipe_description_group.setVisible(bool(description))
+
         self.count = QLabel('Inputs: ' + file_count(len(self.files))); layout.addWidget(self.count)
         split = self.splitter = QSplitter(Qt.Horizontal); layout.addWidget(split, 1)
         split.setChildrenCollapsible(False)
@@ -1056,6 +1077,14 @@ class RunRecipeDialog(QDialog):
         if self.selected_id and self.selector.findData(self.selected_id) < 0 and self.search.text():
             self.search.clear()
         self.heading.setText('Recipe: ' + selection_title(recipe, self.library.folders) if recipe else 'Choose a recipe…')
+
+        description = (
+            recipe.get('description', '').strip()
+            if recipe and not self.operation_title else ''
+        )
+        self.recipe_description.setPlainText(description)
+        self.recipe_description_group.setVisible(bool(description))
+
         self.fill_operations()
         ask = bool(recipe and recipe['destination'].get('ask'))
         self.choose_destination.setVisible(ask)

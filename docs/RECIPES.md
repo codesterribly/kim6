@@ -1,4 +1,4 @@
-# Recipes: Reusable Photo Workflows
+# Recipes: Reusable Image Workflows
 
 Recipes let you combine image operations into a saved workflow and run them directly from **Dolphin's KIMng - Recipes menu**. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and **recipes never modify the source images**.
 
@@ -53,9 +53,81 @@ paths. Do not assume their output settings are identical.
 
 ![KIMng Recipe Editor with ordered steps, destination choices, and live output preview](images/screenshots/12-recipe-editor.png)
 
-Open **Recipe editor…** from the Recipes submenu. Each saved recipe has a name. Add processing steps, set their options, arrange them in the required order, and enable or disable individual steps. Disabled steps are kept in the definition but are not executed. Recipes can be saved in user-created folders, assigned to Root for a direct Dolphin shortcut, or left Unfiled.
+Open **Recipe editor…** from the Recipes submenu. The Editor uses three resizable panels:
 
-The editor can also **Load Photos & Run**. When a run originates in the editor, returning to the editor retains the selected images and editing context. Recipe definitions are stored as versioned JSON, making them suitable for sharing and reuse.
+- **Recipes:** Browse and search built-in and user Recipes, manage folders, and import or export definitions.
+- **Editing:** Change the Recipe name, description, ordered operations, step settings, and output destination.
+- **Preview:** Inspect example images, planned filenames, image properties, metadata effects, and publication information.
+
+Each Recipe has a name and an optional multiline description. Descriptions explain what a Recipe does and when to use it. The Recipe search includes descriptions as well as names and folders. Hovering over a Recipe provides its name and description.
+
+Add processing steps, configure their options, arrange them in execution order, and enable or disable individual steps. Disabled steps remain in the definition but are not executed.
+
+Built-in Recipes are read-only. Use **Duplicate Recipe** to create an editable user copy.
+
+When the Editor opens with images already selected in Dolphin, it provides **Run with selected images**. Use **Choose other images & run…** to select another set. The Editor also supports opening without an initial image selection.
+
+### Recipe folders and organization
+
+User Recipes may be assigned to **Root**, **Unfiled**, or a named folder.
+
+- **Root:** Recipes receive direct shortcuts in Dolphin's KIMng Recipes submenu.
+- **Unfiled:** Recipes remain available in the Editor and Runner without a folder assignment.
+- **Named folders:** Organize Recipes in the Editor and Runner without creating nested Dolphin submenus.
+
+Drag a saved user Recipe onto a valid folder to move it. Valid destinations are highlighted during dragging. Alternatively, select a Recipe and use **Move to Folder…** or its context-menu action.
+
+Built-in Recipes cannot be moved. Moving a Recipe changes its library organization, not its configured image output destination.
+
+The Editor protects unsaved changes when switching or moving Recipes.
+
+### Descriptions and Recipe search
+
+Descriptions support multiple lines and up to 5,000 characters. They are stored with the Recipe and preserved during import, export, and duplication.
+
+The Editor searches Recipe names, descriptions, and folder names. The Runner displays the selected Recipe's description in a read-only **About this recipe** section. Recipes without descriptions do not require that section.
+
+### Import and export
+
+The **Import/Export** dropdown sits below the selected-Recipe management controls and provides four actions:
+
+| Action | Behavior |
+|---|---|
+| **Import Recipe…** | Import one validated schema 3 Recipe from JSON, assigning a new user Recipe ID. |
+| **Export Recipe…** | Export a built-in or saved user Recipe to portable JSON, without its local folder assignment. |
+| **Import Recipe bundle…** | Import multiple Recipes and their folder organization from one validated bundle. |
+| **Export Recipe bundle…** | Export the saved user Recipe library, including its folder definitions, as one JSON file. |
+
+Individual Recipe exports suggest a descriptive filename containing the Recipe name and an ID suffix. Existing export files are not overwritten.
+
+Individual imports preserve descriptions, operations, and output settings, but create new user identities. Duplicate names can be renamed during import, and existing Recipes are not replaced.
+
+A Recipe bundle preserves the collection's folder organization. On import, matching folder names reuse existing folders; new folder names create new folders. Imported Recipes receive new IDs, and conflicting Recipe names receive an imported suffix. The Editor requests confirmation before saving a bundle import.
+
+Bundle exports contain saved user Recipes rather than built-in definitions. Export files remain separate from the application's active Recipe library.
+
+### JSON schema 3
+
+KIMng currently uses Recipe schema **3** for individual Recipes, the user library, and Recipe bundles. Older schema versions are not supported by this new project.
+
+An individual Recipe contains:
+
+- `schema`: Integer `3`.
+- `id`: Recipe identifier.
+- `name`: Display name.
+- `description`: Multiline plain text.
+- `media`: Supported media type, currently `image`.
+- `steps`: Ordered operations with their parameters and enabled states.
+- `destination`: Output destination configuration.
+- `folder`: Optional assignment inside the local user library.
+
+A portable individual Recipe omits `folder`, because another KIMng installation may not have the same folder IDs.
+
+The active user library contains `schema`, `recipes`, and `folders`. Portable bundles additionally identify themselves with `kind: "kimng-recipe-bundle"` and contain `schema`, `recipes`, and `folders`.
+
+KIMng validates imported JSON and Recipe operations before adding them to the user library. Importing never replaces an existing Recipe silently. Recipe definitions do not themselves contain the source image files.
+
+The JSON files are UTF-8. Use the Editor's import/export actions rather than manually editing the active library unless you are deliberately developing or debugging KIMng.
 
 ### Processing steps
 
@@ -112,13 +184,19 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 
 In **Rename Output File**, `{filename}` means the original name without its extension. A pattern of `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.
 
-Previously saved patterns using `{stem}` continue to work. KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. An occupied destination filename blocks the recipe. Change the output pattern or destination and review the updated paths before applying.
+KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension.
+
+When a planned output filename already exists, the Recipe planner can choose a free numbered filename before Review Changes approval. It also accounts for filename collisions between images in the same batch. The actual numbered filename appears in the reviewed output plan.
+
+After approval, the filename is binding. If another process creates that target before publication, KIMng blocks the affected output and requires renewed review rather than silently renumbering or overwriting it.
 
 ## Preflight and output preview
 
 **Run a Recipe** lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked **Ready** or **Problem** as appropriate. The Run button stays disabled until every required preflight check succeeds.
 
 The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.
+
+The Editor groups preview properties into expandable **Files**, **Image details**, **Metadata**, and **Publication details** sections. Full property values remain available through tooltips and copying even when the columns truncate their display. The expansion state of each group can be remembered.
 
 Adding JPEG and PSD files does not require the interface to freeze until the batch is analyzed: pending filenames appear promptly and input inspection continues in background workers. A large PSD may still take time to decode, but the window remains usable.
 
@@ -132,7 +210,7 @@ PSD inputs are treated as rendered image sources rather than editable Photoshop 
 
 ## Destinations, safety, and cancellation
 
-Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Existing targets and duplicate batch targets block approval. Execution uses the frozen reviewed source identities, paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.
+Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Existing filenames and duplicate batch targets are resolved during planning when safe numbering is available. Unresolved conflicts block approval. Execution uses the frozen reviewed source identities, exact output paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.
 
 Recipes and standalone Crop stage complete derivatives privately on the destination filesystem and publish them with an atomic no-replace hard link. Filesystems or permissions that cannot support this publication fail closed; KIMng does not write a partial image directly to the final filename. Source or destination identity changes require a new review. Cancellation and failures remove private stages while retaining published outputs; a durability-sync failure after publication is reported as a warning alongside the created path. Support for exFAT, FAT32, NTFS and network destinations must be verified individually.
 

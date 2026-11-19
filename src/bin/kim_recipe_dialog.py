@@ -2,6 +2,8 @@
 """Reusable recipe manager/builder widget and independent Dolphin launcher."""
 from kim_dialog_buttons import style_button, style_button_box
 import copy
+import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -14,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QDialog, QVBoxLayout, QHBo
     QProgressDialog, QHeaderView, QGroupBox, QSplitter, QSizePolicy, QToolButton, QTreeWidget, QTreeWidgetItem, QDialogButtonBox, QMenu, QScrollArea, QStyle,
     QDateEdit, QTimeEdit, QDoubleSpinBox, QTextEdit)
 from kim_recipe_core import (folder_label, ROOT_FOLDER, RecipeError, builtins,
-                             save_users, load_users, load_library, save_library, RecipeLibrary, library_groups, recipe_title, validate, preview, execute, handler, format_output_pattern, display_output_pattern)
+                             save_users, load_users, load_library, save_library, read_portable_recipe, write_portable_recipe, read_recipe_bundle, write_recipe_bundle, merge_recipe_bundle, RecipeLibrary, library_groups, recipe_title, validate, preview, execute, handler, format_output_pattern, display_output_pattern)
 
 
 from kim_recipe_run import RunRecipeDialog, RecipeWorker, PropertyView, property_fields, WarningView
@@ -715,6 +717,62 @@ class RecipeWidget(QWidget):
 
         navigation_layout.addLayout(selected_actions)
 
+        # Library import/export sits below selected-Recipe actions.
+        navigation_layout.addSpacing(10)
+        # One native menu for individual and bundle transfers.
+        self.transfer_button = QToolButton()
+        self.transfer_button.setText('Import/Export')
+        self.transfer_button.setIcon(
+            QIcon.fromTheme('document-open')
+        )
+        self.transfer_button.setToolButtonStyle(
+            Qt.ToolButtonTextBesideIcon
+        )
+        self.transfer_button.setPopupMode(
+            QToolButton.InstantPopup
+        )
+        self.transfer_button.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
+        self.transfer_button.setAccessibleName(
+            'Import and export Recipes and bundles'
+        )
+
+        self.transfer_menu = QMenu(self.transfer_button)
+
+        self.import_recipe_button = self.transfer_menu.addAction(
+            'Import Recipe…'
+        )
+        self.import_recipe_button.triggered.connect(
+            lambda checked=False: self.import_recipe_file()
+        )
+
+        self.export_recipe_button = self.transfer_menu.addAction(
+            'Export Recipe…'
+        )
+        self.export_recipe_button.triggered.connect(
+            lambda checked=False: self.export_recipe_file()
+        )
+
+        self.transfer_menu.addSeparator()
+
+        self.import_bundle_button = self.transfer_menu.addAction(
+            'Import Recipe bundle…'
+        )
+        self.import_bundle_button.triggered.connect(
+            lambda checked=False: self.import_bundle_file()
+        )
+
+        self.export_bundle_button = self.transfer_menu.addAction(
+            'Export Recipe bundle…'
+        )
+        self.export_bundle_button.triggered.connect(
+            lambda checked=False: self.export_bundle_file()
+        )
+
+        self.transfer_button.setMenu(self.transfer_menu)
+        navigation_layout.addWidget(self.transfer_button)
+
         # Save belongs to the editing panel, not the navigation tree.
         save = QPushButton(
             QIcon.fromTheme('document-save'), 'Save'
@@ -1378,6 +1436,18 @@ class RecipeWidget(QWidget):
 
         folder_id, is_folder = self.selected_tree_folder_id()
 
+        selected = self.recipe_tree.currentItem()
+        selected_id = (
+            selected.data(0, Qt.UserRole)
+            if selected is not None
+            and selected.data(0, Qt.UserRole + 1) == 'recipe'
+            else None
+        )
+        self.export_recipe_button.setEnabled(
+            selected_id is not None
+            and selected_id not in self.draft_ids
+        )
+
         duplicate = self.management_buttons['Duplicate to Edit']
         rename = self.management_buttons['Rename']
         delete = self.management_buttons['Delete']
@@ -1415,6 +1485,245 @@ class RecipeWidget(QWidget):
             )
             rename.setEnabled(editable)
             delete.setEnabled(editable)
+
+    def import_bundle_file(self):
+        if not self.protect_unsaved():
+            return
+
+        if self.recipe is not None and self.is_dirty():
+            self.select(self.active_index, force=True)
+
+        filename, _ = QFileDialog.getOpenFileName(
+            self, 'Import Recipe bundle', str(Path.home()),
+            'KIMng Recipe bundles (*.json);;JSON files (*.json)'
+        )
+        if not filename:
+            return
+
+        try:
+            bundle = read_recipe_bundle(filename)
+            current = load_library()
+            combined, added_ids = merge_recipe_bundle(
+                current, bundle, self.shipped
+            )
+
+            new_folders = len(combined.folders) - len(current.folders)
+            count = len(added_ids)
+
+            summary = (
+                f'Import {count} Recipes and '
+                f'{new_folders} new folders?\n\n'
+                'Existing Recipes will not be replaced. '
+                'Conflicting Recipe names will receive an '
+                'imported suffix. Matching folder names '
+                'will reuse existing folders.'
+            )
+
+            if QMessageBox.question(
+                self, 'Import Recipe bundle', summary,
+                QMessageBox.Yes | QMessageBox.Cancel,
+                QMessageBox.Cancel
+            ) != QMessageBox.Yes:
+                return
+
+            # Recheck against the current on-disk library before saving.
+            # Nothing is persisted until the complete bundle is valid.
+            current = load_library()
+            combined, added_ids = merge_recipe_bundle(
+                current, bundle, self.shipped
+            )
+
+            warning = save_library(combined)
+            self.users, self.folders = (
+                combined.recipes, combined.folders
+            )
+
+            self.recipe_search.clear()
+            selected_id = added_ids[0]
+            index = next(
+                i for i, recipe in enumerate(
+                    self.shipped + self.users
+                ) if recipe['id'] == selected_id
+            )
+            self.refresh(index)
+
+            if warning:
+                self.error(warning)
+            else:
+                self.status.setText(
+                    f'Imported {len(added_ids)} Recipes.'
+                )
+
+        except (OSError, RecipeError, ValueError) as exc:
+            self.error(exc)
+
+    def export_bundle_file(self):
+        if not self.protect_unsaved():
+            return
+
+        if self.recipe is not None and self.is_dirty():
+            self.select(self.active_index, force=True)
+
+        try:
+            library = load_library()
+        except (OSError, RecipeError) as exc:
+            self.error(exc)
+            return
+
+        if not library.recipes:
+            self.error('There are no saved user Recipes to export.')
+            return
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 'Export Recipe bundle',
+            str(Path.home() / 'KIMng-recipes-bundle.json'),
+            'KIMng Recipe bundle (*.json)'
+        )
+        if not filename:
+            return
+
+        if not filename.lower().endswith('.json'):
+            filename += '.json'
+
+        try:
+            write_recipe_bundle(library, filename)
+            self.status.setText(
+                f'Exported {len(library.recipes)} Recipes.'
+            )
+        except FileExistsError:
+            self.error(
+                'That bundle file already exists. '
+                'Choose another filename.'
+            )
+        except (OSError, RecipeError, ValueError) as exc:
+            self.error(exc)
+
+    def import_recipe_file(self):
+        if not self.protect_unsaved():
+            return
+
+        folder_id, is_folder = self.selected_tree_folder_id()
+        target = folder_id if is_folder else None
+        if target == '':
+            target = None
+
+        filename, _ = QFileDialog.getOpenFileName(
+            self, 'Import Recipe', str(Path.home()),
+            'KIMng Recipes (*.json);;JSON files (*.json)'
+        )
+        if not filename:
+            return
+
+        try:
+            imported = read_portable_recipe(filename)
+            existing = {
+                recipe['name'].casefold()
+                for recipe in self.shipped + self.users
+            }
+
+            if imported['name'].casefold() in existing:
+                suggestion = imported['name'] + ' (imported)'
+                name, accepted = QInputDialog.getText(
+                    self, 'Recipe name already exists',
+                    'Name for imported Recipe', text=suggestion
+                )
+                if not accepted:
+                    return
+                imported['name'] = name
+
+            # Never import another machine's identity or overwrite
+            # a user Recipe, even when the names are different.
+            imported['id'] = 'user-' + uuid.uuid4().hex
+
+            if target is not None:
+                imported['folder'] = target
+
+            imported = validate(imported)
+
+            users = [
+                recipe for recipe in self.users
+                if recipe['id'] not in self.draft_ids
+            ]
+            library = RecipeLibrary(
+                copy.deepcopy(users + [imported]),
+                copy.deepcopy(self.folders),
+            )
+            warning = save_library(library)
+
+            self.users, self.folders = (
+                library.recipes, library.folders
+            )
+            self.recipe_search.clear()
+            selected_index = len(self.shipped) + len(self.users) - 1
+            self.refresh(selected_index)
+
+            if warning:
+                self.error(warning)
+            else:
+                self.status.setText('Recipe imported.')
+
+        except (OSError, RecipeError, ValueError) as exc:
+            self.error(exc)
+
+    def export_recipe_file(self):
+        selected = self.recipe_tree.currentItem()
+        if selected is None:
+            return
+
+        recipe_id = selected.data(0, Qt.UserRole)
+        if not isinstance(recipe_id, str):
+            return
+
+        if recipe_id in self.draft_ids:
+            self.error('Save this Recipe before exporting it.')
+            return
+
+        # An active Recipe may contain unsaved edits. Respect the
+        # established Save/Discard/Cancel decision.
+        if (
+            self.recipe is not None
+            and self.recipe['id'] == recipe_id
+            and not self.protect_unsaved()
+        ):
+            return
+
+        saved = next(
+            (
+                recipe for recipe in self.shipped + self.users
+                if recipe['id'] == recipe_id
+            ),
+            None
+        )
+        if saved is None:
+            return
+
+        # Human-readable, stable, per-Recipe export filename.
+        safe_name = (
+            re.sub(r'[^\w.-]+', '-', saved['name'], flags=re.UNICODE)
+            .strip('.-') or 'recipe'
+        )
+        safe_name += '-' + saved['id'].removeprefix('user-')[:8]
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 'Export Recipe',
+            str(Path.home() / (safe_name + '.json')),
+            'KIMng Recipe (*.json)'
+        )
+        if not filename:
+            return
+
+        if not filename.lower().endswith('.json'):
+            filename += '.json'
+
+        try:
+            write_portable_recipe(saved, filename)
+            self.status.setText('Recipe exported.')
+        except FileExistsError:
+            self.error(
+                'That file already exists. Choose another filename.'
+            )
+        except (OSError, RecipeError, ValueError) as exc:
+            self.error(exc)
 
     def create_recipe_from_tree(self):
         folder_id, is_folder = self.selected_tree_folder_id()
