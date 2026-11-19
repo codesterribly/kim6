@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from kim_dialog_buttons import style_button_box
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -58,17 +59,17 @@ class VideoReview(QDialog):
             "av1": "AV1",
         }.get(codec, codec)
 
+        count = len(plan)
         heading = QLabel(
-            f"{len(plan)} selected video(s) | "
-            f"{codec_name} | Maximum {limit} | {quality}"
+            f"{count} video{'s' if count != 1 else ''} selected"
+            f" | {codec_name} | Maximum {limit} | {quality}"
         )
         heading.setWordWrap(True)
         outer.addWidget(heading)
 
         audio_note = QLabel(
-            "KIMng transcodes the first video stream and copies "
-            "available audio streams without re-encoding them. "
-            "Aspect ratio is preserved. Smaller videos are not enlarged."
+            "Videos will be resized to fit without being enlarged. "
+            "Available audio will be kept."
         )
         audio_note.setWordWrap(True)
         outer.addWidget(audio_note)
@@ -140,26 +141,21 @@ class VideoReview(QDialog):
         header = self.table.horizontalHeader()
         header.setStretchLastSection(False)
 
-        for column in range(6):
-            header.setSectionResizeMode(
-                column, QHeaderView.Interactive
-            )
+        # Every column is user-resizable. Long filenames can be
+        # inspected by resizing or using the horizontal scrollbar.
+        header.setMinimumSectionSize(65)
+        header.setSectionResizeMode(QHeaderView.Interactive)
 
-        for column in (0, 4, 5):
-            header.setSectionResizeMode(
-                column, QHeaderView.Stretch
-            )
-
-        for column in (1, 2, 3):
-            header.setSectionResizeMode(
-                column, QHeaderView.ResizeToContents
-            )
+        for column, width in enumerate(
+            (210, 108, 90, 82, 315, 205)
+        ):
+            self.table.setColumnWidth(column, width)
 
         for number, record in enumerate(plan):
             source, dimensions, duration, audio, target, muxer = record
 
             filename = os.path.basename(source)
-            destination = os.path.dirname(target)
+            target_directory = os.path.dirname(target)
             output_name = os.path.basename(target)
 
             try:
@@ -194,7 +190,7 @@ class VideoReview(QDialog):
                 duration_text,
                 audio_text,
                 output_name,
-                destination,
+                target_directory,
             )
 
             for column, value in enumerate(values):
@@ -210,15 +206,6 @@ class VideoReview(QDialog):
 
         outer.addWidget(self.table, 1)
 
-        note = QLabel(
-            "Planned output names reflect current settings and "
-            "filesystem state. If a new filename collision occurs, "
-            "KIMng may add a number during safe publication. "
-            "No video has been modified."
-        )
-        note.setWordWrap(True)
-        outer.addWidget(note)
-
         self.status = QLabel()
         outer.addWidget(self.status)
 
@@ -231,7 +218,8 @@ class VideoReview(QDialog):
         )
 
         self.apply = buttons.button(QDialogButtonBox.Ok)
-        self.apply.setText("Apply changes")
+        self.apply.setText("Apply Changes")
+        style_button_box(buttons)
 
         def submit_destination():
             proposed = destination_entry.text().strip()
@@ -288,10 +276,19 @@ class VideoReview(QDialog):
         blocked = len(self.errors)
         ready = len(self.plan) - blocked
 
-        self.status.setText(
-            f"{ready} ready, {blocked} blocked. "
-            "Review the planned conversion before applying."
+        ready_text = (
+            f"{ready} video{'s' if ready != 1 else ''} "
+            "ready to convert."
         )
+
+        if blocked:
+            self.status.setText(
+                ready_text +
+                f" {blocked} video{'s' if blocked != 1 else ''} "
+                "blocked. Hover for details."
+            )
+        else:
+            self.status.setText(ready_text)
 
         if blocked:
             details = "\n".join(

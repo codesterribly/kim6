@@ -10286,16 +10286,18 @@ action_video() {
       stem="${source##*/}"
       if [[ "$stem" == *.* ]]; then stem="${stem%.*}"; fi
 
-      # Retain the selected path from the approved preflight.
+      # The reviewed output filename is binding. Never renumber it
+      # after approval, even if another process occupies the target.
       target="${review_targets[$source]}"
-      target_number=1
 
-      while [ -e "$target" ] || [ -L "$target" ] ||
-            { [ -n "${review_reserved[$target]:-}" ] &&
-              [ "$target" != "${review_targets[$source]}" ]; }; do
-        target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
-        target_number=$((target_number + 1))
-      done
+      if [ -e "$target" ] || [ -L "$target" ]; then
+        video_item_error "$source" "$(gettext 'approved output filename is now occupied; review again before converting')"
+        progress_value "$ref" "$index" || {
+          report_finish_dialog "$(gettext 'KIMng')"
+          return 1
+        }
+        continue
+      fi
     fi
     stage="$(tmp_for_target "$target")" || {
       video_item_error "$source" "$(gettext 'could not create destination-local staging')"
@@ -10363,35 +10365,27 @@ action_video() {
       [ "$rc" -eq 0 ] || { progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
-    retry=0
-    while :; do
-      if progress_cancelled "$ref"; then
-        video_item_error "$source" "$(gettext 'interrupted immediately before publication')"
-        rm -f -- "$stage" "$error_file"; progress_close "$ref" || true
-        report_finish_dialog "$(gettext 'KIMng')"; return 1
+    if progress_cancelled "$ref"; then
+      video_item_error "$source" "$(gettext 'interrupted immediately before publication')"
+      rm -f -- "$stage" "$error_file"; progress_close "$ref" || true
+      report_finish_dialog "$(gettext 'KIMng')"; return 1
+    fi
+
+    # Publish only the exact filename approved in Review Changes.
+    # commit_tmp_to_target retains exclusive no-replace publication
+    # in create mode. A late collision is a failure, not a new name.
+    if commit_tmp_to_target "$stage" "$target" "$mode"; then
+      rm -f -- "$error_file"
+      report_ok
+    else
+      if [ "$mode" = create ] &&
+         { [ -e "$target" ] || [ -L "$target" ]; }; then
+        video_item_error "$source" "$(gettext 'approved output filename was occupied during publication; review again')"
+      else
+        video_item_error "$source" "$(gettext 'publication failed; existing files were preserved')"
       fi
-      if commit_tmp_to_target "$stage" "$target" "$mode"; then
-        rm -f -- "$error_file"
-        report_ok
-        break
-      fi
-      if [ "$mode" = create ] && { [ -e "$target" ] || [ -L "$target" ]; } && [ "$retry" -lt 1000 ]; then
-        retry=$((retry + 1))
-        while :; do
-          target="$directory/$(affixed_filename "$stem" transcoded "$ext" "$target_number" "_" "-")"
-          target_number=$((target_number + 1))
-          if [ ! -e "$target" ] && [ ! -L "$target" ] &&
-             { [ -z "${review_reserved[$target]:-}" ] ||
-               [ "$target" = "${review_targets[$source]}" ]; }; then
-            break
-          fi
-        done
-        continue
-      fi
-      video_item_error "$source" "$(gettext 'publication failed; existing files were preserved')"
       rm -f -- "$stage" "$error_file"
-      break
-    done
+    fi
     progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
   done
   progress_close "$ref"
