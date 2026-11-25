@@ -146,9 +146,25 @@ runtime_sources+=("src/bin/kim_gallery_chooser.py")
 runtime_files+=("bin/kim_gallery_chooser.py")
 runtime_modes+=("0644")
 
-# Photo Story editor, currently preview-only.
+# In-memory Photo Story editor and live preview.
 runtime_sources+=("src/bin/kim_photo_story_dialog.py")
 runtime_files+=("bin/kim_photo_story_dialog.py")
+runtime_modes+=("0644")
+
+# Full-story reader and its bounded protected thumbnail preview.
+runtime_sources+=("src/bin/kim_photo_story_preview.py")
+runtime_files+=("bin/kim_photo_story_preview.py")
+runtime_modes+=("0644")
+
+# Offline website composition, safe derivatives, Review Changes, and publication.
+runtime_sources+=("src/bin/kim_story_publication.py")
+runtime_files+=("bin/kim_story_publication.py")
+runtime_modes+=("0644")
+runtime_sources+=("src/bin/kim_gallery_viewer.py")
+runtime_files+=("bin/kim_gallery_viewer.py")
+runtime_modes+=("0644")
+runtime_sources+=("src/bin/kim_story_publish.py")
+runtime_files+=("bin/kim_story_publish.py")
 runtime_modes+=("0644")
 
 # Phase 2: review-before-processing UI for video transcode presets.

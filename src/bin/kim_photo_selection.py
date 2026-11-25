@@ -50,7 +50,7 @@ def photo_extensions():
     return {ext for _, exts in groups for ext in exts}
 
 
-def read_thumbnail(path, size, auto_orient=True):
+def read_thumbnail(path, size, auto_orient=True, allow_upscale=True):
     """Use descriptor-backed no-atime reads; never modify an image.
 
     Prefer native decoder scaling. Other decoders may decode up to 24 MP
@@ -79,10 +79,15 @@ def read_thumbnail(path, size, auto_orient=True):
             depth = 8 if QImage(1, 1, reader.imageFormat()).depth() > 32 else 4
             if not native_scale and limit > 0 and dimensions.width() * dimensions.height() * depth > limit * 1024 * 1024:
                 raise ValueError(f'Decoded image exceeds the {limit} MiB preview allocation limit; this decoder cannot downscale while reading.')
-            reader.setScaledSize(dimensions.scaled(size, Qt.KeepAspectRatio))
+            target_size = dimensions.scaled(size, Qt.KeepAspectRatio)
+            if not allow_upscale:
+                target_size = QSize(min(dimensions.width(), target_size.width()),
+                                    min(dimensions.height(), target_size.height()))
+            reader.setScaledSize(target_size)
             image = reader.read()
             if image.isNull(): raise ValueError('Image decoding failed: ' + reader.errorString())
-            image = image.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            if allow_upscale or image.width() > size.width() or image.height() > size.height():
+                image = image.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         finally:
             device.close()
     if identity(path) != before: raise ValueError('Image changed while previewing')
