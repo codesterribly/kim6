@@ -36,6 +36,15 @@ class Element {
     };
   }
   addEventListener(name, callback) { this.handlers[name] = callback; }
+  setAttribute(name, value) {
+    this.attributes = this.attributes || {};
+    this.attributes[name] = value;
+  }
+  appendChild(child) {
+    this.appended = this.appended || [];
+    this.appended.push(child);
+    return child;
+  }
   focus() { document.activeElement = this; }
   querySelector(selector) { return this.children && this.children[selector]; }
   getAttribute(name) { return this.attributes && this.attributes[name] || ""; }
@@ -80,6 +89,7 @@ global.window = {scrollX: 3, scrollY: 420, handlers: {},
 global.requestAnimationFrame = (callback) => callback();
 global.document = {
   activeElement: null, handlers: {},
+  createElement(tag) { return new Element(tag); },
   getElementById(id) { return id === "gallery-viewer" ? dialog : null; },
   querySelectorAll(selector) { return selector === ".gallery-viewer-trigger" ? triggers : []; },
   addEventListener(name, callback) { this.handlers[name] = callback; },
@@ -97,6 +107,15 @@ function key(key) {
 vm.runInThisContext(fs.readFileSync(0, "utf8"));
 assert.strictEqual(click(triggers[0]), true);
 assert.strictEqual(dialog.open, true);
+const feedback = stage.appended[0];
+assert.strictEqual(feedback.attributes.role, "status");
+assert.strictEqual(feedback.textContent, "Loading image...");
+assert.strictEqual(feedback.hidden, false);
+assert.strictEqual(image.hidden, true);
+image.handlers.load();
+assert.strictEqual(feedback.textContent, "");
+assert.strictEqual(feedback.hidden, true);
+assert.strictEqual(image.hidden, false);
 assert.strictEqual(image.src, "images/1.jpg");
 assert.strictEqual(caption.textContent, "Caption 1");
 assert.strictEqual(status.textContent, "Image 1 of 2");
@@ -105,17 +124,28 @@ click(actions["zoom-in"]);
 assert.strictEqual(image.styles["--gallery-viewer-zoom"], "1.5");
 assert.strictEqual(key("ArrowRight"), true);
 assert.strictEqual(image.src, "images/2.jpg");
+assert.strictEqual(feedback.textContent, "Loading image...");
+image.handlers.error();
+assert.strictEqual(feedback.textContent, "Unable to load this image.");
+assert.strictEqual(feedback.hidden, false);
+assert.strictEqual(image.hidden, true);
 assert.strictEqual(status.textContent, "Image 2 of 2");
 assert.strictEqual(actions.next.disabled, true);
 key("ArrowRight");
 assert.strictEqual(status.textContent, "Image 2 of 2");
 click(actions.previous);
 assert.strictEqual(image.src, "images/1.jpg");
+assert.strictEqual(feedback.textContent, "Loading image...");
+image.handlers.load();
+assert.strictEqual(feedback.hidden, true);
+assert.strictEqual(image.hidden, false);
 assert.strictEqual(key("Escape"), true);
 assert.strictEqual(dialog.open, false);
 assert.strictEqual(document.activeElement, triggers[0]);
 assert.deepStrictEqual([window.scrollX, window.scrollY], [3, 420]);
 assert.strictEqual(image.src, "");
+assert.strictEqual(feedback.textContent, "");
+assert.strictEqual(feedback.hidden, true);
 console.log("viewer behavior verified");
 '''
         result = subprocess.run(

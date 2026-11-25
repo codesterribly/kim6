@@ -73,6 +73,25 @@ _STYLESHEET = r"""
     overscroll-behavior: contain;
 }
 .gallery-viewer__stage.is-zoomed { place-items: start; }
+.gallery-viewer__stage { position: relative; }
+.gallery-viewer__image[hidden],
+.gallery-viewer__feedback[hidden] { display: none; }
+.gallery-viewer__feedback {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    margin: 0;
+    padding: .75rem 1rem;
+    max-width: min(90%, 28rem);
+    border-radius: .5rem;
+    background: #20252de8;
+    color: #f5f4f1;
+    font: 500 .95rem/1.5 system-ui, sans-serif;
+    text-align: center;
+    pointer-events: none;
+}
 .gallery-viewer__image {
     display: block;
     width: auto;
@@ -118,6 +137,20 @@ _SCRIPT = r"""(() => {
   const stage = dialog.querySelector(".gallery-viewer__stage");
   const caption = dialog.querySelector(".gallery-viewer__caption");
   const status = dialog.querySelector(".gallery-viewer__status");
+  const feedback = document.createElement("p");
+  feedback.className = "gallery-viewer__feedback";
+  feedback.setAttribute("role", "status");
+  feedback.setAttribute("aria-live", "polite");
+  feedback.hidden = true;
+  stage.appendChild(feedback);
+
+  function setFeedback(message) {
+    feedback.textContent = message;
+    feedback.hidden = !message;
+    stage.setAttribute(
+      "aria-busy", message === "Loading image..." ? "true" : "false"
+    );
+  }
   const previous = dialog.querySelector('[data-viewer-action="previous"]');
   const next = dialog.querySelector('[data-viewer-action="next"]');
   let current = -1;
@@ -156,6 +189,8 @@ _SCRIPT = r"""(() => {
     const alt = sourceImage ? sourceImage.getAttribute("alt") || "Photograph" : "Photograph";
     fitWidth = 0;
     fitHeight = 0;
+    image.hidden = true;
+    setFeedback("Loading image...");
     image.src = source;
     image.alt = alt;
     caption.textContent = link.getAttribute("data-viewer-caption") || "";
@@ -176,8 +211,16 @@ _SCRIPT = r"""(() => {
   }
 
   image.addEventListener("load", () => {
+    image.hidden = false;
+    setFeedback("");
     measureFit();
     sizeImage();
+  });
+  image.addEventListener("error", () => {
+    image.hidden = true;
+    fitWidth = 0;
+    fitHeight = 0;
+    setFeedback("Unable to load this image.");
   });
   window.addEventListener("resize", () => {
     measureFit();
@@ -240,6 +283,8 @@ _SCRIPT = r"""(() => {
   });
   dialog.addEventListener("close", () => {
     image.removeAttribute("src");
+    image.hidden = true;
+    setFeedback("");
     if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
     requestAnimationFrame(() => window.scrollTo(returnScroll[0], returnScroll[1]));
   });

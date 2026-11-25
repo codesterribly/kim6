@@ -217,6 +217,62 @@ class GalleryViewerBrowserTests(unittest.TestCase):
                 self.assertTrue(evaluate("document.activeElement.matches('.gallery-viewer-trigger')"))
                 self.assertEqual(evaluate("window.scrollY"), start_scroll)
 
+                # Test a missing derivative in the actual browser.
+                # Do not modify or delete any real source image.
+                evaluate(
+                    "document.querySelectorAll('.gallery-viewer-trigger')[1]"
+                    ".setAttribute('href', 'images/missing-for-test.jpg')"
+                )
+                evaluate(
+                    "document.querySelectorAll('.gallery-viewer-trigger')[1]"
+                    ".click()"
+                )
+                self.assertTrue(evaluate(
+                    "new Promise(resolve => {"
+                    "const start=Date.now();"
+                    "function poll(){"
+                    "const f=document.querySelector('.gallery-viewer__feedback');"
+                    "if(f && f.textContent==='Unable to load this image.')"
+                    "return resolve(true);"
+                    "if(Date.now()-start>5000)return resolve(false);"
+                    "setTimeout(poll,20);"
+                    "}poll();})"
+                ), "Missing image did not show failure feedback")
+                self.assertEqual(
+                    evaluate(
+                        "document.querySelector('.gallery-viewer__status')"
+                        ".textContent"
+                    ),
+                    "Image 2 of 2",
+                )
+
+                # Previous must still work and clear the error.
+                evaluate(
+                    "document.querySelector("
+                    "'[data-viewer-action=previous]').click()"
+                )
+                self.assertTrue(evaluate(
+                    "new Promise(resolve => {"
+                    "const start=Date.now();"
+                    "function poll(){"
+                    "const img=document.querySelector('.gallery-viewer__image');"
+                    "const f=document.querySelector('.gallery-viewer__feedback');"
+                    "if(img.complete && img.naturalWidth===720 && f.hidden)"
+                    "return resolve(true);"
+                    "if(Date.now()-start>5000)return resolve(false);"
+                    "setTimeout(poll,20);"
+                    "}poll();})"
+                ), "Viewer did not recover after missing image")
+
+                evaluate(
+                    "document.querySelector("
+                    "'[data-viewer-action=close]').click()"
+                )
+                evaluate(
+                    "document.querySelectorAll('.gallery-viewer-trigger')[1]"
+                    ".setAttribute('href', 'images/0002.jpg')"
+                )
+
                 command("Emulation.setDeviceMetricsOverride", {
                     "width": 390, "height": 844, "deviceScaleFactor": 1,
                     "mobile": True,
@@ -240,7 +296,36 @@ class GalleryViewerBrowserTests(unittest.TestCase):
                 evaluate("document.querySelector('[data-viewer-action=close]').click()")
                 self.assertFalse(evaluate("document.getElementById('gallery-viewer').open"))
                 evaluate("0")
-                self.assertEqual(browser_errors, [], browser_errors)
+                # The test intentionally requests one nonexistent image.
+                # Chrome must report that missing resource, while all other
+                # browser errors remain prohibited.
+                expected_missing = []
+                unexpected_errors = []
+
+                for event in browser_errors:
+                    entry = event.get("params", {}).get("entry", {})
+                    if (
+                        event.get("method") == "Log.entryAdded"
+                        and entry.get("source") == "network"
+                        and entry.get("level") == "error"
+                        and entry.get("url", "").endswith(
+                            "/images/missing-for-test.jpg"
+                        )
+                        and "ERR_FILE_NOT_FOUND" in entry.get("text", "")
+                    ):
+                        expected_missing.append(event)
+                    else:
+                        unexpected_errors.append(event)
+
+                self.assertEqual(
+                    len(expected_missing), 1,
+                    "Expected exactly one browser error for the "
+                    "deliberately missing image: " + repr(browser_errors),
+                )
+                self.assertEqual(
+                    unexpected_errors, [],
+                    "Unexpected browser errors: " + repr(unexpected_errors),
+                )
                 print(f"BROWSER_SCREENSHOT_DESKTOP={desktop_path}")
                 print(f"BROWSER_SCREENSHOT_DESKTOP_VIEWER={desktop_viewer_path}")
                 print(f"BROWSER_SCREENSHOT_MOBILE={mobile_path}")

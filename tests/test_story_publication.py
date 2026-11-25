@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,9 +16,9 @@ sys.path.insert(0, str(ROOT / "src/bin"))
 
 from kim_story_publication import (  # noqa: E402
     GALLERY_TYPES, IMAGE_LAYOUTS, LEGACY_STYLES, OUTPUT_FORMATS,
-    TYPE_DEFAULT_LAYOUTS, VISUAL_STYLES, StoryDocument, StoryElement,
+    TYPE_DEFAULT_LAYOUTS, VISUAL_STYLES, StoryCollection, StoryDocument, StoryElement,
     composition_plan, default_layout_for_type, make_document,
-    canonical_visual_style, prepare_publication, publish_prepared,
+    canonical_visual_style, output_pages, prepare_publication, publish_prepared,
     publish_prepared_zip, render_website,
 )
 from kim_preview import identity, inspection_path  # noqa: E402
@@ -170,7 +171,76 @@ class StoryPublicationRenderingTests(unittest.TestCase):
         self.assertEqual(GALLERY_TYPES, ("travelogue", "photo-essay", "illustrated-story", "simple-gallery"))
         self.assertEqual(VISUAL_STYLES, ("classic", "modern", "dramatic", "simple-light", "simple-dark"))
         self.assertEqual(LEGACY_STYLES, ("cinematic", "editorial", "journal"))
-        self.assertEqual(IMAGE_LAYOUTS, ("one-per-section", "two-per-section", "adaptive"))
+        self.assertEqual(IMAGE_LAYOUTS, ("one-per-section", "two-per-section", "adaptive", "justified", "masonry"))
+
+    def test_new_arrangements_preserve_order_and_image_information(self):
+        images = tuple(replace(self.doc.elements[i], image_width=width, image_height=height)
+                       for i, (width, height) in zip((0, 1, 2), ((900, 600), (500, 800), (1000, 1000))))
+        images += (replace(self.doc.elements[5], image_width=1800, image_height=400),)
+        for layout in ("justified", "masonry"):
+            doc = replace(self.doc, elements=images, layout=layout, show_captions=True)
+            rendered = render_website(doc)
+            self.assertEqual([element.id for block in composition_plan(doc) for element in block.elements],
+                             [element.id for element in images])
+            self.assertIn(f"layout-{layout}", rendered.html)
+            self.assertIn("height: auto", rendered.css)
+            self.assertIn("Light &amp; water", rendered.html)
+            for element in images:
+                self.assertEqual(rendered.html.count(f'data-element-id="{element.id}"'), 1)
+
+    def test_collections_render_single_and_multiple_pages_without_losing_order(self):
+        collections = (StoryCollection("first", "Harbor", ("one", "chapter", "words"), "First place", "one"),
+                       StoryCollection("second", "Night", ("two", "two-b", "three")))
+        single = replace(self.doc, collections=collections, layout="masonry")
+        rendered = render_website(single)
+        self.assertEqual(rendered.pages, ())
+        self.assertIn('href="#collection-first"', rendered.html)
+        self.assertIn('id="collection-second"', rendered.html)
+        self.assertLess(rendered.html.index('id="collection-first"'), rendered.html.index('id="collection-second"'))
+        multiple = replace(single, website_structure="multiple-pages")
+        pages = render_website(multiple)
+        self.assertEqual(output_pages(multiple), ("index.html", "collection-harbor.html", "collection-night.html"))
+        self.assertIn('href="collection-harbor.html"', pages.html)
+        self.assertIn('href="index.html"', pages.pages[0][1])
+        self.assertIn('href="collection-night.html"', pages.pages[0][1])
+        self.assertIn('data-element-id="chapter"', pages.pages[0][1])
+        self.assertEqual(single.elements, multiple.elements)
+
+    def test_unassigned_images_and_text_remain_in_single_and_multiple_page_output(self):
+        sections = (StoryCollection("valletta", "Valletta", ("one", "chapter")),
+                    StoryCollection("mdina", "Mdina", ("two",)))
+        single = replace(self.doc, collections=sections)
+        rendered = render_website(single)
+        for element in self.doc.elements:
+            self.assertEqual(rendered.html.count(f'data-element-id="{element.id}"'), 1)
+        self.assertIn("Unassigned", rendered.html)
+        multi = replace(single, website_structure="multiple-pages")
+        pages = render_website(multi)
+        self.assertEqual(output_pages(multi), ("index.html", "collection-valletta.html",
+                                               "collection-mdina.html", "unassigned.html"))
+        self.assertIn('href="unassigned.html"', pages.html)
+        self.assertIn('data-element-id="words"', dict(pages.pages)["unassigned.html"])
+        self.assertIn('data-element-id="two-b"', dict(pages.pages)["unassigned.html"])
+        no_sections = replace(self.doc, collections=(), website_structure="multiple-pages")
+        self.assertEqual(output_pages(no_sections), ("index.html", "unassigned.html"))
+        self.assertEqual(render_website(no_sections).html.count('href="unassigned.html"'), 1)
+
+    def test_collection_validation_rejects_duplicate_slug_and_invalid_cover(self):
+        from kim_story_publication import validate_document
+        base = replace(self.doc, collections=(StoryCollection("a", "One", ("one", "chapter", "words")),
+                                              StoryCollection("b", "Two", ("two", "two-b", "three"))))
+        validate_document(base)
+        with self.assertRaisesRegex(ValueError, "unique"):
+            validate_document(replace(base, collections=(base.collections[0],
+                replace(base.collections[1], title="ONE"))))
+        with self.assertRaisesRegex(ValueError, "unique"):
+            validate_document(replace(base, collections=(base.collections[0],
+                replace(base.collections[1], title="One!"))))
+        with self.assertRaisesRegex(ValueError, "cover"):
+            validate_document(replace(base, collections=(replace(base.collections[0], cover_image_id="two"),
+                                                          base.collections[1])))
+
+    def test_gallery_type_defaults_and_style_variants(self):
         self.assertEqual(OUTPUT_FORMATS, ("folder", "zip"))
         self.assertEqual(TYPE_DEFAULT_LAYOUTS, {
             "simple-gallery": "one-per-section", "travelogue": "one-per-section",
@@ -347,6 +417,69 @@ class StoryPublicationSafetyTests(unittest.TestCase):
             self.assertIn("viewer-gallery/gallery-viewer.css", names)
             self.assertIn("viewer-gallery/gallery-viewer.js", names)
             self.assertIsNone(archive.testzip())
+
+    def test_multiple_page_inventory_is_reviewed_and_published_in_folder_and_zip(self):
+        from zipfile import ZipFile
+        sources = [self.make_source(f"collection-{index}.png", 0xff426780 + index)
+                   for index in range(2)]
+        expected = {"index.html", "collection-day.html", "collection-night.html",
+                    "style.css", "gallery-viewer.css", "gallery-viewer.js",
+                    "images/0001.jpg", "images/0002.jpg"}
+        before = [self.digest(path) for path in sources]
+        for output_format in ("folder", "zip"):
+            document = self.document_for(sources, output_format=output_format)
+            document = replace(document, website_structure="multiple-pages",
+                               collections=(StoryCollection("day", "Day", ("image-0",), cover_image_id="image-0"),
+                                            StoryCollection("night", "Night", ("image-1",))))
+            prepared = prepare_publication(document, str(self.workspace / output_format))
+            self.assertEqual(set(output_pages(prepared.document)) | {
+                "style.css", "gallery-viewer.css", "gallery-viewer.js",
+                *(image.relative_path for image in prepared.images)}, expected)
+            self.assertEqual({name for name, _ in prepared.pages},
+                             {"collection-day.html", "collection-night.html"})
+            from kim_story_publication import validate_prepared
+            with self.assertRaisesRegex(ValueError, "Prepared pages"):
+                validate_prepared(replace(prepared, pages=prepared.pages[:1]))
+            if output_format == "folder":
+                target = self.root / "multipage-folder"
+                publish_prepared(prepared, str(target))
+                self.assertEqual({path.relative_to(target).as_posix() for path in target.rglob("*") if path.is_file()}, expected)
+                self.assertIn('href="collection-night.html"', (target / "collection-day.html").read_text())
+            else:
+                target = self.root / "multipage.zip"
+                publish_prepared_zip(prepared, str(target), gallery_name="multipage")
+                with ZipFile(target) as archive:
+                    self.assertEqual(set(archive.namelist()), {"multipage/" + name for name in expected})
+                    self.assertIsNone(archive.testzip())
+            self.assertEqual([self.digest(path) for path in sources], before)
+
+    def test_unassigned_image_is_prepared_and_published_in_folder_and_zip(self):
+        from zipfile import ZipFile
+        sources = [self.make_source(f"section-{index}.png", 0xff426780 + index)
+                   for index in range(3)]
+        before = [self.digest(path) for path in sources]
+        for output_format in ("folder", "zip"):
+            document = replace(
+                self.document_for(sources, output_format=output_format),
+                website_structure="multiple-pages",
+                collections=(StoryCollection("valletta", "Valletta", ("image-0",)),
+                             StoryCollection("mdina", "Mdina", ("image-1",))))
+            prepared = prepare_publication(document, str(self.workspace / f"unassigned-{output_format}"))
+            self.assertIn("unassigned.html", output_pages(prepared.document))
+            self.assertIn('data-element-id="image-2"', dict(prepared.pages)["unassigned.html"])
+            if output_format == "folder":
+                target = self.root / "unassigned-folder"
+                publish_prepared(prepared, str(target))
+                self.assertTrue((target / "unassigned.html").is_file())
+                self.assertTrue((target / "images/0003.jpg").is_file())
+            else:
+                target = self.root / "unassigned.zip"
+                publish_prepared_zip(prepared, str(target), gallery_name="unassigned")
+                with ZipFile(target) as archive:
+                    self.assertIn("unassigned/unassigned.html", archive.namelist())
+                    self.assertIn("unassigned/images/0003.jpg", archive.namelist())
+                    self.assertIsNone(archive.testzip())
+            self.assertEqual([self.digest(path) for path in sources], before)
 
     @staticmethod
     def digest(path):

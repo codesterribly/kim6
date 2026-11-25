@@ -2,7 +2,7 @@
 """In-memory chronological Photo Story editor."""
 
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import ceil
 import os
 from pathlib import Path
@@ -204,14 +204,18 @@ class StorySequenceView(QWidget):
         narrative_actions.addWidget(self.add_text_button)
         outer.addLayout(narrative_actions)
 
-        edit_actions = QHBoxLayout()
         self.remove_button = QPushButton("Remove selected")
         self.up_button = QPushButton("Move up")
         self.down_button = QPushButton("Move down")
         self.remove_button.setIcon(self._icon("edit-delete", QStyle.SP_TrashIcon))
         self.up_button.setIcon(self._icon("go-up", QStyle.SP_ArrowUp))
         self.down_button.setIcon(self._icon("go-down", QStyle.SP_ArrowDown))
-        for button in (self.remove_button, self.up_button, self.down_button):
+        remove_actions = QHBoxLayout()
+        remove_actions.addWidget(self.remove_button)
+        remove_actions.addStretch(1)
+        outer.addLayout(remove_actions)
+        edit_actions = QHBoxLayout()
+        for button in (self.up_button, self.down_button):
             button.setMinimumWidth(0)
             edit_actions.addWidget(button, 1)
         outer.addLayout(edit_actions)
@@ -474,7 +478,10 @@ class StorySequenceView(QWidget):
         if dialog is not None and hasattr(dialog, "visible_canvas_image_sources"):
             canvas_visible = dialog.visible_canvas_image_sources()
         candidates = []
-        for path in dict.fromkeys([*canvas_visible, self.preview_path, *visible]):
+        manager_visible = ()
+        if dialog is not None and dialog.collection_dialog is not None:
+            manager_visible = dialog.collection_dialog.visible_image_sources()
+        for path in dict.fromkeys([*manager_visible, *canvas_visible, self.preview_path, *visible]):
             if not path or path in self.unavailable or path in self.thumbnails:
                 continue
             if any(item.kind == "image" and item.source == path for item in self.sequence.elements):
@@ -767,6 +774,306 @@ class StoryCanvasBlock(QFrame):
             "Image preview unavailable" if unavailable else "Image preview loads as you scroll")
 
 
+class CollectionManagerDialog(QDialog):
+    """Edit the owning story dialog's publication sections in place."""
+
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+        self.setWindowTitle("KIMng - Manage sections")
+        self.setWindowModality(Qt.WindowModal)
+        self.resize(850, 600)
+        self.setMinimumSize(680, 500)
+
+        outer = QVBoxLayout(self)
+        self.sections_explanation = QLabel()
+        self.sections_explanation.setTextFormat(Qt.PlainText)
+        self.sections_explanation.setWordWrap(True)
+        outer.addWidget(self.sections_explanation)
+        body = QHBoxLayout()
+        outer.addLayout(body, 1)
+
+        list_side = QVBoxLayout()
+        list_side.addWidget(QLabel("Sections"))
+        self.collection_list = QListWidget()
+        self.collection_list.setAccessibleName("Sections")
+        self.collection_list.currentRowChanged.connect(self._selection_changed)
+        list_side.addWidget(self.collection_list, 1)
+        list_actions = QHBoxLayout()
+        self.add_button = QPushButton("Add section")
+        self.remove_button = QPushButton("Remove")
+        self.up_button = QPushButton("Up")
+        self.up_button.setToolTip("Move section up")
+        self.down_button = QPushButton("Down")
+        self.down_button.setToolTip("Move section down")
+        for button in (self.add_button, self.remove_button, self.up_button, self.down_button):
+            list_actions.addWidget(button)
+        list_side.addLayout(list_actions)
+        body.addLayout(list_side, 1)
+
+        details = QVBoxLayout()
+        details.addWidget(QLabel("Section title"))
+        self.title_edit = QLineEdit()
+        self.title_edit.setAccessibleName("Section title")
+        details.addWidget(self.title_edit)
+        details.addWidget(QLabel("Description (optional)"))
+        self.description_edit = QPlainTextEdit()
+        self.description_edit.setAccessibleName("Section description")
+        self.description_edit.setMaximumHeight(76)
+        details.addWidget(self.description_edit)
+        details.addWidget(QLabel("Section cover"))
+        self.cover_selector = QComboBox()
+        self.cover_selector.setAccessibleName("Section cover")
+        details.addWidget(self.cover_selector)
+        self.assignment_status = QLabel()
+        self.assignment_status.setWordWrap(True)
+        details.addWidget(self.assignment_status)
+        details.addWidget(QLabel("Images in this publication"))
+        self.image_list = QListWidget()
+        self.image_list.setObjectName("sectionImageAssignments")
+        self.image_list.setAccessibleName("Assign images to the selected section")
+        self.image_list.setIconSize(QSize(64, 48))
+        self.image_list.setUniformItemSizes(True)
+        self.image_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.image_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        details.addWidget(self.image_list, 1)
+        self.narrative_toggle = QToolButton()
+        self.narrative_toggle.setText("Story text")
+        self.narrative_toggle.setToolTip(
+            "Assign existing headings and text passages to this section.")
+        self.narrative_toggle.setCheckable(True)
+        details.addWidget(self.narrative_toggle)
+
+        self.story_text_help = QLabel(
+            "Choose which headings and paragraphs appear in this section.")
+        self.story_text_help.setWordWrap(True)
+        self.story_text_help.setVisible(False)
+        details.addWidget(self.story_text_help)
+
+        self.story_text_empty = QLabel(
+            "No story text has been added.")
+        self.story_text_empty.setWordWrap(True)
+        self.story_text_empty.setVisible(False)
+        details.addWidget(self.story_text_empty)
+
+        self.narrative_list = QListWidget()
+        self.narrative_list.setAccessibleName(
+            "Assign story text to the selected section")
+        self.narrative_list.setMaximumHeight(112)
+        self.narrative_list.setVisible(False)
+        details.addWidget(self.narrative_list)
+        body.addLayout(details, 2)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.close)
+        outer.addWidget(buttons)
+
+        self.add_button.clicked.connect(self._add)
+        self.remove_button.clicked.connect(self._remove)
+        self.up_button.clicked.connect(lambda: self._move(-1))
+        self.down_button.clicked.connect(lambda: self._move(1))
+        self.title_edit.textChanged.connect(self._details_changed)
+        self.description_edit.textChanged.connect(self._details_changed)
+        self.cover_selector.currentIndexChanged.connect(self._cover_changed)
+        self.image_list.itemChanged.connect(self._image_assignment_changed)
+        self.narrative_list.itemChanged.connect(self._narrative_assignment_changed)
+        self.narrative_toggle.toggled.connect(self.narrative_list.setVisible)
+        self.image_list.verticalScrollBar().valueChanged.connect(
+            self.editor.sequence_view.queue_thumbnails)
+        self.refresh()
+
+    def selected_collection_id(self):
+        item = self.collection_list.currentItem()
+        return item.data(ID_ROLE) if item is not None else ""
+
+    def refresh(self, selected_id=""):
+        self.sections_explanation.setText({
+            "travelogue": "Divide your travelogue into places, days, or stops. Select a section and choose the images that belong to it.",
+            "photo-essay": "Select a section and choose its images. Headings and text can be assigned below.",
+            "illustrated-story": "Divide your story into chapters or sections, then choose each section's images and text.",
+            "simple-gallery": "Group related images into sections. Check an image to add it to the selected section.",
+        }[self.editor.gallery_type_selector.currentData()])
+        selected_id = selected_id or self.selected_collection_id() or self.editor._active_collection_id
+        self.collection_list.blockSignals(True)
+        self.collection_list.clear()
+        selected_row = -1
+        for index, collection in enumerate(self.editor.collections):
+            item = QListWidgetItem(collection.title)
+            item.setData(ID_ROLE, collection.id)
+            self.collection_list.addItem(item)
+            if collection.id == selected_id:
+                selected_row = index
+        self.collection_list.setCurrentRow(selected_row if selected_row >= 0 else
+                                           (0 if self.editor.collections else -1))
+        self.collection_list.blockSignals(False)
+        self._selection_changed()
+        self.editor.sequence_view.queue_thumbnails()
+
+    def _selection_changed(self, *_):
+        collection_id = self.selected_collection_id()
+        self.editor._active_collection_id = collection_id
+        collection = next((item for item in self.editor.collections if item.id == collection_id), None)
+        self.title_edit.blockSignals(True)
+        self.description_edit.blockSignals(True)
+        self.cover_selector.blockSignals(True)
+        self.title_edit.setText(collection.title if collection else "")
+        self.description_edit.setPlainText(collection.description if collection else "")
+        self.cover_selector.clear()
+        if collection:
+            self.cover_selector.addItem("Automatic: first image", "")
+            for element_id in collection.element_ids:
+                element = self.editor.sequence.get(element_id)
+                if element.kind == "image":
+                    self.cover_selector.addItem(element.heading or Path(element.source).name, element.id)
+            cover_index = self.cover_selector.findData(collection.cover_image_id)
+            if collection.cover_image_id and cover_index < 0:
+                self.cover_selector.addItem("Selected section cover is unavailable", collection.cover_image_id)
+                cover_index = self.cover_selector.count() - 1
+            self.cover_selector.setCurrentIndex(max(0, cover_index))
+        self.title_edit.blockSignals(False)
+        self.description_edit.blockSignals(False)
+        self.cover_selector.blockSignals(False)
+        enabled = collection is not None
+        for widget in (self.title_edit, self.description_edit, self.cover_selector, self.remove_button):
+            widget.setEnabled(enabled)
+        row = self.collection_list.currentRow()
+        self.up_button.setEnabled(row > 0)
+        self.down_button.setEnabled(0 <= row < len(self.editor.collections) - 1)
+        self.assignment_status.setText(
+            f"{len(collection.element_ids)} items in this section. Check images to move them here; uncheck to leave them unassigned."
+            if collection else "Add a section, then check images to assign them.")
+        self._populate_assignments()
+
+    def _assignment_section(self, element_id):
+        return next((item for item in self.editor.collections
+                     if element_id in item.element_ids), None)
+
+    def _populate_assignments(self):
+        image_scroll = self.image_list.verticalScrollBar().value()
+        self.image_list.blockSignals(True)
+        self.narrative_list.blockSignals(True)
+        self.image_list.clear()
+        self.narrative_list.clear()
+        selected_id = self.selected_collection_id()
+        image_ids = []
+        story_ids = []
+        for element in self.editor.sequence.elements:
+            owner = self._assignment_section(element.id)
+            owner_name = owner.title if owner else "Unassigned"
+            if element.kind == "image":
+                label = element.heading or Path(element.source).name
+                item = QListWidgetItem(f"{label}  ·  {owner_name}")
+                item.setToolTip(element.source)
+                item.setData(ID_ROLE, element.id)
+                item.setData(SOURCE_ROLE, element.source)
+                image_ids.append(element.id)
+                cached = self.editor.sequence_view.get_thumbnail(element.source)
+                if cached is not None:
+                    item.setIcon(QIcon(QPixmap.fromImage(cached)))
+                elif element.source in self.editor.sequence_view.unavailable:
+                    item.setIcon(QIcon.fromTheme("image-missing"))
+                else:
+                    item.setIcon(QIcon.fromTheme("image-x-generic"))
+                target = self.image_list
+            else:
+                label = element.heading if element.kind == "heading" else (
+                    " ".join(element.text.split())[:80] or "Empty text passage")
+                item = QListWidgetItem(f"{label}  ·  {owner_name}")
+                item.setData(ID_ROLE, element.id)
+                item.setIcon(QIcon.fromTheme(
+                    "format-text-heading" if element.kind == "heading" else "insert-text"))
+                story_ids.append(element.id)
+                target = self.narrative_list
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if owner and owner.id == selected_id else Qt.Unchecked)
+            if not selected_id:
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+            target.addItem(item)
+        self._listed_image_ids = tuple(image_ids)
+        self._listed_story_ids = tuple(story_ids)
+
+        has_story_text = bool(story_ids)
+        self.narrative_toggle.setVisible(has_story_text)
+        self.story_text_help.setVisible(has_story_text)
+        self.story_text_empty.setVisible(not has_story_text)
+
+        if not has_story_text:
+            self.narrative_toggle.setChecked(False)
+            self.narrative_list.setVisible(False)
+        else:
+            self.narrative_list.setVisible(
+                self.narrative_toggle.isChecked())
+
+        self.image_list.blockSignals(False)
+        self.narrative_list.blockSignals(False)
+        self.image_list.verticalScrollBar().setValue(image_scroll)
+
+    def refresh_for_story_change(self):
+        images = tuple(item.id for item in self.editor.sequence.elements if item.kind == "image")
+        story = tuple(item.id for item in self.editor.sequence.elements if item.kind != "image")
+        if images != getattr(self, "_listed_image_ids", ()) or story != getattr(self, "_listed_story_ids", ()):
+            self._populate_assignments()
+        else:
+            self.refresh_thumbnails()
+
+    def refresh_thumbnails(self):
+        for row in range(self.image_list.count()):
+            item = self.image_list.item(row)
+            source = item.data(SOURCE_ROLE)
+            cached = self.editor.sequence_view.get_thumbnail(source)
+            if cached is not None:
+                item.setIcon(QIcon(QPixmap.fromImage(cached)))
+            elif source in self.editor.sequence_view.unavailable:
+                item.setIcon(QIcon.fromTheme("image-missing"))
+
+    def visible_image_sources(self):
+        if not self.isVisible():
+            return ()
+        viewport = self.image_list.viewport().rect()
+        return tuple(self.image_list.item(row).data(SOURCE_ROLE)
+                     for row in range(self.image_list.count())
+                     if self.image_list.visualItemRect(self.image_list.item(row)).intersects(viewport))
+
+    def _image_assignment_changed(self, item):
+        self._assignment_changed(item)
+
+    def _narrative_assignment_changed(self, item):
+        self._assignment_changed(item)
+
+    def _assignment_changed(self, item):
+        self.editor.set_element_assignment(
+            item.data(ID_ROLE), self.selected_collection_id(), item.checkState() == Qt.Checked)
+
+    def _details_changed(self):
+        title = self.title_edit.text().strip()
+        if not title or not self.selected_collection_id():
+            return
+        previous = self.collection_list.currentItem().text()
+        self.editor.edit_collection(title, self.description_edit.toPlainText())
+        item = self.collection_list.currentItem()
+        if item is not None:
+            item.setText(title)
+        if title != previous:
+            self._populate_assignments()
+
+    def _cover_changed(self, *_):
+        self.editor.set_collection_cover(self.cover_selector.currentData() or "")
+
+    def _add(self):
+        used = {item.title.casefold() for item in self.editor.collections}
+        number = 1
+        while f"Section {number}".casefold() in used:
+            number += 1
+        self.editor.add_collection(f"Section {number}")
+        self.title_edit.setFocus()
+        self.title_edit.selectAll()
+
+    def _remove(self):
+        self.editor.remove_collection()
+
+    def _move(self, direction):
+        self.editor.move_collection(direction)
+
 class PhotoStoryDialog(QDialog):
     """Three-panel native editor for a single chronological photo story."""
 
@@ -799,6 +1106,9 @@ class PhotoStoryDialog(QDialog):
         self.destination_parent = self._initial_destination_parent(paths)
         self.destination_parent_explicit = False
         self._destination_sources = tuple(paths)
+        self.collections = []
+        self._active_collection_id = ""
+        self.collection_dialog = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(18, 16, 18, 12)
@@ -816,10 +1126,9 @@ class PhotoStoryDialog(QDialog):
         self._build_sequence_panel(paths)
         self._build_editor_panel()
         self._build_settings_panel()
-        self.splitter.setSizes([305, 785, 325])
-        self.splitter.setStretchFactor(0, 0)
-        self.splitter.setStretchFactor(1, 1)
-        self.splitter.setStretchFactor(2, 0)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 2)
+        self.splitter.setStretchFactor(2, 2)
 
         self.status = QLabel("Add images or story elements to begin.")
         self.status.setWordWrap(True)
@@ -881,6 +1190,11 @@ class PhotoStoryDialog(QDialog):
         self._selection_changed(self.sequence_view.selected_id())
         self._initial_canvas_selection = False
         self._update_status()
+        QTimer.singleShot(0, self._set_initial_splitter_sizes)
+
+    def _set_initial_splitter_sizes(self):
+        available = self.splitter.width() - self.splitter.handleWidth() * 2
+        self.splitter.setSizes([round(available * portion) for portion in (0.2, 0.4, 0.4)])
 
     @property
     def sequence(self):
@@ -948,13 +1262,22 @@ class PhotoStoryDialog(QDialog):
         panel.setMinimumWidth(300)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
+        def setting_group():
+            group = QVBoxLayout()
+            group.setContentsMargins(0, 0, 0, 0)
+            group.setSpacing(4)
+            layout.addLayout(group)
+            return group
         heading = QLabel("Gallery settings")
         heading.setStyleSheet("font-weight: 700; font-size: 15px;")
         layout.addWidget(heading)
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setVerticalSpacing(4)
+        form.setHorizontalSpacing(12)
         self.gallery_type_selector = QComboBox()
+        self.gallery_type_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.gallery_type_selector.setAccessibleName("Gallery type")
         for label, key in (("Travelogue", "travelogue"), ("Photo essay", "photo-essay"),
                            ("Illustrated story", "illustrated-story"),
@@ -964,6 +1287,7 @@ class PhotoStoryDialog(QDialog):
         form.addRow("Gallery type", self.gallery_type_selector)
 
         self.visual_style_selector = QComboBox()
+        self.visual_style_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.visual_style_selector.setAccessibleName("Visual style")
         for label, key in (("Classic", "classic"), ("Modern", "modern"),
                            ("Dramatic", "dramatic"),
@@ -977,21 +1301,25 @@ class PhotoStoryDialog(QDialog):
         self.layout_selector.setAccessibleName("Image arrangement")
         for label, key in (("One image", "one-per-section"),
                            ("Up to two images", "two-per-section"),
-                           ("Adaptive", "adaptive")):
+                           ("Adaptive", "adaptive"),
+                           ("Justified", "justified"), ("Masonry", "masonry")):
             self.layout_selector.addItem(label, key)
         self.layout_selector.setItemData(0, "One image per story section", Qt.ToolTipRole)
         self.layout_selector.setItemData(1, "Up to two images per story section", Qt.ToolTipRole)
         self.layout_selector.setItemData(2, "Adaptive photographic layout", Qt.ToolTipRole)
+        self.layout_selector.setItemData(3, "Images in proportional horizontal rows", Qt.ToolTipRole)
+        self.layout_selector.setItemData(4, "Images in staggered columns", Qt.ToolTipRole)
         self.layout_selector.setCurrentIndex(2)
         self.layout_reset_button = QPushButton("Reset to type default")
         self.layout_reset_button.setVisible(False)
         self.layout_reset_button.clicked.connect(self._reset_layout_to_type_default)
         layout.addLayout(form)
+        arrangement_group = setting_group()
         arrangement_label = QLabel("Image arrangement")
         arrangement_label.setStyleSheet("font-weight: 650;")
-        layout.addWidget(arrangement_label)
-        layout.addWidget(self.layout_selector)
-        layout.addWidget(self.layout_reset_button, alignment=Qt.AlignRight)
+        arrangement_group.addWidget(arrangement_label)
+        arrangement_group.addWidget(self.layout_selector)
+        arrangement_group.addWidget(self.layout_reset_button, alignment=Qt.AlignRight)
 
         self.style_preview_card = QFrame()
         self.style_preview_card.setObjectName("galleryStylePreview")
@@ -1013,33 +1341,60 @@ class PhotoStoryDialog(QDialog):
         preview_layout.addWidget(self.style_preview_title)
         preview_layout.addWidget(self.style_preview_image)
         preview_layout.addWidget(self.style_preview_note)
-        layout.addWidget(self.style_preview_card)
+        arrangement_group.addWidget(self.style_preview_card)
 
+        visibility_group = setting_group()
         self.show_captions = QCheckBox("Show captions in gallery")
         self.show_captions.setChecked(False)
         self.show_filenames = QCheckBox("Show filenames in gallery")
         self.show_filenames.setChecked(False)
-        layout.addWidget(self.show_captions)
-        layout.addWidget(self.show_filenames)
+        visibility_group.addWidget(self.show_captions)
+        visibility_group.addWidget(self.show_filenames)
 
+        output_group = setting_group()
         self.output_format_selector = QComboBox()
         self.output_format_selector.setAccessibleName("Output format")
         self.output_format_selector.addItem("Gallery folder (recommended)", "folder")
         self.output_format_selector.addItem("ZIP archive", "zip")
         output_format_label = QLabel("Output format")
         output_format_label.setStyleSheet("font-weight: 650;")
-        layout.addWidget(output_format_label)
-        layout.addWidget(self.output_format_selector)
+        output_group.addWidget(output_format_label)
+        output_group.addWidget(self.output_format_selector)
         self.output_format_explanation = QLabel()
         self.output_format_explanation.setWordWrap(True)
         self.output_format_explanation.setObjectName("outputFormatExplanation")
-        layout.addWidget(self.output_format_explanation)
+        output_group.addWidget(self.output_format_explanation)
+
+        website_group = setting_group()
+        website_structure_label = QLabel("Website structure")
+        website_structure_label.setStyleSheet("font-weight: 650;")
+        self.website_structure_selector = QComboBox()
+        self.website_structure_selector.setAccessibleName("Website structure")
+        self.website_structure_selector.addItem("Single page", "single-page")
+        self.website_structure_selector.addItem("Multiple pages", "multiple-pages")
+        website_group.addWidget(website_structure_label)
+        website_group.addWidget(self.website_structure_selector)
+        self.website_structure_explanation = QLabel()
+        self.website_structure_explanation.setObjectName("websiteStructureExplanation")
+        self.website_structure_explanation.setWordWrap(True)
+        website_group.addWidget(self.website_structure_explanation)
+        sections_group = setting_group()
+        self.sections_button = QPushButton("Sections…")
+        self.sections_button.setIcon(QIcon.fromTheme("folder-pictures"))
+        self.sections_button.setToolTip(
+            "Organize images and story content into named website sections")
+        self.sections_button.clicked.connect(self.open_collections)
+        sections_group.addWidget(self.sections_button, alignment=Qt.AlignLeft)
+        self.sections_explanation = QLabel()
+        self.sections_explanation.setWordWrap(True)
+        sections_group.addWidget(self.sections_explanation)
 
         self._destination_manual = False
 
+        destination_group = setting_group()
         self.destination_label = QLabel("Destination")
         self.destination_label.setStyleSheet("font-weight: 650;")
-        layout.addWidget(self.destination_label)
+        destination_group.addWidget(self.destination_label)
 
         # Keep the validated destination state without displaying
         # a cramped single-line path editor.
@@ -1057,7 +1412,7 @@ class PhotoStoryDialog(QDialog):
             QIcon.fromTheme("folder-open"))
         self.destination_button.clicked.connect(
             self.change_destination)
-        layout.addWidget(
+        destination_group.addWidget(
             self.destination_button, 0, Qt.AlignLeft)
 
         self.destination_path = QLabel()
@@ -1069,11 +1424,11 @@ class PhotoStoryDialog(QDialog):
             Qt.TextSelectableByMouse)
         self.destination_path.setToolTip(
             "Complete planned gallery output path")
-        layout.addWidget(self.destination_path)
+        destination_group.addWidget(self.destination_path)
 
         self.destination_feedback = QLabel()
         self.destination_feedback.setWordWrap(True)
-        layout.addWidget(self.destination_feedback)
+        destination_group.addWidget(self.destination_feedback)
 
         # Retain the legacy Qt preview's theme data without exposing its old
         # ten-theme selector as if those were complete HTML visual styles.
@@ -1089,8 +1444,14 @@ class PhotoStoryDialog(QDialog):
         self.visual_style_selector.currentIndexChanged.connect(self._update_style_preview)
         self.layout_selector.currentIndexChanged.connect(self._layout_changed)
         self.output_format_selector.currentIndexChanged.connect(self._update_output_format)
+        self.website_structure_selector.currentIndexChanged.connect(
+            self._update_website_structure_explanation)
+        self.gallery_type_selector.currentIndexChanged.connect(
+            self._update_sections_explanation)
         layout.addStretch(1)
         self._update_output_format()
+        self._update_website_structure_explanation()
+        self._update_sections_explanation()
         self._update_style_preview()
         self._update_destination_label()
         self.settings_scroll = QScrollArea()
@@ -1151,9 +1512,11 @@ class PhotoStoryDialog(QDialog):
             f"{labels[gallery_type]} · {style_names[visual_style]}")
         arrangement = self.layout_selector.currentData()
         arrangement_note = {
-            "one-per-section": "Single-image sections",
-            "two-per-section": "Consecutive pairs where image shapes fit",
-            "adaptive": "Deterministic mix of single images and pairs",
+            "one-per-section": "Displays images one at a time, with plenty of room for descriptions and storytelling.",
+            "two-per-section": "Places compatible images side by side, creating balanced photographic spreads.",
+            "adaptive": "Automatically combines individual images and pairs for a varied, editorial presentation.",
+            "justified": "Arranges images in neat horizontal rows of equal height. Image widths adjust to fill each row without cropping. Ideal for traditional photography galleries.",
+            "masonry": "Arranges images in staggered columns with different heights. Portraits and landscapes retain their proportions. Ideal for visual portfolios.",
         }[arrangement]
         self.style_preview_note.setText(f"{notes[gallery_type]}\n{arrangement_note}")
         palettes = {
@@ -1181,6 +1544,22 @@ class PhotoStoryDialog(QDialog):
 
     def _update_style_preview_image(self):
         self.style_preview_image.hide()
+
+    def _update_website_structure_explanation(self, *_):
+        if self.website_structure_selector.currentData() == "multiple-pages":
+            self.website_structure_explanation.setText(
+                "Create a home page with section covers. Each section opens on its own page.")
+        else:
+            self.website_structure_explanation.setText(
+                "Create one scrolling website. Sections appear in order, with links to jump between them.")
+
+    def _update_sections_explanation(self, *_):
+        self.sections_explanation.setText({
+            "travelogue": "Organize your journey into sections for different places, days, or stops.",
+            "photo-essay": "Organize your story into sections, each with its own images and text.",
+            "illustrated-story": "Divide your story into chapters or sections.",
+            "simple-gallery": "Group related images into named sections.",
+        }[self.gallery_type_selector.currentData()])
 
     def _update_output_format(self, *_):
         if self.output_format_selector.currentData() == "zip":
@@ -1247,6 +1626,14 @@ class PhotoStoryDialog(QDialog):
                 and hasattr(self.editor_layout.itemAt(index).widget(), "element_id")]
 
     def _sequence_changed(self):
+        if self.collections:
+            current_ids = [element.id for element in self.sequence.elements]
+            for index, collection in enumerate(self.collections):
+                ids = tuple(element_id for element_id in current_ids
+                            if element_id in collection.element_ids)
+                self.collections[index] = replace(collection, element_ids=ids)
+        if self.collection_dialog is not None:
+            self.collection_dialog.refresh_for_story_change()
         added = self._sync_canvas_structure()
         self._update_status()
         image_sources = tuple(
@@ -1519,6 +1906,81 @@ class PhotoStoryDialog(QDialog):
             self._destination_manual = False
             self._update_destination_label()
 
+    def open_collections(self):
+        if self.collection_dialog is None:
+            self.collection_dialog = CollectionManagerDialog(self)
+        self.collection_dialog.refresh()
+        self.collection_dialog.show()
+
+    def _refresh_collection_controls(self, selected_id=""):
+        if selected_id:
+            self._active_collection_id = selected_id
+        if self.collection_dialog is not None:
+            self.collection_dialog.refresh(selected_id)
+
+    def _selected_collection_index(self):
+        return next((index for index, item in enumerate(self.collections)
+                     if item.id == self._active_collection_id), -1)
+
+    def add_collection(self, title):
+        from kim_story_publication import StoryCollection
+        if not title.strip():
+            return
+        collection = StoryCollection(uuid.uuid4().hex, title.strip(), ())
+        self.collections.append(collection)
+        self._refresh_collection_controls(collection.id)
+
+    def edit_collection(self, title, description):
+        index = self._selected_collection_index()
+        if index < 0 or not title.strip():
+            return
+        self.collections[index] = replace(self.collections[index], title=title.strip(),
+                                          description=description)
+
+    def set_collection_cover(self, cover_id):
+        index = self._selected_collection_index()
+        if index >= 0:
+            self.collections[index] = replace(self.collections[index], cover_image_id=cover_id)
+
+    def move_collection(self, direction):
+        index = self._selected_collection_index()
+        destination = index + direction
+        if index < 0 or destination < 0 or destination >= len(self.collections):
+            return
+        collection = self.collections.pop(index)
+        self.collections.insert(destination, collection)
+        self._refresh_collection_controls(collection.id)
+
+    def remove_collection(self):
+        index = self._selected_collection_index()
+        if index < 0:
+            return
+        collection = self.collections[index]
+        answer = QMessageBox.question(self.collection_dialog or self, "Remove section",
+                                      f'Remove the "{collection.title}" section?\n'
+                                      f'Its {len(collection.element_ids)} items will remain in the gallery as unassigned content.',
+                                      QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        self.collections.pop(index)
+        self._refresh_collection_controls()
+
+    def set_element_assignment(self, element_id, destination_id, checked):
+        """Move an existing story element into or out of one section."""
+        if not any(element.id == element_id for element in self.sequence.elements):
+            return
+        if checked and not any(item.id == destination_id for item in self.collections):
+            return
+        order = [item.id for item in self.sequence.elements]
+        for index, section in enumerate(self.collections):
+            members = set(section.element_ids)
+            members.discard(element_id)
+            if checked and section.id == destination_id:
+                members.add(element_id)
+            self.collections[index] = replace(section, element_ids=tuple(
+                item_id for item_id in order if item_id in members))
+        self._refresh_collection_controls(destination_id)
+
     def _publication_document(self):
         from kim_story_publication import make_document
         return make_document(
@@ -1531,6 +1993,8 @@ class PhotoStoryDialog(QDialog):
             show_captions=self.show_captions.isChecked(),
             layout=self.layout_selector.currentData(),
             output_format=self.output_format_selector.currentData(),
+            website_structure=self.website_structure_selector.currentData(),
+            collections=self.collections,
         )
 
     def preview_in_browser(self):
@@ -1553,10 +2017,10 @@ class PhotoStoryDialog(QDialog):
             self.destination_edit.setFocus()
             return
 
-        document = self._publication_document()
         destination = self.destination_edit.text().strip()
 
         try:
+            document = self._publication_document()
             review = StoryReviewDialog(document, destination, self)
         except Exception as exc:
             QMessageBox.warning(

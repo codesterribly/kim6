@@ -23,7 +23,8 @@ from kim_dialog_buttons import style_button, style_button_box
 from kim_story_publication import (
     DERIVATIVE_MAX_SIZE, DERIVATIVE_QUALITY,
     PreparedPublication, StoryDocument, prepare_publication,
-    publication_slug, publish_prepared, publish_prepared_zip, validate_prepared,
+    output_pages, publication_collections, publication_slug, publish_prepared, publish_prepared_zip,
+    validate_prepared,
 )
 
 
@@ -206,6 +207,8 @@ class StoryReviewDialog(QDialog):
             ("Output format", 1, 2),
             ("Story content", 2, 0),
             ("Story title", 2, 2),
+            ("Website structure", 3, 0),
+            ("Sections", 3, 2),
         )
         self.summary_fields = {}
         for name, row, column in fields:
@@ -411,14 +414,31 @@ class StoryReviewDialog(QDialog):
             "one-per-section": "One image per story section",
             "two-per-section": "Up to two images per story section",
             "adaptive": "Adaptive photographic layout",
+            "justified": "Justified horizontal rows",
+            "masonry": "Masonry columns",
         }
         type_labels = {"travelogue": "Travelogue", "photo-essay": "Photo essay",
-                       "illustrated-story": "Illustrated story"}
+                       "illustrated-story": "Illustrated story", "simple-gallery": "Simple gallery"}
         style_labels = {"classic": "Classic", "modern": "Modern", "dramatic": "Dramatic",
-                        "cinematic": "Dramatic", "editorial": "Modern", "journal": "Classic"}
+                        "cinematic": "Dramatic", "editorial": "Modern", "journal": "Classic",
+                        "simple-light": "Light", "simple-dark": "Dark"}
         gallery_name = publication_slug(prepared.document.title)
+        element_by_id = {item.id: item for item in prepared.document.elements}
+        sections = publication_collections(prepared.document)
+        ordered_elements = (tuple(element_by_id[element_id]
+                                  for section in sections
+                                  for element_id in section.element_ids)
+                            if sections else prepared.document.elements)
+        cover_names = []
+        for collection in sections:
+            cover_id = collection.cover_image_id or next(
+                (item_id for item_id in collection.element_ids
+                 if element_by_id[item_id].kind == "image" and element_by_id[item_id].output_image), "")
+            cover = element_by_id.get(cover_id)
+            cover_names.append(f"{collection.title}: {Path(cover.source).name if cover else 'None'}"
+                               + (" (automatic)" if not collection.cover_image_id else ""))
         format_label = "ZIP archive" if prepared.document.output_format == "zip" else "Gallery folder"
-        planned_files = ["index.html", "style.css", "gallery-viewer.css", "gallery-viewer.js",
+        planned_files = [*output_pages(prepared.document), "style.css", "gallery-viewer.css", "gallery-viewer.js",
                          *(image.relative_path for image in images)]
         if prepared.document.output_format == "zip":
             planned_files = [f"{gallery_name}/{name}" for name in planned_files]
@@ -437,6 +457,9 @@ class StoryReviewDialog(QDialog):
             f"Gallery type: {type_labels[prepared.document.publication_type]}. "
             f"Visual style: {style_labels[prepared.document.style]}. "
             f"Image arrangement: {layout_labels[prepared.document.layout]}. "
+            f"Website structure: {'Multiple pages' if prepared.document.website_structure == 'multiple-pages' else 'Single page'}. "
+            f"Sections: {', '.join(item.title for item in sections) or 'None'}. "
+            f"Covers: {', '.join(cover_names) or 'None'}. "
             f"Captions: {'shown' if prepared.document.show_captions else 'hidden'}. "
             f"Filenames: {'shown' if not prepared.document.hide_filenames else 'hidden'}. "
             f"Output format: {format_label}. "
@@ -462,6 +485,10 @@ class StoryReviewDialog(QDialog):
             style_labels[prepared.document.style])
         self.summary_fields["Image arrangement"].setText(
             layout_labels[prepared.document.layout])
+        self.summary_fields["Website structure"].setText(
+            "Multiple pages" if prepared.document.website_structure == "multiple-pages" else "Single page")
+        self.summary_fields["Sections"].setText(
+            ", ".join(item.title for item in sections) or "None")
         self.summary_fields["Output format"].setText(format_label)
         self.summary_fields["Story content"].setText(
             f"{total_images} images, {headings} headings, {passages} passages")
@@ -476,10 +503,10 @@ class StoryReviewDialog(QDialog):
         else:
             self.warnings_label.setVisible(False)
 
-        self.table.setRowCount(len(prepared.document.elements))
+        self.table.setRowCount(len(ordered_elements))
         images_by_id = {image.element_id: image for image in images}
         blocked_by_id = {image.element_id: image for image in prepared.blocked}
-        for row, element in enumerate(prepared.document.elements):
+        for row, element in enumerate(ordered_elements):
             if element.kind == "image":
                 if element.id in blocked_by_id:
                     item = blocked_by_id[element.id]
@@ -517,7 +544,7 @@ class StoryReviewDialog(QDialog):
         )
 
         entries = [
-            (prefix + "index.html", "HTML", "Gallery document"),
+            *((prefix + name, "HTML", "Gallery document") for name in output_pages(prepared.document)),
             (prefix + "style.css", "CSS", "Gallery stylesheet"),
             (prefix + "gallery-viewer.css", "CSS", "Image viewer"),
             (prefix + "gallery-viewer.js", "JavaScript", "Image viewer"),
@@ -597,10 +624,15 @@ class StoryReviewDialog(QDialog):
 
         self.destination_feedback.setText(problem)
         self.destination_feedback.setVisible(bool(problem))
-        self.status.setText(
-            "Choose another destination to continue."
-            if problem else "Ready to create gallery."
-        )
+        if self.prepared.blocked:
+            self.status.setText(
+                "One or more source images are unavailable. "
+                "Go back to remove them or restore the missing files."
+            )
+        elif problem:
+            self.status.setText("Choose another destination to continue.")
+        else:
+            self.status.setText("Ready to create gallery.")
         self.apply_button.setEnabled(not problem)
 
     def _review_destination_changed(self, value):
@@ -794,7 +826,7 @@ class StoryReviewDialog(QDialog):
             return
         self.apply_button.setEnabled(False)
         self.back_button.setEnabled(False)
-        total = len(self.prepared.images) + 4
+        total = len(self.prepared.images) + 3 + len(output_pages(self.prepared.document))
         self.publication_progress = QProgressDialog(
             "Writing the approved gallery into private staging…",
             "Cancel", 0, total, self)

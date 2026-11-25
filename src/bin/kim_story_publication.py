@@ -31,8 +31,10 @@ STYLE_ALIASES = {
     "cinematic": "cinematic", "editorial": "editorial", "journal": "journal",
 }
 PUBLICATION_TYPES = GALLERY_TYPES
-IMAGE_LAYOUTS = ("one-per-section", "two-per-section", "adaptive")
+IMAGE_LAYOUTS = ("one-per-section", "two-per-section", "adaptive", "justified", "masonry")
+WEBSITE_STRUCTURES = ("single-page", "multiple-pages")
 OUTPUT_FORMATS = ("folder", "zip")
+UNASSIGNED_COLLECTION_ID = "kimng-unassigned"
 TYPE_DEFAULT_LAYOUTS = {
     "simple-gallery": "one-per-section",
     "travelogue": "one-per-section",
@@ -71,6 +73,17 @@ class StoryDocument:
     show_captions: bool = False
     layout: str = "adaptive"
     output_format: str = "folder"
+    website_structure: str = "single-page"
+    collections: tuple[StoryCollection, ...] = ()
+
+
+@dataclass(frozen=True)
+class StoryCollection:
+    id: str
+    title: str
+    element_ids: tuple[str, ...]
+    description: str = ""
+    cover_image_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -85,6 +98,7 @@ class RenderedWebsite:
     css: str
     viewer_css: str
     viewer_js: str
+    pages: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -118,6 +132,30 @@ class PreparedPublication:
     viewer_js: str
     blocked: tuple[BlockedImage, ...] = ()
     warnings: tuple[str, ...] = ()
+    pages: tuple[tuple[str, str], ...] = ()
+
+
+def collection_page_name(collection: StoryCollection) -> str:
+    if collection.id == UNASSIGNED_COLLECTION_ID:
+        return "unassigned.html"
+    return f"collection-{_slug(collection.title, 'collection')}.html"
+
+
+def publication_collections(document: StoryDocument) -> tuple[StoryCollection, ...]:
+    """Return authored sections plus a visible home for unassigned content."""
+    if not document.collections and document.website_structure == "single-page":
+        return ()
+    assigned = {element_id for item in document.collections for element_id in item.element_ids}
+    unassigned = tuple(item.id for item in document.elements if item.id not in assigned)
+    sections = document.collections
+    if unassigned or not sections:
+        title = "Unassigned" if sections else "All images"
+        sections += (StoryCollection(UNASSIGNED_COLLECTION_ID, title, unassigned),)
+    return sections
+
+
+def output_pages(document: StoryDocument) -> tuple[str, ...]:
+    return ("index.html", *(collection_page_name(item) for item in publication_collections(document))) if document.website_structure == "multiple-pages" else ("index.html",)
 
 
 def _escape(value: str) -> str:
@@ -156,6 +194,8 @@ def validate_document(document: StoryDocument) -> None:
         raise ValueError("Choose a supported preferred image layout")
     if document.output_format not in OUTPUT_FORMATS:
         raise ValueError("Choose Gallery folder or ZIP archive output format")
+    if document.website_structure not in WEBSITE_STRUCTURES:
+        raise ValueError("Choose Single page or Multiple pages website structure")
     ids = set()
     outputs = set()
     for element in document.elements:
@@ -177,6 +217,30 @@ def validate_document(document: StoryDocument) -> None:
                 if element.output_image in outputs:
                     raise ValueError("Every website image needs a unique output filename")
                 outputs.add(element.output_image)
+    if document.collections:
+        collection_ids = set()
+        names = set()
+        pages = set()
+        members = []
+        images = {element.id for element in document.elements if element.kind == "image"}
+        for collection in document.collections:
+            if (not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", collection.id)
+                    or collection.id == UNASSIGNED_COLLECTION_ID or collection.id in collection_ids):
+                raise ValueError("Collection IDs must be safe and unique")
+            collection_ids.add(collection.id)
+            if not collection.title.strip():
+                raise ValueError("Every collection needs a title")
+            name = collection.title.strip().casefold()
+            page = collection_page_name(collection)
+            if name in names or page in pages or page in {"index.html", "style.css", "gallery-viewer.css", "gallery-viewer.js"}:
+                raise ValueError("Collection names and page names must be unique")
+            names.add(name)
+            pages.add(page)
+            members.extend(collection.element_ids)
+            if collection.cover_image_id and (collection.cover_image_id not in collection.element_ids or collection.cover_image_id not in images):
+                raise ValueError("A collection cover must be an image in that collection")
+        if len(members) != len(set(members)) or not set(members).issubset(ids):
+            raise ValueError("Story elements may belong to only one collection")
 
 
 def composition_plan(document: StoryDocument) -> tuple[CompositionBlock, ...]:
@@ -188,6 +252,21 @@ def composition_plan(document: StoryDocument) -> tuple[CompositionBlock, ...]:
     """
     validate_document(document)
     elements = document.elements
+    if document.layout in ("justified", "masonry"):
+        result = []
+        pending = []
+        def flush():
+            if pending:
+                result.append(CompositionBlock(document.layout, tuple(pending)))
+                pending.clear()
+        for element in elements:
+            if element.kind == "image":
+                pending.append(element)
+            else:
+                flush()
+                result.append(CompositionBlock("section" if element.kind == "heading" else "passage", (element,)))
+        flush()
+        return tuple(result)
     result: list[CompositionBlock] = []
     index = 0
     if elements and elements[0].kind == "image":
@@ -301,7 +380,8 @@ def _image_story(element: StoryElement, document: StoryDocument, *, variant: str
                    if prose else "")
     image_style = (
         ' style="--story-image-render-width: '
-        f'{_story_image_render_width(element)};"'
+        f'{_story_image_render_width(element)}; '
+        f'--image-ratio: {element.image_width / element.image_height:.8f};"'
         if element.image_width > 0 and element.image_height > 0 else ""
     )
     return (
@@ -312,9 +392,11 @@ def _image_story(element: StoryElement, document: StoryDocument, *, variant: str
     )
 
 
-def render_website(document: StoryDocument) -> RenderedWebsite:
+def render_website(document: StoryDocument, *, hero: bool = True) -> RenderedWebsite:
     """Render an offline, semantic website using only local assets."""
     validate_document(document)
+    if document.collections or document.website_structure == "multiple-pages":
+        return _render_collections(document)
     blocks = composition_plan(document)
     headings = [block.elements[0] for block in blocks
                 if block.kind == "section" and block.elements[0].heading.strip()]
@@ -339,7 +421,7 @@ def render_website(document: StoryDocument) -> RenderedWebsite:
     masthead, reading_label, contents_label, chapter_label = type_labels[gallery_type]
     opening_image = ""
     hero_render_width = ""
-    if blocks and blocks[0].kind == "hero":
+    if hero and blocks and blocks[0].kind == "hero":
         hero_element = blocks[0].elements[0]
         opening_image = _image_story(hero_element, document, variant="hero-image")
         hero_render_width = _story_image_render_width(hero_element)
@@ -381,6 +463,12 @@ def render_website(document: StoryDocument) -> RenderedWebsite:
                 for item in block.elements)
             content.append(
                 f'<div class="image-pair layout-{document.layout}">{stories}</div>')
+        elif block.kind in ("justified", "masonry"):
+            stories = "".join(_image_story(item, document, variant="gallery-image")
+                              for item in block.elements)
+            if block.kind == "justified":
+                stories += '<span class="justified-filler" aria-hidden="true"></span>'
+            content.append(f'<div class="image-group layout-{block.kind}">{stories}</div>')
         else:
             element = block.elements[0]
             variant = "wide-image" if block.kind == "feature" else "story-image"
@@ -443,8 +531,96 @@ def render_website(document: StoryDocument) -> RenderedWebsite:
 </dialog>
 </body>
 </html>'''
-    return RenderedWebsite(html_doc, _stylesheet(style_key, gallery_type),
+    return RenderedWebsite(html_doc, _stylesheet(style_key, gallery_type) + _arrangement_css(),
                            viewer_assets.stylesheet, viewer_assets.script)
+
+
+def _main_content(html_text: str) -> str:
+    return html_text.split('<main id="story" class="story-flow">', 1)[1].split("</main>", 1)[0]
+
+
+def _render_collections(document: StoryDocument) -> RenderedWebsite:
+    sections = publication_collections(document)
+    by_id = {element.id: element for element in document.elements}
+    children = []
+    cards = []
+    for collection in sections:
+        members = tuple(by_id[element_id] for element_id in collection.element_ids)
+        child = replace(document, title=collection.title, introduction=collection.description,
+                        elements=members, collections=(), website_structure="single-page")
+        rendered = render_website(child, hero=False)
+        children.append(rendered)
+        cover_id = collection.cover_image_id or next(
+            (item.id for item in members if item.kind == "image" and item.output_image), "")
+        cover = by_id.get(cover_id)
+        cover_markup = (f'<img src="{_escape(cover.output_image)}" alt="" loading="lazy">'
+                        if cover and cover.output_image else
+                        '<span class="collection-card-empty">No cover image</span>')
+        description = _paragraphs(collection.description)
+        href = (collection_page_name(collection) if document.website_structure == "multiple-pages"
+                else f"#collection-{collection.id}")
+        cards.append(f'<a class="collection-card" href="{_escape(href)}">'
+                     f'{cover_markup}<span class="collection-card-copy"><strong>{_escape(collection.title)}</strong>'
+                     f'{description}</span></a>')
+    landing = render_website(replace(document, elements=(), collections=(),
+                                     website_structure="single-page"))
+    cards_markup = '<nav class="collection-cards" aria-label="Sections">' + "".join(cards) + '</nav>'
+    if document.website_structure == "single-page":
+        section_markup = []
+        for collection, child in zip(sections, children):
+            description = _paragraphs(collection.description)
+            section_markup.append(f'<section class="collection-section" id="collection-{collection.id}">'
+                                  f'<header><h2>{_escape(collection.title)}</h2>{description}</header>'
+                                  f'{_main_content(child.html)}</section>')
+        html_text = landing.html.replace('<main id="story" class="story-flow">',
+                                         '<main id="story" class="story-flow">' + cards_markup + "".join(section_markup), 1)
+        return replace(landing, html=html_text)
+    html_text = landing.html.replace('<main id="story" class="story-flow">',
+                                     '<main id="story" class="story-flow">' + cards_markup, 1)
+    pages = []
+    for index, (collection, child) in enumerate(zip(sections, children)):
+        links = ['<a href="index.html">All sections</a>']
+        if index:
+            previous = sections[index - 1]
+            links.append(f'<a href="{_escape(collection_page_name(previous))}">Previous section</a>')
+        if index + 1 < len(sections):
+            following = sections[index + 1]
+            links.append(f'<a href="{_escape(collection_page_name(following))}">Next section</a>')
+        navigation = '<nav class="collection-page-nav" aria-label="Section navigation">' + "".join(links) + '</nav>'
+        page_html = child.html.replace('<main id="story" class="story-flow">',
+                                       navigation + '<main id="story" class="story-flow">', 1)
+        pages.append((collection_page_name(collection), page_html))
+    return replace(landing, html=html_text, pages=tuple(pages))
+
+
+def _arrangement_css() -> str:
+    return r'''
+.collection-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1.25rem; margin: 2rem auto 5rem; }
+.collection-card { display: block; overflow: hidden; color: inherit; text-decoration: none; border: 1px solid currentColor; border-radius: .35rem; }
+.collection-card img { display: block; width: 100%; height: 13rem; object-fit: contain; background: #7772; }
+.collection-card-copy { display: block; padding: 1rem; }
+.collection-card-copy strong { display: block; font-size: 1.25rem; }
+.collection-card-copy p { margin: .5rem 0 0; }
+.collection-card-empty { display: block; padding: 5rem 1rem; text-align: center; }
+.collection-section { margin: 5rem 0; scroll-margin-top: 5rem; }
+.collection-section > header { max-width: 50rem; margin: 0 auto 2rem; }
+.collection-page-nav { display: flex; gap: 1.5rem; flex-wrap: wrap; width: min(100% - 3rem, 76rem); margin: 1rem auto; }
+.image-group { width: 100%; margin: 2rem auto 4rem; }
+.image-group .image-story-item { display: block; width: 100%; max-width: none; margin: 0; }
+.image-group .photograph { width: 100%; margin: 0; }
+.image-group .photograph img { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
+.image-group .image-description { width: 100%; max-width: none; }
+.image-group.layout-justified { display: flex; flex-wrap: wrap; gap: .75rem; align-items: start; }
+.layout-justified .image-story-item { flex: var(--image-ratio, 1) 1 calc(var(--image-ratio, 1) * 14rem); min-width: min(100%, 9rem); }
+.layout-justified .justified-filler { flex: 1000 1 14rem; height: 0; }
+.image-group.layout-masonry { columns: 3 15rem; column-gap: .9rem; }
+.layout-masonry .image-story-item { break-inside: avoid; margin: 0 0 .9rem; }
+@media (max-width: 700px) {
+  .image-group.layout-masonry { columns: 2 10rem; }
+  .layout-justified .image-story-item { flex-basis: calc(var(--image-ratio, 1) * 10rem); }
+}
+@media (max-width: 430px) { .image-group.layout-masonry { columns: 1; } }
+'''
 
 
 def _stylesheet(style: str, gallery_type: str = "photo-essay") -> str:
@@ -1208,7 +1384,8 @@ body { background: #f8f8f6; color: #17232d; }
 
 def make_document(title, introduction, elements, *, style, hide_filenames,
                   publication_type="photo-essay", source_identities=None,
-                  show_captions=False, layout="adaptive", output_format="folder"):
+                  show_captions=False, layout="adaptive", output_format="folder",
+                  website_structure="single-page", collections=()):
     source_identities = source_identities or {}
     image_number = 0
     converted = []
@@ -1229,7 +1406,8 @@ def make_document(title, introduction, elements, *, style, hide_filenames,
         ))
     doc = StoryDocument(title or "", introduction or "", publication_type,
                         style, bool(hide_filenames), tuple(converted),
-                        bool(show_captions), layout, output_format)
+                        bool(show_captions), layout, output_format,
+                        website_structure, tuple(collections))
     validate_document(doc)
     return doc
 
@@ -1317,12 +1495,14 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
     )
     rendered = render_website(document)
     _write_private(root / "index.html", rendered.html.encode("utf-8"))
+    for page_name, page_html in rendered.pages:
+        _write_private(root / page_name, page_html.encode("utf-8"))
     _write_private(root / "style.css", rendered.css.encode("utf-8"))
     _write_private(root / "gallery-viewer.css", rendered.viewer_css.encode("utf-8"))
     _write_private(root / "gallery-viewer.js", rendered.viewer_js.encode("utf-8"))
     return PreparedPublication(document, str(root), tuple(prepared), rendered.html,
                                rendered.css, rendered.viewer_css, rendered.viewer_js,
-                               tuple(blocked), tuple(warnings))
+                               tuple(blocked), tuple(warnings), rendered.pages)
 
 
 def _write_private(path: Path, payload: bytes) -> None:
@@ -1359,6 +1539,14 @@ def _verify_private_jpeg(path: Path) -> None:
 
 
 def validate_prepared(prepared: PreparedPublication, *, cancelled=lambda: False) -> None:
+    validate_document(prepared.document)
+    if tuple(name for name, _ in prepared.pages) != output_pages(prepared.document)[1:]:
+        raise ValueError("Prepared pages do not match the reviewed website structure")
+    rendered = render_website(prepared.document)
+    if (rendered.html != prepared.index_html or rendered.pages != prepared.pages
+            or rendered.css != prepared.style_css or rendered.viewer_css != prepared.viewer_css
+            or rendered.viewer_js != prepared.viewer_js):
+        raise ValueError("Prepared website changed after Review Changes")
     if prepared.blocked:
         names = ", ".join(Path(image.source).name for image in prepared.blocked)
         raise ValueError("Publication is blocked by unavailable images: " + names)
@@ -1430,12 +1618,13 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
                         stream.write(payload)
                         stream.flush()
                         os.fsync(stream.fileno())
-                    progress(image_number, len(prepared.images) + 4,
+                    progress(image_number, len(prepared.images) + 3 + len(output_pages(prepared.document)),
                              Path(image.source).name)
                 for name, payload in (("style.css", prepared.style_css.encode("utf-8")),
                                       ("gallery-viewer.css", prepared.viewer_css.encode("utf-8")),
                                       ("gallery-viewer.js", prepared.viewer_js.encode("utf-8")),
-                                      ("index.html", prepared.index_html.encode("utf-8"))):
+                                      ("index.html", prepared.index_html.encode("utf-8")),
+                                      *((name, page.encode("utf-8")) for name, page in prepared.pages)):
                     if cancelled():
                         raise InterruptedError("Website publication was cancelled")
                     fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=root_fd)
@@ -1443,7 +1632,8 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
                         stream.write(payload)
                         stream.flush()
                         os.fsync(stream.fileno())
-                progress(len(prepared.images) + 4, len(prepared.images) + 4,
+                progress(len(prepared.images) + 3 + len(output_pages(prepared.document)),
+                         len(prepared.images) + 3 + len(output_pages(prepared.document)),
                          "Verifying gallery")
             finally:
                 os.close(image_fd)
@@ -1458,6 +1648,7 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
         os.chmod(stage_path / "images", 0o755, follow_symlinks=False)
         for output_file in (stage_path / "index.html", stage_path / "style.css",
                             stage_path / "gallery-viewer.css", stage_path / "gallery-viewer.js",
+                            *(stage_path / name for name, _ in prepared.pages),
                             *(stage_path / image.relative_path for image in prepared.images)):
             os.chmod(output_file, 0o644, follow_symlinks=False)
         os.chmod(stage_path, 0o755, follow_symlinks=False)
@@ -1547,6 +1738,8 @@ def publish_prepared_zip(prepared: PreparedPublication, destination: str, *,
                     (f"{gallery_name}/style.css", prepared.style_css.encode("utf-8")),
                     (f"{gallery_name}/gallery-viewer.css", prepared.viewer_css.encode("utf-8")),
                     (f"{gallery_name}/gallery-viewer.js", prepared.viewer_js.encode("utf-8"))]
+        payloads.extend((f"{gallery_name}/{name}", page.encode("utf-8"))
+                        for name, page in prepared.pages)
         for image in prepared.images:
             relative = PurePosixPath(image.relative_path)
             if (relative.is_absolute() or ".." in relative.parts
@@ -1659,15 +1852,10 @@ def _verify_zip(stage_name: str, parent_fd: int, expected_digests: dict[str, str
                 required = {"index.html", "style.css", "gallery-viewer.css", "gallery-viewer.js"}
                 if not required.issubset(relative_entries):
                     raise ValueError("ZIP is missing a required gallery page or local asset")
-                html_text = archive.read(index_name).decode("utf-8")
-                for reference in re.findall(r'(?:href|src)="([^"]+)"', html_text):
-                    if reference.startswith(("file:", "http:", "https:", "/")):
-                        raise ValueError("ZIP gallery references a remote or absolute resource")
-                    if reference.startswith("#"):
-                        if f'id="{reference[1:]}"' not in html_text:
-                            raise ValueError("ZIP gallery contains a broken section link")
-                    elif reference not in relative_entries:
-                        raise ValueError("ZIP gallery references a missing local asset")
+                for page_name in sorted(name for name in relative_entries if name.endswith(".html")):
+                    html_text = archive.read(f"{gallery_root}/{page_name}").decode("utf-8")
+                    _verify_html_references(html_text, page_name, relative_entries,
+                                            lambda name: archive.read(f"{gallery_root}/{name}").decode("utf-8"))
                 for info in infos:
                     if cancelled():
                         raise InterruptedError("ZIP publication was cancelled")
@@ -1684,10 +1872,25 @@ def _verify_zip(stage_name: str, parent_fd: int, expected_digests: dict[str, str
 
 
 def _verify_site(root: Path, prepared: PreparedPublication, *, cancelled=lambda: False) -> None:
-    required = ("index.html", "style.css", "gallery-viewer.css", "gallery-viewer.js")
+    required = (*output_pages(prepared.document), "style.css", "gallery-viewer.css", "gallery-viewer.js")
     if any(not (root / name).is_file() or (root / name).is_symlink() for name in required):
         raise ValueError("Generated website is incomplete")
-    text = (root / "index.html").read_text(encoding="utf-8")
+    expected_text = {"index.html": prepared.index_html, "style.css": prepared.style_css,
+                     "gallery-viewer.css": prepared.viewer_css,
+                     "gallery-viewer.js": prepared.viewer_js, **dict(prepared.pages)}
+    expected_files = set(expected_text) | {image.relative_path for image in prepared.images}
+    actual_entries = {path.relative_to(root).as_posix(): path for path in root.rglob("*")}
+    if (set(actual_entries) != expected_files | {"images"}
+            or any(path.is_symlink() for path in actual_entries.values())
+            or not actual_entries["images"].is_dir()):
+        raise ValueError("Generated website files do not match the reviewed inventory")
+    for name, content in expected_text.items():
+        if cancelled():
+            raise InterruptedError("Website publication was cancelled")
+        if (root / name).read_bytes() != content.encode("utf-8"):
+            raise ValueError("Generated website asset changed after Review Changes")
+    page_text = {name: (root / name).read_text(encoding="utf-8")
+                 for name in output_pages(prepared.document)}
     for image in prepared.images:
         if cancelled():
             raise InterruptedError("Website publication was cancelled")
@@ -1696,17 +1899,26 @@ def _verify_site(root: Path, prepared: PreparedPublication, *, cancelled=lambda:
             raise ValueError("Generated website is missing an image derivative")
         if hashlib.sha256(output.read_bytes()).hexdigest() != image.sha256:
             raise ValueError("Generated image derivative failed integrity verification")
-        if image.relative_path not in text:
+        if not any(image.relative_path in text for text in page_text.values()):
             raise ValueError("Generated website does not reference a planned image")
+    inventory = set(required) | {image.relative_path for image in prepared.images}
+    for name, text in page_text.items():
+        _verify_html_references(text, name, inventory, page_text.__getitem__)
+
+
+def _verify_html_references(text: str, page_name: str, inventory: set[str], read_page) -> None:
     for reference in re.findall(r'(?:href|src)="([^"]+)"', text):
-        if reference.startswith(("file:", "http:", "https:", "/")):
+        if reference.startswith(("file:", "http:", "https:", "/", "//")):
             raise ValueError("Website references a non-portable or remote resource")
-        if reference.startswith("#") and f'id="{reference[1:]}"' not in text:
-            raise ValueError("Website contains a broken internal navigation link")
-        if not reference.startswith("#"):
-            asset = root.joinpath(*PurePosixPath(reference).parts)
-            if not asset.is_file() or asset.is_symlink():
-                raise ValueError("Website references a missing or unsafe local asset")
+        target, marker = (reference.split("#", 1) + [""])[:2] if "#" in reference else (reference, "")
+        if not target:
+            target = page_name
+        path = PurePosixPath(target)
+        if (path.is_absolute() or ".." in path.parts or "\\" in target
+                or path.as_posix() != target or target not in inventory):
+            raise ValueError("Website references a missing or unsafe local asset")
+        if marker and (not target.endswith(".html") or f'id="{marker}"' not in (text if target == page_name else read_page(target))):
+            raise ValueError("Website contains a broken navigation link")
 
 
 def _open_directory_chain(path: Path) -> int:

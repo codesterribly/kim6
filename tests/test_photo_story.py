@@ -374,6 +374,28 @@ class PhotoStoryDialogTests(unittest.TestCase):
         large.close()
         wait_until(lambda: large.sequence_view.thumbnail_worker is None)
 
+    def test_manage_sections_lists_one_hundred_images_with_bounded_thumbnail_cache(self):
+        paths = []
+        for index in range(100):
+            path = self.root / f"section-{index:03}.png"
+            image = QImage(24, 18, QImage.Format_RGB32)
+            image.fill(0xff335577 + index)
+            self.assertTrue(image.save(str(path)))
+            paths.append(str(path))
+        large = PhotoStoryDialog(paths)
+        large.show()
+        large.sections_button.click()
+        manager = large.collection_dialog
+        self.assertEqual(manager.image_list.count(), 100)
+        manager.add_button.click()
+        manager.image_list.item(99).setCheckState(Qt.Checked)
+        self.assertEqual(large.collections[0].element_ids,
+                         (large.sequence.elements[99].id,))
+        self.assertLessEqual(len(large.sequence_view.thumbnails), 64)
+        manager.close()
+        large.close()
+        wait_until(lambda: large.sequence_view.thumbnail_worker is None)
+
     def test_publication_settings_are_independent_and_default_private(self):
         first = self.dialog.sequence.elements[0]
         first.caption = "Keep this caption"
@@ -390,6 +412,273 @@ class PhotoStoryDialogTests(unittest.TestCase):
         self.assertEqual(document.layout, "one-per-section")
         self.assertEqual(document.elements[0].description, "Long description")
         self.assertEqual(document.elements[0].caption, "Keep this caption")
+
+    def test_collection_controls_preserve_authored_content_and_structure_switch(self):
+        from PySide6.QtWidgets import QMessageBox
+        first, second = self.dialog.sequence.elements[:2]
+        first.caption = "Harbor caption"
+        first.description = "Harbor description"
+        self.dialog.sections_button.click()
+        manager = self.dialog.collection_dialog
+        manager.add_button.click()
+        self.assertEqual(manager.title_edit.text(), "Section 1")
+        manager.title_edit.setText("Harbor")
+        manager.description_edit.setPlainText("First collection")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        manager.add_button.click()
+        manager.title_edit.setText("Coast")
+        self.assertEqual(len(self.dialog.collections), 2)
+        manager.image_list.item(1).setCheckState(Qt.Checked)
+        self.assertEqual(self.dialog.collections[0].element_ids, (first.id,))
+        self.assertEqual(self.dialog.collections[1].element_ids, (second.id,))
+        manager.cover_selector.setCurrentIndex(1)
+        self.assertEqual(self.dialog.collections[1].cover_image_id, second.id)
+        manager.up_button.click()
+        manager.close()
+        self.dialog.website_structure_selector.setCurrentIndex(1)
+        document = self.dialog._publication_document()
+        self.assertEqual(document.website_structure, "multiple-pages")
+        self.assertEqual(document.collections[0].element_ids, (second.id,))
+        self.assertEqual(document.collections[1].description, "First collection")
+        self.dialog.website_structure_selector.setCurrentIndex(0)
+        self.assertEqual(self.dialog._publication_document().elements, document.elements)
+        self.dialog.sections_button.click()
+        with patch("kim_photo_story_dialog.QMessageBox.question", return_value=QMessageBox.Yes):
+            manager.remove_button.click()
+        self.assertEqual(len(self.dialog.collections), 1)
+        self.assertEqual(tuple(item.id for item in self.dialog._publication_document().elements),
+                         (first.id, second.id))
+        self.assertEqual(first.caption, "Harbor caption")
+        self.assertEqual(first.description, "Harbor description")
+        manager.close()
+
+    def test_section_manager_opens_beneath_website_structure(self):
+        from PySide6.QtWidgets import QComboBox, QDialogButtonBox, QPushButton
+        sidebar = self.dialog.settings_scroll.widget()
+        self.assertEqual(
+            [item.accessibleName() for item in sidebar.findChildren(QComboBox)
+             if item.isVisible() and item.accessibleName() in {
+                 "Selected collection", "Collection cover", "Album cover", "Albums",
+                 "Move selected story element to collection"}], [])
+        self.assertFalse(any(button.text() in {"Move selected element", "Add album", "Remove album"}
+                             for button in sidebar.findChildren(QPushButton)))
+        self.assertEqual(self.dialog.website_structure_selector.currentData(), "single-page")
+        self.assertIs(self.dialog.website_structure_selector.parent(), sidebar)
+        self.assertLess(self.dialog.style_preview_card.y(), self.dialog.show_captions.y())
+        self.assertLess(self.dialog.show_filenames.y(), self.dialog.output_format_selector.y())
+        self.assertLess(self.dialog.output_format_explanation.y(),
+                        self.dialog.website_structure_selector.y())
+        self.assertLess(self.dialog.website_structure_selector.y(), self.dialog.destination_label.y())
+        original_settings = (self.dialog.gallery_type_selector.currentData(),
+                             self.dialog.visual_style_selector.currentData(),
+                             self.dialog.layout_selector.currentData(),
+                             self.dialog.output_format_selector.currentData(),
+                             self.dialog.destination_edit.text())
+        button = self.dialog.sections_button
+        self.assertEqual(button.text(), "Sections…")
+        self.assertIs(button.parent(), sidebar)
+        self.assertGreater(button.y(), self.dialog.website_structure_selector.y())
+        button.click()
+        manager = self.dialog.collection_dialog
+        self.assertTrue(manager.isVisible())
+        self.assertTrue(manager.sections_explanation.isVisible())
+        self.assertEqual(manager.add_button.text(), "Add section")
+        self.assertEqual(manager.title_edit.accessibleName(), "Section title")
+        self.assertEqual(manager.cover_selector.accessibleName(), "Section cover")
+        manager.findChild(QDialogButtonBox).button(QDialogButtonBox.Close).click()
+        self.assertFalse(manager.isVisible())
+        self.assertTrue(self.dialog.isVisible())
+        self.assertEqual(self.dialog._publication_document().website_structure, "single-page")
+        self.assertEqual((self.dialog.gallery_type_selector.currentData(),
+                          self.dialog.visual_style_selector.currentData(),
+                          self.dialog.layout_selector.currentData(),
+                          self.dialog.output_format_selector.currentData(),
+                          self.dialog.destination_edit.text()), original_settings)
+
+    def test_visible_editor_starts_near_twenty_forty_forty_and_handles_move(self):
+        for width in (1460, 1366):
+            self.dialog.resize(width, 768)
+            QApplication.processEvents()
+            sizes = self.dialog.splitter.sizes()
+            available = sum(sizes)
+            for actual, expected in zip(sizes, (0.2, 0.4, 0.4)):
+                self.assertAlmostEqual(actual / available, expected, delta=0.04)
+            self.assertGreater(self.dialog.canvas_scroll.viewport().width(), 300)
+            self.assertGreater(self.dialog.settings_scroll.viewport().width(), 300)
+
+        before = self.dialog.splitter.sizes()
+        self.dialog.splitter.moveSplitter(before[0] + 35, 1)
+        QApplication.processEvents()
+        self.assertGreater(self.dialog.splitter.sizes()[0], before[0])
+        self.assertEqual(self.dialog.splitter.handle(1).isVisible(), True)
+        self.dialog.resize(980, 620)
+        QApplication.processEvents()
+        self.assertTrue(all(size > 0 for size in self.dialog.splitter.sizes()))
+        self.assertLessEqual(sum(self.dialog.splitter.sizes()), self.dialog.splitter.width())
+
+    def test_gallery_settings_use_compact_within_group_spacing_and_wrapping(self):
+        self.dialog.resize(1366, 768)
+        QApplication.processEvents()
+
+        def gap(first, second):
+            return second.y() - (first.y() + first.height())
+
+        pairs = (
+            (self.dialog.layout_selector, self.dialog.style_preview_card),
+            (self.dialog.show_captions, self.dialog.show_filenames),
+            (self.dialog.output_format_selector, self.dialog.output_format_explanation),
+            (self.dialog.website_structure_selector, self.dialog.website_structure_explanation),
+            (self.dialog.sections_button, self.dialog.sections_explanation),
+            (self.dialog.destination_button, self.dialog.destination_path),
+        )
+        for first, second in pairs:
+            self.assertLessEqual(gap(first, second), 6)
+            self.assertGreaterEqual(gap(first, second), 0)
+        self.assertGreaterEqual(gap(self.dialog.output_format_explanation,
+                                    self.dialog.website_structure_selector), 8)
+        for name in ("style_preview_note", "output_format_explanation",
+                     "website_structure_explanation", "sections_explanation",
+                     "destination_path", "destination_feedback"):
+            self.assertTrue(getattr(self.dialog, name).wordWrap())
+        self.assertFalse(self.dialog.settings_scroll.horizontalScrollBar().isVisible())
+        self.dialog.settings_scroll.ensureWidgetVisible(self.dialog.destination_button)
+        QApplication.processEvents()
+        self.assertGreater(self.dialog.destination_button.width(), 100)
+        self.assertEqual(self.dialog.website_structure_selector.currentData(), "single-page")
+        self.dialog.resize(980, 620)
+        self.dialog.destination_path.setText(
+            "/home/coolian/Pictures/Travelogue/ReallyLongDestinationFolderNameThatDoesNotHaveSpaces/"
+            "AnotherVeryLongFolderNameForPublishedPhotoStories/index.html")
+        self.dialog.destination_feedback.setText(
+            "Destination contains a long validation warning with enough words to wrap across "
+            "several lines at the minimum editor width.")
+        self.dialog.destination_feedback.show()
+        QApplication.processEvents()
+        for widget in (self.dialog.destination_path, self.dialog.destination_feedback):
+            self.assertGreater(widget.height(), widget.fontMetrics().height())
+        self.assertFalse(self.dialog.settings_scroll.horizontalScrollBar().isVisible())
+
+    def test_manage_sections_assigns_images_without_story_order_preselection(self):
+        first, second = self.dialog.sequence.elements[:2]
+        self.dialog.gallery_type_selector.setCurrentIndex(
+            self.dialog.gallery_type_selector.findData("travelogue"))
+        self.dialog.sequence_view.list.setCurrentRow(-1)
+        self.dialog.sections_button.click()
+        manager = self.dialog.collection_dialog
+        self.assertEqual(manager.windowTitle(), "KIMng - Manage sections")
+        self.assertEqual(manager.image_list.count(), 2)
+        self.assertIn("Unassigned", manager.image_list.item(0).text())
+        manager.add_button.click()
+        manager.title_edit.setText("Valletta")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        self.assertEqual(self.dialog.collections[0].element_ids, (first.id,))
+        manager.add_button.click()
+        manager.title_edit.setText("Mdina")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        self.assertEqual(self.dialog.collections[0].element_ids, ())
+        self.assertEqual(self.dialog.collections[1].element_ids, (first.id,))
+        manager.image_list.item(0).setCheckState(Qt.Unchecked)
+        self.assertEqual(self.dialog.collections[1].element_ids, ())
+        document = self.dialog._publication_document()
+        self.assertEqual(tuple(item.id for item in document.elements), (first.id, second.id))
+        manager.close()
+
+    def test_sections_explanations_thumbnails_and_narrative_assignment(self):
+        from kim_story_publication import output_pages, render_website
+        descriptions = {
+            "travelogue": "Organize your journey into sections for different places, days, or stops.",
+            "photo-essay": "Organize your story into sections, each with its own images and text.",
+            "illustrated-story": "Divide your story into chapters or sections.",
+            "simple-gallery": "Group related images into named sections.",
+        }
+        for gallery_type, expected in descriptions.items():
+            self.dialog.gallery_type_selector.setCurrentIndex(
+                self.dialog.gallery_type_selector.findData(gallery_type))
+            self.assertEqual(self.dialog.sections_explanation.text(), expected)
+        self.dialog.gallery_type_selector.setCurrentIndex(
+            self.dialog.gallery_type_selector.findData("travelogue"))
+        first, second = self.dialog.sequence.elements[:2]
+        first.caption = "A Valletta caption"
+        first.description = "A Valletta description"
+        stamp = self.dialog.sequence_view.source_stamps[first.source]
+        heading = self.dialog.sequence.add_heading("The harbor", index=1)
+        passage = self.dialog.sequence.add_text("Morning walk", index=2)
+        self.dialog._sequence_changed()
+        self.dialog.sections_button.click()
+        manager = self.dialog.collection_dialog
+        self.assertIn("places, days, or stops", manager.sections_explanation.text())
+        self.assertEqual(manager.image_list.count(), 2)
+        self.assertFalse(manager.image_list.item(0).icon().isNull())
+        manager.add_button.click()
+        manager.title_edit.setText("Valletta")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        manager.narrative_toggle.setChecked(True)
+        self.assertEqual(manager.narrative_list.count(), 2)
+        manager.narrative_list.item(0).setCheckState(Qt.Checked)
+        manager.narrative_list.item(1).setCheckState(Qt.Checked)
+        manager.add_button.click()
+        manager.title_edit.setText("Mdina")
+        manager.image_list.item(1).setCheckState(Qt.Checked)
+        self.assertEqual(self.dialog.collections[0].element_ids,
+                         (first.id, heading.id, passage.id))
+        self.assertEqual(self.dialog.collections[1].element_ids, (second.id,))
+        manager.close()
+        self.assertTrue(self.dialog.isVisible())
+        self.assertEqual(self.dialog.sequence_view.source_stamps[first.source], stamp)
+        self.assertEqual((first.caption, first.description),
+                         ("A Valletta caption", "A Valletta description"))
+        self.dialog.website_structure_selector.setCurrentIndex(1)
+        document = self.dialog._publication_document()
+        self.assertEqual(output_pages(document),
+                         ("index.html", "collection-valletta.html", "collection-mdina.html"))
+        pages = dict(render_website(document).pages)
+        self.assertIn("Morning walk", pages["collection-valletta.html"])
+        self.assertIn('data-element-id="%s"' % second.id, pages["collection-mdina.html"])
+        self.dialog.website_structure_selector.setCurrentIndex(0)
+        self.assertEqual(tuple(item.id for item in self.dialog._publication_document().elements),
+                         (first.id, heading.id, passage.id, second.id))
+
+    def test_manager_keeps_invalid_manual_cover_visible_until_user_resolves_it(self):
+        first, second = self.dialog.sequence.elements[:2]
+        self.dialog.sections_button.click()
+        manager = self.dialog.collection_dialog
+        manager.add_button.click()
+        manager.title_edit.setText("First")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        manager.cover_selector.setCurrentIndex(1)
+        self.assertEqual(self.dialog.collections[0].cover_image_id, first.id)
+        manager.add_button.click()
+        manager.title_edit.setText("Second")
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        manager.collection_list.setCurrentRow(0)
+        self.assertEqual(manager.cover_selector.currentText(), "Selected section cover is unavailable")
+        with self.assertRaisesRegex(ValueError, "cover"):
+            self.dialog._publication_document()
+        manager.cover_selector.setCurrentIndex(0)
+        document = self.dialog._publication_document()
+        self.assertEqual(document.collections[0].cover_image_id, "")
+        self.assertEqual(document.collections[1].element_ids, (first.id,))
+        self.assertEqual(document.collections[0].element_ids, ())
+        manager.close()
+
+    def test_removing_last_section_keeps_images_and_multiple_page_choice(self):
+        from PySide6.QtWidgets import QMessageBox
+        from kim_story_publication import output_pages
+        first, second = self.dialog.sequence.elements
+        self.dialog.website_structure_selector.setCurrentIndex(1)
+        self.dialog.sections_button.click()
+        manager = self.dialog.collection_dialog
+        manager.add_button.click()
+        manager.image_list.item(0).setCheckState(Qt.Checked)
+        with patch("kim_photo_story_dialog.QMessageBox.question", return_value=QMessageBox.Yes):
+            manager.remove_button.click()
+        self.assertEqual(self.dialog.collections, [])
+        self.assertEqual(self.dialog.website_structure_selector.currentData(), "multiple-pages")
+        document = self.dialog._publication_document()
+        self.assertEqual(tuple(item.id for item in document.elements), (first.id, second.id))
+        self.assertEqual(output_pages(document), ("index.html", "unassigned.html"))
+        self.assertIn("Unassigned", manager.image_list.item(0).text())
+        manager.close()
 
     def test_caption_controls_collapse_without_losing_text_and_visibility_is_independent(self):
         first = self.dialog.sequence.elements[0]
@@ -464,7 +753,7 @@ class PhotoStoryDialogTests(unittest.TestCase):
 
         note = self.dialog.style_preview_note.text()
         self.assertIn("Photography leads", note)
-        self.assertIn("single images and pairs", note)
+        self.assertIn("Automatically combines individual images and pairs", note)
 
         previous_title = self.dialog.style_preview_title.text()
 
@@ -480,11 +769,42 @@ class PhotoStoryDialogTests(unittest.TestCase):
         self.assertIn("Travelogue", title)
         self.assertIn("Classic", title)
         self.assertIn("One image at a time", note)
-        self.assertIn("Single-image sections", note)
+        self.assertIn("Displays images one at a time", note)
 
         self.assertTrue(self.dialog.style_preview_image.isHidden())
         self.assertEqual(first.source, original_source)
         self.assertEqual(first.id, self.dialog.sequence.elements[0].id)
+
+    def test_all_image_arrangements_and_website_structures_explain_their_output(self):
+        arrangements = {
+            "one-per-section": "Displays images one at a time, with plenty of room for descriptions and storytelling.",
+            "two-per-section": "Places compatible images side by side, creating balanced photographic spreads.",
+            "adaptive": "Automatically combines individual images and pairs for a varied, editorial presentation.",
+            "justified": "Arranges images in neat horizontal rows of equal height. Image widths adjust to fill each row without cropping. Ideal for traditional photography galleries.",
+            "masonry": "Arranges images in staggered columns with different heights. Portraits and landscapes retain their proportions. Ideal for visual portfolios.",
+        }
+        for key, explanation in arrangements.items():
+            self.dialog.layout_selector.setCurrentIndex(self.dialog.layout_selector.findData(key))
+            self.assertTrue(self.dialog.style_preview_note.isVisible())
+            self.assertTrue(self.dialog.style_preview_note.wordWrap())
+            self.assertTrue(self.dialog.style_preview_note.text().endswith(explanation))
+            self.assertIn("Photography leads", self.dialog.style_preview_note.text())
+            self.assertEqual(self.dialog._publication_document().layout, key)
+
+        structure_explanations = {
+            "single-page": "Create one scrolling website. Sections appear in order, with links to jump between them.",
+            "multiple-pages": "Create a home page with section covers. Each section opens on its own page.",
+        }
+        for key, explanation in structure_explanations.items():
+            self.dialog.website_structure_selector.setCurrentIndex(
+                self.dialog.website_structure_selector.findData(key))
+            self.assertEqual(self.dialog.website_structure_explanation.text(), explanation)
+            self.assertTrue(self.dialog.website_structure_explanation.wordWrap())
+            self.assertTrue(self.dialog.website_structure_explanation.isVisible())
+            if key == "multiple-pages":
+                self.assertEqual(self.dialog.website_structure_selector.currentData(), key)
+            else:
+                self.assertEqual(self.dialog._publication_document().website_structure, key)
 
 
 class FullStoryPreviewTests(unittest.TestCase):
@@ -553,6 +873,7 @@ class FullStoryPreviewTests(unittest.TestCase):
         wait_until(lambda: review.prepared is not None or "failed" in review.status.text().lower())
         self.assertIsNotNone(review.prepared)
         self.assertTrue(review.apply_button.isEnabled())
+        self.assertEqual(review.status.text(), "Ready to create gallery.")
         self.assertIn("Gallery type: Photo essay", review.details.text())
         self.assertIn("Visual style: Modern", review.details.text())
         self.assertEqual(review.table.rowCount(), len(document.elements))
@@ -583,8 +904,100 @@ class FullStoryPreviewTests(unittest.TestCase):
         wait_until(lambda: review.prepared is not None or 'failed' in review.status.text().lower())
         self.assertEqual(len(review.prepared.blocked), 1)
         self.assertFalse(review.apply_button.isEnabled())
+        self.assertEqual(
+            review.status.text(),
+            "One or more source images are unavailable. "
+            "Go back to remove them or restore the missing files.",
+        )
         self.assertIn('blocked', review.table.item(0, 0).text().lower())
         self.assertIn('unavailable', review.prepared.index_html.lower())
+        review.reject()
+
+    def test_review_shows_every_collection_page_and_blocks_missing_manual_cover(self):
+        from kim_story_publication import StoryCollection
+        from kim_story_publish import StoryReviewDialog
+        first, second = self.editor.sequence.elements
+        self.editor.collections = [
+            StoryCollection("day", "Day", (first.id,), cover_image_id=first.id),
+            StoryCollection("night", "Night", (second.id,)),
+        ]
+        self.editor._refresh_collection_controls()
+        self.editor.website_structure_selector.setCurrentIndex(1)
+        document = self.editor._publication_document()
+        review = StoryReviewDialog(document, str(self.root / "collection-site"), self.editor)
+        review.show()
+        wait_until(lambda: review.prepared is not None or "failed" in review.status.text().lower())
+        self.assertTrue(review.apply_button.isEnabled())
+        self.assertIn("Website structure: Multiple pages", review.details.text())
+        self.assertIn("Sections: Day, Night", review.details.text())
+        self.assertIn("Sections", review.summary_fields)
+        self.assertIn("Day: landscape.png", review.details.text())
+        self.assertEqual(review.output_inventory.rowCount(), 8)
+        inventory = {review.output_inventory.item(row, 0).text()
+                     for row in range(review.output_inventory.rowCount())}
+        self.assertIn("collection-day.html", inventory)
+        self.assertIn("collection-night.html", inventory)
+        review.reject()
+
+        Path(self.paths[0]).unlink()
+        blocked = StoryReviewDialog(document, str(self.root / "blocked-collection"), self.editor)
+        blocked.show()
+        wait_until(lambda: blocked.prepared is not None or "failed" in blocked.status.text().lower())
+        self.assertEqual(len(blocked.prepared.blocked), 1)
+        self.assertFalse(blocked.apply_button.isEnabled())
+        self.assertIn("No cover image", blocked.prepared.index_html)
+        blocked.reject()
+
+    def test_editor_preview_and_review_receive_the_same_managed_collection_document(self):
+        from PySide6.QtWidgets import QDialog
+        self.editor.show()
+        self.editor.sections_button.click()
+        manager = self.editor.collection_dialog
+        manager.add_button.click()
+        manager.title_edit.setText("Managed collection")
+        manager.description_edit.setPlainText("Kept through both paths")
+        manager.close()
+        self.editor.website_structure_selector.setCurrentIndex(1)
+        self.editor.layout_selector.setCurrentIndex(
+            self.editor.layout_selector.findData("justified"))
+
+        with patch("kim_story_publish.prepare_for_browser", return_value=None) as prepare:
+            self.editor.preview_in_browser()
+        preview_document = prepare.call_args.args[1]
+        self.assertEqual(preview_document.collections[0].title, "Managed collection")
+        self.assertEqual(preview_document.website_structure, "multiple-pages")
+        self.assertEqual(preview_document.layout, "justified")
+
+        with patch("kim_story_publish.StoryReviewDialog") as review_type:
+            review = review_type.return_value
+            review.exec.return_value = QDialog.Rejected
+            review.publication_path = ""
+            review.cancel_requested = False
+            review.destination = self.editor.destination_edit.text().strip()
+            self.editor.review_publication()
+        review_document = review_type.call_args.args[0]
+        self.assertEqual(review_document, preview_document)
+        self.assertEqual(review.exec.call_count, 1)
+        self.assertFalse(self.editor.isHidden())
+
+    def test_review_includes_unassigned_image_and_generated_page(self):
+        from kim_story_publish import StoryReviewDialog
+        from kim_story_publication import StoryCollection
+        first, second = self.editor.sequence.elements
+        self.editor.collections = [StoryCollection("valletta", "Valletta", (first.id,))]
+        self.editor.website_structure_selector.setCurrentIndex(1)
+        review = StoryReviewDialog(
+            self.editor._publication_document(), str(self.root / "unassigned-review"), self.editor)
+        review.show()
+        wait_until(lambda: review.prepared is not None or "failed" in review.status.text().lower())
+        self.assertTrue(review.apply_button.isEnabled())
+        self.assertIn("Sections: Valletta, Unassigned", review.details.text())
+        self.assertEqual(review.table.rowCount(), 2)
+        inventory = {review.output_inventory.item(row, 0).text()
+                     for row in range(review.output_inventory.rowCount())}
+        self.assertIn("unassigned.html", inventory)
+        self.assertIn('data-element-id="%s"' % second.id,
+                      dict(review.prepared.pages)["unassigned.html"])
         review.reject()
 
     def test_review_includes_approved_caption_filename_and_layout_choices(self):
