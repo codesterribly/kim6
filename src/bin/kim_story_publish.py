@@ -8,13 +8,16 @@ from pathlib import Path
 import stat
 import tempfile
 
-from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, QSize, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDialog, QDialogButtonBox, QHBoxLayout,
-    QLabel, QMessageBox, QProgressBar, QProgressDialog, QPushButton, QTableWidget,
-    QStyle, QTableWidgetItem, QVBoxLayout,
+    QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QFrame, QGridLayout,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar, QProgressDialog,
+    QPushButton, QScrollArea, QTableWidget, QStyle, QTableWidgetItem,
+    QToolButton, QVBoxLayout, QWidget,
 )
+
+from PySide6.QtWidgets import QSizePolicy, QHeaderView
 
 from kim_dialog_buttons import style_button, style_button_box
 from kim_story_publication import (
@@ -172,53 +175,208 @@ class StoryReviewDialog(QDialog):
         self._closing = False
 
         self.setWindowTitle("KIMng - Create a gallery - Review Changes")
-        self.resize(920, 680)
-        self.setMinimumSize(720, 480)
+        self.resize(1000, 720)
+        self.setMinimumSize(740, 500)
+
         layout = QVBoxLayout(self)
+        layout.setSpacing(9)
+
         title = QLabel("Review gallery output")
-        title.setStyleSheet("font-size: 20px; font-weight: 700;")
+        title.setStyleSheet("font-size: 18px; font-weight: 700;")
         layout.addWidget(title)
-        self.status = QLabel("Preparing the exact gallery output shown in browser preview…")
+
+        self.status = QLabel("Preparing gallery output…")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         layout.addWidget(self.progress)
+
+        summary = QFrame()
+        summary.setFrameShape(QFrame.StyledPanel)
+        summary_grid = QGridLayout(summary)
+        summary_grid.setHorizontalSpacing(16)
+        summary_grid.setVerticalSpacing(5)
+
+        fields = (
+            ("Gallery type", 0, 0),
+            ("Visual style", 0, 2),
+            ("Image arrangement", 1, 0),
+            ("Output format", 1, 2),
+            ("Story content", 2, 0),
+            ("Story title", 2, 2),
+        )
+        self.summary_fields = {}
+        for name, row, column in fields:
+            label = QLabel(name + ":")
+            value = QLabel("Preparing…")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            summary_grid.addWidget(label, row, column)
+            summary_grid.addWidget(value, row, column + 1)
+            self.summary_fields[name] = value
+        summary_grid.setColumnStretch(1, 1)
+        summary_grid.setColumnStretch(3, 1)
+        layout.addWidget(summary)
+
+        heading_row = QHBoxLayout()
+        content_title = QLabel("Planned gallery content")
+        content_title.setStyleSheet("font-weight: 700;")
+        heading_row.addWidget(content_title)
+        heading_row.addStretch()
+        self.content_count = QLabel()
+        heading_row.addWidget(self.content_count)
+        layout.addLayout(heading_row)
+
+        self.story_scroll = QScrollArea()
+        self.story_scroll.setWidgetResizable(True)
+        self.story_scroll.setFrameShape(QFrame.StyledPanel)
+        self.story_container = QWidget()
+        self.story_layout = QVBoxLayout(self.story_container)
+        self.story_layout.setContentsMargins(8, 8, 8, 8)
+        self.story_layout.setSpacing(6)
+        self.story_scroll.setWidget(self.story_container)
+        layout.addWidget(self.story_scroll, 1)
+
+        self.warnings_label = QLabel()
+        self.warnings_label.setWordWrap(True)
+        self.warnings_label.setVisible(False)
+        layout.addWidget(self.warnings_label)
+
+        self.output_toggle = QToolButton()
+        self.output_toggle.setText("Output details")
+        self.output_toggle.setCheckable(True)
+        self.output_toggle.setChecked(False)
+        self.output_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.output_toggle.setArrowType(Qt.RightArrow)
+        layout.addWidget(self.output_toggle)
+
+        self.output_box = QWidget()
+        output_layout = QVBoxLayout(self.output_box)
+        output_layout.setContentsMargins(4, 0, 4, 0)
+
         self.details = QLabel()
         self.details.setWordWrap(True)
-        layout.addWidget(self.details)
+        self.details.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        output_layout.addWidget(self.details)
+        self.details.hide()
+
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(("Story element", "Source", "Generated file", "Derivative"))
+        self.table.setHorizontalHeaderLabels(
+            ("Story element", "Source", "Generated file", "Derivative")
+        )
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.table, 1)
-        action_row = QHBoxLayout()
+        self.table.setMinimumHeight(150)
+        output_layout.addWidget(self.table)
+        self.table.hide()
+
+        self.output_inventory = QTableWidget(0, 3)
+        self.output_inventory.setHorizontalHeaderLabels(
+            ("Generated file", "Type", "Details")
+        )
+        self.output_inventory.setEditTriggers(
+            QAbstractItemView.NoEditTriggers
+        )
+        self.output_inventory.setSelectionBehavior(
+            QAbstractItemView.SelectRows
+        )
+        self.output_inventory.setAlternatingRowColors(True)
+        self.output_inventory.horizontalHeader().setStretchLastSection(True)
+        self.output_inventory.setMaximumHeight(230)
+        output_layout.addWidget(self.output_inventory)
+
+        self.output_box.setMaximumHeight(250)
+        self.output_box.setVisible(False)
+        layout.addWidget(self.output_box)
+
+        def toggle_output(checked):
+            self.output_toggle.setArrowType(
+                Qt.DownArrow if checked else Qt.RightArrow
+            )
+            self.output_box.setVisible(checked)
+
+        self.output_toggle.toggled.connect(toggle_output)
+
+        destination_title = QLabel("Destination")
+        destination_title.setStyleSheet("font-weight: 700;")
+        layout.addWidget(destination_title)
+
+        # Retain the validated QLineEdit model for compatibility
+        # and signal handling. Display a wrapping full-width path
+        # instead of a horizontally scrolling control.
+        self.destination_edit = QLineEdit(self.destination)
+        self.destination_edit.setObjectName(
+            "reviewGalleryDestinationPath")
+        self.destination_edit.textChanged.connect(
+            self._review_destination_changed)
+        self.destination_edit.hide()
+
+        self.change_destination_button = QPushButton(
+            "Change destination…")
+        self.change_destination_button.setIcon(
+            QIcon.fromTheme("folder-open"))
+        self.change_destination_button.clicked.connect(
+            self.change_review_destination)
+        layout.addWidget(
+            self.change_destination_button, 0, Qt.AlignLeft)
+
+        self.destination_path = QLabel(self.destination)
+        self.destination_path.setObjectName(
+            "reviewGalleryDestinationDisplay")
+        self.destination_path.setWordWrap(True)
+        self.destination_path.setMinimumWidth(0)
+        self.destination_path.setTextInteractionFlags(
+            Qt.TextSelectableByMouse)
+        self.destination_path.setToolTip(self.destination)
+        layout.addWidget(self.destination_path)
+
+        self.destination_feedback = QLabel()
+        self.destination_feedback.setWordWrap(True)
+        layout.addWidget(self.destination_feedback)
+
+        # Compatibility for existing review tests and callers.
+        self.destination_label = QLabel(self.destination)
+        self.destination_label.hide()
+
+        actions = QHBoxLayout()
+
+        self.back_button = QPushButton("Back")
+        self.back_button.setIcon(QIcon.fromTheme("go-previous"))
+        self.back_button.clicked.connect(self.go_back)
+        style_button(self.back_button)
+        actions.addWidget(self.back_button)
+
+        actions.addStretch(1)
+
         self.open_preview = QPushButton("Preview in browser")
-        self.open_preview.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.open_preview.setIcon(QIcon.fromTheme("internet-web-browser"))
         self.open_preview.setEnabled(False)
         self.open_preview.clicked.connect(self.open_browser_preview)
-        action_row.addWidget(self.open_preview)
-        action_row.addStretch(1)
-        layout.addLayout(action_row)
+        self.open_preview.hide()
+
         self.buttons = QDialogButtonBox()
         style_button_box(self.buttons)
-        self.back_button = QPushButton("Back")
-        self.cancel_button = QPushButton("Cancel")
-        self.back_button.clicked.connect(self.go_back)
-        self.cancel_button.clicked.connect(self.cancel_story)
-        style_button(self.back_button)
-        style_button(self.cancel_button)
-        self.buttons.addButton(self.back_button, QDialogButtonBox.RejectRole)
-        self.buttons.addButton(self.cancel_button, QDialogButtonBox.RejectRole)
+
         self.apply_button = QPushButton("Apply")
         self.apply_button.setObjectName("primaryAction")
+        self.apply_button.setIcon(QIcon.fromTheme("dialog-ok-apply"))
         self.apply_button.setEnabled(False)
         style_button(self.apply_button)
         self.buttons.addButton(self.apply_button, QDialogButtonBox.AcceptRole)
         self.apply_button.clicked.connect(self.apply)
-        layout.addWidget(self.buttons)
+
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setIcon(QIcon.fromTheme("dialog-cancel"))
+        self.cancel_button.clicked.connect(self.cancel_story)
+        style_button(self.cancel_button)
+        self.buttons.addButton(self.cancel_button, QDialogButtonBox.RejectRole)
+
+        actions.addWidget(self.buttons)
+        layout.addLayout(actions)
         self._start_preparation()
 
     def _start_preparation(self):
@@ -226,6 +384,7 @@ class StoryReviewDialog(QDialog):
         self.worker.completed.connect(self._prepared)
         self.worker.failed.connect(self._failed)
         self.worker.progress.connect(self._progress)
+        self.worker.finished.connect(self._finish_cancel_if_ready)
         self.worker.start()
 
     def _progress(self, current, total, name):
@@ -240,6 +399,8 @@ class StoryReviewDialog(QDialog):
             self.progress.setFormat("No images to prepare")
 
     def _prepared(self, prepared):
+        if self._closing:
+            return
         self.prepared = prepared
         self.progress.hide()
         self.open_preview.setEnabled(True)
@@ -295,6 +456,26 @@ class StoryReviewDialog(QDialog):
                 self.details.text()
                 + f"\nBlocked images: {len(prepared.blocked)}. Remove or replace them before Apply."
             )
+        self.summary_fields["Gallery type"].setText(
+            type_labels[prepared.document.publication_type])
+        self.summary_fields["Visual style"].setText(
+            style_labels[prepared.document.style])
+        self.summary_fields["Image arrangement"].setText(
+            layout_labels[prepared.document.layout])
+        self.summary_fields["Output format"].setText(format_label)
+        self.summary_fields["Story content"].setText(
+            f"{total_images} images, {headings} headings, {passages} passages")
+        self.summary_fields["Story title"].setText(
+            prepared.document.title.strip() or "Untitled story")
+        self.content_count.setText(f"{elements} elements")
+
+        if warnings:
+            self.warnings_label.setText(
+                "Warnings: " + "; ".join(warnings))
+            self.warnings_label.setVisible(True)
+        else:
+            self.warnings_label.setVisible(False)
+
         self.table.setRowCount(len(prepared.document.elements))
         images_by_id = {image.element_id: image for image in images}
         blocked_by_id = {image.element_id: image for image in prepared.blocked}
@@ -323,34 +504,279 @@ class StoryReviewDialog(QDialog):
                 self.table.setItem(row, column, cell)
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().setStretchLastSection(True)
-        collision = os.path.lexists(self.destination)
-        parent = Path(self.destination).parent
-        parent_ready = parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
-        try:
-            current_parent = parent.resolve(strict=True).stat()
-            parent_matches = self.approved_parent_identity == (
-                current_parent.st_dev, current_parent.st_ino)
-        except OSError:
-            parent_matches = False
-        try:
-            validate_prepared(prepared)
-            validation_error = ""
-        except Exception as exc:
-            validation_error = str(exc)
-        if collision:
-            self.status.setText("Blocked: the reviewed output path already exists. Go back and choose another destination.")
-        elif not parent_ready or not parent_matches:
-            self.status.setText("Blocked: the destination parent directory is unavailable or not writable.")
-        elif validation_error:
-            self.status.setText("Blocked: " + validation_error)
+        self._render_story_rows(
+            prepared, images_by_id, blocked_by_id, gallery_name)
+
+        self._populate_output_inventory(prepared, gallery_name)
+        self._validate_destination()
+
+    def _populate_output_inventory(self, prepared, gallery_name):
+        prefix = (
+            gallery_name + "/"
+            if prepared.document.output_format == "zip" else ""
+        )
+
+        entries = [
+            (prefix + "index.html", "HTML", "Gallery document"),
+            (prefix + "style.css", "CSS", "Gallery stylesheet"),
+            (prefix + "gallery-viewer.css", "CSS", "Image viewer"),
+            (prefix + "gallery-viewer.js", "JavaScript", "Image viewer"),
+        ]
+
+        for image in prepared.images:
+            entries.append((
+                prefix + image.relative_path,
+                "JPEG",
+                f"{image.width} × {image.height} px; "
+                f"{image.byte_size:,} bytes"
+            ))
+
+        self.output_inventory.setRowCount(len(entries))
+        for row, values in enumerate(entries):
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value)
+                cell.setToolTip(value)
+                self.output_inventory.setItem(row, column, cell)
+
+        self.output_inventory.setWordWrap(True)
+        self.output_inventory.setTextElideMode(Qt.ElideNone)
+
+        header = self.output_inventory.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(
+            0, QHeaderView.Interactive)
+        header.setSectionResizeMode(
+            1, QHeaderView.Fixed)
+        header.setSectionResizeMode(
+            2, QHeaderView.Stretch)
+
+        self.output_inventory.setColumnWidth(0, 215)
+        self.output_inventory.setColumnWidth(1, 80)
+        self.output_inventory.resizeRowsToContents()
+
+    def _validate_destination(self):
+        self.apply_button.setEnabled(False)
+        if self.prepared is None:
+            return
+
+        value = self.destination.strip()
+        problem = ""
+        if not value or not Path(value).is_absolute():
+            problem = "Enter an absolute destination path."
+        elif os.path.lexists(value):
+            problem = (
+                "A gallery already exists at this location. "
+                "Choose another destination."
+            )
         else:
-            self.status.setText("Ready. Review the exact output plan, then choose Apply to create the gallery.")
-            self.apply_button.setEnabled(True)
+            parent = Path(value).parent
+            if not parent.is_dir():
+                problem = "The destination directory does not exist."
+            elif not os.access(parent, os.W_OK | os.X_OK):
+                problem = "The destination directory is not writable."
+            else:
+                try:
+                    info = parent.resolve(strict=True).stat()
+                    if self.approved_parent_identity != (
+                            info.st_dev, info.st_ino):
+                        problem = "The destination directory changed."
+                except OSError:
+                    problem = "The destination directory is unavailable."
+
+        if not problem:
+            try:
+                validate_prepared(self.prepared)
+            except Exception as exc:
+                problem = str(exc)
+
+        if not problem and self.prepared.blocked:
+            problem = (
+                f"{len(self.prepared.blocked)} source image(s) "
+                "cannot be published."
+            )
+
+        self.destination_feedback.setText(problem)
+        self.destination_feedback.setVisible(bool(problem))
+        self.status.setText(
+            "Choose another destination to continue."
+            if problem else "Ready to create gallery."
+        )
+        self.apply_button.setEnabled(not problem)
+
+    def _review_destination_changed(self, value):
+        self.destination = value.strip()
+        self.destination_path.setText(
+            self.destination or "Choose a destination directory.")
+        self.destination_path.setToolTip(self.destination)
+        self.destination_label.setText(self.destination)
+        self.destination_label.setToolTip(self.destination)
+        try:
+            parent = Path(self.destination).parent.resolve(
+                strict=True).stat()
+            self.approved_parent_identity = (
+                parent.st_dev, parent.st_ino)
+        except (OSError, ValueError):
+            self.approved_parent_identity = None
+        self._validate_destination()
+
+    def change_review_destination(self):
+        if (self.publication_worker is not None
+                and self.publication_worker.isRunning()):
+            return
+
+        current = self.destination_edit.text().strip()
+        start = str(Path(current).parent) if current else str(Path.home())
+        selected = QFileDialog.getExistingDirectory(
+            self, "Choose gallery destination directory", start,
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        if selected:
+            filename = Path(self.destination).name
+            self.destination_edit.setText(str(Path(selected) / filename))
+
+    def _render_story_rows(self, prepared, images_by_id,
+                           blocked_by_id, gallery_name):
+        """Show compact story-order rows using prepared derivatives only."""
+        while self.story_layout.count():
+            child = self.story_layout.takeAt(0)
+            widget = child.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for element in prepared.document.elements:
+            card = QFrame()
+            card.setFrameShape(QFrame.StyledPanel)
+
+            row = QHBoxLayout(card)
+            row.setContentsMargins(6, 3, 6, 3)
+            row.setSpacing(8)
+
+            thumbnail_label = QLabel()
+            thumbnail_label.setFixedSize(76, 54)
+            thumbnail_label.setAlignment(Qt.AlignCenter)
+
+            content = QWidget()
+            content_layout = QVBoxLayout(content)
+            content_layout.setContentsMargins(0, 0, 0, 0)
+            content_layout.setSpacing(3)
+            content.setMinimumWidth(0)
+            content.setSizePolicy(
+                QSizePolicy.Ignored, QSizePolicy.Preferred)
+
+            name_label = QLabel()
+            name_label.setTextFormat(Qt.PlainText)
+            name_label.setWordWrap(True)
+            name_label.setMinimumWidth(0)
+            name_label.setSizePolicy(
+                QSizePolicy.Ignored, QSizePolicy.Preferred)
+            name_label.setStyleSheet("font-weight: 600;")
+            name_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+            detail_label = QLabel()
+            detail_label.setTextFormat(Qt.PlainText)
+            detail_label.setWordWrap(True)
+            detail_label.setMinimumWidth(0)
+            detail_label.setSizePolicy(
+                QSizePolicy.Ignored, QSizePolicy.Preferred)
+            detail_label.setTextInteractionFlags(
+                Qt.TextSelectableByMouse)
+            detail_font = detail_label.font()
+            detail_font.setPointSize(
+                max(8, detail_font.pointSize() - 1))
+            detail_label.setFont(detail_font)
+
+            if element.kind == "image":
+                image = images_by_id.get(element.id)
+                blocked = blocked_by_id.get(element.id)
+
+                if image is not None:
+                    reader = QImageReader(image.staged_path)
+                    size = reader.size()
+                    if size.isValid():
+                        reader.setScaledSize(
+                            size.scaled(
+                                QSize(72, 50), Qt.KeepAspectRatio
+                            )
+                        )
+
+                    thumbnail = reader.read()
+                    if not thumbnail.isNull():
+                        thumbnail_label.setPixmap(
+                            QPixmap.fromImage(thumbnail)
+                        )
+                    else:
+                        thumbnail_label.setText("No preview")
+
+                    source_name = Path(image.source).name
+                    name_label.setText(source_name)
+                    name_label.setToolTip(image.source)
+
+                    output_name = image.relative_path
+                    if prepared.document.output_format == "zip":
+                        output_name = f"{gallery_name}/{output_name}"
+
+                    detail_label.setText(
+                        f"{output_name}  |  "
+                        f"{image.width} × {image.height} px  |  "
+                        f"JPEG  |  {image.byte_size:,} bytes"
+                    )
+                    detail_label.setToolTip(
+                        f"Source: {image.source}\n"
+                        f"Planned output: {output_name}"
+                    )
+                else:
+                    source_name = Path(element.source).name
+                    reason = (
+                        blocked.reason if blocked is not None
+                        else "No prepared derivative"
+                    )
+                    thumbnail_label.setText("Blocked")
+                    name_label.setText(source_name)
+                    name_label.setToolTip(element.source)
+                    detail_label.setText(f"Blocked: {reason}")
+
+            elif element.kind == "heading":
+                thumbnail_label.setPixmap(
+                    QIcon.fromTheme(
+                        "format-text-heading"
+                    ).pixmap(28, 28)
+                )
+                name_label.setText(
+                    element.heading or "(empty heading)"
+                )
+                detail_label.setText(
+                    "Section heading  |  Included in index.html"
+                )
+
+            else:
+                thumbnail_label.setPixmap(
+                    QIcon.fromTheme(
+                        "format-justify-left"
+                    ).pixmap(28, 28)
+                )
+                excerpt = " ".join((element.text or "").split())
+                if len(excerpt) > 140:
+                    excerpt = excerpt[:137] + "…"
+                name_label.setText(
+                    excerpt or "(empty passage)"
+                )
+                name_label.setToolTip(element.text or "")
+                detail_label.setText(
+                    "Text in index.html"
+                    if excerpt else "Empty text element"
+                )
+
+            content_layout.addWidget(name_label)
+            content_layout.addWidget(detail_label)
+
+            row.addWidget(thumbnail_label)
+            row.addWidget(content, 1)
+            self.story_layout.addWidget(card)
+
+        self.story_layout.addStretch(1)
 
     def _failed(self, error):
         self.progress.hide()
         if self._closing:
-            QTimer.singleShot(0, lambda: QDialog.reject(self))
             return
         self.status.setText("Gallery preparation failed: " + error)
         self.apply_button.setEnabled(False)
@@ -382,6 +808,9 @@ class StoryReviewDialog(QDialog):
         self.publication_worker.progress.connect(self._publication_progress)
         self.publication_worker.completed.connect(self._publication_completed)
         self.publication_worker.failed.connect(self._publication_failed)
+        self.publication_worker.finished.connect(
+            self._finish_cancel_if_ready
+        )
         self.publication_progress.canceled.connect(
             self.publication_worker.requestInterruption)
         self.publication_worker.start()
@@ -414,40 +843,50 @@ class StoryReviewDialog(QDialog):
         if "cancelled" in error.casefold():
             self.status.setText("Publication cancelled. No gallery output was created.")
             self.apply_button.setEnabled(True)
-            if self._closing:
-                QTimer.singleShot(0, lambda: QDialog.reject(self))
             return
         self.status.setText("Publication blocked: " + error)
         # A changed source or a newly occupied destination requires a new review.
         self.apply_button.setEnabled(False)
 
-    def reject(self):
-        if self.publication_worker is not None and self.publication_worker.isRunning():
-            self._closing = True
-            self.publication_worker.requestInterruption()
-            self.status.setText("Stopping before gallery output is created…")
-            self.back_button.setEnabled(False)
+    def _finish_cancel_if_ready(self):
+        if not self._closing:
             return
-        if self.worker is not None and self.worker.isRunning():
+        for worker in (self.worker, self.publication_worker):
+            if worker is not None and worker.isRunning():
+                return
+        QTimer.singleShot(0, lambda: QDialog.reject(self))
+
+    def reject(self):
+        running = [
+            worker for worker in (
+                self.worker, self.publication_worker)
+            if worker is not None and worker.isRunning()
+        ]
+        if running:
             self._closing = True
-            self.worker.requestInterruption()
-            self.status.setText("Stopping gallery preparation…")
+            self.apply_button.setEnabled(False)
             self.back_button.setEnabled(False)
+            self.cancel_button.setEnabled(False)
+            self.change_destination_button.setEnabled(False)
+            self.status.setText("Stopping gallery operation…")
+            for worker in running:
+                worker.requestInterruption()
             return
         super().reject()
 
     def closeEvent(self, event):
-        if self.publication_worker is not None and self.publication_worker.isRunning():
+        running = [
+            worker for worker in (
+                self.worker, self.publication_worker)
+            if worker is not None and worker.isRunning()
+        ]
+        if running:
             self._closing = True
-            self.publication_worker.requestInterruption()
+            for worker in running:
+                worker.requestInterruption()
             event.ignore()
             return
-        if self.worker is not None and self.worker.isRunning():
-            self._closing = True
-            self.worker.requestInterruption()
-            event.ignore()
-            return
-        event.accept()
+        super().closeEvent(event)
 
     def done(self, result):
         if self.publication_worker is not None and self.publication_worker.isRunning():

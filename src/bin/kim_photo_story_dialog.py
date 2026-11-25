@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate, QStyle, QStyleOptionViewItem, QVBoxLayout, QWidget, QToolButton,
 )
 
-from kim_dialog_buttons import style_button_box
+from kim_dialog_buttons import style_button, style_button_box
 from kim_photo_selection import CREATE_IMAGE_EXTENSIONS, ThumbnailWorker, choose_images
 from kim_preview import identity
 
@@ -433,7 +433,7 @@ class StorySequenceView(QWidget):
         else:
             excerpt = " ".join(element.text.split())[:100] or "Empty text passage"
             item.setText(excerpt)
-            item.setData(Qt.UserRole, "Text passage")
+            item.setData(Qt.UserRole, "")
             item.setIcon(self._icon("insert-text", QStyle.SP_FileDialogContentsView))
             item.setToolTip(element.text or "Empty text passage")
         item.setData(KIND_ROLE, element.kind)
@@ -824,11 +824,44 @@ class PhotoStoryDialog(QDialog):
         self.status = QLabel("Add images or story elements to begin.")
         self.status.setWordWrap(True)
         outer.addWidget(self.status)
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        style_button_box(buttons)
-        self.close_button = buttons.button(QDialogButtonBox.Close)
-        buttons.rejected.connect(self.reject)
-        outer.addWidget(buttons)
+
+        footer = QHBoxLayout()
+        self.preview_button = QPushButton("Preview in browser")
+        self.preview_button.setObjectName("previewGalleryInBrowser")
+        self.preview_button.setIcon(QIcon.fromTheme(
+            "internet-web-browser",
+            self.style().standardIcon(QStyle.SP_BrowserReload)))
+        self.preview_button.clicked.connect(self.preview_in_browser)
+        self.preview_button.setIconSize(QSize(16, 16))
+        self.preview_button.setMaximumWidth(170)
+        self.preview_button.setAutoDefault(False)
+        self.preview_button.setDefault(False)
+        self.preview_button.setToolTip(
+            "Open a temporary gallery preview in your browser")
+        self.preview_button.setSizePolicy(
+            QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self.full_preview_button = self.preview_button
+        footer.addWidget(self.preview_button)
+        footer.addStretch(1)
+
+        self.buttons = QDialogButtonBox()
+        self.review_button = QPushButton("Review Changes")
+        self.review_button.setObjectName("primaryAction")
+        style_button(self.review_button, "review")
+        self.review_button.clicked.connect(self.review_publication)
+        self.buttons.addButton(
+            self.review_button, QDialogButtonBox.AcceptRole)
+
+        self.cancel_button = QPushButton("Cancel")
+        style_button(self.cancel_button, "cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        self.buttons.addButton(
+            self.cancel_button, QDialogButtonBox.RejectRole)
+
+        self.close_button = self.cancel_button
+        footer.addWidget(self.buttons)
+        outer.addLayout(footer)
+        QTimer.singleShot(0, self._validate_editor_destination)
 
         self.sequence_view.selection_changed.connect(self._selection_changed)
         self.sequence_view.list.itemClicked.connect(
@@ -1002,24 +1035,45 @@ class PhotoStoryDialog(QDialog):
         self.output_format_explanation.setObjectName("outputFormatExplanation")
         layout.addWidget(self.output_format_explanation)
 
-        self.destination_label = QLabel()
-        self.destination_label.setWordWrap(True)
-        self.destination_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._destination_manual = False
+
+        self.destination_label = QLabel("Destination")
+        self.destination_label.setStyleSheet("font-weight: 650;")
         layout.addWidget(self.destination_label)
-        self.destination_button = QPushButton("Change destination…")
-        self.destination_button.clicked.connect(self.change_destination)
-        layout.addWidget(self.destination_button)
-        self.preview_button = QPushButton("Preview in browser")
-        self.preview_button.setObjectName("previewGalleryInBrowser")
-        self.preview_button.setIcon(QIcon.fromTheme("internet-web-browser"))
-        self.preview_button.setMinimumHeight(42)
-        self.preview_button.clicked.connect(self.preview_in_browser)
-        self.full_preview_button = self.preview_button
-        layout.addWidget(self.preview_button)
-        self.review_button = QPushButton("Review Changes")
-        self.review_button.setIcon(QIcon.fromTheme("document-preview"))
-        self.review_button.clicked.connect(self.review_publication)
-        layout.addWidget(self.review_button)
+
+        # Keep the validated destination state without displaying
+        # a cramped single-line path editor.
+        self.destination_edit = QLineEdit()
+        self.destination_edit.setObjectName("galleryDestinationPath")
+        self.destination_edit.textEdited.connect(
+            self._destination_edited)
+        self.destination_edit.textChanged.connect(
+            self._validate_editor_destination)
+        self.destination_edit.hide()
+
+        self.destination_button = QPushButton(
+            "Change destination…")
+        self.destination_button.setIcon(
+            QIcon.fromTheme("folder-open"))
+        self.destination_button.clicked.connect(
+            self.change_destination)
+        layout.addWidget(
+            self.destination_button, 0, Qt.AlignLeft)
+
+        self.destination_path = QLabel()
+        self.destination_path.setObjectName(
+            "galleryDestinationDisplay")
+        self.destination_path.setWordWrap(True)
+        self.destination_path.setMinimumWidth(0)
+        self.destination_path.setTextInteractionFlags(
+            Qt.TextSelectableByMouse)
+        self.destination_path.setToolTip(
+            "Complete planned gallery output path")
+        layout.addWidget(self.destination_path)
+
+        self.destination_feedback = QLabel()
+        self.destination_feedback.setWordWrap(True)
+        layout.addWidget(self.destination_feedback)
 
         # Retain the legacy Qt preview's theme data without exposing its old
         # ten-theme selector as if those were complete HTML visual styles.
@@ -1382,35 +1436,87 @@ class PhotoStoryDialog(QDialog):
         return next(iter(parents)) if len(parents) == 1 else ""
 
     def _update_destination_label(self):
-        if not self.destination_parent_explicit and hasattr(self, "sequence_view"):
-            image_parents = set()
+        if not self.destination_parent_explicit and hasattr(
+                self, "sequence_view"):
+            parents = set()
             for element in self.sequence.elements:
-                if element.kind == "image":
-                    try:
-                        image_parents.add(str(Path(element.source).resolve(strict=True).parent))
-                    except OSError:
-                        pass
-            self.destination_parent = next(iter(image_parents)) if len(image_parents) == 1 else ""
+                if element.kind != "image":
+                    continue
+                try:
+                    parents.add(str(
+                        Path(element.source).resolve(strict=True).parent))
+                except OSError:
+                    pass
+            self.destination_parent = (
+                next(iter(parents)) if len(parents) == 1 else "")
+
         from kim_story_publication import publication_slug
-        parent = self.destination_parent
-        if not parent:
-            self.destination_label.setText("Output path: choose a shared destination.")
+        if not getattr(self, "_destination_manual", False):
+            if self.destination_parent:
+                name = publication_slug(self.story_title.text())
+                if (hasattr(self, "output_format_selector")
+                        and self.output_format_selector.currentData()
+                        == "zip"):
+                    name += ".zip"
+                value = str(Path(self.destination_parent) / name)
+            else:
+                value = ""
+            if hasattr(self, "destination_edit"):
+                self.destination_edit.setText(value)
+        if hasattr(self, "destination_edit"):
+            self.destination_label.setText(
+                "Destination" if self.destination_parent
+                else "Destination: choose a shared destination.")
+            self._validate_editor_destination()
+
+    def _destination_edited(self, value):
+        self._destination_manual = True
+
+    def _validate_editor_destination(self, *_):
+        if not hasattr(self, "destination_edit"):
             return
-        slug = publication_slug(self.story_title.text())
-        suffix = ".zip" if (hasattr(self, "output_format_selector")
-                             and self.output_format_selector.currentData() == "zip") else ""
-        target = Path(parent) / (slug + suffix)
-        self.destination_label.setText("Output path: " + str(target))
+        value = self.destination_edit.text().strip()
+        self.destination_path.setText(
+            value or "Choose a shared destination directory.")
+        self.destination_path.setToolTip(value)
+        problem = ""
+        if not value:
+            problem = "Choose a shared destination directory."
+        elif not Path(value).is_absolute():
+            problem = "Enter an absolute destination path."
+        elif os.path.lexists(value):
+            problem = (
+                "A gallery already exists at this location. "
+                "Choose another destination."
+            )
+        else:
+            parent = Path(value).parent
+            if not parent.is_dir():
+                problem = "The destination directory does not exist."
+            elif not os.access(parent, os.W_OK | os.X_OK):
+                problem = "The destination directory is not writable."
+            elif (hasattr(self, "output_format_selector")
+                  and self.output_format_selector.currentData() == "zip"
+                  and Path(value).suffix.casefold() != ".zip"):
+                problem = "ZIP gallery output must end in .zip."
+
+        self.destination_feedback.setText(problem)
+        self.destination_feedback.setVisible(bool(problem))
+        if hasattr(self, "review_button"):
+            self.review_button.setEnabled(not problem)
+        return not problem
 
     def change_destination(self):
-        start = self.destination_parent or str(Path.home())
+        current = self.destination_edit.text().strip()
+        start = str(Path(current).parent) if current else (
+            self.destination_parent or str(Path.home()))
         selected = QFileDialog.getExistingDirectory(
-            self, "Choose parent folder for gallery output", start,
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
-        )
+            self, "Choose gallery destination directory", start,
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         if selected:
             self.destination_parent = str(Path(selected).resolve())
             self.destination_parent_explicit = True
+            self._destination_manual = False
             self._update_destination_label()
 
     def _publication_document(self):
@@ -1442,36 +1548,37 @@ class PhotoStoryDialog(QDialog):
             QMessageBox.warning(self, "Browser unavailable", "KDE could not open the local gallery preview.")
 
     def review_publication(self):
-        from kim_story_publication import publication_slug
         from kim_story_publish import StoryReviewDialog
-        if not self.destination_parent:
-            QMessageBox.information(
-                self, "Choose a gallery destination",
-                "Selected images come from different folders, or the story has no images. "
-                "Choose one shared destination before Review Changes.",
-            )
-            self.change_destination()
-            if not self.destination_parent:
-                return
+        if not self._validate_editor_destination():
+            self.destination_edit.setFocus()
+            return
+
         document = self._publication_document()
-        filename = publication_slug(document.title)
-        if document.output_format == "zip":
-            filename += ".zip"
-        destination = str(Path(self.destination_parent) / filename)
+        destination = self.destination_edit.text().strip()
+
         try:
             review = StoryReviewDialog(document, destination, self)
         except Exception as exc:
-            QMessageBox.warning(self, "Gallery plan unavailable", str(exc))
+            QMessageBox.warning(
+                self, "Gallery plan unavailable", str(exc))
             return
-        cancel_story = False
+
         try:
             result = review.exec()
-            output = review.publication_path if result == QDialog.Accepted else ""
+            output = (
+                review.publication_path
+                if result == QDialog.Accepted else "")
             cancel_story = review.cancel_requested
+            reviewed_destination = review.destination
         finally:
             review.deleteLater()
+
+        if reviewed_destination != destination:
+            self._destination_manual = True
+            self.destination_edit.setText(reviewed_destination)
+            self._validate_editor_destination()
+
         if cancel_story:
-            self.reject()
             return
         if output:
             self._show_publication_complete(output)

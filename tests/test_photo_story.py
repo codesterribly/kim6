@@ -447,7 +447,11 @@ class PhotoStoryDialogTests(unittest.TestCase):
         self.assertEqual(document.style, "dramatic")
         self.assertEqual(document.layout, "one-per-section")
         self.assertEqual(document.output_format, "zip")
-        self.assertTrue(self.dialog.destination_label.text().endswith(".zip"))
+        self.assertTrue(self.dialog.destination_edit.text().endswith(".zip"))
+        self.assertEqual(
+            self.dialog.destination_edit.text(),
+            str(self.root / "photo-story.zip"),
+        )
         self.assertEqual(first.heading, "Harbor at dusk")
         self.assertEqual(first.description, "A lasting memory.\n\nOne more paragraph.")
         self.assertEqual(first.caption, "The evening crossing.")

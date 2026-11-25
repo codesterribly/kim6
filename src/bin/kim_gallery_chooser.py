@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QStyle, QVBoxLayout,
 )
 
-from kim_dialog_buttons import style_button_box
+from kim_dialog_buttons import style_button, style_button_box
 from kim_photo_selection import ThumbnailWorker
 
 
@@ -153,13 +153,15 @@ def artwork(kind, pictures):
             'A PHOTO STORY',
         )
 
-        font = QFont('Noto Serif', 31)
+        font = QFont('Noto Serif', 26)
         font.setBold(True)
         painter.setFont(font)
+        headline = 'Your story.\nBeautifully told.'
+        headline_rect = rectangle(29, 119, 510, 119)
         painter.drawText(
-            rectangle(29, 151, 510, 81),
-            Qt.AlignLeft | Qt.AlignVCenter,
-            'Your story.\nBeautifully told.',
+            headline_rect,
+            Qt.AlignLeft | Qt.AlignVCenter | Qt.TextWordWrap,
+            headline,
         )
 
         font = QFont('Noto Sans', 10)
@@ -334,12 +336,7 @@ class GalleryChooser(QDialog):
         self.continue_button.setText('Continue')
         self.continue_button.setEnabled(False)
 
-        next_icon = QIcon.fromTheme('go-next')
-        if next_icon.isNull():
-            next_icon = self.style().standardIcon(
-                QStyle.SP_ArrowRight
-            )
-        self.continue_button.setIcon(next_icon)
+        style_button(self.continue_button, 'review')
 
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
