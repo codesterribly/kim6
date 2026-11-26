@@ -72,8 +72,20 @@
 <td>Installation and removal scripts.</td>
 </tr>
 <tr>
+<td><code>install_inventory.sh</code></td>
+<td>Shared authoritative runtime, menu and retirement inventory.</td>
+</tr>
+<tr>
+<td><code>tools/build_manual.py</code></td>
+<td>Build or verify generated HTML reference pages.</td>
+</tr>
+<tr>
+<td><code>tools/extract_messages.py</code></td>
+<td>Rebuild or verify the English gettext template.</td>
+</tr>
+<tr>
 <td><code>po/</code></td>
-<td>Translation files.</td>
+<td>English gettext message template and localization infrastructure.</td>
 </tr>
 <tr>
 <td><code>docs/</code></td>
@@ -142,7 +154,8 @@
 <p>The dispatcher's command-line help is maintained in <code>src/bin/kim_all</code> and should remain consistent with the documented options.</p>
 <p>See <a href="ACTIONS.html">ACTIONS.md</a> for the complete menu definitions and <a href="commandconfig.html">commandconfig.md</a> for command-line arguments.</p>
 <h2 id="embedded-user-guide-rendering">Embedded User Guide rendering</h2>
-<p><code>src/bin/kim_settings_dialog.py</code> embeds the installed <code>docs/index.html</code> using <code>PySide6.QtWebEngineWidgets.QWebEngineView</code>. The binding is optional for general KIMng operation but required for the full HTML guide inside Settings/About.</p>
+<p><code>src/bin/kim_manual_viewer.py</code> provides the shared manual-viewing implementation used by the standalone User Guide and the Settings dialog. <code>src/bin/kim_settings_dialog.py</code> embeds the installed <code>docs/index.html</code> using <code>PySide6.QtWebEngineWidgets.QWebEngineView</code>.</p>
+<p>Preserve shared navigation behavior, local documentation paths, fragment links and browser fallbacks when modifying either entry point. The binding is optional for general KIMng operation but required for the full HTML guide inside Settings/About.</p>
 <p>For Ubuntu or Debian, the package is <code>python3-pyside6.qtwebenginewidgets</code>. The Qt WebEngine runtime libraries alone do not provide the Python import. <code>install.sh</code> checks <code>from PySide6.QtWebEngineWidgets import QWebEngineView</code> and reports the missing optional dependency.</p>
 <p>The guide opens from a local file URL, so installed CSS, illustrations, and reference pages must retain their relative paths. The application keeps an external-browser action and a limited Markdown fallback.</p>
 <p>When modifying this tab, keep the status label hidden during successful HTML rendering and give the WebEngine widget the available vertical space. Restore a status message only for fallback or missing-file conditions. Do not disable HTML rendering merely because the process has SSH environment variables.</p>
@@ -212,7 +225,7 @@
 <p>Metadata operations use ExifTool where appropriate, alongside native PNG, JPEG/WebP and GIF metadata engines and TIFF/ISOBMFF verification helpers. Result checks preserve image pixels, color profiles, permissions, and modification times where supported. Selective GPS removal targets recognized coordinate tags. Selective AI removal targets recognized IPTC AI prompt and system tags and removes <code>DigitalSourceType</code> only for recognized AI classifications. Neither selective mode guarantees removal of all related information; unrecognized generator-specific fields and signed C2PA / Content Credentials may remain.</p>
 <p>Date synchronization supports separate operations for filesystem timestamps and embedded image metadata. Before a direct original-file mtime update, the selected source's link count, device and inode are checked to detect unexpected path replacement. The create-copy path must not explicitly restore atime on the selected original. Camera-time shifting changes wall-clock date tags, not timezone interpretation; subsecond and timezone-offset metadata follow the documented per-action contract.</p>
 <h3 id="web-export">Web export</h3>
-<p>Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg path with frame and timing checks.</p>
+<p>Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg backend path with frame and timing checks. Backend paths must not be confused with unconditionally enabled interactive support.</p>
 <h3 id="video-processing-1">Video processing</h3>
 <p>Video utilities create separate outputs. Video transcoding can replace an existing file only when authorized.</p>
 <p>Slideshow generation always creates a separate output file.</p>
@@ -221,7 +234,7 @@
 <p>Renaming does not use the same publication mechanism as image transformations.</p>
 <h3 id="special-image-formats">Special image formats</h3>
 <p>Not every image is a single-frame RGB image. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.</p>
-<p>Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.</p>
+<p>Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg backend path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.</p>
 <h2 id="adding-or-modifying-actions">Adding or Modifying Actions</h2>
 <p>Most KIMng functionality is implemented as action functions in <code>src/bin/kim_all</code>. Dolphin invokes these functions through the service-menu definitions in <code>src/</code>.</p>
 <p>When adding or changing an action:</p>
@@ -247,7 +260,10 @@
 <pre class="sh"><code>bash -n src/bin/kim_all install.sh uninstall.sh
 shellcheck --exclude=SC2015 src/bin/kim_all install.sh uninstall.sh
 git --no-pager diff --check</code></pre>
-<p>Installer tests should use temporary installation directories rather than modifying the active Dolphin installation.</p>
+<p>Installer tests should use temporary installation directories and isolated HOME/XDG settings rather than modifying the active Dolphin installation.</p>
+<p>The installation inventory is shared by the installer and uninstaller. Adding a runtime dependency, Python module, menu template or offline documentation asset requires an inventory review. Run the independent inventory tests with:</p>
+<pre><code>python3 -B tests/test_installation_inventory.py -v</code></pre>
+<p>These tests check packaging completeness, destination uniqueness, file modes, internal Python imports and retired-file exclusions. The installation lifecycle tests additionally exercise upgrades, interruption recovery, unsafe symlinks, unrelated-file preservation and repeated installation and removal.</p>
 <p>KDE service menus use <code>Type=Service</code>, which may not be handled correctly by generic desktop-entry validators. Use the project's KDE-specific menu tests for structural validation.</p>
 <p>Automated menu tests verify definitions and command arguments, but actual menu display and interaction should also be tested in Dolphin.</p>
 <h2 id="installation-and-release-testing">Installation and Release Testing</h2>
@@ -283,7 +299,7 @@ git --no-pager diff --check</code></pre>
 <h2 id="reporting-a-bug">Reporting a Bug</h2>
 <p>Include the KIMng version or commit, distribution/KDE and tool versions, exact action/options, a small synthetic or safely redacted sample when possible, expected and actual behavior, and the reported error. State whether the failure is repeatable. Never attach private images or videos without permission.</p>
 <h2 id="installer-safety-and-recovery">Installer Safety and Recovery</h2>
-<p>The installer identifies KIMng installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.</p>
+<p>The installer uses the KIMng ownership marker, recognized dispatcher and service-menu ownership checks to distinguish managed content from unrelated files. A valid owned runtime with a missing dispatcher can be repaired. An unfamiliar dispatcher or unsafe symlink must still be refused. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.</p>
 <p>Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIMng path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.</p>
 <h2 id="local-smoke-test">Local Smoke Test</h2>
 <p>Test web export with a synthetic JPEG rather than a personal image. Run from the repository root:</p>
@@ -302,7 +318,7 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
 <p>Check the output before removing the temporary directory. The original synthetic image is not overwritten. This test requires ImageMagick and the normal KIMng runtime dependencies.</p>
 <p>See <a href="commandconfig.html">Command and Configuration Reference</a> for additional options.</p>
 <h2 id="documentation-screenshot-assets">Documentation screenshot assets</h2>
-<p>Approved, individually anonymized application screenshots are stored in <code>docs/images/screenshots/</code>.</p>
+<p>Application screenshot assets are stored in <code>docs/images/screenshots/</code>. The current documentation contains 23 explicit screenshot placeholders. Replace these with approved, individually anonymized screenshots during release preparation.</p>
 <p>The User Guide places these images alongside the relevant workflow instructions.</p>
 <p>Screenshots must accurately depict KDE Plasma/Dolphin and KIMng. Preserve actual application controls, image previews, and maps. Remove identifying usernames, hostnames, personal paths, and identifying filenames before publication.</p>
 <p>Do not replace real image or map content with generic placeholders, and do not combine individual dialogs into screenshot montages.</p>
@@ -324,7 +340,7 @@ find &quot;$work/output&quot; -maxdepth 1 -type f -print</code></pre>
 <p>Commit generated HTML alongside its Markdown source changes. Do not edit <code>docs/reference/</code> directly.</p>
 <p>The landing page, stylesheet and illustrations are maintained separately. Their content and presentation must be reviewed when corresponding user-facing functionality changes.</p>
 <h2 id="deferred-enhancements">Deferred Enhancements</h2>
-<p>The following improvements are planned for future development. They are not implemented in the current release.</p>
+<p>The following improvements are deferred. They are not implemented in the current development checkout.</p>
 <h3 id="format-aware-dolphin-menu-filtering">Format-aware Dolphin menu filtering</h3>
 <p>Investigate hiding redundant or inapplicable conversion actions according to the selected image format. For example, <strong>Convert to JPEG</strong> would normally be unnecessary when only JPEG images are selected.</p>
 <p>The design must account for KDE service-menu MIME filtering, mixed-format batch selections, and situations where same-format re-encoding remains useful. Runtime format and encoder validation must remain in place regardless of menu visibility.</p>

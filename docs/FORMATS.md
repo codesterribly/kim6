@@ -9,7 +9,7 @@ KIMng uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A r
 |---|---|---|---|
 | JPEG/JPG/JFIF | ImageMagick JPEG decoder | JPEG encoder; compression and conversion menus | Lossy compression. Progressive/baseline scans and Huffman optimization are JPEG-specific. JFIF is a JPEG variant. |
 | PNG | ImageMagick PNG decoder | PNG encoder | Standard PNG conversion does not imply APNG animation support. Embedded ICC profiles are handled where supported. |
-| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | FFmpeg APNG conversion and animation creation | APNG conversion and creation validate frames, timing, and looping. The creator requires 2–360 single-frame images and normalizes them to a transparent canvas. **Animated APNG input is refused by Resize, Web Export and resized email preparation** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
+| APNG | PNG animation control detection and FFmpeg/ffprobe inspection | FFmpeg APNG conversion and animation creation | The dedicated backend paths validate frames, timing, and looping. APNG availability is operation-specific; do not treat the presence of these paths as blanket support in the graphical interface. The creator requires 2–360 single-frame images and normalizes them to a transparent canvas. **Animated APNG input is refused by Resize, Web Export and resized email preparation** because an ImageMagick decoder may expose only the first frame. Normal still PNG remains supported. |
 | GIF | ImageMagick GIF decoder | GIF encoder; `animate` creates GIF animations | Indexed color; frame count, delays, and looping are validated for animation operations. |
 | TIFF/TIF | ImageMagick TIFF decoder | TIFF encoder; `tiffjoin` creates multi-page files | Multiple pages are supported where the selected operation permits them. |
 | BMP/DIB | ImageMagick BMP decoder | BMP encoder; menu selects BMP5 | Normally single-frame. DIB is treated as a BMP alias; no general ICC guarantee. |
@@ -40,6 +40,8 @@ Some PSDs contain CMYK data, transparency, embedded ICC profiles, or higher bit 
 For the full workflow, see [Recipes](RECIPES.md#photoshop-psd-inputs-and-fix-recipe).
 
 ## Frame Preservation
+
+The supported operation must be considered separately from a format's advertised read or write capability. A backend processing path, an encoder listed by FFmpeg or ImageMagick, or a CLI argument does not by itself establish that the corresponding graphical workflow is available. Disabled or rejected operations must remain blocked rather than silently producing a different result.
 
 KIMng distinguishes still images, animations, and multi-page documents. Conversion rejects known frame loss rather than silently flattening unsupported animations. APNG has a dedicated FFmpeg path; other multi-frame formats depend on the installed coder and the selected action.
 

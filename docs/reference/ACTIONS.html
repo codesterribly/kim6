@@ -179,20 +179,20 @@
 </thead>
 <tbody>
 <tr>
-<td>View GPS metadata</td>
-<td><code>kim_all location-report -- %F</code></td>
-</tr>
-<tr>
 <td>Edit GPS metadata…</td>
 <td><code>kim_all location-apply -- %F</code></td>
 </tr>
 <tr>
-<td>Reduce exact GPS location…</td>
-<td><code>kim_all location-reduce -- %F</code></td>
+<td>View GPS metadata</td>
+<td><code>kim_all location-report -- %F</code></td>
 </tr>
 <tr>
 <td>Remove GPS metadata…</td>
 <td><code>kim_all stripmeta --mode gps --interactive -- %F</code></td>
+</tr>
+<tr>
+<td>Reduce exact GPS location…</td>
+<td><code>kim_all location-reduce -- %F</code></td>
 </tr>
 </tbody>
 </table>
@@ -207,8 +207,20 @@
 </thead>
 <tbody>
 <tr>
-<td>Check and correct extensions…</td>
-<td><code>kim_all checkextensions -- %F</code></td>
+<td>View metadata</td>
+<td><code>kim_all metadata-view -- %F</code></td>
+</tr>
+<tr>
+<td>Edit metadata…</td>
+<td><code>kim_all metadata-edit -- %F</code></td>
+</tr>
+<tr>
+<td>Strip metadata…</td>
+<td><code>kim_all stripmeta --interactive -- %F</code></td>
+</tr>
+<tr>
+<td>Set creator/copyright/usage…</td>
+<td><code>kim_all copyright --interactive -- %F</code></td>
 </tr>
 <tr>
 <td>Rename images…</td>
@@ -219,24 +231,12 @@
 <td><code>kim_all capturedate --mode unified --interactive -- %F</code></td>
 </tr>
 <tr>
-<td>Set creator/copyright/usage…</td>
-<td><code>kim_all copyright --interactive -- %F</code></td>
+<td>Check and correct extensions…</td>
+<td><code>kim_all checkextensions -- %F</code></td>
 </tr>
 <tr>
 <td>Add watermark…</td>
 <td><code>kim_all overlay -- %F</code></td>
-</tr>
-<tr>
-<td>Strip metadata…</td>
-<td><code>kim_all stripmeta --interactive -- %F</code></td>
-</tr>
-<tr>
-<td>View metadata</td>
-<td><code>kim_all metadata-view -- %F</code></td>
-</tr>
-<tr>
-<td>Edit metadata…</td>
-<td><code>kim_all metadata-edit -- %F</code></td>
 </tr>
 </tbody>
 </table>

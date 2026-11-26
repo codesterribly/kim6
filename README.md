@@ -79,7 +79,7 @@ KIMng includes a dedicated **KIMng - Recipes** submenu in Dolphin. A recipe comb
 - **Correct recipe problems:** When a PSD input requires an explicit output format, **Fix recipe…** opens the existing editor so you can add Convert Format and choose an appropriate format.
 - **Protect original files:** Recipes always create derivatives. They never overwrite source images, and existing destination filenames are protected against collisions.
 
-The built-in **Web Export** recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, removes all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions.
+The built-in **Web Export** recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, applies the Remove All Metadata operation, and saves `{filename}_web.jpg` in a `Web` subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions. Metadata removal is not a guarantee that every identifying field, signed credential, or visible identifying detail has been eliminated.
 
 Photoshop PSD files can be used as inputs in supported workflows, but KIMng does not create PSD output files. A suitable output format must be selected when conversion is required.
 
@@ -126,8 +126,7 @@ It also covers [resizing, cropping, rotation, and conversion](docs/index.html#ph
 [recipe workflows](docs/index.html#recipes),
 and [Review Changes](docs/index.html#file-handling).
 
-Screenshots are maintained separately from this
-documentation reconciliation.
+The illustrated documentation currently contains placeholders for application screenshots that will be replaced during release preparation.
 
 
 ### Create and share
@@ -136,7 +135,7 @@ documentation reconciliation.
 - **Publish galleries and photo stories:** Choose **Create a gallery…** in Dolphin. **Image gallery** opens the classic gallery creator with image ordering, captions, themes, resolution, and preview controls. **Photo story** opens the three-panel story editor with headings, paragraphs, sections, layouts, and single-page or multiple-page websites. Photo stories support folder or ZIP publication with a mandatory Review Changes step. See the [Gallery Publishing walkthrough](docs/index.html#gallery-publishing).
 - **Create collages:** Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.
 - **Create PDF albums and print layouts:** Prepare images for viewing or printing, including printable contact-sheet layouts.
-- **Work with TIFF and GIF:** Combine images into multipage TIFF files or create animated GIF/APNG derivatives.
+- **Work with TIFF and GIF:** Combine images into multipage TIFF files or create animated GIF derivatives. APNG processing is subject to operation-specific availability and animation validation; see the [format reference](docs/FORMATS.md#frame-preservation).
 
 ### Gallery Publishing
 
@@ -168,7 +167,7 @@ KIMng adds image and video tools to Dolphin's right-click menu. Select a photo o
 
 KIMng can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under **Actions → KIMng - Settings/About → Settings**. Replacing original files requires an additional confirmation, so KIMng won't silently overwrite them.
 
-Resizing, compression, conversion, and rotation follow these settings where supported. Horizontal and vertical Flip operations are always create-only: they open Review Changes and publish separate transformed images without overwriting the originals. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.
+Resizing, compression, conversion, and rotation follow these settings where supported. Horizontal and vertical Flip operations are always create-only: they open Review Changes and publish separate transformed images without overwriting the originals. Renaming and dedicated metadata-writing actions have their own safeguards, including warnings before original files are replaced or renamed. The general Metadata Editor remains a read-only change planner. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.
 
 Some interactive Review Changes dialogs have their own Create/Overwrite controls rather than using the saved `KIM_POLICY` value to decide which choices to display. Resize, Compress, and Convert video can expose an explicit Overwrite choice, while Flip and other create-only operations do not. Choosing Overwrite is not automatic authorization to replace files; the operation still requires its applicable confirmation and safety checks.
 
@@ -188,11 +187,15 @@ Dolphin includes a **Download New Services** feature under its configuration set
 
 **Important:** This version of KIMng is a substantial rewrite. The version currently available through Dolphin or the KDE Store may still be an earlier release. To use the rewrite, download the corresponding source version and install it manually.
 
-From a checkout containing the rewrite:
+To obtain the current development source from this repository:
 
 ```bash
+git clone --branch recovery/kim-all https://github.com/codesterribly/kim6.git
+cd kim6
 ./install.sh
 ```
+
+The `recovery/kim-all` branch contains the current rewrite. It is development source, not an announcement of a completed stable release.
 
 Restart Dolphin after installing, then right-click a supported image or video to find the KIMng menus.
 
@@ -208,6 +211,8 @@ To uninstall KIMng, run `./uninstall.sh` from the source directory. See [Install
 - [Supported Formats](docs/FORMATS.md) - Image and video format support.
 - [Configuration](docs/commandconfig.md) - Customizing KIMng's behavior.
 - [Development](docs/DEVELOPMENT.md) - Technical information and contributing.
+
+Repository documentation also includes the [development changelog](https://github.com/codesterribly/kim6/blob/recovery/kim-all/CHANGELOG.md), [contribution guidelines](https://github.com/codesterribly/kim6/blob/recovery/kim-all/CONTRIBUTING.md), and [security reporting policy](https://github.com/codesterribly/kim6/blob/recovery/kim-all/SECURITY.md).
 
 For source and project updates, see [the KIMng project](https://github.com/codesterribly/kim6). Report bugs or suggest improvements through [GitHub Issues](https://github.com/codesterribly/kim6/issues). The original project remains credited in the history section below.
 

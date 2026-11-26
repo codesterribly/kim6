@@ -58,10 +58,10 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 | Menu action | Dispatcher command |
 |---|---|
-| View GPS metadata | `kim_all location-report -- %F` |
 | Edit GPS metadata… | `kim_all location-apply -- %F` |
-| Reduce exact GPS location… | `kim_all location-reduce -- %F` |
+| View GPS metadata | `kim_all location-report -- %F` |
 | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+| Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 
 ### KIMng - Metadata/Organize
 
@@ -69,14 +69,14 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 | Menu action | Dispatcher command |
 |---|---|
-| Check and correct extensions… | `kim_all checkextensions -- %F` |
-| Rename images… | `kim_all rename interactive -- %F` |
-| Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
-| Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
-| Add watermark… | `kim_all overlay -- %F` |
-| Strip metadata… | `kim_all stripmeta --interactive -- %F` |
 | View metadata | `kim_all metadata-view -- %F` |
 | Edit metadata… | `kim_all metadata-edit -- %F` |
+| Strip metadata… | `kim_all stripmeta --interactive -- %F` |
+| Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
+| Rename images… | `kim_all rename interactive -- %F` |
+| Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
+| Check and correct extensions… | `kim_all checkextensions -- %F` |
+| Add watermark… | `kim_all overlay -- %F` |
 
 View metadata opens the existing read-only Metadata Browser with all selected images in one window. Select exactly two images inside Browser to use its Compare view. Edit metadata opens the existing Metadata Editor with the complete selection; it retains drafts while navigating and only plans changes. Neither action writes image metadata or XMP sidecars.
 

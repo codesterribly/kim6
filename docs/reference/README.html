@@ -124,7 +124,7 @@
 <li><strong>Correct recipe problems:</strong> When a PSD input requires an explicit output format, <strong>Fix recipe…</strong> opens the existing editor so you can add Convert Format and choose an appropriate format.</li>
 <li><strong>Protect original files:</strong> Recipes always create derivatives. They never overwrite source images, and existing destination filenames are protected against collisions.</li>
 </ul>
-<p>The built-in <strong>Web Export</strong> recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, removes all metadata, and saves <code>{filename}_web.jpg</code> in a <code>Web</code> subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions.</p>
+<p>The built-in <strong>Web Export</strong> recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, applies the Remove All Metadata operation, and saves <code>{filename}_web.jpg</code> in a <code>Web</code> subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions. Metadata removal is not a guarantee that every identifying field, signed credential, or visible identifying detail has been eliminated.</p>
 <p>Photoshop PSD files can be used as inputs in supported workflows, but KIMng does not create PSD output files. A suitable output format must be selected when conversion is required.</p>
 <p>See the <a href="../index.html#recipes">Recipes walkthrough in the User Guide</a> for the Dolphin workflow and illustrated examples.</p>
 <h3 id="resize-compress-and-convert-images">Resize, compress, and convert images</h3>
@@ -160,14 +160,14 @@
 </ul>
 <p>The <a href="../index.html#metadata">offline User Guide</a> includes walkthroughs for Metadata Browser, two-image Compare, read-only Editor planning, and the standalone GPS tools.</p>
 <p>It also covers <a href="../index.html#photos">resizing, cropping, rotation, and conversion</a>, <a href="../index.html#recipes">recipe workflows</a>, and <a href="../index.html#file-handling">Review Changes</a>.</p>
-<p>Screenshots are maintained separately from this documentation reconciliation.</p>
+<p>The illustrated documentation currently contains placeholders for application screenshots that will be replaced during release preparation.</p>
 <h3 id="create-and-share">Create and share</h3>
 <ul>
 <li><strong>Email images:</strong> Send original images or create smaller copies suitable for email attachments.</li>
 <li><strong>Publish galleries and photo stories:</strong> Choose <strong>Create a gallery…</strong> in Dolphin. <strong>Image gallery</strong> opens the classic gallery creator with image ordering, captions, themes, resolution, and preview controls. <strong>Photo story</strong> opens the three-panel story editor with headings, paragraphs, sections, layouts, and single-page or multiple-page websites. Photo stories support folder or ZIP publication with a mandatory Review Changes step. See the <a href="../index.html#gallery-publishing">Gallery Publishing walkthrough</a>.</li>
 <li><strong>Create collages:</strong> Arrange multiple images using grid, mosaic, hero, filmstrip, or scattered-photo layouts. Adjust canvas, background, spacing, frames, and shadows where supported.</li>
 <li><strong>Create PDF albums and print layouts:</strong> Prepare images for viewing or printing, including printable contact-sheet layouts.</li>
-<li><strong>Work with TIFF and GIF:</strong> Combine images into multipage TIFF files or create animated GIF/APNG derivatives.</li>
+<li><strong>Work with TIFF and GIF:</strong> Combine images into multipage TIFF files or create animated GIF derivatives. APNG processing is subject to operation-specific availability and animation validation; see the <a href="FORMATS.html#frame-preservation">format reference</a>.</li>
 </ul>
 <h3 id="gallery-publishing">Gallery Publishing</h3>
 <p>Select images in Dolphin and choose <strong>KIMng - Create/Publish → Create a gallery…</strong>. The chooser opens two different workflows. <strong>Image gallery</strong> launches the classic gallery creator, with image ordering, captions, Clean Light or Dark Portfolio themes, Standard or High image resolution, columns, and a gallery preview. <strong>Photo story</strong> launches the newer three-panel editor: Story order on the left, story canvas in the middle, and Gallery settings on the right.</p>
@@ -189,7 +189,7 @@
 <p>KIMng adds image and video tools to Dolphin's right-click menu. Select a photo or video, right-click it, and choose what you want to do. You can also select multiple files to process them together.</p>
 <p><strong>Keeping your originals safe</strong></p>
 <p>KIMng can create new files while leaving your originals untouched, or ask how you want to proceed when an action supports replacing them. You can choose the default behavior under <strong>Actions → KIMng - Settings/About → Settings</strong>. Replacing original files requires an additional confirmation, so KIMng won't silently overwrite them.</p>
-<p>Resizing, compression, conversion, and rotation follow these settings where supported. Horizontal and vertical Flip operations are always create-only: they open Review Changes and publish separate transformed images without overwriting the originals. Renaming and metadata editing have their own safeguards, including warnings before original filenames are removed. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.</p>
+<p>Resizing, compression, conversion, and rotation follow these settings where supported. Horizontal and vertical Flip operations are always create-only: they open Review Changes and publish separate transformed images without overwriting the originals. Renaming and dedicated metadata-writing actions have their own safeguards, including warnings before original files are replaced or renamed. The general Metadata Editor remains a read-only change planner. Other operations, such as web export, email preparation, slideshows, and extracting video frames or audio, create separate results. Recipes always create separate derivatives and never overwrite their source images. Video transcoding can also replace an original, but only with explicit confirmation.</p>
 <p>Some interactive Review Changes dialogs have their own Create/Overwrite controls rather than using the saved <code>KIM_POLICY</code> value to decide which choices to display. Resize, Compress, and Convert video can expose an explicit Overwrite choice, while Flip and other create-only operations do not. Choosing Overwrite is not automatic authorization to replace files; the operation still requires its applicable confirmation and safety checks.</p>
 <p><strong>Filenames and batch processing</strong></p>
 <p>Legacy actions avoid overwriting an existing file by adding a number to the output filename when necessary. Standalone Crop and GUI Recipe workflows resolve known occupied filenames and duplicate batch targets by numbering outputs during planning where safe. The resulting filenames appear in Review Changes and become binding when approved. If a target becomes occupied after approval, publication blocks that output instead of renumbering or overwriting it. Noninteractive Recipe CLI execution follows a different rule: occupied and duplicate targets are blocked without automatic numbering. Open <strong>Settings → Output Filenames</strong> to customize descriptive labels, such as changing <code>photo_compressed.jpg</code> to <code>photo_com.jpg</code>. You can put labels before or after the original name and preview the result. Existing labels remain the defaults. Filenames you enter yourself in creation dialogs are unchanged. Recipe output patterns can use <code>{filename}</code> to represent the original filename without its extension. For example, <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The Recipe Editor previews the resulting names.</p>
@@ -199,8 +199,11 @@
 <p>KIMng is designed for KDE Plasma 6 and Dolphin.</p>
 <p>Dolphin includes a <strong>Download New Services</strong> feature under its configuration settings, which can install service-menu extensions from KDE's online catalog. You can also find the existing project on the <a href="https://store.kde.org/p/2307290/">KDE Store</a>.</p>
 <p><strong>Important:</strong> This version of KIMng is a substantial rewrite. The version currently available through Dolphin or the KDE Store may still be an earlier release. To use the rewrite, download the corresponding source version and install it manually.</p>
-<p>From a checkout containing the rewrite:</p>
-<pre class="bash"><code>./install.sh</code></pre>
+<p>To obtain the current development source from this repository:</p>
+<pre class="bash"><code>git clone --branch recovery/kim-all https://github.com/codesterribly/kim6.git
+cd kim6
+./install.sh</code></pre>
+<p>The <code>recovery/kim-all</code> branch contains the current rewrite. It is development source, not an announcement of a completed stable release.</p>
 <p>Restart Dolphin after installing, then right-click a supported image or video to find the KIMng menus.</p>
 <p>To uninstall KIMng, run <code>./uninstall.sh</code> from the source directory. See <a href="INSTALL.html">Installation Instructions</a> for dependencies, upgrades, system-wide installation, custom directories, and uninstall options.</p>
 <h2 id="documentation">Documentation</h2>
@@ -214,6 +217,7 @@
 <li><a href="commandconfig.html">Configuration</a> - Customizing KIMng's behavior.</li>
 <li><a href="DEVELOPMENT.html">Development</a> - Technical information and contributing.</li>
 </ul>
+<p>Repository documentation also includes the <a href="https://github.com/codesterribly/kim6/blob/recovery/kim-all/CHANGELOG.md">development changelog</a>, <a href="https://github.com/codesterribly/kim6/blob/recovery/kim-all/CONTRIBUTING.md">contribution guidelines</a>, and <a href="https://github.com/codesterribly/kim6/blob/recovery/kim-all/SECURITY.md">security reporting policy</a>.</p>
 <p>For source and project updates, see <a href="https://github.com/codesterribly/kim6">the KIMng project</a>. Report bugs or suggest improvements through <a href="https://github.com/codesterribly/kim6/issues">GitHub Issues</a>. The original project remains credited in the history section below.</p>
 <h2 id="project-history">Project history</h2>
 <p>KIM, the KDE Image Menu, began during the KDE 3 era in the mid-2000s. Its goal was simple: provide useful image-processing tools from the file manager without requiring users to open a separate application.</p>

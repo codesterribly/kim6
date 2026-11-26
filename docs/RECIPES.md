@@ -19,7 +19,9 @@ Inspect the selected images, enabled processing steps, planned output filenames,
 
 ## Web Export: a ready-to-use recipe
 
-The supplied **Web Export** recipe auto-orients images, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and **removes all metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.
+The supplied **Web Export** recipe auto-orients images, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and applies **Remove All Metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.
+
+Metadata stripping should not be treated as a guarantee of anonymity. Inspect the resulting files before sharing sensitive images. Color-management information, signed credentials, or other identifying information may require separate consideration.
 
 This workflow is more than a change of file extension. Its three optional rights-metadata steps, **Set Creator / Artist**, **Set Copyright Notice**, and **Set Usage Rights**, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: **Duplicate to Edit** creates a customizable copy rather than changing the supplied recipe.
 
@@ -161,7 +163,7 @@ The Recipe Editor offers **27 operations** in four groups. Each entry below uses
 |---|---|
 | **Add Watermark / Overlay** | Render a text, image, camera-detail, or caption overlay where supported. |
 | **Remove AI Metadata** | Remove recognized AI-related metadata. |
-| **Remove All Metadata** | Remove all available metadata; normalize orientation first if required. |
+| **Remove All Metadata** | Apply the full metadata-stripping operation; normalize orientation first if required. Do not assume complete anonymity. |
 | **Remove Descriptive Metadata** | Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation. |
 | **Remove GPS Location** | Remove recognized GPS/location metadata. |
 | **Set Copyright** | Set creator, copyright notice, and usage rights, inherited or overridden. |

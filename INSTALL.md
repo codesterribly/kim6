@@ -54,7 +54,7 @@ KIMng uses several common tools to process images and videos:
 - **KDialog and qdbus:** Dialogs, progress reporting, and interaction with KDE.
 - **Email application (optional):** Required for the Send via email workflow. If no supported mail client is available, KIMng blocks attachment preparation.
 
-Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
+Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. APNG has operation-specific processing paths and restrictions. Resize and Web Export refuse animated APNG to prevent silent frame loss. Backend availability does not imply that every APNG workflow is enabled in the graphical interface.
 
 **Output policy:** In Dolphin, open **Actions → KIMng - Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation and EXIF auto-orientation can support authorized replacement, while horizontal and vertical Flip always publish separate reviewed copies. Other derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
 
@@ -66,7 +66,7 @@ Download or clone the KIMng source code, then open a terminal in the project dir
 
 If you downloaded a source archive, extract it first and run the installer from the extracted folder.
 
-The installer adds KIMng's program files and service-menu definitions to your user installation directory. Restart Dolphin, then right-click an image or video to see the KIMng actions available for that file type.
+The installer adds KIMng's program files and service-menu definitions to your user installation directory. By default this is `${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus`, with application files under its `kimng` subdirectory. Restart Dolphin, then right-click an image or video to see the KIMng actions available for that file type.
 
 The `kim_all` program is installed with the menus and does not need to be added to your shell's `PATH`.
 
@@ -129,7 +129,7 @@ installation. The installer runs `python3 src/bin/kim_location_map.py --check` a
 warnings rather than automatically installed. Individual KIMng actions
 check for the tools they need when invoked.
 
-Optional tools include Poppler `pdftoppm` for rendering PDF source pages, Pandoc for generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's service cache.
+Optional tools include Poppler for PDF source operations, Pandoc for generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's service cache. PDF page rendering requires `pdfinfo` and `pdftoppm`; embedded-image extraction requires `pdfimages`. The installer reports the Poppler rendering probe separately from action-specific capability checks.
 
 ### Filesystem and source validation
 
@@ -156,6 +156,7 @@ files in a `kimng` directory beneath the selected service-menu directory.
 The installed components include:
 
 - The image and video command dispatcher.
+- A complete inventory of 111 runtime files, including program modules, resources and offline documentation.
 - 62 installed Python dialog, processing, and application helper modules, as enumerated in `install_inventory.sh`.
 - Metadata processing and format-verification helpers.
 - Gallery generation resources.
@@ -188,8 +189,9 @@ After copying files, the installer:
 - Confirms that all 62 installed Python helper files are present,
   are not symbolic links, and have valid Python syntax.
 - Refreshes the KDE service cache with `kbuildsycoca6` when available.
-- Prints the verified menu and helper inventories, installation path,
-  and completion message.
+- Prints verified menu and helper counts, installation paths,
+  and a completion summary. Use `--verbose` to list individual
+  installed files and verified helpers.
 
 Successful installation confirms that the installed components are
 present and structurally valid. It does not guarantee that every optional
@@ -226,7 +228,7 @@ From the source directory, run:
 ./uninstall.sh
 ```
 
-The uninstaller removes the 12 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Use `--prefix DIR` for a specific service-menu directory, `--no_message` to suppress its completion dialog, or `-h`/`--help` for usage. Restart Dolphin after removal.
+The uninstaller removes the 12 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Use `--prefix DIR` for a specific service-menu directory, `--no_message` to suppress normal completion output, `--verbose` for individual removed-file details, or `-h`/`--help` for usage. Restart Dolphin after removal.
 
 ## Advanced installation locations
 
@@ -263,10 +265,12 @@ The installer creates the chosen folder if needed. It does not install system pa
 First verify that all 12 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
 
 ### Installation or removal reports a conflict
-The installer identifies existing KIMng installations from recognized program
-and service-menu files. It also accepts an empty runtime directory left by
-an interrupted installation. Unrelated files and unsafe symlinked paths
-are protected from replacement or removal.
+The installer identifies existing KIMng installations using its ownership
+marker and recognized program files. It also accepts an empty runtime
+directory left by an interrupted installation. An owned runtime with a
+missing dispatcher can be repaired by rerunning the installer. An
+unfamiliar dispatcher, unsafe symbolic link or unrecognized runtime
+directory still blocks installation. Unrelated files are protected.
 
 Installation and removal operate one file at a time, not as a single
 transaction. If installation is interrupted, rerun `./install.sh`.
@@ -274,7 +278,7 @@ There is no automatic rollback.
 
 Upgrades replace known KIMng program and menu files. Save any customizations
 before upgrading. Unknown files are preserved and may prevent their
-containing directory from being removed.
+containing directory from being removed. The message `unknown runtime content preserved` indicates that the uninstaller retained content outside its managed inventory. Do not delete that content merely to make the directory disappear. A recognized owned runtime can be reinstalled while retaining those unrelated files.
 
 For installer safeguards and recovery procedures, see
 [Installer safety and recovery](docs/DEVELOPMENT.md#installer-safety-and-recovery).
@@ -296,8 +300,9 @@ not writable, the installer verifies the generated HTML rather than
 modifying the source files, provided both tools are available. If the
 generated pages are outdated, installation stops.
 
-Python 3 and Pandoc are not required to view the User Guide. If either
-build tool is unavailable during installation, KIMng uses the prebuilt
+The prebuilt User Guide can be viewed in a web browser without Python
+or Pandoc. Python 3 remains a mandatory KIMng runtime dependency.
+If Pandoc is unavailable during installation, KIMng uses the prebuilt
 HTML pages supplied with the repository.
 
 Contributors should commit regenerated HTML reference pages alongside

@@ -18,7 +18,10 @@ This document covers the project structure, development conventions, testing, an
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
 | `tests/test_*.py` | Unit and integration tests. |
 | `install.sh`, `uninstall.sh` | Installation and removal scripts. |
-| `po/` | Translation files. |
+| `install_inventory.sh` | Shared authoritative runtime, menu and retirement inventory. |
+| `tools/build_manual.py` | Build or verify generated HTML reference pages. |
+| `tools/extract_messages.py` | Rebuild or verify the English gettext template. |
+| `po/` | English gettext message template and localization infrastructure. |
 | `docs/` | User documentation and HTML User Guide. |
 | `docs/archive/upstream/` | Archived documentation from earlier versions. |
 
@@ -142,8 +145,13 @@ See [ACTIONS.md](ACTIONS.md) for the complete menu definitions and [commandconfi
 
 ## Embedded User Guide rendering
 
-`src/bin/kim_settings_dialog.py` embeds the installed
+`src/bin/kim_manual_viewer.py` provides the shared manual-viewing
+implementation used by the standalone User Guide and the Settings
+dialog. `src/bin/kim_settings_dialog.py` embeds the installed
 `docs/index.html` using `PySide6.QtWebEngineWidgets.QWebEngineView`.
+
+Preserve shared navigation behavior, local documentation paths,
+fragment links and browser fallbacks when modifying either entry point.
 The binding is optional for general KIMng operation but required for
 the full HTML guide inside Settings/About.
 
@@ -281,7 +289,7 @@ Date synchronization supports separate operations for filesystem timestamps and 
 
 ### Web export
 
-Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg path with frame and timing checks.
+Web export always creates separate output files. By default, it uses ICC-managed conversion to sRGB for web compatibility. It refuses animated APNG rather than allowing an ImageMagick decoder to flatten the animation silently; nonanimated PNG remains supported. Conversion retains a dedicated APNG/FFmpeg backend path with frame and timing checks. Backend paths must not be confused with unconditionally enabled interactive support.
 
 ### Video processing
 
@@ -299,7 +307,7 @@ Renaming does not use the same publication mechanism as image transformations.
 
 Not every image is a single-frame RGB image. Animated images, multipage documents, RAW formats, layered files, vector graphics, PDFs, and HDR images may require different processing or may be unsupported by particular actions.
 
-Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.
+Format-specific validation is important when modifying conversion and transformation functions. In particular, ImageMagick can identify some animated APNG inputs as a single PNG frame. Conversion has a dedicated APNG/FFmpeg backend path, while Resize and Web Export must refuse animated APNG rather than relying on a misleading one-frame decoder result. Preserve any existing animation/ICC checks unless a targeted regression demonstrates they need changing.
 
 ## Adding or Modifying Actions
 
@@ -347,7 +355,13 @@ shellcheck --exclude=SC2015 src/bin/kim_all install.sh uninstall.sh
 git --no-pager diff --check
 ```
 
-Installer tests should use temporary installation directories rather than modifying the active Dolphin installation.
+Installer tests should use temporary installation directories and isolated HOME/XDG settings rather than modifying the active Dolphin installation.
+
+The installation inventory is shared by the installer and uninstaller. Adding a runtime dependency, Python module, menu template or offline documentation asset requires an inventory review. Run the independent inventory tests with:
+
+    python3 -B tests/test_installation_inventory.py -v
+
+These tests check packaging completeness, destination uniqueness, file modes, internal Python imports and retired-file exclusions. The installation lifecycle tests additionally exercise upgrades, interruption recovery, unsafe symlinks, unrelated-file preservation and repeated installation and removal.
 
 KDE service menus use `Type=Service`, which may not be handled correctly by generic desktop-entry validators. Use the project's KDE-specific menu tests for structural validation.
 
@@ -411,7 +425,7 @@ Include the KIMng version or commit, distribution/KDE and tool versions, exact a
 
 ## Installer Safety and Recovery
 
-The installer identifies KIMng installations using the dispatcher and recognized service menus. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.
+The installer uses the KIMng ownership marker, recognized dispatcher and service-menu ownership checks to distinguish managed content from unrelated files. A valid owned runtime with a missing dispatcher can be repaired. An unfamiliar dispatcher or unsafe symlink must still be refused. It refuses unrelated files with conflicting menu names and symlinked runtime or menu paths. Listed files are installed using temporary sibling files rather than broad filename globs. Unknown runtime files are preserved and prevent removal of their parent directory. Interrupted installations can be recovered by rerunning the installer.
 
 Installation is not a whole-tree transaction. There is no digest manifest, customization recovery copy, or automatic rollback. If interrupted, files already replaced stay replaced; rerunning the installer completes the remaining files. A hard kill or power loss can leave a hidden temporary sibling, which the installer does not glob-delete. Content at a known KIMng path is replaced on upgrade and removed on uninstall, so copy out any edits first. Each individual replacement uses a temporary sibling file, but the runtime and menus can temporarily contain files from different releases. Uninstall is likewise rerunnable but not transactional.
 
@@ -440,8 +454,10 @@ See [Command and Configuration Reference](commandconfig.md) for additional optio
 
 ## Documentation screenshot assets
 
-Approved, individually anonymized application screenshots are
-stored in `docs/images/screenshots/`.
+Application screenshot assets are stored in `docs/images/screenshots/`.
+The current documentation contains 23 explicit screenshot placeholders.
+Replace these with approved, individually anonymized screenshots
+during release preparation.
 
 The User Guide places these images alongside the relevant
 workflow instructions.
@@ -511,7 +527,7 @@ corresponding user-facing functionality changes.
 
 ## Deferred Enhancements
 
-The following improvements are planned for future development. They are not implemented in the current release.
+The following improvements are deferred. They are not implemented in the current development checkout.
 
 ### Format-aware Dolphin menu filtering
 

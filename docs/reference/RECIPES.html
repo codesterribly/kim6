@@ -44,7 +44,8 @@
 <p><img src="../images/screenshots/11-run-recipe.png" alt="Screenshot needed: 11 run recipe" /></p>
 <p>Inspect the selected images, enabled processing steps, planned output filenames, metadata consequences, and destination before running a recipe.</p>
 <h2 id="web-export-a-ready-to-use-recipe">Web Export: a ready-to-use recipe</h2>
-<p>The supplied <strong>Web Export</strong> recipe auto-orients images, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and <strong>removes all metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.</p>
+<p>The supplied <strong>Web Export</strong> recipe auto-orients images, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and applies <strong>Remove All Metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.</p>
+<p>Metadata stripping should not be treated as a guarantee of anonymity. Inspect the resulting files before sharing sensitive images. Color-management information, signed credentials, or other identifying information may require separate consideration.</p>
 <p>This workflow is more than a change of file extension. Its three optional rights-metadata steps, <strong>Set Creator / Artist</strong>, <strong>Set Copyright Notice</strong>, and <strong>Set Usage Rights</strong>, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: <strong>Duplicate to Edit</strong> creates a customizable copy rather than changing the supplied recipe.</p>
 <h3 id="included-recipes">Included recipes</h3>
 <p>The following recipes are shipped with this checkout. You can duplicate a built-in to customize it.</p>
@@ -235,7 +236,7 @@
 </tr>
 <tr>
 <td><strong>Remove All Metadata</strong></td>
-<td>Remove all available metadata; normalize orientation first if required.</td>
+<td>Apply the full metadata-stripping operation; normalize orientation first if required. Do not assume complete anonymity.</td>
 </tr>
 <tr>
 <td><strong>Remove Descriptive Metadata</strong></td>
