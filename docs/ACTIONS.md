@@ -63,7 +63,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
-### KIMng - Organize Metadata
+### KIMng - Metadata/Organize
 
 [View submenu screenshot](images/screenshots/05-organize-metadata.png)
 
@@ -145,7 +145,7 @@ in Dolphin. The video menu set comprises three codec conversion
 submenus, **AV1**, **H.264**, and **H.265**, plus **Video Utilities**.
 The shared **Settings/About** submenu remains available.
 
-![Video actions in Dolphin](images/screenshots/21-video-menu-overview.png)
+![Screenshot needed: 21 video menu overview](images/screenshots/21-video-menu-overview.png)
 
 ### Conversion presets
 
@@ -158,7 +158,7 @@ can provide greater compression efficiency, subject to source
 content, codec implementation, encoding speed, and playback support.
 Available encoders depend on the installed FFmpeg configuration.
 
-![AV1 conversion presets](images/screenshots/22-video-av1-presets.png)
+![Screenshot needed: 22 video av1 presets](images/screenshots/22-video-av1-presets.png)
 
 ### Video Utilities
 
@@ -171,7 +171,7 @@ The six utilities are:
 - **Create video contact sheet…**
 - **Create animated GIF from video…**
 
-![Video Utilities menu](images/screenshots/23-video-utilities.png)
+![Screenshot needed: 23 video utilities](images/screenshots/23-video-utilities.png)
 
 The conversion actions and utilities are also documented in the
 complete executable action inventory below, including their actual

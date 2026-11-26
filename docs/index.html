@@ -14,7 +14,7 @@
   <header class="topbar">
     <div class="topbar-inner page-width">
       <a class="brand" href="#top" aria-label="KIMng User Guide home">
-        <span class="brand-mark" aria-hidden="true"><img src="images/kimng-brand-icon.png" alt="" width="30" height="30"></span>
+        <span class="brand-mark" aria-hidden="true"><img src="images/kimng-guide-icon.png" alt="" width="30" height="30"></span>
         <span class="brand-name">KIM<span>ng</span></span>
         <span class="brand-divider" aria-hidden="true"></span>
         <span class="brand-description">User Guide</span>
@@ -37,14 +37,14 @@
           <a class="hero-button" href="#start">Get started <span aria-hidden="true">↗</span></a>
           <a class="hero-secondary" href="#recipes">Explore Recipes <span aria-hidden="true">↓</span></a>
         </div>
-        <div class="hero-facts" aria-label="Key facts">
+        <div class="hero-facts" role="group" aria-label="Key facts">
           <span><span class="fact-check" aria-hidden="true">✓</span> Works from Dolphin</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Batch-friendly</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Originals protected</span>
           <span><span class="fact-check" aria-hidden="true">✓</span> Custom filename labels</span>
         </div>
       </div>
-      <div class="hero-art" aria-label="Example showing a image and its resized copy">
+      <div class="hero-art" role="group" aria-label="Example showing an image and its resized copy">
         <div class="art-label">A simple example</div>
         <div class="art-file art-original">
           <div class="art-thumbnail" aria-hidden="true">
@@ -98,7 +98,7 @@
         <p class="section-eyebrow"><span class="section-index">01</span> FIRST STEPS</p>
         <h2 id="start-title">Start with a single photo.</h2>
         <p class="section-intro">No new application to learn. KIMng adds actions to the context menu you already use in Dolphin.</p>
-        <div class="steps" aria-label="Three steps to use KIMng">
+        <div class="steps" role="group" aria-label="Three steps to use KIMng">
           <div class="step"><span class="step-number">1</span><div><h3>Select</h3><p>Choose one or more local photos or videos in Dolphin.</p></div></div>
           <div class="step"><span class="step-number">2</span><div><h3>Right-click</h3><p>Open a KIMng submenu and choose the task you want.</p></div></div>
           <div class="step"><span class="step-number">3</span><div><h3>Save</h3><p>For actions that offer a choice, select <strong>Create new</strong> to keep the original file.</p></div></div>
@@ -176,7 +176,7 @@ Recipes always create derivatives.</p>
 reference</a> for processing steps, library organization,
 and JSON details.</p>
 </div>
-<div class="steps" aria-label="Running a recipe from Dolphin">
+<div class="steps" role="group" aria-label="Running a recipe from Dolphin">
           <div class="step">
             <span class="step-number">1</span>
             <div>
@@ -428,7 +428,7 @@ color precision, embedded profiles, and metadata.</p>
 <h3>Browse and compare image metadata</h3>
 
 <p>Select one or more images in Dolphin and choose
-<strong>Organize Metadata → View metadata…</strong>.
+<strong>Metadata/Organize → View metadata…</strong>.
 The read-only Metadata Browser displays image previews,
 a human-readable overview, and searchable technical tags.
 You can inspect tag names, values, groups, and source
@@ -450,7 +450,7 @@ associated sidecars.</p>
 
 <h3>Plan metadata changes without writing them</h3>
 
-<p>Choose <strong>Organize Metadata → Edit metadata…</strong>
+<p>Choose <strong>Metadata/Organize → Edit metadata…</strong>
 to open the Metadata Editor. The current Editor is a
 <strong>read-only change planner</strong>, not an enabled
 metadata writer.</p>
@@ -477,13 +477,13 @@ need to perform a supported location change.</p>
             <h3>Remove GPS and AI metadata</h3>
             <p>Select <strong>Location/GPS › Remove GPS metadata…</strong> to remove recognized GPS coordinate fields while retaining unrelated metadata.</p>
             <p>Use <strong>Location/GPS</strong> to inspect location metadata, modify photo GPS coordinates, or approximate precise positions. <strong>Edit GPS on images…</strong> offers another image, map selection, manual coordinates, and GPX tracks as location sources.</p>
-            <p>Select <strong>Organize Metadata › Strip metadata</strong> to review available metadata-removal options, including recognized AI-generation information.</p>
+            <p>Select <strong>Metadata/Organize › Strip metadata</strong> to review available metadata-removal options, including recognized AI-generation information.</p>
             <div class="output output-inline"><span>trip.jpg</span><span class="output-arrow" aria-hidden="true">→</span><strong>trip_gps.jpg</strong></div>
             <p class="minor">If there is no matching GPS metadata, KIMng reports the file unchanged and creates no copy.</p>
           </div>
           <div>
             <h3>Copyright and capture times</h3>
-            <p>Add creator and copyright information, adjust or set a photo capture date, set capture dates from filesystem dates, or set file modification dates from photo capture dates. Use <strong>Organize Metadata</strong> in Dolphin to choose the appropriate action.</p>
+            <p>Add creator and copyright information, adjust or set a photo capture date, set capture dates from filesystem dates, or set file modification dates from photo capture dates. Use <strong>Metadata/Organize</strong> in Dolphin to choose the appropriate action.</p>
             <p class="minor">Time shifting is a fixed adjustment, not a timezone conversion. EXIF timestamps and filesystem modification times are different things.</p>
           </div>
         </div>
@@ -491,16 +491,16 @@ need to perform a supported location change.</p>
 
 <div class="kimng-doc-feature">
 <h3>Organize image files and dates</h3>
-<p>Check actual formats before correcting filename extensions. Use Set dates to inspect and change supported timestamps. The Organize Metadata submenu also provides renaming, overlays, rights information, and unified metadata stripping.</p>
+<p>Check actual formats before correcting filename extensions. Use Set dates to inspect and change supported timestamps. The Metadata/Organize submenu also provides renaming, overlays, rights information, and unified metadata stripping.</p>
 
 <figure class="kimng-doc-shot" id="shot-05">
-  <a href="images/screenshots/05-organize-metadata.png" title="View full-size Organize Metadata menu screenshot">
+  <a href="images/screenshots/05-organize-metadata.png" title="View full-size Metadata/Organize menu screenshot">
     <img src="images/screenshots/05-organize-metadata.png"
          alt="Screenshot needed: 05 organize metadata"
          width="982" height="739"
          loading="lazy" decoding="async">
   </a>
-  <figcaption><strong>Organize Metadata menu.</strong> Manage extensions, filenames, dates, overlays, and metadata.</figcaption>
+  <figcaption><strong>Metadata/Organize menu.</strong> Manage extensions, filenames, dates, overlays, and metadata.</figcaption>
 </figure>
 
 <figure class="kimng-doc-shot" id="shot-14">
@@ -549,7 +549,7 @@ metadata is removed.</p>
 </div>
 <div class="kimng-doc-feature">
 <h3>Inspect and modify GPS information</h3>
-<p>Modify GPS can use a reference image, manually entered coordinates, a map, or a GPX track where supported. Reducing coordinate precision replaces precise coordinates with an approximate location. Removing GPS metadata is a separate action. Inspect the planned changes before applying them.</p>
+<p>Edit GPS on images… can use a reference image, manually entered coordinates, a map, or a GPX track where supported. Reducing coordinate precision replaces precise coordinates with an approximate location. Removing GPS metadata is a separate action. Inspect the planned changes before applying them.</p>
 
 <figure class="kimng-doc-shot" id="shot-04">
   <a href="images/screenshots/04-location-gps.png" title="View full-size Location/GPS menu screenshot">
@@ -593,7 +593,7 @@ metadata is removed.</p>
           <div><span class="collection-symbol" aria-hidden="true">▧</span><strong>PDF album &amp; print</strong><span>Multi-page albums or print layouts.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">▥</span><strong>Multi-page TIFF</strong><span>Combine images into one TIFF.</span></div>
           <div><span class="collection-symbol" aria-hidden="true">◉</span><strong>Animated GIF/APNG</strong><span>Animation from selected images.</span></div>
-          <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Choose timing, dimensions, frame rate, background and destination in one dialog. Images play in natural filename order.</span></div>
+          <div><span class="collection-symbol" aria-hidden="true">▶</span><strong>MP4 slideshow</strong><span>Choose timing, dimensions, frame rate, background and destination in one dialog. Add or reorder images before rendering. Slides play in the chosen order.</span></div>
         </div>
         <p class="section-footnote">Collages include grid, mosaic, hero, filmstrip and scattered layouts with operation-specific canvas, spacing, background, frame and shadow controls. Gallery Publishing has its own chooser, story editor, styles, and offline website output. Printable PDF contact sheets complement albums and print layouts. Slideshows are silent and straightforward: fixed time per image, without titles, transitions, pan, or zoom effects. Successful PDF and other publication workflows identify the saved result; when notices are available, <strong>Details (N)</strong> expands them for inspection.</p>
 
@@ -666,7 +666,6 @@ results and destinations before publication.</p>
         <p class="section-intro">Select images in Dolphin, right-click, and choose <strong>KIMng - Create/Publish → Create a gallery…</strong>. Choose <strong>Image gallery</strong> to open the classic gallery creator, or <strong>Photo story</strong> to open the three-panel story editor described below. These are different workflows.</p>
         <h3>Image gallery</h3>
 <p>The classic image gallery creator lets you order images, edit captions, choose columns, select the Clean Light or Dark Portfolio theme, and choose Standard (up to 1920 px) or High (up to 3840 px) image resolution. Inspect the gallery preview before publishing. This workflow does not offer the Photo story editor's sections, multiple-page structure, or ZIP Review Changes workflow.</p>
-<h3>Photo story</h3>
 <h3>Arrange your story</h3>
         <p>The editor has three panels: <strong>Story order</strong> on the left, the image and story canvas in the middle, and <strong>Gallery settings</strong> on the right. Change the image order, select an image to edit its information, or use <strong>Add heading</strong> and <strong>Add text</strong> to add narrative passages. Preview the website before publishing.</p>
         <h3>Choose a gallery type, style, and arrangement</h3>
@@ -687,7 +686,7 @@ results and destinations before publication.</p>
   <h3>Choose a video operation</h3>
   <p>Use <strong>KIMng - Convert Video: AV1</strong>, <strong>H.264</strong>, or <strong>H.265</strong> to create a re-encoded video. Use <strong>Video Utilities</strong> for extracting or publishing parts of an existing video.</p>
 
-<figure class="kimng-doc-shot">
+<figure class="kimng-doc-shot" id="shot-21">
   <a href="images/screenshots/21-video-menu-overview.png" title="View full-size Video actions in Dolphin screenshot">
     <img src="images/screenshots/21-video-menu-overview.png"
          alt="Screenshot needed: 21 video menu overview"
@@ -704,7 +703,7 @@ results and destinations before publication.</p>
 
   <p>The screenshot below shows the AV1 presets. The H.264 and H.265 menus offer the same resolution-and-quality combinations, with their respective codecs.</p>
 
-<figure class="kimng-doc-shot">
+<figure class="kimng-doc-shot" id="shot-22">
   <a href="images/screenshots/22-video-av1-presets.png" title="View full-size AV1 conversion presets screenshot">
     <img src="images/screenshots/22-video-av1-presets.png"
          alt="Screenshot needed: 22 video av1 presets"
@@ -725,7 +724,7 @@ results and destinations before publication.</p>
     <li><strong>Create animated GIF from video…</strong> turns a selected video segment into an animation.</li>
   </ul>
 
-<figure class="kimng-doc-shot">
+<figure class="kimng-doc-shot" id="shot-23">
   <a href="images/screenshots/23-video-utilities.png" title="View full-size Video Utilities screenshot">
     <img src="images/screenshots/23-video-utilities.png"
          alt="Screenshot needed: 23 video utilities"
@@ -784,13 +783,13 @@ draft proposals but does not yet execute metadata writes.</p>
 <p>Inspect the proposed results, filenames, directories, and per-file status. Resolve blocked items before proceeding. Different operations have different review controls, but KIMng protects originals through their applicable output and overwrite rules.</p>
 
 <figure class="kimng-doc-shot" id="shot-13">
-  <a href="images/screenshots/13-preview-changes.png" title="View full-size Preview changes screenshot">
+  <a href="images/screenshots/13-preview-changes.png" title="View full-size Review Changes screenshot">
     <img src="images/screenshots/13-preview-changes.png"
          alt="Screenshot needed: 13 preview changes"
          width="1072" height="722"
          loading="lazy" decoding="async">
   </a>
-  <figcaption><strong>Preview changes.</strong> Review source files, planned results, destinations, and status.</figcaption>
+  <figcaption><strong>Review Changes.</strong> Review source files, planned results, destinations, and status.</figcaption>
 </figure>
 </div>
 

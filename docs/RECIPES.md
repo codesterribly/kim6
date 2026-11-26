@@ -4,7 +4,7 @@ Recipes let you combine image operations into a saved workflow and run them dire
 
 ## Start in Dolphin
 
-![KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Run a recipe…, and Recipe editor…](images/screenshots/06-recipes.png)
+![Screenshot needed: 06 recipes](images/screenshots/06-recipes.png)
 
 1. Select one or more supported images and right-click.
 2. Open **KIMng - Recipes → Run a recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
@@ -13,7 +13,7 @@ Recipes let you combine image operations into a saved workflow and run them dire
 
 The Recipes menu also provides **Recipe editor…** for creating and managing your own workflows. The runner and editor group recipes under **Built-In**, **Root**, user-created folders, and **Unfiled**. Only user recipes assigned to **Root** are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.
 
-![Run a Recipe displaying readiness and planned outputs](images/screenshots/11-run-recipe.png)
+![Screenshot needed: 11 run recipe](images/screenshots/11-run-recipe.png)
 
 Inspect the selected images, enabled processing steps, planned output filenames, metadata consequences, and destination before running a recipe.
 
@@ -51,7 +51,7 @@ paths. Do not assume their output settings are identical.
 
 ## Create and edit recipes
 
-![KIMng Recipe Editor with ordered steps, destination choices, and live output preview](images/screenshots/12-recipe-editor.png)
+![Screenshot needed: 12 recipe editor](images/screenshots/12-recipe-editor.png)
 
 Open **Recipe editor…** from the Recipes submenu. The Editor uses three resizable panels:
 
@@ -154,12 +154,12 @@ The Recipe Editor offers **27 operations** in four groups. Each entry below uses
 | **Color Profile** | Preserve a supported profile or convert to sRGB. |
 | **Compress Image** | Set final compression preset or custom encoder quality, PNG level, and JPEG options. |
 | **Convert Format** | Choose output format and applicable encoder options, including JPEG quality. |
-| **Add Watermark / Overlay** | Render a text, image, camera-detail, or caption overlay where supported. |
 
 #### Metadata & Copyright
 
 | Operation | Behavior |
 |---|---|
+| **Add Watermark / Overlay** | Render a text, image, camera-detail, or caption overlay where supported. |
 | **Remove AI Metadata** | Remove recognized AI-related metadata. |
 | **Remove All Metadata** | Remove all available metadata; normalize orientation first if required. |
 | **Remove Descriptive Metadata** | Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation. |
@@ -194,7 +194,7 @@ After approval, the filename is binding. If another process creates that target 
 
 ## Preflight and output preview
 
-**Run a Recipe** lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked **Ready** or **Problem** as appropriate. The Run button stays disabled until every required preflight check succeeds.
+**Run a Recipe** lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked **Ready** or **Blocked** as appropriate. The Run button stays disabled until every required preflight check succeeds.
 
 The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.
 

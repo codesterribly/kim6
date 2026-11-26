@@ -197,6 +197,8 @@ The user-facing entry point is **Actions → KIMng - Settings/About → Settings
 
 `kimng_load_user_settings()` in `src/bin/kim_all` reads supported `KEY=value` data without executing the file. Persisted settings include `KIM_POLICY`, `KIM_NAME_AFFIX_POSITION`, 21 allowlisted `KIM_AFFIX_*` labels, three web-export quality values (default 95), and three copyright fields. Labels are validated as 1–32 ASCII filename-safe characters. `affixed_filename()` resolves configured labels centrally, including compound GPS/AI and timestamped video frame names. The Output Filenames Settings tab provides editable labels, previews and Restore Defaults. User-chosen output names and Rename Images are unaffected. Explicit environment variables take precedence. `KIM_WEB_FORMAT` and `KIM_WEB_COLOR_MODE` are environment-only, not saved by Settings.
 
+The saved location preferences include `KIM_LOCATION_UNITS` and `KIM_LOCATION_ONLINE_MAPS`. These are normal Settings preferences rather than shell-environment overrides. The Metadata tab uses `QSettings("KIMng", "MetadataTools")` for metadata-source priority and display preferences, separately from `settings.conf`.
+
 `KIM_POLICY` accepts `create` or `prompt`. `choose_output_mode()` implements the Create/Overwrite choice and the second overwrite warning. `confirm_inplace_overwrite()` handles operations that require original-file modification. No setting silently authorizes replacement. See [Configuration and Defaults](commandconfig.md#configuration-and-defaults).
 
 ## File Safety and Error Handling
@@ -269,7 +271,7 @@ Different KIMng actions have different file-handling requirements.
 
 Resizing, compression, and conversion generate and validate output before publishing it. Most support creating new files or explicitly authorized overwriting.
 
-Rotation, EXIF auto-orientation, flip, and flop select Create or Overwrite through `choose_output_mode()`. Create publishes validated transformed copies. Overwrite requires explicit two-stage authorization and replaces selected originals only after validation.
+Rotation and EXIF auto-orientation support Create or explicitly authorized Overwrite where applicable. Horizontal and vertical Flip always publish separate reviewed copies and never replace selected originals.
 
 ### Metadata and dates
 
@@ -379,7 +381,7 @@ Changes to file-processing operations should explain how existing source and des
 
 Preserve historical author notices and GPL license headers.
 
-Translations are maintained in `po/` using gettext and intltool. When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
+Translations are maintained in `po/` using the Python extraction tool and GNU gettext utilities (`xgettext`, `msgcat`, and `msgfmt`). When changing menu labels or other translated text, update the relevant translation sources and keep message identifiers consistent.
 
 For the project's origins and earlier contributors, see [Project history](../README.md#project-history). More detailed upstream material remains in the source repository under `docs/archive/upstream/` and is not bundled with the offline User Guide.
 
@@ -391,7 +393,7 @@ Generated media is first written to invocation-owned staging on the destination 
 
 This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIMng’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.
 
-Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. The current Gallery Publishing workflow creates a new directory or ZIP archive and does not recursively replace an occupied destination. Its publication snapshot includes the complete page and asset inventory, including multiple-page section output and unassigned content; approved paths are binding. Gallery chooser, editor, rendering, publishing, and browser verification are implemented in `kim_gallery_chooser.py`, `kim_photo_story_dialog.py`, `kim_story_publication.py`, `kim_story_publish.py`, and the gallery-specific tests. The older `kim_all gallery` command remains separate from the Dolphin `gallery-choose` entry point.
+Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. The current Gallery Publishing workflow creates a new directory or ZIP archive and does not recursively replace an occupied destination. Its publication snapshot includes the complete page and asset inventory, including multiple-page section output and unassigned content; approved paths are binding. Gallery chooser, editor, rendering, publishing, and browser verification are implemented in `kim_gallery_chooser.py`, `kim_photo_story_dialog.py`, `kim_story_publication.py`, `kim_story_publish.py`, and the gallery-specific tests. The `kim_all gallery` command opens the classic Image gallery creator directly and is also invoked by the Image gallery choice in the Dolphin `gallery-choose` workflow.
 
 Cleanup removes only staging files, directories and child processes owned by the current invocation. A producer failure, invalid result, cancellation or publication failure must not delete a pre-existing destination. Earlier completed batch results remain in place if a later item fails. Error and summary dialogs identify failed items rather than claiming a rejected output succeeded.
 

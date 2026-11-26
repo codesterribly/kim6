@@ -1,6 +1,6 @@
 # KIMng
 
-<p align="center">
+<p>
   <img
     src="docs/images/kimng-brand-icon.png"
     alt="KIMng image toolkit icon"
@@ -17,12 +17,12 @@ Select one file or an entire group of files, right-click, and choose what you wa
 
 KIMng is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
-<p align="center">
+<p>
   <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="Screenshot needed: 06 recipes" width="760"></a>
 </p>
-<p align="center"><em>KIMng - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
+<p><em>KIMng - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
-<p align="center">
+<p>
   <a href="docs/images/screenshots/01-main-menu.png">
     <img src="docs/images/screenshots/01-main-menu.png"
          alt="Screenshot needed: 01 main menu"
@@ -30,7 +30,7 @@ KIMng is a modernized rewrite of the KDE Image Menu project, bringing its famili
   </a>
 </p>
 
-<p align="center"><em>KIMng in Dolphin's Actions menu.</em></p>
+<p><em>KIMng in Dolphin's Actions menu.</em></p>
 
 ## Quick Start
 
@@ -63,10 +63,10 @@ Video selections expose three video conversion submenus (AV1, H.264, and H.265) 
 
 ### Recipes: reusable photo workflows
 
-<p align="center">
+<p>
   <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="Screenshot needed: 12 recipe editor" width="760"></a>
 </p>
-<p align="center"><em>The Recipe Editor and its planned-output preview.</em></p>
+<p><em>The Recipe Editor and its planned-output preview.</em></p>
 
 
 KIMng includes a dedicated **KIMng - Recipes** submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire selection.
@@ -87,10 +87,10 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 
 ### Resize, compress, and convert images
 
-<p align="center">
+<p>
   <a href="docs/images/screenshots/02-convert-compress.png"><img src="docs/images/screenshots/02-convert-compress.png" alt="Screenshot needed: 02 convert compress" width="760"></a>
 </p>
-<p align="center"><em>Conversion and compression actions available directly from Dolphin.</em></p>
+<p><em>Conversion and compression actions available directly from Dolphin.</em></p>
 
 
 - **Resize images:** Choose maximum-width/height presets, custom dimensions, percentage resizing, and advanced geometry. Presets preserve the aspect ratio and do not enlarge smaller inputs by default. Enable Allow enlargement when you want a preset to upscale smaller images. Percentage resizing above 100% also allows enlargement. Select Automatic, Lanczos, Bicubic, or Nearest-neighbor resampling where offered. Review the planned dimensions, filenames, and destinations before applying changes. Process multiple images together.
@@ -103,15 +103,15 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 
 ### Organize images and manage metadata
 
-<p align="center">
+<p>
   <a href="docs/images/screenshots/05-organize-metadata.png"><img src="docs/images/screenshots/05-organize-metadata.png" alt="Screenshot needed: 05 organize metadata" width="760"></a>
 </p>
-<p align="center"><em>Image dates, renaming and metadata tools in Dolphin. Existing screenshots may still show KIMng menu labels.</em></p>
+<p><em>Image dates, renaming and metadata tools in Dolphin. Replacement screenshots are pending.</em></p>
 
 
-- **Browse metadata:** Choose **Organize Metadata → View metadata…** to open the standalone, read-only Metadata Browser. Inspect image previews, common fields, detailed tags, source representations, and associated metadata. Search and navigate without modifying the selected images.
+- **Browse metadata:** Choose **Metadata/Organize → View metadata…** to open the standalone, read-only Metadata Browser. Inspect image previews, common fields, detailed tags, source representations, and associated metadata. Search and navigate without modifying the selected images.
 - **Compare two images:** Use the Metadata Browser's comparison interface to examine shared values and differences between two images, including alternate representations.
-- **Plan metadata edits:** Choose **Organize Metadata → Edit metadata…** to open the Metadata Editor. Prepare changes for individual images or batches, inspect available metadata sources, and review explicit field operations. **This is currently a read-only change planner: Review changes does not write metadata, create sidecars, or alter originals.**
+- **Plan metadata edits:** Choose **Metadata/Organize → Edit metadata…** to open the Metadata Editor. Prepare changes for individual images or batches, inspect available metadata sources, and review explicit field operations. **This is currently a read-only change planner: Review changes does not write metadata, create sidecars, or alter originals.**
 - **View GPS information:** Use **View on map** from Metadata Browser or Editor to inspect the selected coordinates in a compact map; metadata fields also offer **Edit GPS** or **Add GPS** actions where supported. Viewing does not apply an edit, and the Editor preserves pending drafts when opening the map.
 - **Manage privacy and metadata:** Use **Remove GPS metadata…** to remove recognized coordinates, **Strip metadata** to remove selected categories of metadata, including recognized AI-generation fields. GPS-only cleanup does not guarantee location anonymization. AI-only cleanup cannot guarantee removal of every generator-specific field or signed C2PA / Content Credentials.
 - **Manage photo dates:** Rename images using EXIF dates, shift camera wall-clock timestamps, and synchronize EXIF and filesystem dates in either direction. Time shifts are not automatic timezone conversions; subsecond and offset behavior depends on the action.

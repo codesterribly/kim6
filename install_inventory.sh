@@ -92,6 +92,7 @@ docs/DEVELOPMENT.md|docs/DEVELOPMENT.md|0644
 docs/commandconfig.md|docs/commandconfig.md|0644
 docs/index.html|docs/index.html|0644
 docs/images/kimng-brand-icon.png|docs/images/kimng-brand-icon.png|0644
+docs/images/kimng-guide-icon.png|docs/images/kimng-guide-icon.png|0644
 docs/work.css|docs/work.css|0644
 docs/reference/ABOUT.html|docs/reference/ABOUT.html|0644
 docs/reference/ACTIONS.html|docs/reference/ACTIONS.html|0644
@@ -101,18 +102,7 @@ docs/reference/FORMATS.html|docs/reference/FORMATS.html|0644
 docs/reference/INSTALL.html|docs/reference/INSTALL.html|0644
 docs/reference/LICENSE.html|docs/reference/LICENSE.html|0644
 docs/reference/README.html|docs/reference/README.html|0644
-docs/images/screenshots/kim6-photo-actions.png|docs/images/screenshots/kim6-photo-actions.png|0644
-docs/images/screenshots/kim6-video-conversion.png|docs/images/screenshots/kim6-video-conversion.png|0644
-docs/images/screenshots/kim6-video-utilities.png|docs/images/screenshots/kim6-video-utilities.png|0644
-docs/images/screenshots/kim6-settings-dialog.png|docs/images/screenshots/kim6-settings-dialog.png|0644
-docs/images/screenshots/kim6-collage-dialog.png|docs/images/screenshots/kim6-collage-dialog.png|0644
-docs/images/screenshots/kim6-animated-gif-dialog.png|docs/images/screenshots/kim6-animated-gif-dialog.png|0644
 docs/reference/RECIPES.html|docs/reference/RECIPES.html|0644
-docs/images/screenshots/kim6-recipes-menu.png|docs/images/screenshots/kim6-recipes-menu.png|0644
-docs/images/screenshots/kim6-recipe-editor.png|docs/images/screenshots/kim6-recipe-editor.png|0644
-docs/images/screenshots/kim6-convert-menu.png|docs/images/screenshots/kim6-convert-menu.png|0644
-docs/images/screenshots/kim6-metadata-menu.png|docs/images/screenshots/kim6-metadata-menu.png|0644
-docs/images/screenshots/kim6-settings-general.png|docs/images/screenshots/kim6-settings-general.png|0644
 src/bin/kim_process.py|bin/kim_process.py|0644
 src/bin/kim_settings_file.py|bin/kim_settings_file.py|0644
 docs/images/screenshots/01-main-menu.png|docs/images/screenshots/01-main-menu.png|0644
@@ -138,7 +128,6 @@ docs/images/screenshots/20-review-web-export.png|docs/images/screenshots/20-revi
 docs/images/screenshots/21-video-menu-overview.png|docs/images/screenshots/21-video-menu-overview.png|0644
 docs/images/screenshots/22-video-av1-presets.png|docs/images/screenshots/22-video-av1-presets.png|0644
 docs/images/screenshots/23-video-utilities.png|docs/images/screenshots/23-video-utilities.png|0644
-docs/reference/STEP2_IMPLEMENTATION.html|docs/reference/STEP2_IMPLEMENTATION.html|0644
 KIMNG_RUNTIME_FILES
 
 # Gallery presentation chooser.
@@ -186,3 +175,20 @@ runtime_modes+=("0644")
 runtime_sources+=("src/bin/kim_pdf_extract.py")
 runtime_files+=("bin/kim_pdf_extract.py")
 runtime_modes+=("0644")
+
+# Retired public documentation from earlier KIMng installations.
+# These exact paths are removed only inside an owned runtime.
+retired_documentation_files=(
+  docs/images/screenshots/kim6-animated-gif-dialog.png
+  docs/images/screenshots/kim6-collage-dialog.png
+  docs/images/screenshots/kim6-convert-menu.png
+  docs/images/screenshots/kim6-metadata-menu.png
+  docs/images/screenshots/kim6-photo-actions.png
+  docs/images/screenshots/kim6-recipe-editor.png
+  docs/images/screenshots/kim6-recipes-menu.png
+  docs/images/screenshots/kim6-settings-dialog.png
+  docs/images/screenshots/kim6-settings-general.png
+  docs/images/screenshots/kim6-video-conversion.png
+  docs/images/screenshots/kim6-video-utilities.png
+  docs/reference/STEP2_IMPLEMENTATION.html
+)

@@ -39,7 +39,6 @@ def sources():
         ROOT / "ABOUT",
         ROOT / "LICENSE.md",
         DOC_DIR / "RECIPES.md",
-        DOC_DIR / "STEP2_IMPLEMENTATION.md",
     )
     found = set(MAIN)
     found.update(public)
@@ -94,6 +93,8 @@ def render(source, names):
     if result.returncode:
         raise RuntimeError(f"Pandoc failed for {source}:\n{result.stderr}")
     main_html = rewrite_urls(result.stdout, source, names)
+    if source.name == "ABOUT":
+        main_html = '<h1 id="about-kimng">About KIMng</h1>\n' + main_html
     display_name = source.stem if source.suffix else source.name
     titles = {
         "README": "Project overview",
@@ -136,7 +137,7 @@ def render(source, names):
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><img src="../images/kimng-guide-icon.png" alt="" width="39" height="39"></span><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>

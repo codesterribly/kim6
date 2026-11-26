@@ -11,7 +11,7 @@
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><img src="../images/kimng-guide-icon.png" alt="" width="39" height="39"></span><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
@@ -33,7 +33,7 @@
 <h1 id="recipes-reusable-image-workflows">Recipes: Reusable Image Workflows</h1>
 <p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIMng - Recipes menu</strong>. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and <strong>recipes never modify the source images</strong>.</p>
 <h2 id="start-in-dolphin">Start in Dolphin</h2>
-<p><img src="../images/screenshots/06-recipes.png" alt="KDE Dolphin KIMng - Recipes menu showing Root shortcuts, Run a recipe…, and Recipe editor…" /></p>
+<p><img src="../images/screenshots/06-recipes.png" alt="Screenshot needed: 06 recipes" /></p>
 <ol type="1">
 <li>Select one or more supported images and right-click.</li>
 <li>Open <strong>KIMng - Recipes → Run a recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
@@ -41,7 +41,7 @@
 <li>When all files are ready, use the Runner destination selector to keep the recipe default, save beside each source, or choose another directory. Review the resulting filenames and directory before running. The finished results are separate files.</li>
 </ol>
 <p>The Recipes menu also provides <strong>Recipe editor…</strong> for creating and managing your own workflows. The runner and editor group recipes under <strong>Built-In</strong>, <strong>Root</strong>, user-created folders, and <strong>Unfiled</strong>. Only user recipes assigned to <strong>Root</strong> are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.</p>
-<p><img src="../images/screenshots/11-run-recipe.png" alt="Run a Recipe displaying readiness and planned outputs" /></p>
+<p><img src="../images/screenshots/11-run-recipe.png" alt="Screenshot needed: 11 run recipe" /></p>
 <p>Inspect the selected images, enabled processing steps, planned output filenames, metadata consequences, and destination before running a recipe.</p>
 <h2 id="web-export-a-ready-to-use-recipe">Web Export: a ready-to-use recipe</h2>
 <p>The supplied <strong>Web Export</strong> recipe auto-orients images, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and <strong>removes all metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.</p>
@@ -71,7 +71,7 @@
 <p>The built-in recipe auto-orients images, fits them within 1600 × 1600 without enlargement, applies sRGB handling, converts to JPEG at quality <strong>95</strong>, strips metadata, and writes <code>{filename}_web.jpg</code> into a <code>Web</code> subfolder.</p>
 <p>These workflows have different configuration and processing paths. Do not assume their output settings are identical.</p>
 <h2 id="create-and-edit-recipes">Create and edit recipes</h2>
-<p><img src="../images/screenshots/12-recipe-editor.png" alt="KIMng Recipe Editor with ordered steps, destination choices, and live output preview" /></p>
+<p><img src="../images/screenshots/12-recipe-editor.png" alt="Screenshot needed: 12 recipe editor" /></p>
 <p>Open <strong>Recipe editor…</strong> from the Recipes submenu. The Editor uses three resizable panels:</p>
 <ul>
 <li><strong>Recipes:</strong> Browse and search built-in and user Recipes, manage folders, and import or export definitions.</li>
@@ -214,10 +214,6 @@
 <td><strong>Convert Format</strong></td>
 <td>Choose output format and applicable encoder options, including JPEG quality.</td>
 </tr>
-<tr>
-<td><strong>Add Watermark / Overlay</strong></td>
-<td>Render a text, image, camera-detail, or caption overlay where supported.</td>
-</tr>
 </tbody>
 </table>
 <h4 id="metadata--copyright">Metadata &amp; Copyright</h4>
@@ -229,6 +225,10 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><strong>Add Watermark / Overlay</strong></td>
+<td>Render a text, image, camera-detail, or caption overlay where supported.</td>
+</tr>
 <tr>
 <td><strong>Remove AI Metadata</strong></td>
 <td>Remove recognized AI-related metadata.</td>
@@ -305,7 +305,7 @@
 <p>When a planned output filename already exists, the Recipe planner can choose a free numbered filename <strong>before</strong> Review Changes approval. It also checks for collisions between images in the batch. The final filename is shown in the reviewed output plan. If the planner cannot resolve a conflict safely, the affected result is blocked.</p>
 <p>After approval, the filename is binding. If another process creates that target before publication, KIMng blocks the affected output and requires renewed review rather than silently renumbering or overwriting it.</p>
 <h2 id="preflight-and-output-preview">Preflight and output preview</h2>
-<p><strong>Run a Recipe</strong> lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Problem</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
+<p><strong>Run a Recipe</strong> lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Blocked</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
 <p>The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.</p>
 <p>The Editor groups preview properties into expandable <strong>Files</strong>, <strong>Image details</strong>, <strong>Metadata</strong>, and <strong>Publication details</strong> sections. Full property values remain available through tooltips and copying even when the columns truncate their display. The expansion state of each group can be remembered.</p>
 <p>Adding JPEG and PSD files does not require the interface to freeze until the batch is analyzed: pending filenames appear promptly and input inspection continues in background workers. A large PSD may still take time to decode, but the window remains usable.</p>

@@ -136,7 +136,7 @@ if [ -d "$RUNTIME" ]; then
       check_dir "$directory"
     done
 
-    for relative in "${runtime_files[@]}"; do
+    for relative in "${runtime_files[@]}" "${retired_documentation_files[@]}"; do
       check_file "$RUNTIME/$relative"
     done
 
@@ -178,7 +178,7 @@ if [ "$runtime_owned" = true ]; then
   # Keep the marker until cleanup completes, allowing a retry
   # after interruption.
 
-  for relative in "${runtime_files[@]}"; do
+  for relative in "${runtime_files[@]}" "${retired_documentation_files[@]}"; do
     path="$RUNTIME/$relative"
     if [ -f "$path" ]; then
       rm -f -- "$path"

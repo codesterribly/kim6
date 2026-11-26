@@ -14,28 +14,57 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MANUAL_FILES = (
-    "docs/index.html",
-    "docs/work.css",
-    "docs/reference/ABOUT.html",
-    "docs/reference/ACTIONS.html",
-    "docs/reference/commandconfig.html",
-    "docs/reference/DEVELOPMENT.html",
-    "docs/reference/FORMATS.html",
-    "docs/reference/INSTALL.html",
-    "docs/reference/LICENSE.html",
-    "docs/reference/README.html",
-    "docs/images/screenshots/kim6-photo-actions.png",
-    "docs/images/screenshots/kim6-video-conversion.png",
-    "docs/images/screenshots/kim6-video-utilities.png",
-    "docs/images/screenshots/kim6-settings-dialog.png",
-    "docs/images/screenshots/kim6-collage-dialog.png",
-    "docs/images/screenshots/kim6-animated-gif-dialog.png",
-    "docs/reference/RECIPES.html",
-    "docs/images/screenshots/kim6-recipes-menu.png",
-    "docs/images/screenshots/kim6-recipe-editor.png",
-    "docs/images/screenshots/kim6-convert-menu.png",
-    "docs/images/screenshots/kim6-metadata-menu.png",
-    "docs/images/screenshots/kim6-settings-general.png",
+    'docs/index.html',
+    'docs/work.css',
+    'docs/images/kimng-brand-icon.png',
+    "docs/images/kimng-guide-icon.png",
+    'docs/reference/ABOUT.html',
+    'docs/reference/ACTIONS.html',
+    'docs/reference/commandconfig.html',
+    'docs/reference/DEVELOPMENT.html',
+    'docs/reference/FORMATS.html',
+    'docs/reference/INSTALL.html',
+    'docs/reference/LICENSE.html',
+    'docs/reference/README.html',
+    'docs/reference/RECIPES.html',
+    'docs/images/screenshots/01-main-menu.png',
+    'docs/images/screenshots/02-convert-compress.png',
+    'docs/images/screenshots/03-create-publish.png',
+    'docs/images/screenshots/04-location-gps.png',
+    'docs/images/screenshots/05-organize-metadata.png',
+    'docs/images/screenshots/06-recipes.png',
+    'docs/images/screenshots/07-resize-crop-rotate.png',
+    'docs/images/screenshots/08-settings-about.png',
+    'docs/images/screenshots/09-web-export.png',
+    'docs/images/screenshots/10-settings-menu.png',
+    'docs/images/screenshots/11-run-recipe.png',
+    'docs/images/screenshots/12-recipe-editor.png',
+    'docs/images/screenshots/13-preview-changes.png',
+    'docs/images/screenshots/14-check-extensions.png',
+    'docs/images/screenshots/15-modify-gps.png',
+    'docs/images/screenshots/16-reduce-gps-precision.png',
+    'docs/images/screenshots/17-crop-image.png',
+    'docs/images/screenshots/18-set-dates.png',
+    'docs/images/screenshots/19-create-collage.png',
+    'docs/images/screenshots/20-review-web-export.png',
+    'docs/images/screenshots/21-video-menu-overview.png',
+    'docs/images/screenshots/22-video-av1-presets.png',
+    'docs/images/screenshots/23-video-utilities.png',
+)
+
+RETIRED_MANUAL_FILES = (
+    'docs/images/screenshots/kim6-animated-gif-dialog.png',
+    'docs/images/screenshots/kim6-collage-dialog.png',
+    'docs/images/screenshots/kim6-convert-menu.png',
+    'docs/images/screenshots/kim6-metadata-menu.png',
+    'docs/images/screenshots/kim6-photo-actions.png',
+    'docs/images/screenshots/kim6-recipe-editor.png',
+    'docs/images/screenshots/kim6-recipes-menu.png',
+    'docs/images/screenshots/kim6-settings-dialog.png',
+    'docs/images/screenshots/kim6-settings-general.png',
+    'docs/images/screenshots/kim6-video-conversion.png',
+    'docs/images/screenshots/kim6-video-utilities.png',
+    'docs/reference/STEP2_IMPLEMENTATION.html',
 )
 
 
@@ -178,14 +207,14 @@ class ManualInstallationTests(unittest.TestCase):
     def test_installed_recipe_manual_and_referenced_screenshots_are_packaged(self):
         self.run_installer('install.sh')
         # The installed overview links to Recipes, and the new guide uses all
-        # five screenshots. Compare bytes so placeholders cannot satisfy this.
+        # five screenshots. Compare bytes with the current checkout, including intentional screenshot placeholders.
         references = (
             'docs/reference/RECIPES.html',
-            'docs/images/screenshots/kim6-recipes-menu.png',
-            'docs/images/screenshots/kim6-recipe-editor.png',
-            'docs/images/screenshots/kim6-convert-menu.png',
-            'docs/images/screenshots/kim6-metadata-menu.png',
-            'docs/images/screenshots/kim6-settings-general.png',
+            'docs/images/screenshots/06-recipes.png',
+            'docs/images/screenshots/12-recipe-editor.png',
+            'docs/images/screenshots/02-convert-compress.png',
+            'docs/images/screenshots/05-organize-metadata.png',
+            'docs/images/screenshots/08-settings-about.png',
         )
         for relative in references:
             with self.subTest(file=relative):
@@ -236,7 +265,7 @@ class ManualInstallationTests(unittest.TestCase):
 
     def test_reject_symlinked_illustration_file(self):
         self.run_installer("install.sh")
-        illustration = self.runtime / "docs/images/screenshots/kim6-settings-dialog.png"
+        illustration = self.runtime / "docs/images/screenshots/10-settings-menu.png"
         outside = self.base / "do-not-overwrite.png"
         outside.write_bytes(b"unrelated data\n")
         illustration.unlink()
@@ -246,6 +275,79 @@ class ManualInstallationTests(unittest.TestCase):
         self.run_installer("uninstall.sh", succeeds=False)
         self.assertEqual(b"unrelated data\n", outside.read_bytes())
         self.assertTrue((self.runtime / "bin/kim_all").is_file())
+
+
+
+    def test_retired_documentation_not_installed(self):
+        self.run_installer("install.sh")
+        self.assert_manual_matches_checkout()
+
+        for relative in RETIRED_MANUAL_FILES:
+            path = self.runtime / relative
+            self.assertFalse(path.exists(), relative)
+            self.assertFalse(path.is_symlink(), relative)
+
+    def test_upgrade_removes_retired_documentation(self):
+        self.run_installer("install.sh")
+
+        for relative in RETIRED_MANUAL_FILES:
+            path = self.runtime / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"retired KIMng documentation")
+
+        unrelated = self.runtime / "docs/reference/user-notes.txt"
+        unrelated.write_bytes(b"preserve unrelated content")
+
+        self.run_installer("install.sh")
+        self.assert_manual_matches_checkout()
+
+        for relative in RETIRED_MANUAL_FILES:
+            self.assertFalse((self.runtime / relative).exists())
+
+        self.assertEqual(
+            unrelated.read_bytes(),
+            b"preserve unrelated content"
+        )
+
+    def test_uninstall_removes_retired_documentation(self):
+        self.run_installer("install.sh")
+
+        for relative in RETIRED_MANUAL_FILES:
+            path = self.runtime / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"retired KIMng documentation")
+
+        unrelated = self.runtime / "docs/reference/user-notes.txt"
+        unrelated.write_bytes(b"preserve unrelated content")
+
+        self.run_installer("uninstall.sh")
+
+        for relative in RETIRED_MANUAL_FILES:
+            self.assertFalse((self.runtime / relative).exists())
+
+        self.assertEqual(
+            unrelated.read_bytes(),
+            b"preserve unrelated content"
+        )
+
+    def test_retired_documentation_symlink_is_refused(self):
+        self.run_installer("install.sh")
+
+        outside = self.base / "outside-documentation"
+        outside.write_bytes(b"must remain unchanged")
+
+        retired = self.runtime / RETIRED_MANUAL_FILES[0]
+        retired.symlink_to(outside)
+
+        dispatcher = self.runtime / "bin/kim_all"
+        original = dispatcher.read_bytes()
+
+        self.run_installer("install.sh", succeeds=False)
+        self.run_installer("uninstall.sh", succeeds=False)
+
+        self.assertTrue(retired.is_symlink())
+        self.assertEqual(outside.read_bytes(), b"must remain unchanged")
+        self.assertEqual(dispatcher.read_bytes(), original)
 
 
 if __name__ == "__main__":

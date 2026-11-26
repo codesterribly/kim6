@@ -11,7 +11,7 @@
   <a class="skip-link" href="#main">Skip to main content</a>
   <header class="topbar">
     <div class="topbar-inner page-width">
-      <a class="brand" href="../index.html"><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
+      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><img src="../images/kimng-guide-icon.png" alt="" width="39" height="39"></span><span class="brand-name">KIM<span>ng</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Documentation</span></a>
       <nav class="top-actions" aria-label="Reference navigation"><a href="../index.html">User Guide</a><a class="top-action-primary" href="README.html">Overview</a></nav>
     </div>
   </header>
@@ -52,7 +52,7 @@
 <li><strong>ExifTool:</strong> Metadata management, photo dates, and copyright information.</li>
 <li><strong>FFmpeg and ffprobe:</strong> Video conversion, audio extraction, animations, and slideshows.</li>
 <li><strong>KDialog and qdbus:</strong> Dialogs, progress reporting, and interaction with KDE.</li>
-<li><strong>Email application (optional):</strong> Required only to open a draft automatically. KIMng can still prepare attachment files and report their location for manual attachment.</li>
+<li><strong>Email application (optional):</strong> Required for the Send via email workflow. If no supported mail client is available, KIMng blocks attachment preparation.</li>
 </ul>
 <p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
 <p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIMng - Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation and EXIF auto-orientation can support authorized replacement, while horizontal and vertical Flip always publish separate reviewed copies. Other derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
@@ -162,8 +162,8 @@
 <p>The installer prepares KIMng for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h3 id="dependency-checks">Dependency checks</h3>
 <p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, and Pacman and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
-<p>Python 3 with PySide6 Qt Widgets is mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
-<p>Optional tools include Poppler <code>pdftoppm</code> for rendering PDF source pages, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache. The installer also checks QtNetwork map support through <code>python3 src/bin/kim_location_map.py --check</code>.</p>
+<p>Python 3 with PySide6 Qt Widgets and QtNetwork map support is mandatory for installation. The installer runs <code>python3 src/bin/kim_location_map.py --check</code> and stops if the map dependency check fails. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
+<p>Optional tools include Poppler <code>pdftoppm</code> for rendering PDF source pages, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache.</p>
 <h3 id="filesystem-and-source-validation">Filesystem and source validation</h3>
 <p>Before installing application files, <code>install.sh</code>:</p>
 <ul>
@@ -208,7 +208,7 @@
 <p>KIMng retains its normal submenu structure; you do not need to modify the service-menu files to work around this issue.</p>
 <h2 id="upgrade-or-reinstall">Upgrade or reinstall</h2>
 <p>Use the newer source checkout and run <code>./install.sh</code> again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.</p>
-<p>Known KIMng files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIMng menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIMng image/video actions, not to the installer's replacement of its own known program files.</p>
+<p>Known KIMng files are replaced. Explicitly retired documentation files from earlier KIMng installations are removed from verified KIMng runtime directories. Unrelated files are left alone. If you modified a KIMng menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIMng image/video actions, not to the installer's replacement of its own known program files.</p>
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>

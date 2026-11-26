@@ -31,7 +31,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Configuration and Defaults](#configuration-and-defaults)
 - [Still-image actions](#still-image-actions): album, animate, capturedate, checkextensions, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery-choose, gallery, photo-story, location-gpx, location-copy, location-apply, location-report, location-reduce, metadata-view, metadata-edit, pdf-pages, pdf-extract, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport, crop, overlay
 - [Video actions](#video-actions): slideshow, video, videoaudio, videoframes, videogif
-- [Information actions](#information-actions): about, license, manual, settings, checkextensions
+- [Information actions](#information-actions): about, license, manual, settings
 
 ## Command Syntax
 
@@ -67,7 +67,7 @@ Some metadata and timestamp operations have additional rules. Each command secti
 
 **Interactive Review Changes policies:** Compress, Resize, and Convert video can show their own Create/Overwrite controls, initially selecting Create. Their available choices are not necessarily restricted by `KIM_POLICY`. Interactive Rename has its own copy-versus-rename controls. Conversion with `--preview`, interactive metadata stripping and copyright actions, and horizontal or vertical Flip have create-only reviewed workflows. Web Export, PDF page conversion, PDF embedded-image extraction, and Photo story publication also create separate outputs. Do not interpret `KIM_POLICY=create` as a universal prohibition enforced by every interactive dialog; inspect that operation's controls and approved review plan. No saved preference alone authorizes original-file replacement.
 
-See [File handling](#output-and-file-handling) for file preservation and overwrite protections. The next section explains how to configure output policies and other defaults.
+See [File preservation details](#file-preservation-details) below for operation-specific preservation and overwrite protections.
 
 ### File preservation details
 
@@ -225,20 +225,21 @@ Prompts for one of eight PDF album layouts and a PDF destination. The legacy pos
 ### `animate`
 
 ```sh
-kim_all animate [--format gif|apng] [--delay CENTISECONDS] [--loop COUNT] [--output PATH] -- IMAGE...
+kim_all animate [--format gif|apng] [--delay CENTISECONDS] [--loop COUNT] [--canvas-mode fit|fill|preserve] [--output PATH] -- IMAGE...
 ```
 
-Creates an animated GIF or APNG derivative from selected still images using one settings dialog for format, frame delay, looping and destination. GIF retains its ImageMagick path and supports 0–65535-centisecond delays, including multi-frame inputs. APNG uses FFmpeg and requires 2–360 single-frame sources, delay 1–65535 centiseconds, a transparent normalized RGBA canvas up to 4096 × 4096 and a total budget of 200 million pixel-frames. APNG uses a `.png` filename and verifies frame count, dimensions, timing, looping and decoding before publication. The originals are never replaced. This is distinct from `videogif`, which samples video.
+Creates an animated GIF or APNG derivative from selected still images using one settings dialog for format, frame delay, looping and destination. GIF retains its ImageMagick path and supports 0–65535-centisecond delays, including multi-frame inputs. APNG uses FFmpeg and requires 2–360 single-frame sources, delay 1–65535 centiseconds, a transparent normalized RGBA canvas up to 4096 × 4096 and a total budget of 200 million pixel-frames. APNG uses a `.png` filename and verifies frame count, dimensions, timing, looping and decoding before publication. Canvas handling can be selected using `--canvas-mode fit|fill|preserve`, subject to the selected format's restrictions. The originals are never replaced. This is distinct from `videogif`, which samples video.
 
 ### `capturedate`
 
 ```sh
+kim_all capturedate --mode unified --interactive -- FILE...
 kim_all capturedate --interactive -- FILE...
 kim_all capturedate --datetime 'YYYY-MM-DD HH:MM:SS' --timezone unknown|UTC|+HH:MM -- FILE...
 kim_all capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM] [--seconds INTEGER] [--fields capture|all] -- FILE...
 ```
 
-The **Set Image Capture Date…** command edits camera capture-date metadata. `capturedate --mode unified` opens the unified photo-date workflow. The related photo-date actions
+The Dolphin **Set dates…** action edits camera capture-date metadata. `capturedate --mode unified` opens the unified photo-date workflow. The related photo-date actions
 can adjust an existing capture date, derive a capture date from the file modification time, or synchronize
 the file modification time with the recorded photo capture date. Unknown camera time zones are not assumed
 to be UTC or the computer local time.
@@ -359,7 +360,7 @@ kim_all datesync --direction file-to-exif [--fields capture|all] -- FILE...
 kim_all datesync --interactive -- FILE...
 ```
 
-`exif-to-file` sets filesystem modification time from `DateTimeOriginal` only when a valid time and explicit timezone can be established; unknown camera timezones are not silently interpreted as the computer's local time or UTC. `file-to-exif` writes capture time from filesystem mtime; `capture` writes `DateTimeOriginal`, while `all` also writes `CreateDate` and `ModifyDate`. The interactive command delegates to the unified Qt photo-date workflow rather than using the legacy direction prompt; it reviews planned changes before execution. Writing EXIF dates preserves image pixels without recompression and retains filesystem modification time. Filesystem creation time is not changed.
+`exif-to-file` sets filesystem modification time from `DateTimeOriginal` only when a valid time and explicit timezone can be established; unknown camera timezones are not silently interpreted as the computer's local time or UTC. `file-to-exif` writes capture time from filesystem mtime using an established camera timezone. An unknown camera timezone blocks the operation; `capture` writes `DateTimeOriginal`, while `all` also writes `CreateDate` and `ModifyDate`. The interactive command delegates to the unified Qt photo-date workflow rather than using the legacy direction prompt; it reviews planned changes before execution. Writing EXIF dates preserves image pixels without recompression and retains filesystem modification time. Filesystem creation time is not changed.
 
 ### `flipflop`
 
@@ -396,7 +397,7 @@ Choose **Gallery folder (recommended)** or **ZIP archive**, use **Preview in bro
 kim_all gallery -- IMAGE...
 ```
 
-This legacy command opens the older direct HTML gallery workflow. It remains available for compatibility but is not the current Dolphin **Create a gallery…** entry point. Use [`gallery-choose`](#gallery-choose) for the current Gallery Publishing editor.
+This command opens the classic HTML gallery creator directly. Dolphin's **Create a gallery… → Image gallery** choice also invokes this workflow through [`gallery-choose`](#gallery-choose). The creator supports image ordering, captions, Clean Light and Dark Portfolio themes, Standard and High image resolution, column selection, and gallery preview. Choose **Photo story** for the separate story editor.
 
 ### `location-gpx`, `location-copy`, `location-apply`, `location-report`, `location-reduce`
 
@@ -518,9 +519,17 @@ Geometry uses ImageMagick’s supported resize grammar and preserves aspect rati
 kim_all resizeandsend [--size full|WIDTHxHEIGHT] -- IMAGE...
 ```
 
-Without `--size`, prompts for full size, 1600/1200/800/600/300 square bounds, or custom geometry. Only successfully prepared files are attached. Animated APNG cannot be resized for email because animation frames may be lost; `--size full` preserves the original animation by copying its bytes. KMail, Thunderbird, or `xdg-email` is used if available. Attachments are retained in `${XDG_DATA_HOME:-$HOME/.local/share}/kimng/email-attachments` because clients may read asynchronously; see [File handling](#output-and-file-handling).
+**Send via email…** opens the email settings dialog even when `--size` is supplied. The argument supplies an initial size selection rather than bypassing the graphical workflow. Available choices include full size, 1600, 1200, 800 and 600 pixel square bounds, and custom dimensions.
 
-KIMng does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. Email preparation creates temporary attachment copies, not a published derivative meant to replace the original image. The selected mail program controls the final sending step. A failed mail-client launch does not authorize KIMng to alter the source files. If no compatible mail program is available, KIMng reports the directory so the files can be attached manually.
+Supported mail integrations include KMail, Thunderbird, Thunderbird (Flatpak), and `xdg-email`, subject to local availability. If no supported client is available, preparation is blocked.
+
+Full-size preparation copies the original bytes. Animated APNG cannot be resized for email because animation frames may be lost.
+
+The prepared attachments must pass Review Changes before handoff. KIMng warns when attachment sizes exceed 18 MiB and blocks handoff above 25 MiB. A preparation failure for any selected image blocks handoff of the entire batch.
+
+Attachments are retained under `${XDG_DATA_HOME:-$HOME/.local/share}/kimng/email-attachments` because mail clients may read them asynchronously.
+
+KIMng does not automatically delete prepared attachments. Remove them from the attachment directory when they are no longer needed. Email preparation creates temporary attachment copies, not a published derivative meant to replace the original image. The selected mail program controls the final sending step. A failed mail-client launch does not authorize KIMng to alter the source files. If mail-client handoff fails after preparation, retained attachments may be available for manual attachment.
 
 ### `rotate`
 
@@ -568,10 +577,10 @@ Adds or subtracts the fixed offset from camera date tags. `all` (default) shifts
 ### `webexport`
 
 ```sh
-kim_all webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|jpeg|png|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...
+kim_all webexport [--custom] [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|jpeg|png|webp|avif|keep] [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] [--color srgb|preserve] [--output-dir DIR] -- IMAGE...
 ```
 
-Options can also be prompted. Web Export accepts an output directory and selected source files. Default size is 1600×1600, default quality is 95 for JPEG, WebP and AVIF (independently configurable in Settings), format defaults to `KIM_WEB_FORMAT` (normally JPEG), and color defaults to ICC-managed sRGB. `keep` retains source format when supported. Web Export creates distinct derivatives. Animated APNG input is refused rather than flattened. JPEG scan and optimization options apply only to JPEG output.
+Use `--custom` to open custom Web Export settings. Web Export accepts an output directory and selected source files. The default destination is beside each source. Review Changes presents the planned filenames and destinations before processing. Default size is 1600×1600, default quality is 95 for JPEG, WebP and AVIF (independently configurable in Settings), format defaults to `KIM_WEB_FORMAT` (normally JPEG), and color defaults to ICC-managed sRGB. `keep` retains source format when supported. Web Export creates distinct derivatives, fits images within the specified dimensions without upscaling, and applies ImageMagick's `-strip` metadata policy. A compatible ICC profile can be retained or reapplied according to the selected color mode. Animated APNG input is refused rather than flattened. JPEG scan and optimization options apply only to JPEG output.
 
 With `--color srgb` (the default), tagged images undergo ICC conversion to sRGB. Untagged RGB images are treated as sRGB, while ambiguous untagged CMYK images are rejected. Color-managed conversion requires an installed sRGB profile and the appropriate source profile. `--color preserve` retains embedded color profiles where supported.
 
@@ -583,7 +592,7 @@ With `--color srgb` (the default), tagged images undergo ICC conversion to sRGB.
 kim_all slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30] [--background COLOR] [--output FILE] [--interactive] -- PHOTO...
 ```
 
-Creates a derived, silent H.264/yuv420p MP4. The interactive action uses one settings dialog for timing, resolution, frame rate, background (including custom `#RRGGBB`), destination and estimated duration. When one image is selected, more images may be added. The interactive slideshow dialog also has a selected-slide preview and a playback timestamp readout for checking image order and timing. Images are sorted by natural filename order, fitted without upscaling, and padded. Defaults: 3 seconds per image, 1280×720, 25 fps, black background. Size presets are 854×480, 1280×720 and 1920×1080. Limits: 200 images, 600 seconds, 18,000 frames and 1920×1080. The output must be a free `.mp4` path; existing files are not replaced. RAW, layered, vector, HDR and animated sources are rejected. H.264 encoder `libx264` is required.
+Creates a derived, silent H.264/yuv420p MP4. The interactive action uses one settings dialog for timing, resolution, frame rate, background (including custom `#RRGGBB`), destination and estimated duration. Images may be added and reordered regardless of the initial selection, up to the 200-image limit. The interactive slideshow dialog also has a selected-slide preview and a playback timestamp readout for checking image order and timing. Interactive rendering preserves the order established in the slideshow dialog. Noninteractive input uses natural filename ordering. Images are fitted without upscaling and padded. Defaults: 3 seconds per image, 1280×720, 25 fps, black background. Size presets are 854×480, 1280×720 and 1920×1080. Limits: 200 images, 600 seconds, 18,000 frames and 1920×1080. The output must be a free `.mp4` path; existing files are not replaced. RAW, layered, vector, HDR and animated sources are rejected. H.264 encoder `libx264` is required.
 
 Slideshows do not include titles, transitions, pan, or zoom effects. They are intended for straightforward photo-to-video conversion, not video editing.
 

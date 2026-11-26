@@ -24,14 +24,14 @@ KIMng uses the installed ImageMagick 7 build, ExifTool, FFmpeg, and ffprobe. A r
 | PDF | ImageMagick PDF delegate when local policy allows | Validated PDF output; `album` and `print` generate PDFs | Page count and layout are checked. Untrusted PDF input remains subject to local delegate/security policy. |
 | PSD | KIMng Photoshop source preparation for supported photo workflows | No PSD output | Supported 8- or 16-bit RGB, grayscale, or profiled CMYK PSD input, subject to canvas and decoding limits. Layers are rendered, not retained as an editable document. Recipes require a supported output format. |
 | PSB | Rejected | Not supported | Large Photoshop Document (PSB) files are explicitly refused; do not assume they are interchangeable with PSD. |
-| Radiance HDR / OpenEXR | Coder-dependent decoder | Coder-dependent encoder | No promised automatic HDR-to-SDR color-managed conversion. `slideshow` rejects HDR input. |
+| Radiance HDR / OpenEXR | Coder-dependent decoder | Coder-dependent encoder | Direct conversion and slideshow workflows reject HDR/OpenEXR input. No automatic HDR-to-SDR tone mapping is promised. |
 | Camera RAW (DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2, others) | Installed ImageMagick RAW delegate, if available | No dedicated RAW development or output workflow | Demosaicing and color depend on the delegate. RAW metadata editing is rejected; conversion must not overwrite RAW originals. Use a dedicated RAW processor for development. |
 
 ## Photoshop PSD Inputs
 
-KIMng accepts supported Photoshop PSD files as **read-only sources** for applicable image actions, including Recipes and supported publication workflows. **PSB is not supported.** PSD preparation accepts supported 8- and 16-bit grayscale, RGB and profiled CMYK documents within its size limits. A PSD is prepared as a rendered image for processing. This is not an editable Photoshop round trip: layers and other document-specific structure are not reproduced in the derivative.
+KIMng accepts supported Photoshop PSD files as **read-only sources** for applicable image actions, including Recipes and supported publication workflows. **PSB is not supported.** PSD preparation accepts supported 8- and 16-bit grayscale, RGB and profiled CMYK documents within its limits of 30,000 pixels per dimension, 100 megapixels, and a 2 GiB source-file size. A PSD is prepared as a rendered image for processing. This is not an editable Photoshop round trip: layers and other document-specific structure are not reproduced in the derivative.
 
-**Recipes never save PSD output.** If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers **Fix Recipe…**, where **Convert Format** can be added and a supported format selected. KIMng does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.
+**Recipes never save PSD output.** If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers **Fix recipe…**, where **Convert Format** can be added and a supported format selected. KIMng does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.
 
 For direct PSD-to-PDF conversion, `kim_all convert --format pdf --strip-metadata -- DOCUMENT.psd` is supported. The `--strip-metadata` conversion flag is not available for arbitrary formats or non-PSD inputs. Other metadata-removal workflows use the dedicated `stripmeta` action.
 
@@ -47,6 +47,8 @@ Operations that preserve frames validate expected input and output frame counts.
 
 **Animation-specific boundaries:** Animated GIF conversion checks frame delays and looping. APNG conversion has a dedicated FFmpeg path and checks animation control information. Animated WebP and other multi-frame formats require suitable installed coders and action-specific validation; do not assume that an ordinary resize or web export preserves every animation property. **Resize, Web Export and resized email attachments refuse animated APNG rather than publish a flattened still image. Full-size email preparation copies the original bytes.** This applies even when the file is named `.png` rather than `.apng`. Nonanimated PNGs work normally. Failed or unsupported operations leave existing source files untouched.
 
+Direct conversion refuses multi-image AVIF/HEIC inputs and animated WebP conversion to non-WebP output rather than risking unsupported frame handling.
+
 Multi-page TIFF and PDF inputs are documents rather than timed animations. Converting a multi-page or animated source to a single-image format is refused where frames would otherwise be discarded.
 
 ## Color Profiles and Metadata
@@ -61,13 +63,15 @@ See [Web export](commandconfig.md#webexport) for color options and [File handlin
 
 GPS edits and precision reduction are limited to verified, nonanimated still JPEG, PNG, WebP, TIFF, HEIC/HEIF, or AVIF images whose extensions match their detected formats. Progressive JPEG is refused by the GPS writer because the current container verifier cannot preserve its scan structure. Animated PNG (APNG), animated WebP, PSD, camera RAW, and other unsupported containers remain read-only for these GPS changes. KIMng does not silently transcode a source to make it writable.
 
-The PNG metadata implementation also rejects unsupported or malformed `eXIf` structures instead of publishing partially reconstructed metadata. These restrictions are operation-specific: format decoding and image conversion are distinct from safe metadata editing.
+Progressive JPEG restrictions also apply to the metadata-writing paths used by `stripmeta`, `copyright`, `capturedate`, `timeshift`, and `datesync` when safe container verification is required.
+
+Selective PNG metadata stripping (`stripmeta --mode gps` or `--mode ai`) refuses PNG files containing any `eXIf` chunk, not just malformed chunks. Other PNG metadata operations reject unsupported or malformed `eXIf` structures where applicable. These restrictions are operation-specific: format decoding and image conversion are distinct from safe metadata editing.
 
 ## Video Formats and Encoders
 
 KIMng uses FFmpeg for H.264 (`libx264`) and H.265 (`libx265`) video. AV1 prefers `libsvtav1` and uses `libaom-av1` when SVT-AV1 is unavailable; it does not substitute another codec if AV1 encoding is unavailable. Available containers must support the selected codecs and streams. An incompatible original container causes an error rather than an automatic switch to MP4.
 
-Video utilities use FFmpeg for frame extraction, midpoint thumbnails, contact sheets, audio extraction or removal, and GIF creation. Photo-to-MP4 slideshow generation creates a separate video using selected still images in natural filename order. Encoders, stream-copy compatibility, resolution/quality options, GIF loop settings, and output validation depend on the operation and installed FFmpeg capabilities. See [Video actions](commandconfig.md#video-actions) for exact options and limits.
+Video utilities use FFmpeg for frame extraction, midpoint thumbnails, contact sheets, audio extraction or removal, and GIF creation. Photo-to-MP4 slideshow generation creates a separate video using selected still images. Interactive rendering preserves the order established in the slideshow dialog; noninteractive rendering uses natural filename ordering. Encoders, stream-copy compatibility, resolution/quality options, GIF loop settings, and output validation depend on the operation and installed FFmpeg capabilities. See [Video actions](commandconfig.md#video-actions) for exact options and limits.
 
 ## Check Installed Capabilities
 

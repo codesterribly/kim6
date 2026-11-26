@@ -386,7 +386,7 @@ for directory in "$RUNTIME" "$RUNTIME/bin" "$RUNTIME/gallery" \
   check_dir "$directory"
 done
 
-for relative in "${runtime_files[@]}" .kimng-owned .kimng-manifest; do
+for relative in "${runtime_files[@]}" "${retired_documentation_files[@]}" .kimng-owned .kimng-manifest; do
   check_file "$RUNTIME/$relative"
 done
 
@@ -614,6 +614,26 @@ for relative in "${runtime_files[@]}"; do
 done
 
 echo
+# Retire only explicitly enumerated documentation in an owned runtime.
+runtime_is_kimng ||
+    die "refusing retired documentation cleanup in an unrecognized runtime"
+
+for directory in "$RUNTIME/docs" "$RUNTIME/docs/images" \
+    "$RUNTIME/docs/images/screenshots" "$RUNTIME/docs/reference"; do
+    check_dir "$directory"
+done
+
+for relative in "${retired_documentation_files[@]}"; do
+    check_file "$RUNTIME/$relative"
+done
+
+for relative in "${retired_documentation_files[@]}"; do
+    if [ -f "$RUNTIME/$relative" ]; then
+        rm -f -- "$RUNTIME/$relative"
+        printf 'Removed retired documentation: %s\n' "$relative"
+    fi
+done
+
 echo "Bundled KIMng User Guide installed."
 
 echo

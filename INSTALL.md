@@ -52,7 +52,7 @@ KIMng uses several common tools to process images and videos:
 - **ExifTool:** Metadata management, photo dates, and copyright information.
 - **FFmpeg and ffprobe:** Video conversion, audio extraction, animations, and slideshows.
 - **KDialog and qdbus:** Dialogs, progress reporting, and interaction with KDE.
-- **Email application (optional):** Required only to open a draft automatically. KIMng can still prepare attachment files and report their location for manual attachment.
+- **Email application (optional):** Required for the Send via email workflow. If no supported mail client is available, KIMng blocks attachment preparation.
 
 Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
 
@@ -124,12 +124,12 @@ The installer detects the Linux distribution and package manager, then
 reports installed and missing dependencies. It recognizes APT, DNF, and Pacman and suggests appropriate package installation commands
 when dependencies are missing. Package availability may vary by distribution.
 
-Python 3 with PySide6 Qt Widgets is mandatory for
-installation. Missing image-processing or video tools are reported as
+Python 3 with PySide6 Qt Widgets and QtNetwork map support is mandatory for
+installation. The installer runs `python3 src/bin/kim_location_map.py --check` and stops if the map dependency check fails. Missing image-processing or video tools are reported as
 warnings rather than automatically installed. Individual KIMng actions
 check for the tools they need when invoked.
 
-Optional tools include Poppler `pdftoppm` for rendering PDF source pages, Pandoc for generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's service cache. The installer also checks QtNetwork map support through `python3 src/bin/kim_location_map.py --check`.
+Optional tools include Poppler `pdftoppm` for rendering PDF source pages, Pandoc for generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's service cache.
 
 ### Filesystem and source validation
 
@@ -216,7 +216,7 @@ KIMng retains its normal submenu structure; you do not need to modify the servic
 
 Use the newer source checkout and run `./install.sh` again. Installation is performed one file at a time. If it is interrupted, run the installer again to finish.
 
-Known KIMng files are replaced, while unrelated files in the installation folder are left alone. If you modified a KIMng menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIMng image/video actions, not to the installer's replacement of its own known program files.
+Known KIMng files are replaced. Explicitly retired documentation files from earlier KIMng installations are removed from verified KIMng runtime directories. Unrelated files are left alone. If you modified a KIMng menu or program file yourself, save a copy before upgrading because the installer replaces it. Installation updates are per-file, not a whole-tree transaction; rerun the installer after an interruption. The new output-policy confirmation applies to KIMng image/video actions, not to the installer's replacement of its own known program files.
 
 ## Uninstall
 
