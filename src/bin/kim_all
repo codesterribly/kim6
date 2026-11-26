@@ -12020,7 +12020,8 @@ Commands:
       but never deletes original source files.
 
   flipflop <flip|flop> -- <files...>
-      Flip or flop images.
+      Flip vertically or flop horizontally. Always creates separate images
+      after Review Changes. Selected originals are never overwritten.
 
   metadata-view -- <files...>
       Open the Metadata Browser with all selected images. Read-only.
@@ -12030,10 +12031,18 @@ Commands:
       Plans changes only; does not write metadata.
 
   gallery -- <files...>
-      Create an offline, responsive HTML gallery (Dark Portfolio by default).
-      Prompts for title, author, columns, theme, image size, and output directory.
-      The output includes images (up to 1920px), thumbnails (up to 360px),
-      and a self-contained index.html with a keyboard-accessible photo viewer.
+      Open the classic HTML image gallery creator. Supports image ordering,
+      captions, Clean Light and Dark Portfolio themes, resolution choices,
+      columns, and gallery preview.
+
+  gallery-choose -- <files...>
+      Choose Image gallery or Photo story, as in Dolphin's Create a gallery action.
+
+  photo-story -- <files...>
+      Open the Photo story editor directly. Supports headings, text, sections,
+      gallery preview, single-page or multiple-page publication, and folder
+      or ZIP output. Review Changes is required before publication.
+      Creates a separate destination and preserves selected originals.
 
   collage -- <files...>
       Prompt for a collage layout: Grid, Mosaic, Hero, Scattered, Filmstrip.
@@ -12052,8 +12061,9 @@ Commands:
       other presets use A4 pages.
 
   tiffjoin [--output PATH] [--] <files...>
-      Join selected image frames in order into a TIFF file.
-      Supports destination selection and safe create/overwrite policy.
+      Join selected image frames in order into a multi-page TIFF.
+      Always creates a new file. Occupied output names are numbered without
+      replacing existing files. Selected originals remain unchanged.
 
   animate [--format gif|apng] [--delay CENTISECONDS] [--loop COUNT]
           [--canvas-mode fit|fill|preserve] [--output PATH] [--] <files...>
@@ -12072,8 +12082,9 @@ Commands:
   resize --percent 1..1000 [--output-dir DIR] -- <files...>
   resize --custom|--custom-percent -- <files...>
       Resize images to geometry or percentage. Percentage ranges from 1% to
-      1000%, uses ImageMagick rounding and preserves aspect ratio. Custom
-      percentage opens a numeric prompt.
+      1000%, uses ImageMagick rounding and preserves aspect ratio. Geometry
+      presets do not enlarge smaller images by default. Percentages above
+      100% explicitly request enlargement. Custom settings expose resize options.
       Overwrite mode replaces the selected original only after validation.
       Create mode writes *_resized files beside each input by default.
 
@@ -12082,40 +12093,47 @@ Commands:
       Folder scans are nonrecursive. Correctly named copies require review.
 
   location-gpx -- <images...>
+  location-copy -- <images...>
   location-apply -- <images...>
   location-report -- <images...>
   location-reduce -- <images...>
-      Shared Image Location Tools dialog; mandatory Preview Changes for edits.
+      Shared Image Location Tools dialog; mandatory Review Changes for edits.
       Report is read-only. GPS writes preserve pixels, profiles and image dates.
 
   capturedate --interactive -- <photos...>
   capturedate --datetime 'YYYY-MM-DD HH:MM:SS[.fraction]' --timezone unknown|UTC|+HH:MM -- <photos...>
-  capturedate --mode exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM]
+  capturedate --mode unified|exif-to-file|file-to-exif|shift [--timezone UTC|+HH:MM]
               [--seconds INTEGER] [--fields capture|all] -- <photos...>
       Embedded Photo Capture Date and filesystem File Modification Date are
       separate. Unknown camera timezones are never interpreted as computer-local.
 
   datesync --direction exif-to-file|file-to-exif [--fields capture|all] -- <files...>
   datesync --interactive -- <files...>
-      Synchronize DateTimeOriginal and filesystem mtime. Timezone-less camera
-      values use system local time, never UTC; explicit offsets are honored.
-      DST-gap local times reject. Metadata updates preserve pixels, ICC and mtime.
-
-  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|png|webp|avif|keep]
-            [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize] -- <files...>
-      JPEG scan and Huffman options apply only when the selected output is JPEG.
+      Synchronize DateTimeOriginal and filesystem modification time.
+      Both directions require an established camera timezone. Unknown camera
+      timezones block synchronization rather than assuming local time or UTC.
+      Interactive mode opens the unified Qt date workflow for review.
+      EXIF date updates preserve pixels, ICC and filesystem modification time.
+      Filesystem creation time is not changed.
 
   slideshow [--seconds-per-photo 1..30] [--size WxH] [--fps 1..30]
             [--background COLOR] [--output FILE] [--interactive] -- <photos...>
-      Build an H.264/yuv420p MP4. Photos are naturally filename-sorted, fitted
-      without upscaling, and padded. It has no audio. Limits: 200 photos,
+      Build an H.264/yuv420p MP4. Noninteractive input uses natural filename
+      order. Interactive mode allows adding and reordering images and renders
+      the chosen order. Images are fitted without upscaling and padded.
+      Output has no audio. Limits: 200 photos,
       600 seconds, 18,000 frames and 1920x1080. RAW, layered, vector, HDR and
       animated sources reject.
 
   resizeandsend [--size full|WIDTHxHEIGHT] [--] <files...>
-      Resize selected images for email and open your mail client
-      with validated resized copies attached. Presets: 1600, 1200, 800,
-      600 and 300 square bounds. Omit --size to show the existing dialog.
+      Prepare images for email using the graphical settings dialog.
+      Presets: full size, 1600, 1200, 800 and 600 pixel square bounds,
+      or custom dimensions. --size supplies the initial selection.
+      Full-size preparation copies original bytes. Animated APNG cannot
+      be resized for email. Review Changes is required before handoff.
+      Attachment sizes above 18 MiB warn; above 25 MiB block handoff.
+      A failed preparation blocks the entire batch. A supported local
+      mail client is required: KMail, Thunderbird or xdg-email.
       Successful attachments remain in XDG_DATA_HOME/kimng/email-attachments
       (or ~/.local/share/kimng/email-attachments when XDG_DATA_HOME is unset)
       until you remove them, because mail clients may read them asynchronously.
@@ -12175,13 +12193,18 @@ Commands:
       create derived files and never overwrite selected source media.
 
   webexport [<dir>] <files...>
-      Prepare images for web use.
-      Prompts for max size when omitted. Positional directory syntax remains supported.
-  webexport [--size WIDTHxHEIGHT] [--quality 1..100] [--format jpg|png|webp|avif|keep]
+  webexport [--custom] [--size WIDTHxHEIGHT] [--quality 1..100]
+            [--format jpg|jpeg|png|webp|avif|keep]
+            [--jpeg-progressive|--jpeg-baseline] [--jpeg-optimize]
             [--color srgb|preserve] [--output-dir DIR] -- <files...>
-      Action-local arguments expose size, quality, format, and output choices.
+      Prepare images for web use. Positional directory syntax remains supported.
+      --custom opens the custom settings dialog. Review Changes is required.
+      Output defaults to beside each source. Images are not enlarged.
+      Metadata is stripped during preparation; color management follows
+      the selected profile policy.
+      JPEG scan and Huffman options apply only to JPEG output.
       Web export always creates derived files; KIM_POLICY never replaces originals.
-      Creates uniquely named derivatives using configured filename labels.
+      Creates derivatives using configured filename labels.
       Output format uses KIM_WEB_FORMAT (default: jpg).
       Color defaults to an ICC-managed sRGB transform. Untagged RGB is
       assumed sRGB; untagged CMYK is rejected. --color preserve retains an

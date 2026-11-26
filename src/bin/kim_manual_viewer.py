@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -16,6 +16,58 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
 )
+
+
+def add_history_controls(layout, viewer):
+    """Add navigation buttons that follow the embedded page history."""
+    from PySide6.QtWebEngineCore import QWebEnginePage
+
+    page = viewer.page()
+    back_action = page.action(QWebEnginePage.WebAction.Back)
+    forward_action = page.action(QWebEnginePage.WebAction.Forward)
+
+    back = QPushButton(QIcon.fromTheme("go-previous"), "Back")
+    forward = QPushButton(QIcon.fromTheme("go-next"), "Forward")
+
+    back.setObjectName("manualBack")
+    forward.setObjectName("manualForward")
+
+    back.setToolTip("Return to the previous page")
+    forward.setToolTip("Go to the next page in browsing history")
+
+    back.setAutoDefault(False)
+    forward.setAutoDefault(False)
+
+    back.clicked.connect(viewer.back)
+    forward.clicked.connect(viewer.forward)
+
+    def update_history_controls():
+        back.setEnabled(back_action.isEnabled())
+        forward.setEnabled(forward_action.isEnabled())
+
+    back_action.changed.connect(update_history_controls)
+    forward_action.changed.connect(update_history_controls)
+
+    viewer.urlChanged.connect(update_history_controls)
+    viewer.loadFinished.connect(update_history_controls)
+
+    update_history_controls()
+
+    layout.addWidget(back)
+    layout.addWidget(forward)
+
+    return back, forward
+
+
+def current_guide_url(viewer, fallback):
+    """Return the current HTML page, or the installed guide fallback."""
+    if viewer is not None and callable(getattr(viewer, "url", None)):
+        current = viewer.url()
+        if current.isValid() and not current.isEmpty():
+            if current.scheme() != "about":
+                return current
+
+    return fallback
 
 
 def main():
@@ -58,10 +110,22 @@ def main():
     layout.addWidget(viewer, 1)
 
     controls = QHBoxLayout()
+    add_history_controls(controls, viewer)
     controls.addStretch()
 
     open_browser = QPushButton("Open in browser…")
-    open_browser.clicked.connect(lambda: QDesktopServices.openUrl(url))
+    open_browser.setObjectName("manualOpenBrowser")
+    open_browser.setAutoDefault(False)
+
+    def launch_browser():
+        if not QDesktopServices.openUrl(current_guide_url(viewer, url)):
+            QMessageBox.warning(
+                dialog,
+                "KIMng User Guide",
+                "Could not launch a browser.",
+            )
+
+    open_browser.clicked.connect(launch_browser)
     controls.addWidget(open_browser)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Close)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """KIMng persistent settings and About dialog."""
 from kim_dialog_buttons import style_button, style_button_box
+from kim_manual_viewer import add_history_controls, current_guide_url
 
 import os
 import re
@@ -462,13 +463,15 @@ def create_dialog(about_path, path=None, metadata_preferences=None):
     manual_status.setWordWrap(True)
     manual_layout.addWidget(manual_status)
 
-    if manual_path.is_file():
-        manual_view = None
+    manual_view = None
+    manual_web_view = None
 
+    if manual_path.is_file():
         try:
             from PySide6.QtWebEngineWidgets import QWebEngineView
             manual_view = QWebEngineView()
             manual_view.setUrl(QUrl.fromLocalFile(str(manual_path)))
+            manual_web_view = manual_view
             manual_status.hide()
         except (ImportError, RuntimeError):
             manual_view = QTextBrowser()
@@ -501,14 +504,21 @@ def create_dialog(about_path, path=None, metadata_preferences=None):
         manual_status.setText("Installed HTML User Guide not found.")
 
     manual_controls = QHBoxLayout()
+    if manual_web_view is not None:
+        add_history_controls(manual_controls, manual_web_view)
     manual_controls.addStretch()
 
-    open_browser = QPushButton("Open in Browser…")
+    open_browser = QPushButton("Open in browser…")
+    open_browser.setObjectName("manualOpenBrowser")
+    open_browser.setAutoDefault(False)
     open_browser.setEnabled(manual_path.is_file())
 
     def launch_manual_browser():
         if not QDesktopServices.openUrl(
-            QUrl.fromLocalFile(str(manual_path))
+            current_guide_url(
+                manual_web_view,
+                QUrl.fromLocalFile(str(manual_path)),
+            )
         ):
             QMessageBox.warning(
                 dialog,
