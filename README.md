@@ -18,14 +18,14 @@ Select one file or an entire group of files, right-click, and choose what you wa
 KIMng is a modernized rewrite of the KDE Image Menu project, bringing its familiar tools to KDE Plasma 6 while adding new capabilities and improving how files are handled.
 
 <p align="center">
-  <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="KIMng - Recipes submenu in KDE Dolphin, including saved recipe shortcuts, Run a recipe and Recipe editor" width="760"></a>
+  <a href="docs/images/screenshots/06-recipes.png"><img src="docs/images/screenshots/06-recipes.png" alt="Screenshot needed: 06 recipes" width="760"></a>
 </p>
 <p align="center"><em>KIMng - Recipes in Dolphin. Click the screenshot for the full-size view.</em></p>
 
 <p align="center">
   <a href="docs/images/screenshots/01-main-menu.png">
     <img src="docs/images/screenshots/01-main-menu.png"
-         alt="KIMng submenus in KDE Dolphin"
+         alt="Screenshot needed: 01 main menu"
          width="850">
   </a>
 </p>
@@ -64,7 +64,7 @@ Video selections expose three video conversion submenus (AV1, H.264, and H.265) 
 ### Recipes: reusable photo workflows
 
 <p align="center">
-  <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="KIMng Recipe Editor showing ordered operations, destination options, and planned output preview" width="760"></a>
+  <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="Screenshot needed: 12 recipe editor" width="760"></a>
 </p>
 <p align="center"><em>The Recipe Editor and its planned-output preview.</em></p>
 
@@ -88,7 +88,7 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 ### Resize, compress, and convert images
 
 <p align="center">
-  <a href="docs/images/screenshots/02-convert-compress.png"><img src="docs/images/screenshots/02-convert-compress.png" alt="Dolphin Convert and Compress submenu showing available formats and compression presets" width="760"></a>
+  <a href="docs/images/screenshots/02-convert-compress.png"><img src="docs/images/screenshots/02-convert-compress.png" alt="Screenshot needed: 02 convert compress" width="760"></a>
 </p>
 <p align="center"><em>Conversion and compression actions available directly from Dolphin.</em></p>
 
@@ -104,7 +104,7 @@ See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the
 ### Organize images and manage metadata
 
 <p align="center">
-  <a href="docs/images/screenshots/05-organize-metadata.png"><img src="docs/images/screenshots/05-organize-metadata.png" alt="Dolphin Organize and Metadata submenu with rename, photo dates and metadata removal actions" width="760"></a>
+  <a href="docs/images/screenshots/05-organize-metadata.png"><img src="docs/images/screenshots/05-organize-metadata.png" alt="Screenshot needed: 05 organize metadata" width="760"></a>
 </p>
 <p align="center"><em>Image dates, renaming and metadata tools in Dolphin. Existing screenshots may still show KIMng menu labels.</em></p>
 

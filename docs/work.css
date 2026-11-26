@@ -587,3 +587,127 @@ body {
     color: #111111;
   }
 }
+
+/* KIMng visual documentation audit: responsive and accessible */
+.reference-sidebar {
+  max-height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.reference-sidebar a:focus-visible,
+.reference-sidebar a[aria-current="page"] {
+  outline: 2px solid #075c86;
+  outline-offset: 1px;
+  background: #eef5fa;
+  color: #06476a;
+}
+
+.markdown-body table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+  min-width: 8rem;
+}
+
+.markdown-body tr:nth-child(even) td {
+  background: #f2f6fa;
+}
+
+.kimng-doc-shot img {
+  background: #eef5fa;
+}
+
+@media (max-width: 820px) {
+  .side-nav .nav-external {
+    display: flex;
+  }
+
+  .side-nav-inner {
+    overflow-y: visible;
+  }
+
+  .reference-sidebar {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .reference-sidebar nav {
+    overflow-x: auto;
+  }
+
+  .reference-sidebar .back-link {
+    display: block;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar-inner {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .top-actions {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .top-actions a:not(.top-action-primary) {
+    display: inline-flex;
+  }
+
+  .collection-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .hero,
+  .site-footer {
+    background: white;
+    color: #111;
+  }
+
+  .hero h1,
+  .hero h1 em,
+  .hero-kicker,
+  .hero-lede,
+  .hero-facts {
+    color: #111;
+  }
+}
+
+
+/* KIMng mobile reference table readability */
+@media (max-width: 620px) {
+  .markdown-body table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .markdown-body table th,
+  .markdown-body table td {
+    min-width: 13rem;
+    overflow-wrap: normal;
+    word-break: normal;
+    vertical-align: top;
+  }
+
+  .markdown-body table code {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: nowrap;
+  }
+}

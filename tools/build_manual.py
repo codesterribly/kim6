@@ -95,7 +95,18 @@ def render(source, names):
         raise RuntimeError(f"Pandoc failed for {source}:\n{result.stderr}")
     main_html = rewrite_urls(result.stdout, source, names)
     display_name = source.stem if source.suffix else source.name
-    title = escape(display_name)
+    titles = {
+        "README": "Project overview",
+        "INSTALL": "Installation",
+        "ACTIONS": "All menu actions",
+        "RECIPES": "Recipes",
+        "commandconfig": "Commands and settings",
+        "FORMATS": "Supported formats",
+        "DEVELOPMENT": "Development",
+        "ABOUT": "About KIMng",
+        "LICENSE": "License",
+    }
+    title = escape(titles.get(display_name, display_name))
     index_links = [
         ("Overview", ROOT / "README.md"),
         ("Installation", ROOT / "INSTALL.md"),
@@ -106,7 +117,9 @@ def render(source, names):
         ("Development", DOC_DIR / "DEVELOPMENT.md"),
     ]
     links = "\n".join(
-        f'<a href="{escape(names[path.resolve()], quote=True)}">{escape(label)}</a>'
+        f'<a href="{escape(names[path.resolve()], quote=True)}"' +
+        (' aria-current="page"' if path.resolve() == source.resolve() else '') +
+        f'>{escape(label)}</a>'
         for label, path in index_links if path.resolve() in names
     )
     source_label = escape(str(source.relative_to(ROOT)))
