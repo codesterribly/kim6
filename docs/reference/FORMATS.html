@@ -162,6 +162,7 @@
 <h2 id="photoshop-psd-inputs">Photoshop PSD Inputs</h2>
 <p>KIMng accepts supported Photoshop PSD files as <strong>read-only sources</strong> for applicable image actions, including Recipes and supported publication workflows. <strong>PSB is not supported.</strong> PSD preparation accepts supported 8- and 16-bit grayscale, RGB and profiled CMYK documents within its size limits. A PSD is prepared as a rendered image for processing. This is not an editable Photoshop round trip: layers and other document-specific structure are not reproduced in the derivative.</p>
 <p><strong>Recipes never save PSD output.</strong> If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers <strong>Fix Recipe…</strong>, where <strong>Convert Format</strong> can be added and a supported format selected. KIMng does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.</p>
+<p>For direct PSD-to-PDF conversion, <code>kim_all convert --format pdf --strip-metadata -- DOCUMENT.psd</code> is supported. The <code>--strip-metadata</code> conversion flag is not available for arbitrary formats or non-PSD inputs. Other metadata-removal workflows use the dedicated <code>stripmeta</code> action.</p>
 <p>Some PSDs contain CMYK data, transparency, embedded ICC profiles, or higher bit depths. KIMng checks source and output capabilities and applies operation-specific profile, alpha, and precision handling. The output's format and properties must be inspected rather than assuming the source document's characteristics will be preserved identically.</p>
 <p>For the full workflow, see <a href="RECIPES.html#photoshop-psd-inputs-and-fix-recipe">Recipes</a>.</p>
 <h2 id="frame-preservation">Frame Preservation</h2>
@@ -171,8 +172,11 @@
 <p>Multi-page TIFF and PDF inputs are documents rather than timed animations. Converting a multi-page or animated source to a single-image format is refused where frames would otherwise be discarded.</p>
 <h2 id="color-profiles-and-metadata">Color Profiles and Metadata</h2>
 <p>Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.</p>
-<p>The default web-export color mode targets sRGB; <code>--color preserve</code> instead requests retention of a usable, compatible input profile. ICC validation cannot manufacture a profile that an encoder does not support, and color conversion may be rejected rather than silently drop a required profile. JPEG baseline/progressive scans and Huffman optimization are separate from ICC handling. KIMng does not promise automatic HDR-to-SDR tone mapping or universally lossless CMYK-to-RGB conversion. Metadata preservation also varies by format. GPS-only removal targets recognized coordinates but does not guarantee complete location anonymization. AI-only removal targets recognized AI-generation fields but may leave generator-specific metadata. Neither is equivalent to stripping all metadata, and signed C2PA / Content Credentials cannot be guaranteed fully removable.</p>
+<p>The default web-export color mode targets sRGB; <code>--color preserve</code> instead requests retention of a usable, compatible input profile. ICC validation cannot manufacture a profile that an encoder does not support, and color conversion may be rejected rather than silently drop a required profile. JPEG baseline/progressive scans and Huffman optimization are separate from ICC handling. KIMng does not promise automatic HDR-to-SDR tone mapping or universally lossless CMYK-to-RGB conversion. Metadata preservation also varies by format. GPS-only removal targets recognized coordinates but does not guarantee complete location anonymization. AI-only removal targets recognized AI-generation fields but may leave generator-specific metadata. Neither selective mode is equivalent to the full-strip operation. Full stripping removes ordinary metadata but intentionally retains ICC color profiles and EXIF Orientation to preserve essential image characteristics. Even full stripping cannot guarantee complete removal of signed C2PA / Content Credentials.</p>
 <p>See <a href="commandconfig.html#webexport">Web export</a> for color options and <a href="commandconfig.html#output-and-file-handling">File handling</a> for preservation behavior.</p>
+<h3 id="gps-metadata-writer-restrictions">GPS metadata writer restrictions</h3>
+<p>GPS edits and precision reduction are limited to verified, nonanimated still JPEG, PNG, WebP, TIFF, HEIC/HEIF, or AVIF images whose extensions match their detected formats. Progressive JPEG is refused by the GPS writer because the current container verifier cannot preserve its scan structure. Animated PNG (APNG), animated WebP, PSD, camera RAW, and other unsupported containers remain read-only for these GPS changes. KIMng does not silently transcode a source to make it writable.</p>
+<p>The PNG metadata implementation also rejects unsupported or malformed <code>eXIf</code> structures instead of publishing partially reconstructed metadata. These restrictions are operation-specific: format decoding and image conversion are distinct from safe metadata editing.</p>
 <h2 id="video-formats-and-encoders">Video Formats and Encoders</h2>
 <p>KIMng uses FFmpeg for H.264 (<code>libx264</code>) and H.265 (<code>libx265</code>) video. AV1 prefers <code>libsvtav1</code> and uses <code>libaom-av1</code> when SVT-AV1 is unavailable; it does not substitute another codec if AV1 encoding is unavailable. Available containers must support the selected codecs and streams. An incompatible original container causes an error rather than an automatic switch to MP4.</p>
 <p>Video utilities use FFmpeg for frame extraction, midpoint thumbnails, contact sheets, audio extraction or removal, and GIF creation. Photo-to-MP4 slideshow generation creates a separate video using selected still images in natural filename order. Encoders, stream-copy compatibility, resolution/quality options, GIF loop settings, and output validation depend on the operation and installed FFmpeg capabilities. See <a href="commandconfig.html#video-actions">Video actions</a> for exact options and limits.</p>
@@ -184,6 +188,34 @@ ffmpeg -hide_banner -encoders
 ffprobe -version
 exiftool -ver</code></pre>
 <p>The read/write flags in <code>magick -list format</code> show advertised capabilities of the installed build, not a guarantee that a particular conversion will succeed. Delegates, security policies, libraries, container compatibility, and individual file characteristics may still prevent an operation. KIMng checks relevant capabilities and validates outputs for the selected action.</p>
+<h2 id="pdf-source-operations">PDF source operations</h2>
+<p>KIMng supports two distinct operations on PDF input documents through <strong>Convert/Compress</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Dolphin action</th>
+<th>Command</th>
+<th>Operation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Convert PDF pages to images…</td>
+<td><code>kim_all pdf-pages -- DOCUMENT.pdf</code></td>
+<td>Render complete PDF pages into separate images</td>
+</tr>
+<tr>
+<td>Extract embedded images from PDF…</td>
+<td><code>kim_all pdf-extract -- DOCUMENT.pdf</code></td>
+<td>Extract image resources embedded in the PDF</td>
+</tr>
+</tbody>
+</table>
+<p>PDF page rendering depends on Poppler utilities such as <code>pdfinfo</code> and <code>pdftoppm</code>. Embedded-image extraction uses <code>pdfimages</code>.</p>
+<p>Both actions open interactive settings and <strong>Review Changes</strong>. The default destination is beside each source PDF, with an optional shared directory.</p>
+<p>Output filenames are established during review. Known conflicts may be resolved by numbering before approval; late collisions block publication instead of changing an approved output filename.</p>
+<p>These are create-only PDF input operations. Neither modifies or overwrites the source PDF.</p>
+<p>PDF input support is distinct from KIMng's ability to create PDFs from selected images.</p>
 
       </article>
     </main>

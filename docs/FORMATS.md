@@ -33,6 +33,8 @@ KIMng accepts supported Photoshop PSD files as **read-only sources** for applica
 
 **Recipes never save PSD output.** If a recipe cannot determine an output format for a PSD, the Run a Recipe preflight stops and offers **Fix Recipe…**, where **Convert Format** can be added and a supported format selected. KIMng does not automatically substitute JPEG or PNG. PSD source bytes remain unchanged.
 
+For direct PSD-to-PDF conversion, `kim_all convert --format pdf --strip-metadata -- DOCUMENT.psd` is supported. The `--strip-metadata` conversion flag is not available for arbitrary formats or non-PSD inputs. Other metadata-removal workflows use the dedicated `stripmeta` action.
+
 Some PSDs contain CMYK data, transparency, embedded ICC profiles, or higher bit depths. KIMng checks source and output capabilities and applies operation-specific profile, alpha, and precision handling. The output's format and properties must be inspected rather than assuming the source document's characteristics will be preserved identically.
 
 For the full workflow, see [Recipes](RECIPES.md#photoshop-psd-inputs-and-fix-recipe).
@@ -51,9 +53,15 @@ Multi-page TIFF and PDF inputs are documents rather than timed animations. Conve
 
 Color handling depends on the selected action, usable ICC profiles, and output coder. Web export supports ICC-managed conversion to sRGB or preservation of compatible embedded profiles. Other actions have their own profile and metadata rules.
 
-The default web-export color mode targets sRGB; `--color preserve` instead requests retention of a usable, compatible input profile. ICC validation cannot manufacture a profile that an encoder does not support, and color conversion may be rejected rather than silently drop a required profile. JPEG baseline/progressive scans and Huffman optimization are separate from ICC handling. KIMng does not promise automatic HDR-to-SDR tone mapping or universally lossless CMYK-to-RGB conversion. Metadata preservation also varies by format. GPS-only removal targets recognized coordinates but does not guarantee complete location anonymization. AI-only removal targets recognized AI-generation fields but may leave generator-specific metadata. Neither is equivalent to stripping all metadata, and signed C2PA / Content Credentials cannot be guaranteed fully removable.
+The default web-export color mode targets sRGB; `--color preserve` instead requests retention of a usable, compatible input profile. ICC validation cannot manufacture a profile that an encoder does not support, and color conversion may be rejected rather than silently drop a required profile. JPEG baseline/progressive scans and Huffman optimization are separate from ICC handling. KIMng does not promise automatic HDR-to-SDR tone mapping or universally lossless CMYK-to-RGB conversion. Metadata preservation also varies by format. GPS-only removal targets recognized coordinates but does not guarantee complete location anonymization. AI-only removal targets recognized AI-generation fields but may leave generator-specific metadata. Neither selective mode is equivalent to the full-strip operation. Full stripping removes ordinary metadata but intentionally retains ICC color profiles and EXIF Orientation to preserve essential image characteristics. Even full stripping cannot guarantee complete removal of signed C2PA / Content Credentials.
 
 See [Web export](commandconfig.md#webexport) for color options and [File handling](commandconfig.md#output-and-file-handling) for preservation behavior.
+
+### GPS metadata writer restrictions
+
+GPS edits and precision reduction are limited to verified, nonanimated still JPEG, PNG, WebP, TIFF, HEIC/HEIF, or AVIF images whose extensions match their detected formats. Progressive JPEG is refused by the GPS writer because the current container verifier cannot preserve its scan structure. Animated PNG (APNG), animated WebP, PSD, camera RAW, and other unsupported containers remain read-only for these GPS changes. KIMng does not silently transcode a source to make it writable.
+
+The PNG metadata implementation also rejects unsupported or malformed `eXIf` structures instead of publishing partially reconstructed metadata. These restrictions are operation-specific: format decoding and image conversion are distinct from safe metadata editing.
 
 ## Video Formats and Encoders
 
@@ -74,3 +82,22 @@ exiftool -ver
 ```
 
 The read/write flags in `magick -list format` show advertised capabilities of the installed build, not a guarantee that a particular conversion will succeed. Delegates, security policies, libraries, container compatibility, and individual file characteristics may still prevent an operation. KIMng checks relevant capabilities and validates outputs for the selected action.
+
+## PDF source operations
+
+KIMng supports two distinct operations on PDF input documents through **Convert/Compress**:
+
+| Dolphin action | Command | Operation |
+|---|---|---|
+| Convert PDF pages to images… | `kim_all pdf-pages -- DOCUMENT.pdf` | Render complete PDF pages into separate images |
+| Extract embedded images from PDF… | `kim_all pdf-extract -- DOCUMENT.pdf` | Extract image resources embedded in the PDF |
+
+PDF page rendering depends on Poppler utilities such as `pdfinfo` and `pdftoppm`. Embedded-image extraction uses `pdfimages`.
+
+Both actions open interactive settings and **Review Changes**. The default destination is beside each source PDF, with an optional shared directory.
+
+Output filenames are established during review. Known conflicts may be resolved by numbering before approval; late collisions block publication instead of changing an approved output filename.
+
+These are create-only PDF input operations. Neither modifies or overwrites the source PDF.
+
+PDF input support is distinct from KIMng's ability to create PDFs from selected images.

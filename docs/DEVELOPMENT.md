@@ -12,8 +12,8 @@ This document covers the project structure, development conventions, testing, an
 | Path | Purpose |
 |---|---|
 | `src/bin/kim_all` | Main executable containing image and video processing functions. |
-| `src/kim_*.desktop.in` | 12 KDE Dolphin service-menu definitions containing 89 executable static actions and four visual separator entries. |
-| `src/gallery/` | Templates used to generate HTML photo galleries. |
+| `src/kim_*.desktop.in` | 12 KDE Dolphin service-menu definitions containing 93 executable static actions and five desktop separator blocks (referenced by eight menu entries). |
+| `src/gallery/` | Legacy gallery templates. The newer Gallery Publishing workflow uses the dedicated story editor, publication renderer, and publisher modules. |
 | `tests/run.py` | Test runner. |
 | `tests/support.py`, `tests/adapter.py` | Shared test fixtures and helpers. |
 | `tests/test_*.py` | Unit and integration tests. |
@@ -42,6 +42,76 @@ The Recipes submenu has two static entries, Run a recipe… and Recipe editor…
 **Safety contract:** Recipes publish derivatives only, never overwrite selected source images, and must guard against output filename collisions. Costly source inspection and capability probes run in workers instead of blocking the Qt GUI thread. Stale preflight results must not revive invalidated plans; repair opens the editor using a completion signal rather than nesting another editor exec() loop. Standalone editor-to-run handoffs retain their existing modal dialog behavior and selected images. Cancellation or failed publication must never be presented as success.
 
 See [RECIPES.md](RECIPES.md) for user-facing behavior and [ACTIONS.md](ACTIONS.md) for service-menu entry points.
+
+## Metadata inspection and change planning
+
+KIMng has separate metadata inspection, comparison,
+planning, and operational GPS components.
+
+`src/bin/kim_metadata_browser.py` provides read-only
+browsing and two-image comparison, supported by
+`kim_metadata_compare.py`, `kim_metadata_reader.py`,
+and `kim_metadata_sources.py`.
+
+Inspection preserves source provenance, duplicate tags,
+structured values, XMP language representations, and
+associated sidecars. The default display priority is
+embedded XMP, XMP sidecar, IPTC-IIM, then EXIF.
+Preferred representations and alternatives remain
+distinguishable. Read-only inspection must preserve
+image bytes and filesystem timestamps.
+
+`src/bin/kim_metadata_editor.py` is currently a read-only
+metadata change planner. Individual and batch drafts
+distinguish Leave unchanged, Fill empty, Replace, and Clear.
+Proposals explicitly identify source representations and
+languages instead of silently redirecting edits.
+
+The Editor does not currently write metadata or sidecars.
+It must preserve pending drafts when opening the shared
+compact GPS field map or preparing a GPS proposal.
+Browser and Editor field controls use `show_field_map()`
+for View on map and can offer Edit GPS or Add GPS where
+supported. These controls do not activate metadata writing.
+
+Implementing metadata writing requires separate approval,
+combined Review Changes, validation, transaction and
+rollback protection, and safe RAW/sidecar handling.
+
+## Image publication and review
+
+Image transformations, standalone Crop, Recipes, PDF
+publication, and Gallery Publishing use their applicable
+planning and publication paths.
+
+Derivative-producing operations must protect selected
+originals and present their exact planned filenames,
+directories, source identities, warnings, and blocked
+items before publication.
+
+When execution is bound to an approved immutable plan,
+late destination collisions must block output rather than
+silently change the approved filename. Cancellation and
+atomic publication protections must be preserved.
+
+Gallery Publishing uses:
+
+- `kim_gallery_chooser.py`
+- `kim_photo_story_dialog.py`
+- `kim_photo_story_preview.py`
+  - Renders local preview pages for the Photo story editor; it is not a separate Dolphin action.
+- `kim_story_publication.py`
+- `kim_story_publish.py`
+- `kim_gallery_viewer.py`
+
+It supports image and narrative content, sections,
+single-page and multiple-page HTML output, and local
+folder or ZIP publication. Generated pages, images,
+and viewer assets belong in the reviewed output inventory.
+
+The older `gallery` command remains a separate legacy
+dispatcher route.
+
 
 ## Dolphin Service Menus
 
@@ -113,7 +183,7 @@ KIMng uses Bash and common command-line utilities, along with:
 - **FFmpeg and ffprobe:** Video processing and media inspection.
 - **KDialog and qdbus:** KDE dialogs, progress reporting, and cancellation.
 
-Specific operations may also require optional image encoders, format delegates, ICC profiles, `xdg-open`, email clients, or `setsid`. Installation from source uses `intltool-merge`.
+Specific operations may also require optional image encoders, format delegates, ICC profiles, `xdg-open`, email clients, or `setsid`. Installation from source uses the Python-based desktop-template renderer in `install.sh`; `intltool-merge` is not required.
 
 KIMng checks for required tools and probes optional format support where appropriate. An image extension alone does not guarantee that the installed ImageMagick build can read or write that format.
 
@@ -271,7 +341,7 @@ Before submitting changes, check Bash syntax and run ShellCheck:
 
 ```sh
 bash -n src/bin/kim_all install.sh uninstall.sh
-shellcheck src/bin/kim_all install.sh uninstall.sh
+shellcheck --exclude=SC2015 src/bin/kim_all install.sh uninstall.sh
 git --no-pager diff --check
 ```
 
@@ -294,7 +364,7 @@ Installation updates are performed one file at a time. An interrupted installati
 Before preparing a release:
 
 1. Run the complete test suite and static checks.
-2. Verify all 12 Dolphin service-menu definitions, 89 executable static actions, and four separator entries against the current source.
+2. Verify all 12 Dolphin service-menu definitions, 93 executable static actions, and five separator blocks against the current source.
 3. Test installation, upgrading, and uninstallation using temporary directories.
 4. Test the menus in Dolphin on a supported KDE Plasma system.
 5. Review the installation instructions and user documentation.
@@ -321,7 +391,7 @@ Generated media is first written to invocation-owned staging on the destination 
 
 This provides atomic visibility for supported local filesystem operations; it is not a promise of crash durability. Directory-entry and file contents are not necessarily forced to stable storage. KIMng’s cooperative locking does not protect against every unrelated external writer. A non-cooperating program can still race with an operation or alter a target after it is published.
 
-Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. Gallery publication uses a new directory name and does not recursively replace an occupied directory.
+Destination symlinks and ambiguous source/destination aliases are rejected where following them could change the object being processed. Safely resolved symlinked parent directories are allowed. Hard-linked selected files are rejected for in-place operations where modifying their shared inode could alter another name. Derived publication rejects source aliases. The current Gallery Publishing workflow creates a new directory or ZIP archive and does not recursively replace an occupied destination. Its publication snapshot includes the complete page and asset inventory, including multiple-page section output and unassigned content; approved paths are binding. Gallery chooser, editor, rendering, publishing, and browser verification are implemented in `kim_gallery_chooser.py`, `kim_photo_story_dialog.py`, `kim_story_publication.py`, `kim_story_publish.py`, and the gallery-specific tests. The older `kim_all gallery` command remains separate from the Dolphin `gallery-choose` entry point.
 
 Cleanup removes only staging files, directories and child processes owned by the current invocation. A producer failure, invalid result, cancellation or publication failure must not delete a pre-existing destination. Earlier completed batch results remain in place if a later item fails. Error and summary dialogs identify failed items rather than claiming a rejected output succeeded.
 

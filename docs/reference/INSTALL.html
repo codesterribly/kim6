@@ -55,7 +55,7 @@
 <li><strong>Email application (optional):</strong> Required only to open a draft automatically. KIMng can still prepare attachment files and report their location for manual attachment.</li>
 </ul>
 <p>Some image formats and video codecs require additional system support. See <a href="FORMATS.html">Formats and codecs</a>. A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.</p>
-<p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIMng - Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
+<p><strong>Output policy:</strong> In Dolphin, open <strong>Actions → KIMng - Settings/About → Settings</strong> to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation and EXIF auto-orientation can support authorized replacement, while horizontal and vertical Flip always publish separate reviewed copies. Other derived-only actions keep sources intact. Advanced environment overrides are described in <a href="commandconfig.html#configuration-and-defaults">Configuration and Defaults</a>.</p>
 <p>Download or clone the KIMng source code, then open a terminal in the project directory and run:</p>
 <pre class="sh"><code>./install.sh</code></pre>
 <p>If you downloaded a source archive, extract it first and run the installer from the extracted folder.</p>
@@ -105,6 +105,12 @@
 <td><code>ffmpeg</code></td>
 </tr>
 <tr>
+<td>Poppler PDF rendering (optional)</td>
+<td><code>poppler-utils</code></td>
+<td><code>poppler-utils</code></td>
+<td><code>poppler</code></td>
+</tr>
+<tr>
 <td>Python</td>
 <td><code>python3</code></td>
 <td><code>python3</code></td>
@@ -135,22 +141,10 @@
 <td><code>xdg-utils</code></td>
 </tr>
 <tr>
-<td>intltool</td>
-<td><code>intltool</code></td>
-<td><code>intltool</code></td>
-<td><code>intltool</code></td>
-</tr>
-<tr>
 <td>Pandoc (optional)</td>
 <td><code>pandoc</code></td>
 <td><code>pandoc</code></td>
 <td><code>pandoc</code></td>
-</tr>
-<tr>
-<td>gettext tools (optional)</td>
-<td><code>gettext</code></td>
-<td><code>gettext</code></td>
-<td><code>gettext</code></td>
 </tr>
 <tr>
 <td>KDE service cache (optional)</td>
@@ -167,9 +161,9 @@
 <h2 id="what-installsh-does">What <code>install.sh</code> does</h2>
 <p>The installer prepares KIMng for Dolphin, checks the installation environment, and verifies the installed components. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h3 id="dependency-checks">Dependency checks</h3>
-<p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, Pacman, and Zypper and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
+<p>The installer detects the Linux distribution and package manager, then reports installed and missing dependencies. It recognizes APT, DNF, and Pacman and suggests appropriate package installation commands when dependencies are missing. Package availability may vary by distribution.</p>
 <p>Python 3 with PySide6 Qt Widgets is mandatory for installation. Missing image-processing or video tools are reported as warnings rather than automatically installed. Individual KIMng actions check for the tools they need when invoked.</p>
-<p>Optional tools include <code>msgfmt</code> for compiled translations, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache.</p>
+<p>Optional tools include Poppler <code>pdftoppm</code> for rendering PDF source pages, Pandoc for generating HTML documentation, and <code>kbuildsycoca6</code> for refreshing KDE's service cache. The installer also checks QtNetwork map support through <code>python3 src/bin/kim_location_map.py --check</code>.</p>
 <h3 id="filesystem-and-source-validation">Filesystem and source validation</h3>
 <p>Before installing application files, <code>install.sh</code>:</p>
 <ul>
@@ -185,14 +179,14 @@
 <p>The installed components include:</p>
 <ul>
 <li>The image and video command dispatcher.</li>
-<li>Seven Python graphical dialog and application helper files.</li>
+<li>62 installed Python dialog, processing, and application helper modules, as enumerated in <code>install_inventory.sh</code>.</li>
 <li>Metadata processing and format-verification helpers.</li>
 <li>Gallery generation resources.</li>
 <li>12 Dolphin service-menu definitions, including the Recipes submenu.</li>
 <li>The English source interface (no translated language catalogs currently ship).</li>
 <li>The offline HTML User Guide, illustrations, stylesheet, and reference pages.</li>
 </ul>
-<p>The installer renders the English values of the <code>intltool-merge</code>-style menu templates and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
+<p>The installer renders the English values of the menu templates using its own Python renderer (without an <code>intltool-merge</code> dependency) and replaces their command references with the absolute path to the installed dispatcher. No manual shell <code>PATH</code> changes are needed.</p>
 <h3 id="safe-file-replacement">Safe file replacement</h3>
 <p>Each installed file is written to a temporary file beside its destination and then moved into place. This prevents an interrupted copy from leaving that individual destination file partially written.</p>
 <p>Installation is not a whole-tree transaction. An interruption can leave different installed files at different revision levels. Rerunning <code>./install.sh</code> completes or repairs the installation.</p>
@@ -200,8 +194,8 @@
 <h3 id="post-installation-verification">Post-installation verification</h3>
 <p>After copying files, the installer:</p>
 <ul>
-<li>Confirms that all 11 installed Dolphin menus exist, carry KIMng's identification marker, and reference the installed dispatcher.</li>
-<li>Confirms that the seven required Python helper files are present, are not symbolic links, and have valid Python syntax.</li>
+<li>Confirms that all 12 installed Dolphin menus exist, carry KIMng's identification marker, and reference the installed dispatcher.</li>
+<li>Confirms that all 62 installed Python helper files are present, are not symbolic links, and have valid Python syntax.</li>
 <li>Refreshes the KDE service cache with <code>kbuildsycoca6</code> when available.</li>
 <li>Prints the verified menu and helper inventories, installation path, and completion message.</li>
 </ul>
@@ -218,7 +212,7 @@
 <h2 id="uninstall">Uninstall</h2>
 <p>From the source directory, run:</p>
 <pre class="sh"><code>./uninstall.sh</code></pre>
-<p>The uninstaller removes the 11 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Restart Dolphin after removal.</p>
+<p>The uninstaller removes the 12 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Use <code>--prefix DIR</code> for a specific service-menu directory, <code>--no_message</code> to suppress its completion dialog, or <code>-h</code>/<code>--help</code> for usage. Restart Dolphin after removal.</p>
 <h2 id="advanced-installation-locations">Advanced installation locations</h2>
 <p>To choose a service-menu folder explicitly, use <code>--prefix</code>:</p>
 <pre class="sh"><code>./install.sh --prefix &quot;$HOME/.local/share/kio/servicemenus&quot;</code></pre>
@@ -231,7 +225,7 @@
 <p>The installer creates the chosen folder if needed. It does not install system packages, change KDE settings, or modify your images and videos.</p>
 <h2 id="installation-and-removal-troubleshooting">Installation and Removal Troubleshooting</h2>
 <h3 id="dolphin-does-not-show-an-action">Dolphin does not show an action</h3>
-<p>First verify that all 11 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
+<p>First verify that all 12 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected <code>kim_all</code> command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.</p>
 <h3 id="installation-or-removal-reports-a-conflict">Installation or removal reports a conflict</h3>
 <p>The installer identifies existing KIMng installations from recognized program and service-menu files. It also accepts an empty runtime directory left by an interrupted installation. Unrelated files and unsafe symlinked paths are protected from replacement or removal.</p>
 <p>Installation and removal operate one file at a time, not as a single transaction. If installation is interrupted, rerun <code>./install.sh</code>. There is no automatic rollback.</p>

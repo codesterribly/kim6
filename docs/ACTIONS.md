@@ -1,7 +1,7 @@
 # KIMng Dolphin Menu Actions
 
 KIMng integrates image and video operations into KDE Dolphin.
-Its 12 service-menu definitions expose **93 executable static actions** across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.
+Its 12 service-menu definitions expose **93 executable static actions** across eight image-related submenu categories and four video-related categories. Five additional desktop action blocks are visual separators, not executable menu actions. Eight menu-entry references point to those five blocks.
 
 The action inventory below is derived directly from the current `.desktop.in` files in `src/`. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.
 
@@ -28,6 +28,8 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
 | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
 | Custom convert… | `kim_all convert --preview --custom-format -- %F` |
+| Convert PDF pages to images… | `kim_all pdf-pages -- %F` |
+| Extract embedded images from PDF… | `kim_all pdf-extract -- %F` |
 | Compress recommended | `kim_all compress --recommended --interactive -- %F` |
 | Compress maximum | `kim_all compress --maximum --interactive -- %F` |
 | Compress custom… | `kim_all compress --custom -- %F` |
@@ -36,9 +38,11 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 [View submenu screenshot](images/screenshots/03-create-publish.png)
 
+**Create a gallery…** opens a chooser with two different workflows. **Image gallery** uses the classic gallery creator; **Photo story** opens the three-panel Gallery Publishing editor. It supports five image arrangements, named **Sections**, single-page and multiple-page websites, a local gallery folder or ZIP archive, and mandatory **Review Changes**. See [Gallery Publishing in the User Guide](index.html#gallery-publishing). The `kim_all gallery` command remains available directly and is also invoked by the Image gallery choice.
+
 | Menu action | Dispatcher command |
 |---|---|
-| Create an HTML gallery… | `kim_all gallery -- %F` |
+| Create a gallery… | `kim_all gallery-choose -- %F` |
 | Create a collage… | `kim_all collage -- %F` |
 | Create a contact sheet… | `kim_all contactsheet -- %F` |
 | Create a PDF album… | `kim_all album -- %F` |
@@ -54,12 +58,12 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 | Menu action | Dispatcher command |
 |---|---|
-| Inspect location metadata… | `kim_all location-report -- %F` |
-| Modify GPS on images… | `kim_all location-apply -- %F` |
+| View GPS metadata… | `kim_all location-report -- %F` |
+| Edit GPS on images… | `kim_all location-apply -- %F` |
 | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
-### KIMng - Organize/Metadata
+### KIMng - Organize Metadata
 
 [View submenu screenshot](images/screenshots/05-organize-metadata.png)
 
@@ -68,8 +72,8 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Check and correct extensions… | `kim_all checkextensions -- %F` |
 | Rename images… | `kim_all rename interactive -- %F` |
 | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
-| Set creator and copyright… | `kim_all copyright --interactive -- %F` |
-| Add watermark / overlay… | `kim_all overlay -- %F` |
+| Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
+| Add watermark… | `kim_all overlay -- %F` |
 | Strip metadata | `kim_all stripmeta --interactive -- %F` |
 | View metadata… | `kim_all metadata-view -- %F` |
 | Edit metadata… | `kim_all metadata-edit -- %F` |
@@ -185,7 +189,7 @@ Image format and codec support are checked at runtime. A visible menu action doe
 
 ### Metadata and location privacy
 
-**Modify GPS on images…** is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.
+**Edit GPS on images…** is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.
 
 **Strip metadata** is the unified metadata-removal action. There is no separate Strip AI metadata menu action.
 
@@ -293,7 +297,7 @@ The following inventory is derived from the current KDE service-menu definitions
 
 | Action ID | Label | Command |
 |---|---|---|
-| `Gallery` | Create an HTML gallery… | `kim_all gallery -- %F` |
+| `GalleryChooser` | Create a gallery… | `kim_all gallery-choose -- %F` |
 | `Collage` | Create a collage… | `kim_all collage -- %F` |
 | `ContactSheet` | Create a contact sheet… | `kim_all contactsheet -- %F` |
 | `Album` | Create a PDF album… | `kim_all album -- %F` |

@@ -31,7 +31,7 @@
       <div class="reference-source">KIMng DOCUMENTATION · docs/ACTIONS.md</div>
       <article class="markdown-body">
 <h1 id="kimng-dolphin-menu-actions">KIMng Dolphin Menu Actions</h1>
-<p>KIMng integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>93 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Four additional desktop action blocks are visual separators, not executable menu actions.</p>
+<p>KIMng integrates image and video operations into KDE Dolphin. Its 12 service-menu definitions expose <strong>93 executable static actions</strong> across eight image-related submenu categories and four video-related categories. Five additional desktop action blocks are visual separators, not executable menu actions. Eight menu-entry references point to those five blocks.</p>
 <p>The action inventory below is derived directly from the current <code>.desktop.in</code> files in <code>src/</code>. These are the actual static Dolphin menu labels and dispatcher commands, not historical descriptions.</p>
 <p>Saved recipes assigned to Root may also appear dynamically in the Recipes submenu. They are not part of the static service-menu definitions.</p>
 <h2 id="image-menus">Image menus</h2>
@@ -98,6 +98,14 @@
 <td><code>kim_all convert --preview --custom-format -- %F</code></td>
 </tr>
 <tr>
+<td>Convert PDF pages to images…</td>
+<td><code>kim_all pdf-pages -- %F</code></td>
+</tr>
+<tr>
+<td>Extract embedded images from PDF…</td>
+<td><code>kim_all pdf-extract -- %F</code></td>
+</tr>
+<tr>
 <td>Compress recommended</td>
 <td><code>kim_all compress --recommended --interactive -- %F</code></td>
 </tr>
@@ -113,6 +121,7 @@
 </table>
 <h3 id="kimng---createpublish">KIMng - Create/Publish</h3>
 <p><a href="../images/screenshots/03-create-publish.png">View submenu screenshot</a></p>
+<p><strong>Create a gallery…</strong> opens a chooser with two different workflows. <strong>Image gallery</strong> uses the classic gallery creator; <strong>Photo story</strong> opens the three-panel Gallery Publishing editor. It supports five image arrangements, named <strong>Sections</strong>, single-page and multiple-page websites, a local gallery folder or ZIP archive, and mandatory <strong>Review Changes</strong>. See <a href="../index.html#gallery-publishing">Gallery Publishing in the User Guide</a>. The <code>kim_all gallery</code> command remains available directly and is also invoked by the Image gallery choice.</p>
 <table>
 <thead>
 <tr>
@@ -122,8 +131,8 @@
 </thead>
 <tbody>
 <tr>
-<td>Create an HTML gallery…</td>
-<td><code>kim_all gallery -- %F</code></td>
+<td>Create a gallery…</td>
+<td><code>kim_all gallery-choose -- %F</code></td>
 </tr>
 <tr>
 <td>Create a collage…</td>
@@ -170,11 +179,11 @@
 </thead>
 <tbody>
 <tr>
-<td>Inspect location metadata…</td>
+<td>View GPS metadata…</td>
 <td><code>kim_all location-report -- %F</code></td>
 </tr>
 <tr>
-<td>Modify GPS on images…</td>
+<td>Edit GPS on images…</td>
 <td><code>kim_all location-apply -- %F</code></td>
 </tr>
 <tr>
@@ -187,7 +196,7 @@
 </tr>
 </tbody>
 </table>
-<h3 id="kimng---organizemetadata">KIMng - Organize/Metadata</h3>
+<h3 id="kimng---organize-metadata">KIMng - Organize Metadata</h3>
 <p><a href="../images/screenshots/05-organize-metadata.png">View submenu screenshot</a></p>
 <table>
 <thead>
@@ -210,11 +219,11 @@
 <td><code>kim_all capturedate --mode unified --interactive -- %F</code></td>
 </tr>
 <tr>
-<td>Set creator and copyright…</td>
+<td>Set creator/copyright/usage…</td>
 <td><code>kim_all copyright --interactive -- %F</code></td>
 </tr>
 <tr>
-<td>Add watermark / overlay…</td>
+<td>Add watermark…</td>
 <td><code>kim_all overlay -- %F</code></td>
 </tr>
 <tr>
@@ -425,7 +434,7 @@
 <p>Recipes never overwrite selected source images.</p>
 <p>Image format and codec support are checked at runtime. A visible menu action does not guarantee that every selected input format supports the corresponding transformation.</p>
 <h3 id="metadata-and-location-privacy">Metadata and location privacy</h3>
-<p><strong>Modify GPS on images…</strong> is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.</p>
+<p><strong>Edit GPS on images…</strong> is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.</p>
 <p><strong>Strip metadata</strong> is the unified metadata-removal action. There is no separate Strip AI metadata menu action.</p>
 <p>Removing GPS or AI-related metadata does not guarantee complete anonymity. Other metadata, signed credentials, or visible content may still disclose information.</p>
 <h3 id="web-export-and-recipes">Web Export and Recipes</h3>
@@ -783,9 +792,9 @@
 </thead>
 <tbody>
 <tr>
-<td><code>Gallery</code></td>
-<td>Create an HTML gallery…</td>
-<td><code>kim_all gallery -- %F</code></td>
+<td><code>GalleryChooser</code></td>
+<td>Create a gallery…</td>
+<td><code>kim_all gallery-choose -- %F</code></td>
 </tr>
 <tr>
 <td><code>Collage</code></td>

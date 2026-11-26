@@ -56,7 +56,7 @@ KIMng uses several common tools to process images and videos:
 
 Some image formats and video codecs require additional system support. See [Formats and codecs](docs/FORMATS.md). A declared extension is not proof that the installed encoder or delegate can process a file. Animated APNG conversion uses FFmpeg; Resize and Web Export refuse animated APNG to prevent silent frame loss.
 
-**Output policy:** In Dolphin, open **Actions → KIMng - Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation, EXIF auto-orientation, flip and flop support both modes; derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
+**Output policy:** In Dolphin, open **Actions → KIMng - Settings/About → Settings** to choose whether supported actions automatically create separate files or prompt you to choose. Overwriting originals still requires explicit approval and a second warning. Rotation and EXIF auto-orientation can support authorized replacement, while horizontal and vertical Flip always publish separate reviewed copies. Other derived-only actions keep sources intact. Advanced environment overrides are described in [Configuration and Defaults](docs/commandconfig.md#configuration-and-defaults).
 
 Download or clone the KIMng source code, then open a terminal in the project directory and run:
 
@@ -90,14 +90,13 @@ may depend on the distribution release and enabled repositories.
 | KDialog | `kdialog` | `kdialog` | `kdialog` |
 | QtDBus | `qdbus-qt6` | `qt6-qttools` | `qt6-tools` |
 | FFmpeg and FFprobe | `ffmpeg` | `ffmpeg` | `ffmpeg` |
+| Poppler PDF rendering (optional) | `poppler-utils` | `poppler-utils` | `poppler` |
 | Python | `python3` | `python3` | `python` |
 | PySide6 Widgets | `python3-pyside6.qtwidgets` | `python3-pyside6` | `pyside6` |
 | PySide6 Network | `python3-pyside6.qtnetwork` | `python3-pyside6` | `pyside6` |
 | PySide6 WebEngine (optional) | `python3-pyside6.qtwebenginewidgets` | `python3-pyside6` + `qt6-qtwebengine` | `pyside6` + `qt6-webengine` |
 | xdg-open | `xdg-utils` | `xdg-utils` | `xdg-utils` |
-| intltool | `intltool` | `intltool` | `intltool` |
 | Pandoc (optional) | `pandoc` | `pandoc` | `pandoc` |
-| gettext tools (optional) | `gettext` | `gettext` | `gettext` |
 | KDE service cache (optional) | `libkf6service-bin` | `kf6-kservice` | `kservice` |
 
 The optional Qt WebEngine Python binding enables the full
@@ -122,8 +121,7 @@ system packages, change KDE settings, or modify your images and videos.
 ### Dependency checks
 
 The installer detects the Linux distribution and package manager, then
-reports installed and missing dependencies. It recognizes APT, DNF,
-Pacman, and Zypper and suggests appropriate package installation commands
+reports installed and missing dependencies. It recognizes APT, DNF, and Pacman and suggests appropriate package installation commands
 when dependencies are missing. Package availability may vary by distribution.
 
 Python 3 with PySide6 Qt Widgets is mandatory for
@@ -131,9 +129,7 @@ installation. Missing image-processing or video tools are reported as
 warnings rather than automatically installed. Individual KIMng actions
 check for the tools they need when invoked.
 
-Optional tools include `msgfmt` for compiled translations, Pandoc for
-generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's
-service cache.
+Optional tools include Poppler `pdftoppm` for rendering PDF source pages, Pandoc for generating HTML documentation, and `kbuildsycoca6` for refreshing KDE's service cache. The installer also checks QtNetwork map support through `python3 src/bin/kim_location_map.py --check`.
 
 ### Filesystem and source validation
 
@@ -160,15 +156,14 @@ files in a `kimng` directory beneath the selected service-menu directory.
 The installed components include:
 
 - The image and video command dispatcher.
-- Seven Python graphical dialog and application helper files.
+- 62 installed Python dialog, processing, and application helper modules, as enumerated in `install_inventory.sh`.
 - Metadata processing and format-verification helpers.
 - Gallery generation resources.
 - 12 Dolphin service-menu definitions, including the Recipes submenu.
 - The English source interface (no translated language catalogs currently ship).
 - The offline HTML User Guide, illustrations, stylesheet, and reference pages.
 
-The installer renders the English values of the `intltool-merge`-style
-menu templates and replaces their command references with the absolute
+The installer renders the English values of the menu templates using its own Python renderer (without an `intltool-merge` dependency) and replaces their command references with the absolute
 path to the installed dispatcher. No manual shell `PATH` changes are needed.
 
 ### Safe file replacement
@@ -188,9 +183,9 @@ personal modifications to those files before upgrading.
 
 After copying files, the installer:
 
-- Confirms that all 11 installed Dolphin menus exist, carry KIMng's
+- Confirms that all 12 installed Dolphin menus exist, carry KIMng's
   identification marker, and reference the installed dispatcher.
-- Confirms that the seven required Python helper files are present,
+- Confirms that all 62 installed Python helper files are present,
   are not symbolic links, and have valid Python syntax.
 - Refreshes the KDE service cache with `kbuildsycoca6` when available.
 - Prints the verified menu and helper inventories, installation path,
@@ -231,7 +226,7 @@ From the source directory, run:
 ./uninstall.sh
 ```
 
-The uninstaller removes the 11 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Restart Dolphin after removal.
+The uninstaller removes the 12 recognized KIMng menus and the known KIMng program files. It leaves unrelated files in place. Use `--prefix DIR` for a specific service-menu directory, `--no_message` to suppress its completion dialog, or `-h`/`--help` for usage. Restart Dolphin after removal.
 
 ## Advanced installation locations
 
@@ -265,7 +260,7 @@ The installer creates the chosen folder if needed. It does not install system pa
 
 ### Dolphin does not show an action
 
-First verify that all 11 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
+First verify that all 12 KIMng service-menu files were installed to a KDE service-menu directory and that the installed menu files contain the expected `kim_all` command. Confirm that the action’s MIME filter matches the selected local file. KDE may require a logout/login or menu-cache refresh. KDE Frameworks 6.29 can prevent Dolphin service submenus from appearing. KIMng keeps its normal submenu structure rather than modifying the menu files to work around this issue. Installation can be verified without relying on submenu display; see the installation instructions above.
 
 ### Installation or removal reports a conflict
 The installer identifies existing KIMng installations from recognized program

@@ -9,7 +9,7 @@ Recipes let you combine image operations into a saved workflow and run them dire
 1. Select one or more supported images and right-click.
 2. Open **KIMng - Recipes → Run a recipe…**, then choose **Web Export** or another saved recipe in the recipe selector. A user recipe placed in the **Root** group can also be launched directly from the Dolphin submenu.
 3. Review the selected images and the **Run a Recipe** window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.
-4. When all files are ready, confirm the destination (and choose a directory only when the recipe is configured to ask) before running. The finished results are separate files.
+4. When all files are ready, use the Runner destination selector to keep the recipe default, save beside each source, or choose another directory. Review the resulting filenames and directory before running. The finished results are separate files.
 
 The Recipes menu also provides **Recipe editor…** for creating and managing your own workflows. The runner and editor group recipes under **Built-In**, **Root**, user-created folders, and **Unfiled**. Only user recipes assigned to **Root** are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.
 
@@ -19,7 +19,7 @@ Inspect the selected images, enabled processing steps, planned output filenames,
 
 ## Web Export: a ready-to-use recipe
 
-The supplied **Web Export** recipe auto-orients images, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and **removes all metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The destination is configured in this built-in recipe, not chosen anew for each run. Originals are unchanged.
+The supplied **Web Export** recipe auto-orients images, fits them within **1600 × 1600 pixels** without enlarging smaller images, applies **sRGB** color handling, converts to **JPEG at quality 95**, and **removes all metadata**. It names outputs `{filename}_web.jpg` and saves them in a **Web** subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.
 
 This workflow is more than a change of file extension. Its three optional rights-metadata steps, **Set Creator / Artist**, **Set Copyright Notice**, and **Set Usage Rights**, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: **Duplicate to Edit** creates a customizable copy rather than changing the supplied recipe.
 
@@ -56,14 +56,14 @@ paths. Do not assume their output settings are identical.
 Open **Recipe editor…** from the Recipes submenu. The Editor uses three resizable panels:
 
 - **Recipes:** Browse and search built-in and user Recipes, manage folders, and import or export definitions.
-- **Editing:** Change the Recipe name, description, ordered operations, step settings, and output destination.
+- **Editing:** Change the Recipe title, optional description, ordered operations, step settings, and output destination.
 - **Preview:** Inspect example images, planned filenames, image properties, metadata effects, and publication information.
 
-Each Recipe has a name and an optional multiline description. Descriptions explain what a Recipe does and when to use it. The Recipe search includes descriptions as well as names and folders. Hovering over a Recipe provides its name and description.
+Each Recipe has a name and an optional multiline description. Descriptions explain what a Recipe does and when to use it. The Recipe search includes descriptions as well as names and folders. Hovering over a Recipe displays its title alongside its description.
 
 Add processing steps, configure their options, arrange them in execution order, and enable or disable individual steps. Disabled steps remain in the definition but are not executed.
 
-Built-in Recipes are read-only. Use **Duplicate Recipe** to create an editable user copy.
+Built-in Recipes are read-only. Use **Duplicate Recipe** (toolbar) or **Duplicate to Edit** (context/action control) to create an editable user copy.
 
 When the Editor opens with images already selected in Dolphin, it provides **Run with selected images**. Use **Choose other images & run…** to select another set. The Editor also supports opening without an initial image selection.
 
@@ -131,13 +131,14 @@ The JSON files are UTF-8. Use the Editor's import/export actions rather than man
 
 ### Processing steps
 
-The Recipe Editor offers **25 operations** in four groups. Each entry below uses the label shown in **Add Operation…**. Some operations have format-dependent parameters or ordering requirements.
+The Recipe Editor offers **27 operations** in four groups. Each entry below uses the label shown in **Add Operation…**. Some operations have format-dependent parameters or ordering requirements.
 
 #### Geometry & Orientation
 
 | Operation | Behavior |
 |---|---|
 | **Auto-Orient** | Apply embedded camera orientation to the rendered image. |
+| **Crop Image** | Crop the rendered image using the configured geometry or selection. |
 | **Flip Image** | Mirror horizontally or vertically. |
 | **Resize by Percentage** | Resize by a percentage, including enlargement above 100%. |
 | **Resize Long Edge** | Fit the longest dimension to a pixel limit, with optional upscaling. |
@@ -153,6 +154,7 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 | **Color Profile** | Preserve a supported profile or convert to sRGB. |
 | **Compress Image** | Set final compression preset or custom encoder quality, PNG level, and JPEG options. |
 | **Convert Format** | Choose output format and applicable encoder options, including JPEG quality. |
+| **Add Watermark / Overlay** | Render a text, image, camera-detail, or caption overlay where supported. |
 
 #### Metadata & Copyright
 
@@ -171,11 +173,11 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 
 | Operation | Behavior |
 |---|---|
-| **Adjust Capture Date** | Adjust existing camera capture timestamps by a fixed offset. |
+| **Adjust Image Capture Date** | Adjust existing camera capture timestamps by a fixed offset. |
 | **Change Output Filename** | Transform the planned output name, such as case, prefix, suffix, replacement, sequence, or capture date. |
 | **Keep Source File Date** | Preserve the source file modification timestamp on the derivative. |
 | **Rename Output File** | Set output filename pattern, for example `{filename}_recipe`; preview includes extension. |
-| **Set Capture Date** | Use a specific time, embedded capture time, or file mtime as the capture date. |
+| **Set Image Capture Date** | Use a specific time, embedded capture time, or file mtime as the capture date. |
 | **Synchronize File Date** | Synchronize the derivative filesystem date with the planned capture time. |
 
 **JPEG quality is not a separate operation.** Configure quality through **Convert Format** or **Compress Image**. The final encoding options are applied during output creation. Step order matters, especially for orientation, metadata removal, date operations and naming. All operations can be enabled or disabled independently.
@@ -184,9 +186,9 @@ The Recipe Editor offers **25 operations** in four groups. Each entry below uses
 
 In **Rename Output File**, `{filename}` means the original name without its extension. A pattern of `{filename}_recipe` produces `vacation_recipe.jpg` from `vacation.jpg` when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.
 
-KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension.
+KIMng determines the output extension from the chosen format, so the pattern does not need to repeat `.jpg`, `.png`, or another extension. Output patterns also support `{date}` (capture-date component, when available) and `{index}` (batch position). The preview shows each resolved name; missing required date information blocks that planned name rather than inventing a date.
 
-When a planned output filename already exists, the Recipe planner can choose a free numbered filename before Review Changes approval. It also accounts for filename collisions between images in the same batch. The actual numbered filename appears in the reviewed output plan.
+When a planned output filename already exists, the Recipe planner can choose a free numbered filename **before** Review Changes approval. It also checks for collisions between images in the batch. The final filename is shown in the reviewed output plan. If the planner cannot resolve a conflict safely, the affected result is blocked.
 
 After approval, the filename is binding. If another process creates that target before publication, KIMng blocks the affected output and requires renewed review rather than silently renumbering or overwriting it.
 
@@ -202,7 +204,7 @@ Adding JPEG and PSD files does not require the interface to freeze until the bat
 
 ## Photoshop PSD inputs and Fix Recipe
 
-KIMng can **read** PSD images in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix Recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIMng does not silently choose a format on your behalf.
+KIMng can **read** PSD images in supported workflows but **does not create PSD output files**. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers **Fix recipe…**. This opens the existing editor so you can add **Convert Format** and select a supported output type. KIMng does not silently choose a format on your behalf.
 
 After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.
 
@@ -210,7 +212,7 @@ PSD inputs are treated as rendered image sources rather than editable Photoshop 
 
 ## Destinations, safety, and cancellation
 
-Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). Existing filenames and duplicate batch targets are resolved during planning when safe numbering is available. Unresolved conflicts block approval. Execution uses the frozen reviewed source identities, exact output paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.
+Recipes are **derivative-only**. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). The Runner always presents a destination override selector with **Use recipe default**, **Beside each source**, and **Choose another directory…**; the user can retain the recipe setting without modifying the saved recipe. Existing filenames and duplicate batch targets are resolved during planning when safe numbering is available. Unresolved conflicts block approval. Execution uses the frozen reviewed source identities, exact output paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.
 
 Recipes and standalone Crop stage complete derivatives privately on the destination filesystem and publish them with an atomic no-replace hard link. Filesystems or permissions that cannot support this publication fail closed; KIMng does not write a partial image directly to the final filename. Source or destination identity changes require a new review. Cancellation and failures remove private stages while retaining published outputs; a durability-sync failure after publication is reported as a warning alongside the created path. Support for exFAT, FAT32, NTFS and network destinations must be verified individually.
 
@@ -218,7 +220,7 @@ File inspection, required encoder checks, and the preflight plan must succeed be
 
 ## Completion messages and diagnostic details
 
-Publication tools such as PDF Album can show a compact completion window with the saved output path, **Open Folder**, and **Done**. Where there is additional information about the source files, **Details (N)** expands to grouped, selectable diagnostics with **Copy Details**. The details control is omitted when there is nothing to disclose. Informational details are not necessarily failures.
+Publication tools such as PDF Album can show a compact completion window with the saved output path, **Open folder**, and **Done**. Where there is additional information about the source files, **Details (N)** expands to grouped, selectable diagnostics with **Copy Details**. The details control is omitted when there is nothing to disclose. Informational details are not necessarily failures. Successful background publications can finish without a separate completion dialog when there are no source advisories. A publication failure is reported through the existing error path, not as a success notice. Previously published outputs remain available when a later item fails.
 
 ## Current scope
 
