@@ -1,13 +1,33 @@
 #!/usr/bin/env bash
 #
 # Uninstall only verified KIMng-owned runtime files and Dolphin menus.
-# Usage: ./uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]
+# Usage: ./uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--verbose] [--no_message]
 # Unknown files, unrelated menus, and symlinks are never deleted.
 #
 set -euo pipefail
 
 PREFIX=''
 quiet=false
+verbose=false
+COLOR_BLUE=''
+COLOR_GREEN=''
+COLOR_RESET=''
+
+if [ -t 1 ] &&
+   [ "${TERM:-dumb}" != dumb ] &&
+   [ -z "${NO_COLOR+x}" ]; then
+  COLOR_BLUE=$'\033[1;36m'
+  COLOR_GREEN=$'\033[1;32m'
+  COLOR_RESET=$'\033[0m'
+fi
+
+stage() {
+  if [ "$quiet" = false ]; then
+    printf '\n%s%s%s\n' "$COLOR_BLUE" "$1" "$COLOR_RESET"
+    printf '%s\n' '------------------------------------------------------------'
+  fi
+}
+
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -19,12 +39,16 @@ while [ "$#" -gt 0 ]; do
       PREFIX="$2"
       shift 2
       ;;
+    -v|--verbose)
+      verbose=true
+      shift
+      ;;
     --no_message)
       quiet=true
       shift
       ;;
     -h|--help)
-      echo "Usage: uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--no_message]"
+      echo "Usage: uninstall.sh [--prefix SERVICEMENU_DIRECTORY] [--verbose] [--no_message]"
       exit 0
       ;;
     *)
@@ -91,6 +115,13 @@ menu_is_kimng() {
     grep -Fxq 'X-KIMng-Managed=true' "$1" &&
     grep -Eq '^Exec=.*kimng/bin/kim_all(["[:space:]]|$)' "$1"
 }
+
+if [ "$quiet" = false ]; then
+  printf '\n%sKIMng%s  |  Uninstaller\n' "$COLOR_BLUE" "$COLOR_RESET"
+  printf 'Installation directory: %s\n' "$PREFIX"
+fi
+
+stage '01  Checking installation ownership'
 
 # Preflight every known menu before deleting anything.
 # Never interpret an unrelated service menu as a KIMng installation.
@@ -165,12 +196,23 @@ if [ -d "$RUNTIME" ]; then
   fi
 fi
 
+stage '02  Removing managed files'
+
+removed_menus=0
+removed_files=0
+
 # All relevant paths have now passed preflight.
 # Remove only individually identified, KIMng-owned menus.
 for name in "${menu_names[@]}"; do
   path="$PREFIX/$name"
   if [ -f "$path" ] && menu_is_kimng "$path"; then
     rm -f -- "$path"
+
+    removed_menus=$((removed_menus + 1))
+
+    if [ "$verbose" = true ] && [ "$quiet" = false ]; then
+      printf '  Removed menu: %s\n' "$name"
+    fi
   fi
 done
 
@@ -182,6 +224,12 @@ if [ "$runtime_owned" = true ]; then
     path="$RUNTIME/$relative"
     if [ -f "$path" ]; then
       rm -f -- "$path"
+
+      removed_files=$((removed_files + 1))
+
+      if [ "$verbose" = true ] && [ "$quiet" = false ]; then
+        printf '  Removed file: %s\n' "$relative"
+      fi
     fi
   done
 
@@ -229,9 +277,15 @@ if [ "$runtime_owned" = true ]; then
   fi
 fi
 
+stage '03  Refreshing Dolphin'
+
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
   kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 fi
 
-[ "$quiet" = true ] ||
-  printf 'Removed verified KIMng files from %s\n' "$PREFIX"
+if [ "$quiet" = false ]; then
+  printf '\n%sKIMng UNINSTALLATION COMPLETE%s\n' "$COLOR_GREEN" "$COLOR_RESET"
+  printf 'Removed: %d runtime files, %d service menus\n' "$removed_files" "$removed_menus"
+  printf 'Installation directory: %s\n' "$PREFIX"
+  echo 'User settings, saved recipes and unrelated files are preserved.'
+fi

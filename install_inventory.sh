@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Authoritative KIMng installation inventory, sourced by install/uninstall.
 # Rows are checkout source | runtime destination | installed mode.
-# Menus are rendered and translations compiled separately; never recursively copy.
+# Menus are rendered separately. Never recursively copy source directories.
 menu_names=(
   kim_compressandresize.desktop
   kim_compressandresizevideo.desktop
@@ -88,6 +88,7 @@ INSTALL.md|INSTALL.md|0644
 README.md|README.md|0644
 docs/ACTIONS.md|docs/ACTIONS.md|0644
 docs/FORMATS.md|docs/FORMATS.md|0644
+docs/RECIPES.md|docs/RECIPES.md|0644
 docs/DEVELOPMENT.md|docs/DEVELOPMENT.md|0644
 docs/commandconfig.md|docs/commandconfig.md|0644
 docs/index.html|docs/index.html|0644
@@ -128,53 +129,17 @@ docs/images/screenshots/20-review-web-export.png|docs/images/screenshots/20-revi
 docs/images/screenshots/21-video-menu-overview.png|docs/images/screenshots/21-video-menu-overview.png|0644
 docs/images/screenshots/22-video-av1-presets.png|docs/images/screenshots/22-video-av1-presets.png|0644
 docs/images/screenshots/23-video-utilities.png|docs/images/screenshots/23-video-utilities.png|0644
+src/bin/kim_gallery_chooser.py|bin/kim_gallery_chooser.py|0644
+src/bin/kim_photo_story_dialog.py|bin/kim_photo_story_dialog.py|0644
+src/bin/kim_photo_story_preview.py|bin/kim_photo_story_preview.py|0644
+src/bin/kim_story_publication.py|bin/kim_story_publication.py|0644
+src/bin/kim_gallery_viewer.py|bin/kim_gallery_viewer.py|0644
+src/bin/kim_story_publish.py|bin/kim_story_publish.py|0644
+src/bin/kim_video_review.py|bin/kim_video_review.py|0644
+src/bin/kim_webexport_review.py|bin/kim_webexport_review.py|0644
+src/bin/kim_pdf_pages.py|bin/kim_pdf_pages.py|0644
+src/bin/kim_pdf_extract.py|bin/kim_pdf_extract.py|0644
 KIMNG_RUNTIME_FILES
-
-# Gallery presentation chooser.
-runtime_sources+=("src/bin/kim_gallery_chooser.py")
-runtime_files+=("bin/kim_gallery_chooser.py")
-runtime_modes+=("0644")
-
-# In-memory Photo Story editor and live preview.
-runtime_sources+=("src/bin/kim_photo_story_dialog.py")
-runtime_files+=("bin/kim_photo_story_dialog.py")
-runtime_modes+=("0644")
-
-# Full-story reader and its bounded protected thumbnail preview.
-runtime_sources+=("src/bin/kim_photo_story_preview.py")
-runtime_files+=("bin/kim_photo_story_preview.py")
-runtime_modes+=("0644")
-
-# Offline website composition, safe derivatives, Review Changes, and publication.
-runtime_sources+=("src/bin/kim_story_publication.py")
-runtime_files+=("bin/kim_story_publication.py")
-runtime_modes+=("0644")
-runtime_sources+=("src/bin/kim_gallery_viewer.py")
-runtime_files+=("bin/kim_gallery_viewer.py")
-runtime_modes+=("0644")
-runtime_sources+=("src/bin/kim_story_publish.py")
-runtime_files+=("bin/kim_story_publish.py")
-runtime_modes+=("0644")
-
-# Phase 2: review-before-processing UI for video transcode presets.
-# Keep the source, installed path and mode arrays index-aligned.
-runtime_sources+=("src/bin/kim_video_review.py")
-runtime_files+=("bin/kim_video_review.py")
-runtime_modes+=("0644")
-# Phase 2: Web Export review-before-processing dialog.
-runtime_sources+=("src/bin/kim_webexport_review.py")
-runtime_files+=("bin/kim_webexport_review.py")
-runtime_modes+=("0644")
-
-# PDF page rendering, independent of Recipes.
-runtime_sources+=("src/bin/kim_pdf_pages.py")
-runtime_files+=("bin/kim_pdf_pages.py")
-runtime_modes+=("0644")
-
-# PDF embedded-image extraction.
-runtime_sources+=("src/bin/kim_pdf_extract.py")
-runtime_files+=("bin/kim_pdf_extract.py")
-runtime_modes+=("0644")
 
 # Retired public documentation from earlier KIMng installations.
 # These exact paths are removed only inside an owned runtime.

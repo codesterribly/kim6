@@ -12,7 +12,7 @@ The KIMng rewrite may not yet be available through that catalog. The KDE Store m
 ## Embedded HTML User Guide prerequisite
 
 KIMng includes an illustrated HTML User Guide in the
-**Settings/About > KIMng User Guide** tab. Rendering that guide
+**Settings/About > User Guide** tab. Rendering that guide
 inside the application requires the Python binding
 `PySide6.QtWebEngineWidgets`, not just the Qt WebEngine runtime
 libraries.
@@ -85,7 +85,7 @@ may depend on the distribution release and enabled repositories.
 
 | Component | Ubuntu (apt) | Fedora (dnf) | Arch (pacman) |
 |---|---|---|---|
-| ImageMagick | `imagemagick-7.q16` | `ImageMagick` | `imagemagick` |
+| ImageMagick (`magick` and `identify`) | `imagemagick-7.q16` | `ImageMagick` | `imagemagick` |
 | ExifTool | `libimage-exiftool-perl` | `perl-Image-ExifTool` | `perl-image-exiftool` |
 | KDialog | `kdialog` | `kdialog` | `kdialog` |
 | QtDBus | `qdbus-qt6` | `qt6-qttools` | `qt6-tools` |
@@ -125,7 +125,7 @@ reports installed and missing dependencies. It recognizes APT, DNF, and Pacman a
 when dependencies are missing. Package availability may vary by distribution.
 
 Python 3 with PySide6 Qt Widgets and QtNetwork map support is mandatory for
-installation. The installer runs `python3 src/bin/kim_location_map.py --check` and stops if the map dependency check fails. Missing image-processing or video tools are reported as
+installation. The installer runs `python3 src/bin/kim_location_map.py --check` and stops if the map dependency check fails. ImageMagick's `magick` and `identify` executables are checked separately. Missing image-processing or video tools are reported as
 warnings rather than automatically installed. Individual KIMng actions
 check for the tools they need when invoked.
 
@@ -285,7 +285,7 @@ The installed User Guide includes a dedicated Recipes reference describing the R
 
 KIMng installs a complete offline User Guide, including its stylesheet,
 illustrations, and HTML reference pages. The User Guide is available through
-the KIMng User Guide action in Dolphin.
+the User Guide action in Dolphin.
 
 When Python 3 and Pandoc are installed, running `./install.sh` from a
 writable, non-root development checkout automatically regenerates the
@@ -303,3 +303,20 @@ HTML pages supplied with the repository.
 Contributors should commit regenerated HTML reference pages alongside
 their Markdown changes. The illustrated landing page is maintained
 separately and is not automatically generated.
+
+## Detailed installer output
+
+The installer and uninstaller normally display a compact summary.
+Use `--verbose` to list individual installed or removed runtime files.
+
+    bash install.sh --verbose
+    bash uninstall.sh --verbose
+
+Interactive terminals display colored dependency statuses and installation
+progress. Redirected output uses plain text. Set `NO_COLOR=1` to disable
+terminal colors and animated progress.
+
+    NO_COLOR=1 bash install.sh
+
+Presentation options do not change installation destinations, dependency
+requirements, ownership checks, overwrite protections or removal behavior.

@@ -11,7 +11,7 @@ X-KIMng-Managed=true
 
 [Desktop Action 00ViewMetadata]
 Icon=document-preview
-_Name=View metadata…
+_Name=View metadata
 Exec=kim_all metadata-view -- %F
 
 [Desktop Action 01EditMetadata]
@@ -21,7 +21,7 @@ Exec=kim_all metadata-edit -- %F
 
 [Desktop Action 02StripMetadata]
 Icon=document-properties
-_Name=Strip metadata
+_Name=Strip metadata…
 Exec=kim_all stripmeta --interactive -- %F
 
 [Desktop Action 04Rename]

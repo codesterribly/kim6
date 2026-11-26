@@ -530,10 +530,10 @@ def create_dialog(about_path, path=None, metadata_preferences=None):
     manual_controls.addWidget(open_browser)
     manual_layout.addLayout(manual_controls)
 
-    tabs.addTab(manual_tab, "KIMng User Guide")
+    tabs.addTab(manual_tab, "User Guide")
 
     def resize_for_tab(index):
-        if tabs.tabText(index) in ("License", "KIMng User Guide"):
+        if tabs.tabText(index) in ("License", "User Guide"):
             dialog.resize(max(dialog.width(), 1000), 740)
 
     tabs.currentChanged.connect(resize_for_tab)

@@ -21,7 +21,7 @@ Exec=kim_all license -- %F
 
 [Desktop Action 04Manual]
 Icon=help-contents
-_Name=KIMng User Guide
+_Name=User Guide
 Exec=kim_all manual -- %F
 
 [Desktop Action 01Settings]

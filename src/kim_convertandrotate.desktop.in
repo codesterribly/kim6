@@ -71,7 +71,7 @@ Exec=kim_all convert --preview --format webp -- %F
 
 [Desktop Action 13ConvertCustom]
 Icon=image-x-generic
-_Name=Custom convert…
+_Name=Convert custom…
 Exec=kim_all convert --preview --custom-format -- %F
 
 [Desktop Action 2001CompressRecommended]

@@ -96,6 +96,18 @@ class ManualInstallationTests(unittest.TestCase):
         cache.chmod(0o755)
 
         self.env = os.environ.copy()
+        self.env.update({
+            "HOME": str(self.base / "home"),
+            "XDG_DATA_HOME": str(self.base),
+            "XDG_CONFIG_HOME": str(self.base / "config"),
+            "XDG_CACHE_HOME": str(self.base / "cache"),
+            "XDG_STATE_HOME": str(self.base / "state"),
+            "KIMNG_INSTALL_PREFIX": str(self.prefix),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "QT_QPA_PLATFORM": "offscreen",
+        })
+        for name in ("HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+            Path(self.env[name]).mkdir(exist_ok=True)
         self.env["PATH"] = str(fake_bin) + os.pathsep + self.env.get("PATH", "")
 
     def run_installer(self, script, *, succeeds=True):
@@ -170,6 +182,102 @@ class ManualInstallationTests(unittest.TestCase):
         # Repeated uninstallation is safe and does not remove unknown files.
         self.run_installer("uninstall.sh")
         self.assertTrue(unrelated.is_file())
+
+
+    def test_interrupted_installation_recovers_missing_dispatcher(self):
+        self.run_installer("install.sh")
+
+        dispatcher = self.runtime / "bin/kim_all"
+        original = dispatcher.read_bytes()
+
+        dispatcher.unlink()
+
+        self.assertTrue(
+            (self.runtime / ".kimng-owned").is_file()
+        )
+
+        self.run_installer("install.sh")
+
+        self.assertEqual(original, dispatcher.read_bytes())
+        self.assert_manual_matches_checkout()
+
+    def test_reinstall_after_uninstall_preserved_unknown_file(self):
+        self.run_installer("install.sh")
+
+        sentinel = self.runtime / "docs/user-notes.txt"
+        sentinel.write_bytes(b"unrelated content must survive")
+
+        self.run_installer("uninstall.sh")
+
+        self.assertFalse(
+            (self.runtime / "bin/kim_all").exists()
+        )
+
+        self.assertEqual(
+            sentinel.read_bytes(),
+            b"unrelated content must survive"
+        )
+
+        self.run_installer("install.sh")
+
+        self.assertTrue(
+            (self.runtime / "bin/kim_all").is_file()
+        )
+
+        self.assert_manual_matches_checkout()
+
+        self.assertEqual(
+            sentinel.read_bytes(),
+            b"unrelated content must survive"
+        )
+
+        self.run_installer("uninstall.sh")
+
+        self.assertEqual(
+            sentinel.read_bytes(),
+            b"unrelated content must survive"
+        )
+
+    def test_owned_runtime_refuses_unfamiliar_dispatcher(self):
+        self.run_installer("install.sh")
+
+        dispatcher = self.runtime / "bin/kim_all"
+
+        dispatcher.write_bytes(b"unrelated executable")
+
+        self.run_installer("install.sh", succeeds=False)
+        self.run_installer("uninstall.sh", succeeds=False)
+
+        self.assertEqual(
+            dispatcher.read_bytes(),
+            b"unrelated executable"
+        )
+
+        self.assertTrue(
+            (self.runtime / "docs/index.html").is_file()
+        )
+
+    def test_owned_runtime_refuses_dangling_dispatcher_symlink(self):
+        self.run_installer("install.sh")
+
+        dispatcher = self.runtime / "bin/kim_all"
+
+        dispatcher.unlink()
+
+        outside = self.base / "nonexistent-dispatcher"
+
+        dispatcher.symlink_to(outside)
+
+        self.run_installer("install.sh", succeeds=False)
+        self.run_installer("uninstall.sh", succeeds=False)
+
+        self.assertTrue(dispatcher.is_symlink())
+        self.assertFalse(outside.exists())
+
+        self.assertTrue(
+            (self.runtime / "docs/index.html").is_file()
+        )
+
 
     def test_installed_menus_use_installed_dispatcher(self):
         self.run_installer("install.sh")

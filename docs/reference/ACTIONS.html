@@ -94,7 +94,7 @@
 <td><code>kim_all convert --preview --format bmp --bmp5 -- %F</code></td>
 </tr>
 <tr>
-<td>Custom convert…</td>
+<td>Convert custom…</td>
 <td><code>kim_all convert --preview --custom-format -- %F</code></td>
 </tr>
 <tr>
@@ -179,11 +179,11 @@
 </thead>
 <tbody>
 <tr>
-<td>View GPS metadata…</td>
+<td>View GPS metadata</td>
 <td><code>kim_all location-report -- %F</code></td>
 </tr>
 <tr>
-<td>Edit GPS on images…</td>
+<td>Edit GPS metadata…</td>
 <td><code>kim_all location-apply -- %F</code></td>
 </tr>
 <tr>
@@ -227,11 +227,11 @@
 <td><code>kim_all overlay -- %F</code></td>
 </tr>
 <tr>
-<td>Strip metadata</td>
+<td>Strip metadata…</td>
 <td><code>kim_all stripmeta --interactive -- %F</code></td>
 </tr>
 <tr>
-<td>View metadata…</td>
+<td>View metadata</td>
 <td><code>kim_all metadata-view -- %F</code></td>
 </tr>
 <tr>
@@ -344,7 +344,7 @@
 <td><code>kim_all license -- %F</code></td>
 </tr>
 <tr>
-<td>KIMng User Guide</td>
+<td>User Guide</td>
 <td><code>kim_all manual -- %F</code></td>
 </tr>
 </tbody>
@@ -434,8 +434,8 @@
 <p>Recipes never overwrite selected source images.</p>
 <p>Image format and codec support are checked at runtime. A visible menu action does not guarantee that every selected input format supports the corresponding transformation.</p>
 <h3 id="metadata-and-location-privacy">Metadata and location privacy</h3>
-<p><strong>Edit GPS on images…</strong> is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.</p>
-<p><strong>Strip metadata</strong> is the unified metadata-removal action. There is no separate Strip AI metadata menu action.</p>
+<p><strong>Edit GPS metadata…</strong> is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.</p>
+<p><strong>Strip metadata…</strong> is the unified metadata-removal action. There is no separate Strip AI metadata menu action.</p>
 <p>Removing GPS or AI-related metadata does not guarantee complete anonymity. Other metadata, signed credentials, or visible content may still disclose information.</p>
 <h3 id="web-export-and-recipes">Web Export and Recipes</h3>
 <p>The top-level Web Export submenu provides twelve format-and-size presets (JPEG, PNG, WebP and AVIF at 1600 × 1600, 800 × 800 or 128 × 128 maximum dimensions). JPEG, WebP and AVIF quality settings are independently configurable, with shipped defaults of 95; a screenshot may show the user's saved quality instead. The built-in Web Export recipe is a separate multi-step workflow selected through Recipes: JPEG quality 95, a 1600 × 1600 maximum without upscaling, metadata stripping and output to a <code>Web</code> subfolder.</p>
@@ -635,7 +635,7 @@
 </tr>
 <tr>
 <td><code>13ConvertCustom</code></td>
-<td>Custom convert…</td>
+<td>Convert custom…</td>
 <td><code>kim_all convert --preview --custom-format -- %F</code></td>
 </tr>
 <tr>
@@ -692,7 +692,7 @@
 </tr>
 <tr>
 <td><code>04Manual</code></td>
-<td>KIMng User Guide</td>
+<td>User Guide</td>
 <td><code>kim_all manual -- %F</code></td>
 </tr>
 </tbody>
@@ -708,24 +708,24 @@
 </thead>
 <tbody>
 <tr>
-<td><code>04Report</code></td>
-<td>View GPS metadata…</td>
-<td><code>kim_all location-report -- %F</code></td>
-</tr>
-<tr>
-<td><code>03Apply</code></td>
-<td>Edit GPS on images…</td>
+<td><code>01Edit</code></td>
+<td>Edit GPS metadata…</td>
 <td><code>kim_all location-apply -- %F</code></td>
 </tr>
 <tr>
-<td><code>05Reduce</code></td>
-<td>Reduce exact GPS location…</td>
-<td><code>kim_all location-reduce -- %F</code></td>
+<td><code>02View</code></td>
+<td>View GPS metadata</td>
+<td><code>kim_all location-report -- %F</code></td>
 </tr>
 <tr>
-<td><code>07StripGPS</code></td>
+<td><code>03Remove</code></td>
 <td>Remove GPS metadata…</td>
 <td><code>kim_all stripmeta --mode gps --interactive -- %F</code></td>
+</tr>
+<tr>
+<td><code>04Reduce</code></td>
+<td>Reduce exact GPS location…</td>
+<td><code>kim_all location-reduce -- %F</code></td>
 </tr>
 </tbody>
 </table>
@@ -741,7 +741,7 @@
 <tbody>
 <tr>
 <td><code>00ViewMetadata</code></td>
-<td>View metadata…</td>
+<td>View metadata</td>
 <td><code>kim_all metadata-view -- %F</code></td>
 </tr>
 <tr>
@@ -751,7 +751,7 @@
 </tr>
 <tr>
 <td><code>02StripMetadata</code></td>
-<td>Strip metadata</td>
+<td>Strip metadata…</td>
 <td><code>kim_all stripmeta --interactive -- %F</code></td>
 </tr>
 <tr>

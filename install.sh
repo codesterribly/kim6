@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Install KIMng's unified dispatcher, resources, and twelve menus.
-# Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY]. The default user path
+# Usage: ./install.sh [--prefix SERVICEMENU_DIRECTORY] [--verbose]. The default user path
 # is ${XDG_DATA_HOME:-$HOME/.local/share}/kio/servicemenus; root uses the first
 # XDG_DATA_DIRS entry (default /usr/local/share). --prefix names that directory.
 # Rerun to upgrade. Files are replaced individually through same-directory
@@ -16,6 +16,82 @@ set -euo pipefail
 
 SOURCE_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PREFIX=''
+verbose=false
+
+COLOR_BLUE=''
+COLOR_GREEN=''
+COLOR_YELLOW=''
+COLOR_RED=''
+COLOR_RESET=''
+
+if [ -t 1 ] &&
+   [ "${TERM:-dumb}" != dumb ] &&
+   [ -z "${NO_COLOR+x}" ]; then
+  COLOR_BLUE=$'\033[1;36m'
+  COLOR_GREEN=$'\033[1;32m'
+  COLOR_YELLOW=$'\033[1;33m'
+  COLOR_RED=$'\033[1;31m'
+  COLOR_RESET=$'\033[0m'
+fi
+
+stage() {
+  printf '\n%s%s%s\n' "$COLOR_BLUE" "$1" "$COLOR_RESET"
+  printf '%s\n' '------------------------------------------------------------'
+}
+
+success() {
+  printf '%sPASS%s  %s\n' "$COLOR_GREEN" "$COLOR_RESET" "$1"
+}
+
+status_color() {
+  local status="$1"
+  local group="$2"
+
+  if [ "$status" = OK ]; then
+    printf '%s%s%s' "$COLOR_GREEN" "$status" "$COLOR_RESET"
+  elif [ "$group" = required ]; then
+    printf '%s%s%s' "$COLOR_RED" "$status" "$COLOR_RESET"
+  else
+    printf '%s%s%s' "$COLOR_YELLOW" "$status" "$COLOR_RESET"
+  fi
+}
+
+install_progress() {
+  local completed="$1"
+  local total="$2"
+  local width=28
+  local filled percent left right
+
+  [ "$total" -gt 0 ] || return 0
+
+  if [ "$verbose" = true ]; then
+    return 0
+  fi
+
+  if [ ! -t 1 ] ||
+     [ "${TERM:-dumb}" = dumb ] ||
+     [ -n "${NO_COLOR+x}" ]; then
+    return 0
+  fi
+
+  filled=$((completed * width / total))
+  percent=$((completed * 100 / total))
+
+  printf -v left '%*s' "$filled" ''
+  printf -v right '%*s' "$((width - filled))" ''
+
+  left="${left// /#}"
+  right="${right// /-}"
+
+  printf '\r  %s[%s%s]%s %3d%%  %d/%d files' \
+    "$COLOR_BLUE" "$left" "$right" "$COLOR_RESET" \
+    "$percent" "$completed" "$total"
+
+  if [ "$completed" -eq "$total" ]; then
+    printf '\n'
+  fi
+}
+
 
 # Choose the normal user location, or the first system data directory for root.
 while [ "$#" -gt 0 ]; do
@@ -25,8 +101,12 @@ while [ "$#" -gt 0 ]; do
       PREFIX="$2"
       shift 2
       ;;
+    -v|--verbose)
+      verbose=true
+      shift
+      ;;
     -h|--help)
-      echo "Usage: install.sh [--prefix SERVICEMENU_DIRECTORY]"
+      echo "Usage: install.sh [--prefix SERVICEMENU_DIRECTORY] [--verbose]"
       exit 0
       ;;
     *)
@@ -80,7 +160,7 @@ kimng_report_dependencies() {
   kimng_suggest_package() {
     case "$manager:$1" in
       apt:pdftoppm) echo poppler-utils ;;
-      apt:magick) echo imagemagick-7.q16 ;;
+      apt:magick|apt:identify) echo imagemagick-7.q16 ;;
       apt:exiftool) echo libimage-exiftool-perl ;;
       apt:kdialog) echo kdialog ;;
       apt:qdbus) echo qdbus-qt6 ;;
@@ -94,7 +174,7 @@ kimng_report_dependencies() {
       apt:kbuildsycoca6) echo libkf6service-bin ;;
 
       dnf:pdftoppm) echo poppler-utils ;;
-      dnf:magick) echo ImageMagick ;;
+      dnf:magick|dnf:identify) echo ImageMagick ;;
       dnf:exiftool) echo perl-Image-ExifTool ;;
       dnf:kdialog) echo kdialog ;;
       dnf:qdbus) echo qt6-qttools ;;
@@ -107,7 +187,7 @@ kimng_report_dependencies() {
       dnf:kbuildsycoca6) echo kf6-kservice ;;
 
       pacman:pdftoppm) echo poppler ;;
-      pacman:magick) echo imagemagick ;;
+      pacman:magick|pacman:identify) echo imagemagick ;;
       pacman:exiftool) echo perl-image-exiftool ;;
       pacman:kdialog) echo kdialog ;;
       pacman:qdbus) echo qt6-tools ;;
@@ -125,7 +205,17 @@ kimng_report_dependencies() {
 
   echo
   host_name="$(hostname -s 2>/dev/null || hostname)"
-  echo 'KIMng | Dependency check'
+  printf '%sKIMng%s  |  Installer\n' "$COLOR_BLUE" "$COLOR_RESET"
+  echo 'Image workflow tools for KDE Plasma 6 and Dolphin'
+  printf '\nInstallation directory: %s\n' "$PREFIX"
+
+  if [ "$(id -u)" -eq 0 ]; then
+    echo 'Installation type: System'
+  else
+    echo 'Installation type: Current user'
+  fi
+
+  stage '01  Checking dependencies'
   printf 'Host: %s\n' "$host_name"
   printf 'OS: %s\n' "$os_name"
   printf 'Package manager: %s\n' "$manager"
@@ -193,6 +283,7 @@ kimng_report_dependencies() {
     fi
   done <<'KIMNG_DEPENDENCIES'
 required|magick|ImageMagick|Image processing
+required|identify|ImageMagick identify|Image validation
 required|exiftool|ExifTool|Metadata
 required|kdialog|KDialog|KDE dialogs
 required|qdbus|QtDBus|Desktop integration
@@ -213,14 +304,14 @@ KIMNG_DEPENDENCIES
   printf '%s\n' '------------------------------------------------------------'
   for row in "${required_rows[@]}"; do
     IFS='|' read -r label purpose status <<< "$row"
-    printf '%-23s %-26s %s\n' "$label" "$purpose" "$status"
+    printf '%-23s %-26s %s\n' "$label" "$purpose" "$(status_color "$status" required)"
   done
 
   printf '\n%-23s %-26s %s\n' 'OPTIONAL DEPENDENCIES' 'PURPOSE' 'STATUS'
   printf '%s\n' '------------------------------------------------------------'
   for row in "${optional_rows[@]}"; do
     IFS='|' read -r label purpose status <<< "$row"
-    printf '%-23s %-26s %s\n' "$label" "$purpose" "$status"
+    printf '%-23s %-26s %s\n' "$label" "$purpose" "$(status_color "$status" optional)"
   done
 
   printf '\n%s\n' '------------------------------------------------------------'
@@ -349,7 +440,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Recognize only KIMng-owned installations.
-# A populated runtime requires both its ownership marker and dispatcher.
+# A populated runtime requires a valid ownership marker.
+# An absent dispatcher is recoverable after interrupted installation
+# or uninstallation that preserved unrelated runtime content.
+# An existing unfamiliar dispatcher must never be replaced.
 dispatcher_is_kimng() {
   [ -f "$1" ] && [ ! -L "$1" ] &&
     grep -Fq '# KIMng runtime dispatcher' "$1"
@@ -368,8 +462,19 @@ runtime_is_empty() {
 runtime_is_kimng() {
   [ -f "$RUNTIME/.kimng-owned" ] &&
     [ ! -L "$RUNTIME/.kimng-owned" ] &&
-    [ "$(< "$RUNTIME/.kimng-owned")" = 'KIMng runtime' ] &&
+    [ "$(< "$RUNTIME/.kimng-owned")" = 'KIMng runtime' ] ||
+    return 1
+
+  # A valid marker can survive an interrupted install or uninstall.
+  # Never follow or accept a symlink in the dispatcher directory.
+  [ ! -L "$RUNTIME/bin" ] || return 1
+
+  if [ -e "$RUNTIME/bin/kim_all" ] ||
+     [ -L "$RUNTIME/bin/kim_all" ]; then
     dispatcher_is_kimng "$RUNTIME/bin/kim_all"
+  else
+    return 0
+  fi
 }
 
 if [ -e "$RUNTIME" ] || [ -L "$RUNTIME" ]; then
@@ -418,7 +523,7 @@ done
 # Keep the offline HTML User Guide synchronized with its Markdown sources.
 # A writable, non-root development checkout regenerates reference pages
 # automatically. System installations verify rather than modify source files.
-# Pandoc and Python are optional for users installing prebuilt HTML.
+# Pandoc is optional when installing the prebuilt HTML references.
 if [ -f "$SOURCE_DIR/tools/build_manual.py" ]; then
   if command -v python3 >/dev/null 2>&1 &&
      command -v pandoc >/dev/null 2>&1; then
@@ -456,10 +561,22 @@ printf 'KIMng runtime\n' > "$temporary"
 chmod 0644 -- "$temporary"
 mv -f -- "$temporary" "$RUNTIME/.kimng-owned"
 temporary=''
+stage '02  Installing runtime files'
+
 for index in "${!runtime_files[@]}"; do
 # shellcheck disable=SC2154
   install_file "$SOURCE_DIR/${runtime_sources[$index]}" "$RUNTIME/${runtime_files[$index]}" "${runtime_modes[$index]}"
+
+  if [ "$verbose" = true ]; then
+    printf '  Installed: %s\n' "${runtime_files[$index]}"
+  fi
+
+  install_progress "$((index + 1))" "${#runtime_files[@]}"
 done
+
+success "${#runtime_files[@]} runtime files installed"
+
+stage '03  Configuring Dolphin'
 
 # Use the same Desktop Entry encoder as Recipe rendering and ownership checks.
 exec_path="$(python3 -B "$RUNTIME/bin/kim_desktop_exec.py" "$RUNTIME/bin/kim_all")"
@@ -525,11 +642,25 @@ KIMNG_EXEC_REPLACE
   temporary=''
 done
 
-python3 "$RUNTIME/bin/kim_recipe_core.py" --sync-menu || { echo "install.sh: Recipes shortcuts were not synchronized; retry using the installed dispatcher recipe --sync-menu" >&2; }
+success "${#menu_names[@]} service menus installed"
+
+if python3 "$RUNTIME/bin/kim_recipe_core.py" --sync-menu; then
+  success 'Recipe shortcuts synchronized'
+else
+  echo "install.sh: Recipes shortcuts were not synchronized; retry using the installed dispatcher recipe --sync-menu" >&2
+fi
 
 if command -v kbuildsycoca6 >/dev/null 2>&1; then
-  kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
+  if kbuildsycoca6 --noincremental >/dev/null 2>&1; then
+    success 'KDE service cache refreshed'
+  else
+    printf '%sWARN%s  KDE service cache refresh did not complete.\n' "$COLOR_YELLOW" "$COLOR_RESET" >&2
+  fi
+else
+  echo 'INFO  KDE service cache refresh is unavailable.'
 fi
+
+stage '04  Verifying installation'
 
 # Installation is incomplete if any required Qt helper is absent.
 for relative in "${runtime_files[@]}"; do
@@ -559,8 +690,10 @@ echo
 echo
 echo "======================================================================"
 echo
-echo "VERIFIED DESKTOP MENUS"
-echo "----------------------"
+if [ "$verbose" = true ]; then
+  echo "VERIFIED DESKTOP MENUS"
+  echo "----------------------"
+fi
 
 menu_count=0
 for name in "${menu_names[@]}"; do
@@ -572,7 +705,10 @@ for name in "${menu_names[@]}"; do
     die "installed menu is missing or invalid: $menu"
   fi
 
-  printf '  %s\n' "$name"
+  if [ "$verbose" = true ]; then
+    printf '  %s\n' "$name"
+  fi
+
   ((menu_count += 1))
 done
 
@@ -599,8 +735,12 @@ for path in "$PREFIX"/kim*.desktop; do
 done
 
 echo
-echo "VERIFIED QT HELPERS"
-echo "-------------------"
+if [ "$verbose" = true ]; then
+  echo "VERIFIED QT HELPERS"
+  echo "-------------------"
+fi
+
+helper_count=0
 
 for relative in "${runtime_files[@]}"; do
   [[ "$relative" == bin/*.py ]] || continue
@@ -610,8 +750,15 @@ for relative in "${runtime_files[@]}"; do
   [ -f "$helper_path" ] && [ ! -L "$helper_path" ] ||
     die "required Qt helper is missing: $helper_path"
 
-  printf '  %s\n' "$helper"
+  if [ "$verbose" = true ]; then
+    printf '  %s\n' "$helper"
+  fi
+
+  helper_count=$((helper_count + 1))
 done
+
+success "$menu_count desktop menus verified"
+success "$helper_count Python helpers verified"
 
 echo
 # Retire only explicitly enumerated documentation in an owned runtime.
@@ -634,13 +781,19 @@ for relative in "${retired_documentation_files[@]}"; do
     fi
 done
 
-echo "Bundled KIMng User Guide installed."
+success 'Offline User Guide installed'
 
 echo
 echo "======================================================================"
-echo " KIMng INSTALLATION COMPLETE"
+printf '%s KIMng INSTALLATION COMPLETE%s\n' "$COLOR_GREEN" "$COLOR_RESET"
 echo "======================================================================"
 echo
 printf 'Installed to: %s\n' "$PREFIX"
+printf 'Runtime files: %s\n' "$RUNTIME"
+printf 'Installed: %d runtime files, %d service menus\n' "${#runtime_files[@]}" "$menu_count"
+
+if [ "$verbose" = false ]; then
+  echo 'For detailed installation output, use --verbose.'
+fi
 echo
 echo "Please restart Dolphin to see the KIMng menus."

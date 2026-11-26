@@ -27,7 +27,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
 | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
 | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
-| Custom convert… | `kim_all convert --preview --custom-format -- %F` |
+| Convert custom… | `kim_all convert --preview --custom-format -- %F` |
 | Convert PDF pages to images… | `kim_all pdf-pages -- %F` |
 | Extract embedded images from PDF… | `kim_all pdf-extract -- %F` |
 | Compress recommended | `kim_all compress --recommended --interactive -- %F` |
@@ -58,8 +58,8 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 | Menu action | Dispatcher command |
 |---|---|
-| View GPS metadata… | `kim_all location-report -- %F` |
-| Edit GPS on images… | `kim_all location-apply -- %F` |
+| View GPS metadata | `kim_all location-report -- %F` |
+| Edit GPS metadata… | `kim_all location-apply -- %F` |
 | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
 
@@ -74,8 +74,8 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
 | Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
 | Add watermark… | `kim_all overlay -- %F` |
-| Strip metadata | `kim_all stripmeta --interactive -- %F` |
-| View metadata… | `kim_all metadata-view -- %F` |
+| Strip metadata… | `kim_all stripmeta --interactive -- %F` |
+| View metadata | `kim_all metadata-view -- %F` |
 | Edit metadata… | `kim_all metadata-edit -- %F` |
 
 View metadata opens the existing read-only Metadata Browser with all selected images in one window. Select exactly two images inside Browser to use its Compare view. Edit metadata opens the existing Metadata Editor with the complete selection; it retains drafts while navigating and only plans changes. Neither action writes image metadata or XMP sidecars.
@@ -117,7 +117,7 @@ View metadata opens the existing read-only Metadata Browser with all selected im
 | Settings… | `kim_all settings -- %F` |
 | About KIMng | `kim_all about -- %F` |
 | License | `kim_all license -- %F` |
-| KIMng User Guide | `kim_all manual -- %F` |
+| User Guide | `kim_all manual -- %F` |
 
 ### KIMng - Web Export
 
@@ -189,9 +189,9 @@ Image format and codec support are checked at runtime. A visible menu action doe
 
 ### Metadata and location privacy
 
-**Edit GPS on images…** is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.
+**Edit GPS metadata…** is the main GPS-editing action. Copying coordinates from a reference image and GPX-based geotagging are workflow options rather than separate Dolphin submenu entries.
 
-**Strip metadata** is the unified metadata-removal action. There is no separate Strip AI metadata menu action.
+**Strip metadata…** is the unified metadata-removal action. There is no separate Strip AI metadata menu action.
 
 Removing GPS or AI-related metadata does not guarantee complete anonymity. Other metadata, signed credentials, or visible content may still disclose information.
 
@@ -255,7 +255,7 @@ The following inventory is derived from the current KDE service-menu definitions
 | `05ConvertJP2Lossless` | Convert to JPEG 2000 (lossless) | `kim_all convert --preview --format jp2 --jp2-mode lossless -- %F` |
 | `06ConvertJP2Lossy` | Convert to JPEG 2000 (lossy) | `kim_all convert --preview --format jp2 --jp2-mode lossy -- %F` |
 | `02ConvertBMP` | Convert to BMP | `kim_all convert --preview --format bmp --bmp5 -- %F` |
-| `13ConvertCustom` | Custom convert… | `kim_all convert --preview --custom-format -- %F` |
+| `13ConvertCustom` | Convert custom… | `kim_all convert --preview --custom-format -- %F` |
 | `14PDFPages` | Convert PDF pages to images… | `kim_all pdf-pages -- %F` |
 | `15PDFExtract` | Extract embedded images from PDF… | `kim_all pdf-extract -- %F` |
 | `2001CompressRecommended` | Compress recommended | `kim_all compress --recommended --interactive -- %F` |
@@ -269,24 +269,24 @@ The following inventory is derived from the current KDE service-menu definitions
 | `01Settings` | Settings… | `kim_all settings -- %F` |
 | `02About` | About KIMng | `kim_all about -- %F` |
 | `03License` | License | `kim_all license -- %F` |
-| `04Manual` | KIMng User Guide | `kim_all manual -- %F` |
+| `04Manual` | User Guide | `kim_all manual -- %F` |
 
 ### `kim_location.desktop.in`
 
 | Action ID | Label | Command |
 |---|---|---|
-| `04Report` | View GPS metadata… | `kim_all location-report -- %F` |
-| `03Apply` | Edit GPS on images… | `kim_all location-apply -- %F` |
-| `05Reduce` | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
-| `07StripGPS` | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+| `01Edit` | Edit GPS metadata… | `kim_all location-apply -- %F` |
+| `02View` | View GPS metadata | `kim_all location-report -- %F` |
+| `03Remove` | Remove GPS metadata… | `kim_all stripmeta --mode gps --interactive -- %F` |
+| `04Reduce` | Reduce exact GPS location… | `kim_all location-reduce -- %F` |
 
 ### `kim_metadata.desktop.in`
 
 | Action ID | Label | Command |
 |---|---|---|
-| `00ViewMetadata` | View metadata… | `kim_all metadata-view -- %F` |
+| `00ViewMetadata` | View metadata | `kim_all metadata-view -- %F` |
 | `01EditMetadata` | Edit metadata… | `kim_all metadata-edit -- %F` |
-| `02StripMetadata` | Strip metadata | `kim_all stripmeta --interactive -- %F` |
+| `02StripMetadata` | Strip metadata… | `kim_all stripmeta --interactive -- %F` |
 | `08SetCopyright` | Set creator/copyright/usage… | `kim_all copyright --interactive -- %F` |
 | `04Rename` | Rename images… | `kim_all rename interactive -- %F` |
 | `05SetDates` | Set dates… | `kim_all capturedate --mode unified --interactive -- %F` |
