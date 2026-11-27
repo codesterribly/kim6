@@ -15,8 +15,8 @@ import string
 import tempfile
 from kim_settings_file import read_settings
 from kim_image_ops import CROP_DEFAULTS, OVERLAY_DEFAULTS
-from kim_psd_source import prepared, PSDError, WARNING as PSD_WARNING, header as psd_header
-from kim_process import run_process, metadata_diagnostics, session_warnings, stage
+from kim_psd_source import prepared, prepared_read, PSDError, WARNING as PSD_WARNING, protected_header as psd_header
+from kim_process import open_inspection_fd, run_process, metadata_diagnostics, session_warnings, stage
 from kim_recipe_core import RecipeError, OutputFormatRequired, keys, text, enabled_steps, config_path, format_output_pattern, display_output_pattern
 
 _OMIT_STANDALONE_OVERLAY_METADATA = contextvars.ContextVar(
@@ -88,7 +88,9 @@ DEFAULTS = {
     'image.compress': {'preset': 'recommended', 'quality': 85, 'png_level': 6,
                        'jpeg_progressive': True, 'jpeg_optimize': False},
     'image.color': {'mode': 'preserve'},
-    'metadata.strip_all': {}, 'metadata.strip_descriptive': {}, 'metadata.strip_gps': {}, 'metadata.strip_ai': {},
+    'metadata.strip_all': {}, 'metadata.strip_descriptive': {}, 'metadata.strip_gps': {}, 'metadata.reduce_gps': {'grid': '1000'}, 'metadata.strip_ai': {},
+    'metadata.set_description': {'value': ''},
+    'metadata.set_keywords': {'mode': 'unchanged', 'keywords': ''},
     'metadata.copyright': {'creator': None, 'notice': None, 'rights': None},
     'metadata.creator': {}, 'metadata.copyright_notice': {}, 'metadata.usage_rights': {},
     'metadata.shift_capture': {'seconds': 3600},
@@ -112,6 +114,9 @@ LABELS = {
     'metadata.set_capture': 'Set Image Capture Date', 'metadata.strip_descriptive': 'Remove Descriptive Metadata',
     'file.name_transform': 'Change Output Filename',
     'metadata.strip_all': 'Remove All Metadata', 'metadata.strip_gps': 'Remove GPS Location',
+    'metadata.reduce_gps': 'Reduce GPS Precision',
+    'metadata.set_description': 'Set Caption / Description',
+    'metadata.set_keywords': 'Set Keywords',
     'metadata.strip_ai': 'Remove AI Metadata', 'metadata.copyright': 'Set Copyright',
     'metadata.shift_capture': 'Adjust Image Capture Date', 'file.rename_output': 'Rename Output File',
     'file.sync_date': 'Synchronize File Date', 'file.preserve_date': 'Keep Source File Date', 'metadata.creator': 'Set Creator / Artist',
@@ -159,6 +164,68 @@ COPYRIGHT_TAGS = {
     'notice': ('EXIF:Copyright', 'IPTC:CopyrightNotice', 'XMP-dc:Rights'),
     'rights': ('XMP-xmpRights:UsageTerms',),
 }
+DESCRIPTION_TAGS = ('XMP-dc:Description', 'IPTC:Caption-Abstract')
+KEYWORD_TAGS = ('XMP-dc:Subject', 'IPTC:Keywords')
+IPTC_CAPTION_BYTE_LIMIT = 2000
+IPTC_KEYWORD_BYTE_LIMIT = 64
+
+
+def parse_keywords(raw):
+    """Parse comma-, semicolon-, or newline-separated keywords into a deduplicated list."""
+    import re
+    if not isinstance(raw, str):
+        return []
+    items, seen = [], set()
+    for part in re.split(r'[,;\r\n]+', raw):
+        cleaned = part.strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            items.append(cleaned)
+    return items
+
+
+def _normalize_tag_list(value):
+    if value is None:
+        return []
+    raw_items = value if isinstance(value, list) else [value]
+    result, seen = [], set()
+    for item in raw_items:
+        cleaned = str(item).strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            result.append(cleaned)
+    return result
+
+
+def read_descriptive_metadata(path):
+    """Read current XMP/IPTC description, language alternatives, and keywords."""
+    data = json.loads(run([
+        'exiftool', '-json', '-G1', '-a',
+        '-XMP-dc:Description*', '-IPTC:Caption-Abstract',
+        '-XMP-dc:Subject', '-IPTC:Keywords', '-',
+    ], source=path))[0]
+    xmp_desc = data.get('XMP-dc:Description')
+    iptc_desc = data.get('IPTC:Caption-Abstract')
+    lang_alts = {
+        key: str(val)
+        for key, val in data.items()
+        if key.startswith('XMP-dc:Description-') and key != 'XMP-dc:Description-x-default' and val is not None
+    }
+    xmp_kw = _normalize_tag_list(data.get('XMP-dc:Subject'))
+    iptc_kw = _normalize_tag_list(data.get('IPTC:Keywords'))
+    merged_kw, seen = [], set()
+    for kw in xmp_kw + iptc_kw:
+        if kw not in seen:
+            seen.add(kw)
+            merged_kw.append(kw)
+    return {
+        'xmp_description': None if xmp_desc is None else str(xmp_desc),
+        'iptc_description': None if iptc_desc is None else str(iptc_desc),
+        'lang_alts': lang_alts,
+        'xmp_keywords': xmp_kw,
+        'iptc_keywords': iptc_kw,
+        'keywords': merged_kw,
+    }
 
 
 _CROP_OPTIONAL_METADATA = contextvars.ContextVar(
@@ -188,7 +255,7 @@ def standalone_crop_clean_retry():
 
 
 def selected_metadata(path, tags):
-    data = json.loads(run(['exiftool', '-json', '-G1'] + ['-' + tag for tag in tags] + [str(path)]))[0]
+    data = json.loads(run(['exiftool', '-json', '-G1'] + ['-' + tag for tag in tags] + ['-'], source=path))[0]
     # These selected tags have distinct names; ExifTool reports EXIF's IFD group.
     return {tag: next((value for key, value in data.items()
                       if key.split(':')[-1] == tag.split(':')[-1]), None) for tag in tags}
@@ -207,9 +274,9 @@ def planning_metadata(path, *, psd=False):
     # PSD ICC reads deliberately use the normalized composite, while rights,
     # GPS and provenance must describe the original Photoshop document.
     if not psd: tags.append('ICC_Profile:all')
-    data = json.loads(run(['exiftool', '-json', '-G0:1'] + ['-' + tag for tag in tags] + [str(path)]))[0]
+    data = json.loads(run(['exiftool', '-json', '-G0:1'] + ['-' + tag for tag in tags] + ['-'], source=path))[0]
     if psd:
-        profile_data = json.loads(run(['exiftool', '-json', '-G0:1', '-ICC_Profile:all', str(path)]))[0]
+        profile_data = json.loads(run(['exiftool', '-json', '-G0:1', '-ICC_Profile:all', '-'], source=path))[0]
         data.update({key: value for key, value in profile_data.items() if key != 'SourceFile'})
 
     def matches(key, tag):
@@ -227,14 +294,16 @@ def planning_metadata(path, *, psd=False):
 
 TOOL_TIMEOUT = 180
 
-def run(args, allow_icc_removal=False, allow_png_iptc=False):
+def run(args, allow_icc_removal=False, allow_png_iptc=False, *, source=None, fd=None):
     if not shutil.which(args[0]):
         raise RecipeError('Missing dependency: ' + args[0])
     try:
-        with prepared(args) as resolved:
-            # PDF/codec delegates inherit this group. A timeout must not leave
-            # them running after the private source/cache workspace is removed.
-            result = run_process(resolved, timeout=TOOL_TIMEOUT, text=True)
+        if source is None:
+            with prepared(args) as resolved:
+                result = run_process(resolved, timeout=TOOL_TIMEOUT, text=True)
+        else:
+            with prepared_read(args, source, fd) as (resolved, stdin):
+                result = run_process(resolved, timeout=TOOL_TIMEOUT, text=True, stdin=stdin)
     except (OSError, subprocess.TimeoutExpired, PSDError) as exc:
         raise RecipeError(str(exc)) from exc
     diagnostics = metadata_diagnostics(args, result.returncode, result.stderr)
@@ -245,6 +314,19 @@ def run(args, allow_icc_removal=False, allow_png_iptc=False):
     if result.returncode or 'Warning:' in diagnostics or 'Error:' in diagnostics:
         raise RecipeError(args[0] + ': ' + (result.stderr or result.stdout)[-1500:])
     return result.stdout
+
+
+def magick_input(file_type):
+    """Use seekable inherited stdin for stream-capable coders.
+
+    ImageMagick sniffs bare '-' via a temporary file. Its HEIC delegate
+    requires that named scratch input; native stream readers can use fd:0.
+    The caller supplies the observed content type, never a filename suffix.
+    """
+    coder = file_type.upper()
+    if coder in ('JPEG', 'PNG', 'WEBP', 'TIFF', 'GIF', 'BMP', 'PPM', 'JP2'):
+        return coder + ':fd:0'
+    return '-'
 
 
 def integer(value, low, high):
@@ -269,28 +351,31 @@ def inspection_identity(info):
 def inspect(path, output=False, pdf_scale=1):
     from kim_process import checkpoint
     checkpoint()
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    fd = open_inspection_fd(path)
     try:
         before=inspection_identity(os.fstat(fd)); key=os.path.abspath(path)
         cache=None if output else _CHECKED_INPUTS.get()
         previous=cache.get(key) if cache is not None else None
-        if previous is not None and previous[0]==before: return copy.deepcopy(previous[1])
-        result=inspect_open_path(Path(f'/proc/{os.getpid()}/fd/{fd}'), output=output, pdf_scale=pdf_scale)
-        # Only small header/dimension results are reused. PSD composite sessions,
-        # full recipe plans, ICC checks and execution verification stay fresh.
-        # ctime catches metadata/pixel changes even when mtime is restored.
-        if cache is not None and result[1]!='psd' and before==inspection_identity(os.fstat(fd)):
-            cache[key]=(before,copy.deepcopy(result))
+        if previous is not None and previous[0] == before:
+            result = copy.deepcopy(previous[1])
+        else:
+            result = inspect_open_path(path, fd, output=output, pdf_scale=pdf_scale)
+        if (inspection_identity(os.fstat(fd)) != before or
+                inspection_identity(os.stat(path, follow_symlinks=False)) != before):
+            raise RecipeError('Source changed during inspection; try again')
+        # A hit already owns a detached result. Keep PSD and output checks fresh.
+        if cache is not None and result[1] != 'psd' and (previous is None or previous[0] != before):
+            cache[key] = (before, copy.deepcopy(result))
         return result
     finally:
         os.close(fd)
 
 
-def inspect_open_path(path, output=False, pdf_scale=1):
+def inspect_open_path(path, fd, output=False, pdf_scale=1):
     stage('Reading image metadata')
     grouped = json.loads(run(['exiftool', '-json', '-G1', '-a', '-n', '-FileType', '-ImageWidth', '-ImageHeight',
                            '-Orientation', '-DateTimeOriginal', '-OffsetTimeOriginal', '-SubSecTimeOriginal',
-                           '-CreateDate', '-ModifyDate', '-DateCreated', '-MajorBrand', '-AnimationIterations', str(path)]))[0]
+                           '-CreateDate', '-ModifyDate', '-DateCreated', '-MajorBrand', '-AnimationIterations', '-'], source=path, fd=fd))[0]
     info = {key.split(':')[-1]:value for key,value in grouped.items()}
     # Keep date groups distinct: flattening XMP onto EXIF loses independent
     # clocks and passes XMP fractions/offsets to an EXIF-only parser.
@@ -325,7 +410,8 @@ def inspect_open_path(path, output=False, pdf_scale=1):
     if not output and info.get('MajorBrand') in ('avis','msf1','hevs','hevm','heis'):
         raise RecipeError('Image sequences are unavailable in Recipes; select a single still image.')
     if not output and info.get('FileType') == 'WEBP':
-        with path.open('rb') as stream:
+        os.lseek(fd, 0, os.SEEK_SET)
+        with os.fdopen(os.dup(fd), 'rb') as stream:
             stream.read(12)
             while block := stream.read(8):
                 if len(block) != 8: raise RecipeError('Truncated WebP')
@@ -333,7 +419,8 @@ def inspect_open_path(path, output=False, pdf_scale=1):
                 if tag in (b'ANIM',b'ANMF'): raise RecipeError('Animated WebP is unavailable in Recipes; use the existing animation menus.')
                 stream.seek(length + length % 2,1)
     if info.get('FileType') == 'PNG':
-        with path.open('rb') as stream:
+        os.lseek(fd, 0, os.SEEK_SET)
+        with os.fdopen(os.dup(fd), 'rb') as stream:
             stream.read(8)
             while True:
                 header = stream.read(8)
@@ -350,9 +437,9 @@ def inspect_open_path(path, output=False, pdf_scale=1):
     if output and info.get('FileType') == 'PDF':
         # identify ignores PDF density on some IM builds; the normal reader
         # honors it and supplies a complete decode for verification as well.
-        frames = run(['magick','-density',str(72*pdf_scale),str(path),'-format','%m %w %h\n','info:']).splitlines()
+        frames = run(['magick','-density',str(72*pdf_scale),'-','-format','%m %w %h\n','info:'], source=path, fd=fd).splitlines()
     else:
-        frames = run(['magick','identify','-ping','-format','%m %w %h\n',str(path)]).splitlines()
+        frames = run(['magick','identify','-ping','-format','%m %w %h\n',magick_input(info['FileType'])], source=path, fd=fd).splitlines()
     if len(frames) != 1:
         raise RecipeError('Only single-frame images are supported')
     fmt, width, height = frames[0].split()
@@ -470,7 +557,8 @@ class ImageHandler:
         """Small UI contract owned by the media handler, including shared file steps."""
         choices = {'axis': ('horizontal', 'vertical'), 'preset': ('recommended', 'maximum', 'custom'),
                    'format': tuple(FORMATS), 'mode': ('preserve', 'srgb'), 'jp2_mode': ('lossless', 'lossy'),
-                   'tiff_compression': ('zip', 'lzw', 'none'), 'depth': ('preserve', '8', '16')}
+                   'tiff_compression': ('zip', 'lzw', 'none'), 'depth': ('preserve', '8', '16'),
+                   'grid': ('100', '1000', '5000', '10000')}
         limits = {'max_width': (1, 100000), 'max_height': (1, 100000),
                   'width': (1, 100000), 'height': (1, 100000), 'percent': (1, 1000), 'quality': (1, 100),
                   'seconds': (-315576000, 315576000), 'degrees': (-360, 360), 'png_level': (0, 9),
@@ -487,6 +575,7 @@ class ImageHandler:
                     'pattern':'Output filename pattern', 'upscale': 'Allow upscaling', 'creator': 'Creator / Artist',
                     'notice': 'Copyright notice', 'rights': 'Usage rights',
                     'datetime': 'Image capture date and time', 'timezone': 'Camera timezone', 'fields':'Date fields',
+                    'grid': 'Approximate location grid (metres)',
                     'png_level':'PNG lossless compression level', 'jpeg_optimize':'Optimize JPEG Huffman coding',
                 }.get(key, key.replace('_', ' ').capitalize())}
                 if type(default) is bool:
@@ -508,6 +597,21 @@ class ImageHandler:
                 parameters['timezone']['choices'] = ('', 'unknown', 'embedded', 'UTC', 'custom')
                 parameters['datetime']['type'] = 'capture_datetime'
                 parameters['fields']['choices'] = ('capture', 'all')
+            if op == 'image.overlay':
+                parameters['opacity'].update(type='integer', minimum=0, maximum=100)
+                parameters['size'].update(type='number', minimum=0.1, maximum=100.0)
+                parameters['margin'].update(type='number', minimum=0.0, maximum=40.0)
+                parameters['anchor']['choices'] = (
+                    'top_left', 'top', 'top_right', 'left', 'center', 'right',
+                    'bottom_left', 'bottom', 'bottom_right',
+                )
+                parameters['assistance']['choices'] = ('none', 'shadow', 'outline')
+            if op == 'metadata.set_description':
+                parameters['value']['label'] = 'Caption / Description'
+            if op == 'metadata.set_keywords':
+                parameters['mode']['label'] = 'Keyword handling'
+                parameters['mode']['choices'] = ('unchanged', 'append', 'replace')
+                parameters['keywords']['label'] = 'Keywords (comma or semicolon separated)'
             if op == 'file.name_transform':
                 parameters['method']['choices'] = ('lowercase', 'uppercase', 'spaces_to_dashes', 'spaces_to_underscores', 'underscores_to_spaces', 'dashes_to_spaces', 'prefix', 'suffix', 'replace', 'sequential', 'capture_date')
             category = (CATEGORIES[3] if op.startswith('file.') or op in ('metadata.set_capture','metadata.shift_capture') else CATEGORIES[2] if op.startswith('metadata.')
@@ -516,7 +620,9 @@ class ImageHandler:
                                'keywords': op.replace('.', ' ') + ' ' + ' '.join(parameters) + ' ' + {
                                    'image.flip':'mirror reflect horizontal vertical', 'image.color':'ICC colorspace sRGB',
                                    'file.preserve_date':'mtime modification timestamp', 'file.sync_date':'timestamp EXIF',
-                                   'metadata.strip_all':'privacy EXIF IPTC XMP', 'image.compress':'compression quality smaller recommended maximum custom JPEG PNG WebP AVIF',
+                                   'metadata.strip_all':'privacy EXIF IPTC XMP', 'metadata.reduce_gps':'gps location privacy approximate generalize grid coordinates', 'image.compress':'compression quality smaller recommended maximum custom JPEG PNG WebP AVIF',
+                                   'metadata.set_description':'caption description text editorial iptc xmp alt language',
+                                   'metadata.set_keywords':'keywords tags subject iptc xmp append replace editorial',
                                    'image.resize_long_edge':'resize longest edge aspect fit scale',
                                    'metadata.set_capture':'date timestamp EXIF capture camera clock mtime',
                                    'image.convert':'encode codec JPEG BMP GIF HEIC HEIF JP2 JPEG2000 JXL PDF TIFF WebP AVIF PNG'}.get(op,'')}
@@ -526,15 +632,30 @@ class ImageHandler:
                 definitions[op]['category'] = CATEGORIES[0] if op == 'image.crop' else CATEGORIES[2]
                 definitions[op]['description'] = ('Crop the oriented image, then optionally resize proportionally. Manual areas use relative coordinates on every image.' if op == 'image.crop' else 'Visible pixels, independent of embedded rights metadata. Place after all geometry and color steps; missing embedded fields are omitted.')
             if op == 'image.convert':
-                definitions[op]['description'] = 'One output per input. JPEG/BMP/PDF/HEIC use white backgrounds; GIF uses palette transparency. JPEG/WebP/AVIF quality can inherit KIMng Web Export Settings or use an override.'
+                definitions[op]['description'] = 'Changes the output file format (such as JPEG, PNG, WebP or AVIF) with one output per input. JPEG/BMP/PDF/HEIC use white backgrounds; GIF uses palette transparency. JPEG/WebP/AVIF quality can inherit KIMng Web Export Settings or use an override. Use Compress Image to adjust compression without changing format.'
                 definitions[op]['parameters']['quality'].update(settings_key='Web Export quality',settings_field='quality')
             if op == 'image.resize_exact': definitions[op]['description'] = 'Sets both dimensions exactly; the image may stretch.'
             descriptions = {
-                'image.compress': 'One final encode. Recommended: lossy quality 85 / lossless PNG level 6. Maximum: quality 70 / PNG level 9 (smaller files, more loss for JPEG/WebP/AVIF). Custom exposes quality, PNG level and JPEG options. Final encoder settings apply once at save time, including to later pixel transformations.',
+                'image.auto_orient': 'Rotates pixels to match the camera orientation tag and clears the orientation flag.',
+                'image.flip': 'Mirrors the image horizontally (left to right) or vertically (top to bottom).',
+                'image.resize': 'Fits the image within maximum width and height limits while keeping its aspect ratio. Use Resize Long Edge when you only want one pixel limit.',
+                'image.resize_percent': 'Scales both width and height by a percentage of the current dimensions.',
+                'image.resize_long_edge': 'Scales the longest side to a single pixel target while keeping the aspect ratio. Use Resize to Fit when width and height need separate limits.',
+                'image.color': 'Converts to sRGB for web viewing, preserves the embedded ICC profile, or strips color profiles.',
+                'image.compress': 'Adjusts final output compression without changing format. Recommended: quality 85 / PNG level 6; Maximum: quality 70 / PNG level 9; Custom exposes quality, PNG level and JPEG options. Use Convert Format to change file format.',
+                'metadata.strip_all': 'Removes all EXIF, IPTC, XMP and camera metadata for privacy while keeping image pixels.',
+                'metadata.strip_gps': 'Removes GPS coordinates and location tags while keeping other camera and descriptive metadata.',
+                'metadata.reduce_gps': 'Replaces exact GPS coordinates with the center of an approximate WGS84 grid cell (100 m, 1 km, 5 km or 10 km) and clears altitude, direction, destination coordinates, structured location blocks and place-name tags. Does not remove location clues in captions or image pixels.',
+                'metadata.set_description': 'Sets the embedded caption or description (XMP-dc:Description and IPTC:Caption-Abstract) while preserving unrelated metadata and non-default XMP language alternatives. Leaving the value blank keeps existing descriptions unchanged.',
+                'metadata.set_keywords': 'Updates embedded IPTC and XMP keywords (XMP-dc:Subject and IPTC:Keywords). Choose Leave unchanged, Append (adds unique entries to existing keywords) or Replace. Separate multiple keywords with commas or semicolons.',
+                'metadata.strip_ai': 'Removes IPTC AI generation prompt and system tags while keeping other metadata.',
                 'metadata.set_capture': 'Enter when the image was captured, use its embedded date, or use its file modification time (which may reflect copying). Choose Unknown if you do not know the camera timezone. All dates also sets embedded creation and modification dates. File timestamps change only with Synchronize File Date.',
                 'metadata.shift_capture': 'Advanced: adjust an existing capture clock by days, hours, minutes and seconds. Use Set Image Capture Date for a missing date. All also shifts existing EXIF creation/modification dates. Camera timezone and fractional seconds are retained.',
                 'metadata.strip_descriptive': 'Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation. Image capture dates and copyright are removed. Add new date or rights steps afterwards if needed.',
-                'file.name_transform': 'Changes the planned output filename without its extension. Uses the current planned name; {filename}, {date} and {index} templates are available in Rename Output File. Numbered names are checked again on publication.',
+                'file.name_transform': 'Transforms the current planned output filename (without extension) using case change, prefix, suffix, find/replace or numbering. Use Rename Output File for {filename}, {date}, {index} or Recipe question templates.',
+                'file.rename_output': 'Replaces the output filename using a template with {filename}, {date}, {index} or Recipe questions. Use Change Output Filename to transform the existing name (case, prefix, suffix or find/replace).',
+                'file.sync_date': 'Sets the output file modification time to match the image capture date (EXIF DateTimeOriginal). Use Keep Source File Date to copy the original file modification time instead.',
+                'file.preserve_date': 'Copies the original file modification time onto the output file. Use Synchronize File Date to match the embedded capture date instead.',
                 'image.rotate': 'Rotate the displayed image; orientation is baked into pixels. Custom angles use a transparent background (white in opaque output formats).',
                 'image.resize_geometry': 'ImageMagick geometry: WIDTHxHEIGHT fits, ! stretches, ^ fills without cropping, > only shrinks, < only enlarges. Width-only (1600x), height-only (x1200), and maximum pixel area (1000000@) are allowed. Use Resize by Percentage for percentages.',
             }
@@ -543,12 +664,17 @@ class ImageHandler:
                 definitions[op]['parameters'] = {'value': {
                     'type': 'text', 'default': None, 'settings_key': SETTING_KEYS[SETTING_FIELDS[op]], 'settings_field': SETTING_FIELDS[op],
                     'label': LABELS[op].removeprefix('Set ')}}
-                definitions[op]['description'] = 'Defaults to KIMng Settings. Typing creates a recipe-specific override.'
+                field_desc = {
+                    'metadata.creator': 'Sets only the creator / artist tag. Defaults to KIMng Settings; typing creates a recipe-specific override. Use Set Copyright to manage all rights fields together.',
+                    'metadata.copyright_notice': 'Sets only the copyright notice tag. Defaults to KIMng Settings; typing creates a recipe-specific override. Use Set Copyright to manage creator, notice, rights and year together.',
+                    'metadata.usage_rights': 'Sets only the usage rights tag. Defaults to KIMng Settings; typing creates a recipe-specific override. Use Set Copyright to manage all rights fields together.',
+                }
+                definitions[op]['description'] = field_desc.get(op, 'Defaults to KIMng Settings. Typing creates a recipe-specific override.')
             if op == 'metadata.copyright':
                 for key, spec in definitions[op]['parameters'].items():
                     spec.update(settings_key=SETTING_KEYS[key], settings_field=key)
                 definitions[op]['parameters']['year'] = {'type':'text','default':'','label':'Copyright year (blank = capture year)'}
-                definitions[op]['description'] = 'Each field can inherit Settings or use an override. A blank override leaves that field unchanged.'
+                definitions[op]['description'] = 'Sets creator, copyright notice, usage rights and year together in one step. Each field can inherit KIMng Settings or use an override; a blank override leaves that field unchanged.'
         return copy.deepcopy(definitions)
 
     def step_label(self, step):
@@ -574,6 +700,22 @@ class ImageHandler:
         if op == 'image.compress': return label + ': ' + step['preset'].capitalize()
         if op == 'metadata.set_capture': return label + ': ' + {'specific':step.get('datetime') or 'choose date and time', 'embedded':'embedded date', 'file_mtime':'source file modification time'}.get(step['mode'],'choose source')
         if op == 'metadata.shift_capture': return label + ': ' + str(dt.timedelta(seconds=step['seconds']))
+        if op == 'metadata.reduce_gps':
+            grid_labels = {'100': '~100 m grid', '1000': '~1 km grid', '5000': '~5 km grid', '10000': '~10 km grid'}
+            return label + ': ' + grid_labels.get(str(step.get('grid', '1000')), str(step.get('grid', '1000')) + ' m grid')
+        if op == 'metadata.set_description':
+            val = (step.get('value') or '').strip()
+            if not val:
+                return label + ': leave unchanged'
+            snippet = val if len(val) <= 36 else val[:35] + '…'
+            return label + ': ' + snippet
+        if op == 'metadata.set_keywords':
+            mode = step.get('mode', 'unchanged')
+            mode_label = {'unchanged': 'leave unchanged', 'append': 'append', 'replace': 'replace'}.get(mode, mode)
+            kws = parse_keywords(step.get('keywords', ''))
+            if mode == 'unchanged' or not kws:
+                return label + ': ' + mode_label
+            return f"{label}: {mode_label} ({len(kws)})"
         if op == 'image.color':
             return label + ': ' + ('sRGB' if step['mode'] == 'srgb' else 'Preserve')
         if op == 'image.resize_percent':
@@ -739,6 +881,14 @@ class ImageHandler:
                 raise RecipeError('16-bit output is available for PNG, TIFF and JPEG 2000')
         if op == 'image.color' and step['mode'] not in ('preserve', 'srgb'):
             raise RecipeError('Unsupported color mode')
+        if op == 'metadata.reduce_gps' and str(step['grid']) not in ('100', '1000', '5000', '10000'):
+            raise RecipeError('Choose a supported GPS precision grid (100, 1000, 5000 or 10000 metres).')
+        if op == 'metadata.set_description':
+            text(step['value'])
+        if op == 'metadata.set_keywords':
+            if step['mode'] not in ('unchanged', 'append', 'replace'):
+                raise RecipeError('Choose a supported keyword handling mode (unchanged, append or replace).')
+            text(step['keywords'])
         if op == 'metadata.copyright':
             for key, value in step.items():
                 if key != 'enabled' and value is not None:
@@ -880,12 +1030,21 @@ class ImageHandler:
             if document is None: raise RecipeError('Source changed during inspection; try again')
             if document[3] in (1, 4):
                 color_state += '; normalized to sRGB before image operations'
-        color_record = run(['magick','identify','-ping','-format','%[colorspace]|%z',str(source)]).strip().lower()
+        color_record = run(['magick','identify','-ping','-format','%[colorspace]|%z',magick_input(info['FileType'])], source=source).strip().lower()
         colorspace, source_depth = color_record.split('|')
         source_depth = int(source_depth)
         timestamp_state = 'execution time (not predetermined)'
         quality, timestamp, timestamp_ns = None, None, None
         auto_oriented = False
+        gps_reduce_args = None
+        approved_gps_reduction = None
+        gps_reduce_warnings = []
+        has_desc_ops = any(s['op'] in ('metadata.set_description', 'metadata.set_keywords') for s in steps)
+        desc_info = read_descriptive_metadata(source) if has_desc_ops else None
+        expected_description = None
+        expected_keywords = None
+        desc_state = None
+        kw_state = None
         for step_number, step in numbered_steps:
             op = step['op']
             if op in ('image.rotate', 'image.flip', 'image.crop', 'image.overlay'):
@@ -1022,6 +1181,13 @@ class ImageHandler:
                 copyright_values = dict.fromkeys(copyright_values)
                 gps_state = 'absent (recognized fields)'
                 ai_state = 'absent (recognized writable fields); unrecognized provenance unknown'
+                if desc_info is not None:
+                    desc_info = {'xmp_description': None, 'iptc_description': None, 'lang_alts': {},
+                                 'xmp_keywords': [], 'iptc_keywords': [], 'keywords': []}
+                expected_description = None
+                expected_keywords = None
+                desc_state = None
+                kw_state = None
                 if op == 'metadata.strip_all':
                     color_state = 'sRGB pixels; ICC profile stripped' if srgb_pixels else 'absent (ICC stripped)'
                     orientation_tag = None
@@ -1029,7 +1195,127 @@ class ImageHandler:
                 else: orientation_tag = orientation
             elif op == 'metadata.strip_gps':
                 edits.append(['-' + tag + '=' for tag in GPS_TAGS])
+                gps_reduce_args = None
+                approved_gps_reduction = None
                 gps_state = 'absent (recognized fields)'
+            elif op == 'metadata.reduce_gps':
+                from kim_location import (
+                    read_many, summarize, removal_args, generalize,
+                    assignments as gps_assignments, display_position,
+                )
+                grid_m = int(step['grid'])
+                src_key = str(source)
+                loc_data = read_many([src_key], complete=True)[src_key]
+                if loc_data.get('error'):
+                    raise RecipeError('GPS inspection failed: ' + str(loc_data['error']))
+                loc_info = summarize(loc_data['raw'])
+                camera_issues = loc_info['categories']['camera']['issues']
+                if camera_issues:
+                    raise RecipeError('GPS precision reduction blocked: ' + '; '.join(camera_issues))
+                if not loc_info['position']:
+                    raise RecipeError(
+                        'No camera GPS coordinates found to reduce. '
+                        'Use Remove GPS coordinates or deselect images without GPS.'
+                    )
+                try:
+                    rem_args, _removed = removal_args(loc_info, reduce=True)
+                    new_pos, displacement = generalize(loc_info['position'], grid_m)
+                    write_args = gps_assignments(new_pos)
+                except ValueError as exc:
+                    raise RecipeError(str(exc)) from exc
+                gps_reduce_args = rem_args + write_args
+                approved_gps_reduction = {
+                    'category': 'camera',
+                    'position': new_pos,
+                    'altitude': None,
+                    'direction': None,
+                    'direction_ref': 'T',
+                    'altitude_ref': None,
+                    'reduce': True,
+                }
+                grid_caption = {100: '100 m', 1000: '1 km', 5000: '5 km', 10000: '10 km'}.get(grid_m, f'{grid_m} m')
+                gps_state = (
+                    f'reduced to ~{grid_caption} grid ({display_position(new_pos)}; '
+                    f'~{displacement:.0f} m displacement); altitude, direction, destination and place-name tags cleared'
+                )
+                gps_reduce_warnings.append(
+                    'Free-text captions, image content and external information may still reveal location. Narrative text is preserved.'
+                )
+            elif op == 'metadata.set_description':
+                val = step['value'].strip()
+                if not val:
+                    if desc_state is None:
+                        desc_state = 'unchanged (existing preserved)'
+                else:
+                    write_iptc = fmt not in NO_LEGACY_IPTC
+                    if write_iptc and len(val.encode('utf-8')) > IPTC_CAPTION_BYTE_LIMIT:
+                        raise RecipeError(f'Caption / Description exceeds the {IPTC_CAPTION_BYTE_LIMIT}-byte legacy IPTC limit.')
+                    args = ['-XMP-dc:Description-x-default=' + val]
+                    if write_iptc:
+                        args = ['-IPTC:CodedCharacterSet=UTF8', '-IPTC:Caption-Abstract=' + val] + args
+                    edits.append(args)
+                    expected_description = {
+                        'value': val,
+                        'iptc': write_iptc,
+                        'lang_alts': dict(desc_info['lang_alts']) if desc_info else {},
+                    }
+                    if desc_info is not None:
+                        desc_info['xmp_description'] = val
+                        if write_iptc:
+                            desc_info['iptc_description'] = val
+                    has_alts = bool(desc_info and desc_info['lang_alts'])
+                    desc_state = val + (
+                        ' (XMP + IPTC; other XMP languages preserved)' if write_iptc and has_alts
+                        else ' (XMP + IPTC)' if write_iptc
+                        else ' (XMP only; other XMP languages preserved)' if has_alts
+                        else ' (XMP only)'
+                    )
+            elif op == 'metadata.set_keywords':
+                mode = step['mode']
+                requested = parse_keywords(step['keywords'])
+                if mode == 'unchanged':
+                    if kw_state is None:
+                        kw_state = 'unchanged (existing preserved)'
+                elif mode == 'append':
+                    if not requested:
+                        if kw_state is None:
+                            kw_state = 'unchanged (no keywords provided)'
+                    else:
+                        merged = list(desc_info['keywords']) if desc_info else []
+                        seen_kw = set(merged)
+                        for kw in requested:
+                            if kw not in seen_kw:
+                                seen_kw.add(kw)
+                                merged.append(kw)
+                        write_iptc = fmt not in NO_LEGACY_IPTC
+                        if write_iptc:
+                            for kw in merged:
+                                if len(kw.encode('utf-8')) > IPTC_KEYWORD_BYTE_LIMIT:
+                                    raise RecipeError(f'Keyword "{kw}" exceeds the {IPTC_KEYWORD_BYTE_LIMIT}-byte legacy IPTC limit.')
+                        args = ['-XMP-dc:Subject='] + ['-XMP-dc:Subject=' + kw for kw in merged]
+                        if write_iptc:
+                            args = ['-IPTC:CodedCharacterSet=UTF8', '-IPTC:Keywords='] + ['-IPTC:Keywords=' + kw for kw in merged] + args
+                        edits.append(args)
+                        expected_keywords = {'values': merged, 'iptc': write_iptc}
+                        if desc_info is not None:
+                            desc_info['keywords'] = merged
+                        kw_state = ', '.join(merged) + (' (append; XMP + IPTC)' if write_iptc else ' (append; XMP only)')
+                elif mode == 'replace':
+                    if not requested:
+                        raise RecipeError('Enter at least one keyword when Keyword handling is set to Replace, or choose Leave unchanged.')
+                    write_iptc = fmt not in NO_LEGACY_IPTC
+                    if write_iptc:
+                        for kw in requested:
+                            if len(kw.encode('utf-8')) > IPTC_KEYWORD_BYTE_LIMIT:
+                                raise RecipeError(f'Keyword "{kw}" exceeds the {IPTC_KEYWORD_BYTE_LIMIT}-byte legacy IPTC limit.')
+                    args = ['-XMP-dc:Subject='] + ['-XMP-dc:Subject=' + kw for kw in requested]
+                    if write_iptc:
+                        args = ['-IPTC:CodedCharacterSet=UTF8', '-IPTC:Keywords='] + ['-IPTC:Keywords=' + kw for kw in requested] + args
+                    edits.append(args)
+                    expected_keywords = {'values': requested, 'iptc': write_iptc}
+                    if desc_info is not None:
+                        desc_info['keywords'] = requested
+                    kw_state = ', '.join(requested) + (' (replace; XMP + IPTC)' if write_iptc else ' (replace; XMP only)')
             elif op == 'metadata.strip_ai':
                 args = ['-' + tag + '=' for tag in AI_TAGS]
                 # Only remove DigitalSourceType when it identifies AI generation.
@@ -1119,7 +1405,7 @@ class ImageHandler:
         # provenance. Require explicit removal instead of hiding that warning.
         if not (strip_requested or descriptive_removed) and (auto_oriented or any(any(a.startswith('-XMP') for a in edit) for edit in edits)):
             import xml.etree.ElementTree as ET
-            packet = run(['exiftool','-b','-XMP',str(source)])
+            packet = run(['exiftool','-b','-XMP','-'], source=source)
             if packet:
                 try:
                     root = ET.fromstring(packet)
@@ -1128,13 +1414,13 @@ class ImageHandler:
                         raise RecipeError('The embedded Photoshop XMP Manifest uses a nonstandard list. Editing XMP would repair unrelated provenance. Add Remove Descriptive Metadata before the date/copyright step, or keep the metadata without editing it.')
                 except ET.ParseError as exc:
                     raise RecipeError('Embedded XMP is malformed. Remove Descriptive Metadata before editing dates or copyright, or keep it unchanged.') from exc
-        if pixel_export and any(edit != ['-all='] for edit in edits):
-            raise RecipeError(fmt.upper() + ' output cannot retain the selected capture-date/copyright metadata fields. Choose PNG, TIFF, JPEG, WebP or HEIC, or disable those metadata steps.')
+        if pixel_export and (any(edit != ['-all='] for edit in edits) or gps_reduce_args):
+            raise RecipeError(fmt.upper() + ' output cannot retain the selected capture-date/copyright/descriptive/GPS metadata fields. Choose PNG, TIFF, JPEG, WebP or HEIC, or disable those metadata steps.')
         if pixel_export and not strip_requested:
-            descriptive = json.loads(run(['exiftool','-json','-EXIF:all','-XMP:all','-IPTC:all',str(source)]))[0]
+            descriptive = json.loads(run(['exiftool','-json','-EXIF:all','-XMP:all','-IPTC:all','-'], source=source))[0]
             if len(descriptive) > 1:
                 raise RecipeError(fmt.upper() + ' cannot guarantee descriptive metadata preservation; add Remove All Metadata after Convert Format')
-        if fmt in NO_LEGACY_IPTC and not (strip_requested or descriptive_removed) and run(['exiftool','-s3','-IPTC:all',str(source)]).strip():
+        if fmt in NO_LEGACY_IPTC and not (strip_requested or descriptive_removed) and run(['exiftool','-s3','-IPTC:all','-'], source=source).strip():
             raise RecipeError(fmt.upper() + ' cannot retain legacy IPTC; add Remove Descriptive Metadata / Remove All Metadata or choose TIFF/PNG/JPEG')
         # Opaque / non-profile containers require sRGB pixels before metadata
         # removal. Never assign an RGB profile to unknown CMYK samples.
@@ -1162,6 +1448,9 @@ class ImageHandler:
                     expected.clear(); strip_all = True; strip_gps = True
                 elif tag == 'GPS:all':
                     strip_gps = True
+                elif tag in ('IPTC:CodedCharacterSet', 'XMP-dc:Description-x-default',
+                             'IPTC:Caption-Abstract', 'XMP-dc:Subject', 'IPTC:Keywords'):
+                    continue
                 else:
                     expected[tag] = value
         profile = None
@@ -1183,6 +1472,10 @@ class ImageHandler:
                           'Orientation: ' + (str(orientation_tag) if orientation_tag is not None else 'absent (normal display)'),
                           'GPS: ' + gps_state, 'AI fields: ' + ai_state,
                           'ICC: ' + color_state, 'Output timestamp: ' + timestamp_state]
+        if desc_state is not None:
+            final_metadata.append('Caption / Description: ' + desc_state)
+        if kw_state is not None:
+            final_metadata.append('Keywords: ' + kw_state)
         if conversion and conversion['quality'] is None and quality_setting(fmt) and not compression:
             final_metadata.append('Quality source: KIMng Settings - ' + quality_setting(fmt))
         if capture and capture.tzinfo is None and any(s['op'] in ('metadata.set_capture','metadata.shift_capture') for s in steps):
@@ -1220,10 +1513,15 @@ class ImageHandler:
                                'strip_ai': any(s['op'] == 'metadata.strip_ai' for s in steps),
                                'width': width, 'height': height, 'dimensions': 'exact planned pixels', 'compressed_size': 'unknown', 'quality': quality, 'orientation': orientation_tag, 'compression': compression_label},
                 'metadata': final_metadata, 'pixel_args': pixel_args, 'edits': edits, 'overlays': overlays,
-                'warnings': ([PSD_WARNING] if info.get('FileType') == 'PSD' else []) + session_warnings() + date_warnings + [w for r in overlays for w in r['warnings']],
+                'gps_reduce_args': gps_reduce_args, 'approved_gps_reduction': approved_gps_reduction,
+                'expected_description': expected_description, 'expected_keywords': expected_keywords,
+                'warnings': ([PSD_WARNING] if info.get('FileType') == 'PSD' else []) + session_warnings() + date_warnings + gps_reduce_warnings + [w for r in overlays for w in r['warnings']],
                 'compression': compression, 'compression_label': compression_label,
                 'conversion': conversion, 'pixel_export': pixel_export, 'force_srgb': force_srgb, 'profile_srgb': srgb_pixels,
                 'encode': encode, 'quality': quality, 'timestamp': timestamp, 'timestamp_ns': timestamp_ns, 'auto_oriented': auto_oriented,
+                'capture_year': capture.strftime('%Y') if capture is not None else None,
+                'capture_date_iso': capture.strftime('%Y-%m-%d') if capture is not None else None,
+                'capture_problem': capture_problem,
                 'omit_source_metadata': omit_source_metadata,
                 '_recipe_index': index,
                 '_source_stem': stem}
@@ -1408,7 +1706,7 @@ class ImageHandler:
                 return
         else:
             shutil.copyfile(source, output)
-        if state['edits']: stage('Updating metadata')
+        if state['edits'] or state.get('gps_reduce_args'): stage('Updating metadata')
         for args in state['edits']:
             if state['pixel_export'] and args == ['-all=']: continue
             run(['exiftool', '-overwrite_original'] + args + [str(output)],
@@ -1418,6 +1716,9 @@ class ImageHandler:
                 remaining = json.loads(run(['exiftool', '-json', '-EXIF:all', '-XMP:all', '-IPTC:all', '-ICC_Profile:all', str(output)]))[0]
                 if len(remaining) > 1:
                     raise RecipeError('Metadata stripping verification failed')
+        if state.get('gps_reduce_args'):
+            run(['exiftool', '-overwrite_original'] + state['gps_reduce_args'] + [str(output)],
+                allow_png_iptc=state['format'] == 'png' and any(arg.startswith('-IPTC:') for arg in state['gps_reduce_args']))
 
     def verify(self, output, state):
         stage('Verifying output')
@@ -1445,10 +1746,40 @@ class ImageHandler:
             actual = run(['exiftool', '-s3', '-' + tag, str(output)]).strip()
             if actual != value:
                 raise RecipeError('Metadata verification failed: ' + tag)
+        if state.get('expected_description') or state.get('expected_keywords'):
+            actual_desc = json.loads(run([
+                'exiftool', '-json', '-G1', '-a',
+                '-XMP-dc:Description*', '-IPTC:Caption-Abstract',
+                '-XMP-dc:Subject', '-IPTC:Keywords', str(output),
+            ]))[0]
+            exp_desc = state.get('expected_description')
+            if exp_desc:
+                if str(actual_desc.get('XMP-dc:Description', '')) != exp_desc['value']:
+                    raise RecipeError('Metadata verification failed: XMP-dc:Description')
+                if exp_desc['iptc'] and str(actual_desc.get('IPTC:Caption-Abstract', '')) != exp_desc['value']:
+                    raise RecipeError('Metadata verification failed: IPTC:Caption-Abstract')
+                for lang_tag, lang_val in exp_desc.get('lang_alts', {}).items():
+                    if str(actual_desc.get(lang_tag, '')) != lang_val:
+                        raise RecipeError('Metadata verification failed: preserved language alternative ' + lang_tag)
+            exp_kw = state.get('expected_keywords')
+            if exp_kw:
+                if _normalize_tag_list(actual_desc.get('XMP-dc:Subject')) != exp_kw['values']:
+                    raise RecipeError('Metadata verification failed: XMP-dc:Subject')
+                if exp_kw['iptc'] and _normalize_tag_list(actual_desc.get('IPTC:Keywords')) != exp_kw['values']:
+                    raise RecipeError('Metadata verification failed: IPTC:Keywords')
         if state['strip_gps']:
             remaining = run(['exiftool', '-s3'] + ['-' + tag for tag in GPS_TAGS] + [str(output)]).strip()
             if remaining:
                 raise RecipeError('GPS removal verification failed')
+        if state.get('approved_gps_reduction'):
+            from kim_location import read_many, summarize, matches_approved
+            out_key = str(output)
+            out_data = read_many([out_key], complete=True)[out_key]
+            if out_data.get('error'):
+                raise RecipeError('Reduced GPS verification failed: ' + str(out_data['error']))
+            out_raw = out_data['raw']
+            if not matches_approved(summarize(out_raw), out_raw, state['approved_gps_reduction']):
+                raise RecipeError('Reduced GPS verification failed')
         if state['strip_all'] and not any(state['expected'].values()):
             remaining = json.loads(run(['exiftool', '-json', '-EXIF:all', '-XMP:all',
                                         '-IPTC:all', '-ICC_Profile:all', str(output)]))[0]

@@ -13,7 +13,7 @@ import re
 import stat
 from functools import lru_cache
 import sys
-from kim_process import run_process, inspection_context, checkpoint
+from kim_process import open_inspection_fd, run_process, inspection_context, checkpoint
 
 
 def identity(path):
@@ -37,7 +37,7 @@ def absolute(path):
 def inspection_path(path):
     # Inspect through an inherited descriptor so even access times stay intact.
     # Fail closed when the filesystem/user cannot provide O_NOATIME.
-    try: fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NOATIME)
+    try: fd=open_inspection_fd(path)
     except PermissionError as exc:
         raise ValueError('Cannot inspect this source without changing its access time. Preview requires ownership or permission for read-only, no-access-time inspection: '+str(path)) from exc
     try: yield f'/proc/self/fd/{fd}',fd

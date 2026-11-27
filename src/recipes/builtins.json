@@ -1,6 +1,6 @@
 [
   {
-    "schema": 3,
+    "schema": 4,
     "id": "web-export",
     "name": "Web Export",
     "media": "image",
@@ -47,6 +47,1051 @@
       "mode": "subfolder",
       "folder": "Web"
     },
-    "description": "Prepare images for web publishing. Auto-orient, resize to fit within 1600 × 1600 pixels, convert to sRGB JPEG, remove metadata, and create renamed copies in a Web subfolder."
+    "description": "Prepare images for web publishing. Auto-orient, resize to fit within 1600 × 1600 pixels, convert to sRGB JPEG, remove metadata, and create renamed copies in a Web subfolder.",
+    "category": "Common"
+  },
+  {
+    "schema": 4,
+    "id": "share-privately",
+    "name": "Share Privately",
+    "media": "image",
+    "steps": [
+      {
+        "op": "image.auto_orient"
+      },
+      {
+        "op": "image.resize",
+        "max_width": 2048,
+        "max_height": 2048,
+        "upscale": false
+      },
+      {
+        "op": "image.color",
+        "mode": "srgb"
+      },
+      {
+        "op": "image.convert",
+        "format": "jpeg",
+        "quality": 95
+      },
+      {
+        "op": "metadata.strip_all"
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_private"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Private"
+    },
+    "description": "Create sharing copies sized within 2048 × 2048 pixels in sRGB JPEG (quality 95) with all supported EXIF, IPTC, XMP, GPS and camera metadata removed. Does not remove information visible in the image pixels.",
+    "category": "Common"
+  },
+  {
+    "schema": 4,
+    "id": "protect-sensitive-locations",
+    "name": "Protect Sensitive Locations",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "protection_mode",
+        "label": "Location protection",
+        "type": "choice",
+        "required": true,
+        "default": "remove",
+        "choices": [
+          {
+            "value": "remove",
+            "label": "Remove GPS coordinates"
+          },
+          {
+            "value": "reduce",
+            "label": "Reduce GPS precision"
+          }
+        ]
+      },
+      {
+        "id": "precision_grid",
+        "label": "Approximate location grid",
+        "type": "choice",
+        "required": true,
+        "default": "1000",
+        "choices": [
+          {
+            "value": "100",
+            "label": "About 100 m across"
+          },
+          {
+            "value": "1000",
+            "label": "About 1 km across"
+          },
+          {
+            "value": "5000",
+            "label": "About 5 km across"
+          },
+          {
+            "value": "10000",
+            "label": "About 10 km across"
+          }
+        ],
+        "visible_when": {
+          "param": "protection_mode",
+          "equals": "reduce"
+        },
+        "help": "Replaces exact coordinates with the grid cell center and clears altitude, direction, destination coordinates and place-name tags."
+      }
+    ],
+    "steps": [
+      {
+        "op": "metadata.strip_gps",
+        "enabled_when": {
+          "param": "protection_mode",
+          "equals": "remove"
+        }
+      },
+      {
+        "op": "metadata.reduce_gps",
+        "grid": "1000",
+        "bindings": {
+          "grid": "precision_grid"
+        },
+        "enabled_when": {
+          "param": "protection_mode",
+          "equals": "reduce"
+        }
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_protected"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Protected Locations"
+    },
+    "description": "Create copies that remove GPS coordinates or reduce coordinate precision without re-encoding image pixels, while preserving unrelated photographic metadata. Does not remove identifying landmarks or location text in captions.",
+    "category": "Adventure"
+  },
+  {
+    "schema": 4,
+    "id": "create-client-proofs",
+    "name": "Create Client Proofs",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "project_name",
+        "label": "Client or project name",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "help": "Optional subfolder inside Proofs (for example, Proofs/Acme). Leave blank to save directly in Proofs."
+      },
+      {
+        "id": "max_dimension",
+        "label": "Maximum image dimension",
+        "type": "integer",
+        "required": true,
+        "default": 1600,
+        "minimum": 1,
+        "maximum": 20000,
+        "help": "Fits both width and height within this pixel limit without enlarging smaller images."
+      },
+      {
+        "id": "jpeg_quality",
+        "label": "JPEG quality",
+        "type": "integer",
+        "required": true,
+        "default": 95,
+        "minimum": 1,
+        "maximum": 100,
+        "advanced": true
+      },
+      {
+        "id": "remove_gps",
+        "label": "Remove GPS metadata",
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "advanced": true,
+        "help": "Removes GPS coordinates and location tags while keeping other camera and descriptive metadata."
+      },
+      {
+        "id": "apply_attribution",
+        "label": "Apply photographer attribution",
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "advanced": true,
+        "help": "Turn on to write creator, copyright notice or usage rights onto the proof copies."
+      },
+      {
+        "id": "creator",
+        "label": "Creator or artist",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.creator",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "copyright_notice",
+        "label": "Copyright notice",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.notice",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "usage_rights",
+        "label": "Usage rights",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.rights",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "add_watermark",
+        "label": "Add watermark",
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "advanced": true,
+        "help": "Turn on to add a visible text or image watermark to proof copies."
+      },
+      {
+        "id": "watermark_type",
+        "label": "Watermark type",
+        "type": "choice",
+        "required": true,
+        "default": "text",
+        "advanced": true,
+        "choices": [
+          {
+            "value": "text",
+            "label": "Text watermark"
+          },
+          {
+            "value": "image",
+            "label": "Image / logo watermark"
+          }
+        ],
+        "visible_when": {
+          "param": "add_watermark",
+          "equals": true
+        }
+      },
+      {
+        "id": "watermark_text",
+        "label": "Watermark text",
+        "type": "text",
+        "required": true,
+        "default": "PROOF",
+        "advanced": true,
+        "visible_when": {
+          "all": [
+            {
+              "param": "add_watermark",
+              "equals": true
+            },
+            {
+              "param": "watermark_type",
+              "equals": "text"
+            }
+          ]
+        },
+        "help": "Visible text placed on each proof copy."
+      },
+      {
+        "id": "watermark_image",
+        "label": "Watermark image",
+        "type": "watermark_image",
+        "required": true,
+        "default": "",
+        "advanced": true,
+        "visible_when": {
+          "all": [
+            {
+              "param": "add_watermark",
+              "equals": true
+            },
+            {
+              "param": "watermark_type",
+              "equals": "image"
+            }
+          ]
+        },
+        "help": "Choose a local PNG or other supported watermark image file."
+      },
+      {
+        "id": "watermark_position",
+        "label": "Watermark position",
+        "type": "choice",
+        "required": true,
+        "default": "bottom_right",
+        "advanced": true,
+        "choices": [
+          {
+            "value": "top_left",
+            "label": "Top left"
+          },
+          {
+            "value": "top",
+            "label": "Top center"
+          },
+          {
+            "value": "top_right",
+            "label": "Top right"
+          },
+          {
+            "value": "left",
+            "label": "Middle left"
+          },
+          {
+            "value": "center",
+            "label": "Center"
+          },
+          {
+            "value": "right",
+            "label": "Middle right"
+          },
+          {
+            "value": "bottom_left",
+            "label": "Bottom left"
+          },
+          {
+            "value": "bottom",
+            "label": "Bottom center"
+          },
+          {
+            "value": "bottom_right",
+            "label": "Bottom right"
+          }
+        ],
+        "visible_when": {
+          "param": "add_watermark",
+          "equals": true
+        }
+      },
+      {
+        "id": "watermark_opacity",
+        "label": "Watermark opacity",
+        "type": "integer",
+        "required": true,
+        "default": 65,
+        "minimum": 1,
+        "maximum": 100,
+        "advanced": true,
+        "visible_when": {
+          "param": "add_watermark",
+          "equals": true
+        }
+      },
+      {
+        "id": "watermark_size",
+        "label": "Watermark size",
+        "type": "number",
+        "required": true,
+        "default": 5.0,
+        "minimum": 1.0,
+        "maximum": 50.0,
+        "advanced": true,
+        "visible_when": {
+          "param": "add_watermark",
+          "equals": true
+        },
+        "help": "Percentage of the shorter image edge (font height for text, bounding box for image)."
+      }
+    ],
+    "steps": [
+      {
+        "op": "image.auto_orient"
+      },
+      {
+        "op": "image.resize",
+        "max_width": 1600,
+        "max_height": 1600,
+        "upscale": false,
+        "bindings": {
+          "max_width": "max_dimension",
+          "max_height": "max_dimension"
+        }
+      },
+      {
+        "op": "image.color",
+        "mode": "srgb"
+      },
+      {
+        "op": "image.overlay",
+        "version": 1,
+        "kind": "text",
+        "source": "custom",
+        "value": "PROOF",
+        "logo": "",
+        "anchor": "bottom_right",
+        "margin": 3.0,
+        "size": 5.0,
+        "opacity": 65,
+        "font": "DejaVu Sans",
+        "color": "#ffffff",
+        "bold": false,
+        "italic": false,
+        "assistance": "outline",
+        "text_fields": null,
+        "camera_fields": null,
+        "bindings": {
+          "value": "watermark_text",
+          "anchor": "watermark_position",
+          "opacity": "watermark_opacity",
+          "size": "watermark_size"
+        },
+        "enabled_when": {
+          "all": [
+            {
+              "param": "add_watermark",
+              "equals": true
+            },
+            {
+              "param": "watermark_type",
+              "equals": "text"
+            }
+          ]
+        }
+      },
+      {
+        "op": "image.overlay",
+        "version": 1,
+        "kind": "image",
+        "source": "custom",
+        "value": "",
+        "logo": "",
+        "anchor": "bottom_right",
+        "margin": 3.0,
+        "size": 12.0,
+        "opacity": 65,
+        "font": "DejaVu Sans",
+        "color": "#ffffff",
+        "bold": false,
+        "italic": false,
+        "assistance": "outline",
+        "text_fields": null,
+        "camera_fields": null,
+        "bindings": {
+          "logo": "watermark_image",
+          "anchor": "watermark_position",
+          "opacity": "watermark_opacity",
+          "size": "watermark_size"
+        },
+        "enabled_when": {
+          "all": [
+            {
+              "param": "add_watermark",
+              "equals": true
+            },
+            {
+              "param": "watermark_type",
+              "equals": "image"
+            }
+          ]
+        }
+      },
+      {
+        "op": "image.convert",
+        "format": "jpeg",
+        "quality": 95,
+        "bindings": {
+          "quality": "jpeg_quality"
+        }
+      },
+      {
+        "op": "metadata.strip_gps",
+        "enabled_when": {
+          "param": "remove_gps",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.creator",
+        "value": "",
+        "bindings": {
+          "value": "creator"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.copyright_notice",
+        "value": "",
+        "bindings": {
+          "value": "copyright_notice"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.usage_rights",
+        "value": "",
+        "bindings": {
+          "value": "usage_rights"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_proof"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Proofs/{param:project_name}"
+    },
+    "description": "Create smaller sRGB JPEG proof copies for client review, removing GPS location by default while preserving photographic and rights metadata. Optional text or image watermarking is available under Advanced settings.",
+    "category": "Asset Management"
+  },
+  {
+    "schema": 4,
+    "id": "prepare-client-delivery",
+    "name": "Prepare Client Delivery",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "project_name",
+        "label": "Client or project name",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "help": "Optional subfolder inside Delivery (for example, Delivery/Acme). Leave blank to save directly in Delivery."
+      },
+      {
+        "id": "jpeg_quality",
+        "label": "JPEG quality",
+        "type": "integer",
+        "required": true,
+        "default": 95,
+        "minimum": 1,
+        "maximum": 100,
+        "advanced": true
+      },
+      {
+        "id": "apply_attribution",
+        "label": "Apply photographer attribution",
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "advanced": true,
+        "help": "Turn on to write creator, copyright notice or usage rights. Existing metadata is preserved when left off."
+      },
+      {
+        "id": "creator",
+        "label": "Creator or artist",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.creator",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "copyright_notice",
+        "label": "Copyright notice",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.notice",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "usage_rights",
+        "label": "Usage rights",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.rights",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      }
+    ],
+    "steps": [
+      {
+        "op": "image.auto_orient"
+      },
+      {
+        "op": "image.color",
+        "mode": "srgb"
+      },
+      {
+        "op": "image.convert",
+        "format": "jpeg",
+        "quality": 95,
+        "bindings": {
+          "quality": "jpeg_quality"
+        }
+      },
+      {
+        "op": "metadata.creator",
+        "value": "",
+        "bindings": {
+          "value": "creator"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.copyright_notice",
+        "value": "",
+        "bindings": {
+          "value": "copyright_notice"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.usage_rights",
+        "value": "",
+        "bindings": {
+          "value": "usage_rights"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_delivery"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Delivery/{param:project_name}"
+    },
+    "description": "Create full-resolution sRGB JPEG delivery copies while preserving supported descriptive and rights metadata. Optional photographer attribution is available under Advanced settings.",
+    "category": "Asset Management"
+  },
+  {
+    "schema": 4,
+    "id": "prepare-editorial-submission",
+    "name": "Prepare Editorial Submission",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "project_name",
+        "label": "Publication or project name",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "help": "Optional subfolder inside Editorial (for example, Editorial/Magazine). Leave blank to save directly in Editorial."
+      },
+      {
+        "id": "max_dimension",
+        "label": "Maximum image dimension",
+        "type": "choice",
+        "required": true,
+        "default": "full",
+        "choices": [
+          {
+            "value": "full",
+            "label": "Full resolution (no resize)"
+          },
+          {
+            "value": "4000",
+            "label": "4000 px"
+          },
+          {
+            "value": "3000",
+            "label": "3000 px"
+          },
+          {
+            "value": "2400",
+            "label": "2400 px"
+          },
+          {
+            "value": "2048",
+            "label": "2048 px"
+          },
+          {
+            "value": "custom",
+            "label": "Custom pixel limit"
+          }
+        ],
+        "help": "Keep full resolution or fit within a maximum pixel limit without enlarging smaller images."
+      },
+      {
+        "id": "custom_max_dimension",
+        "label": "Custom maximum dimension",
+        "type": "integer",
+        "required": true,
+        "default": 3000,
+        "minimum": 1,
+        "maximum": 100000,
+        "visible_when": {
+          "param": "max_dimension",
+          "equals": "custom"
+        },
+        "help": "Fits both width and height within this pixel limit without enlarging smaller images."
+      },
+      {
+        "id": "jpeg_quality",
+        "label": "JPEG quality",
+        "type": "integer",
+        "required": true,
+        "default": 95,
+        "minimum": 1,
+        "maximum": 100,
+        "advanced": true
+      },
+      {
+        "id": "apply_attribution",
+        "label": "Apply photographer attribution",
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "advanced": true,
+        "help": "Turn on to write creator, copyright notice or usage rights. Existing attribution is preserved when left off."
+      },
+      {
+        "id": "creator",
+        "label": "Creator or artist",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.creator",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "copyright_notice",
+        "label": "Copyright notice",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.notice",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "usage_rights",
+        "label": "Usage rights",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.rights",
+        "advanced": true,
+        "visible_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "id": "caption",
+        "label": "Caption or description",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "advanced": true,
+        "help": "Optional caption or description (XMP-dc:Description and IPTC:Caption-Abstract). Leave blank to preserve existing descriptions."
+      },
+      {
+        "id": "keyword_mode",
+        "label": "Keyword handling",
+        "type": "choice",
+        "required": true,
+        "default": "unchanged",
+        "advanced": true,
+        "choices": [
+          {
+            "value": "unchanged",
+            "label": "Leave unchanged"
+          },
+          {
+            "value": "append",
+            "label": "Append keywords"
+          },
+          {
+            "value": "replace",
+            "label": "Replace keywords"
+          }
+        ]
+      },
+      {
+        "id": "keywords",
+        "label": "Keywords",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "advanced": true,
+        "visible_when": {
+          "param": "keyword_mode",
+          "in": [
+            "append",
+            "replace"
+          ]
+        },
+        "help": "Separate multiple keywords with commas or semicolons (for example, travel, malta, editorial)."
+      }
+    ],
+    "steps": [
+      {
+        "op": "image.auto_orient"
+      },
+      {
+        "op": "image.resize",
+        "max_width": 4000,
+        "max_height": 4000,
+        "upscale": false,
+        "enabled_when": {
+          "param": "max_dimension",
+          "equals": "4000"
+        }
+      },
+      {
+        "op": "image.resize",
+        "max_width": 3000,
+        "max_height": 3000,
+        "upscale": false,
+        "enabled_when": {
+          "param": "max_dimension",
+          "equals": "3000"
+        }
+      },
+      {
+        "op": "image.resize",
+        "max_width": 2400,
+        "max_height": 2400,
+        "upscale": false,
+        "enabled_when": {
+          "param": "max_dimension",
+          "equals": "2400"
+        }
+      },
+      {
+        "op": "image.resize",
+        "max_width": 2048,
+        "max_height": 2048,
+        "upscale": false,
+        "enabled_when": {
+          "param": "max_dimension",
+          "equals": "2048"
+        }
+      },
+      {
+        "op": "image.resize",
+        "max_width": 3000,
+        "max_height": 3000,
+        "upscale": false,
+        "bindings": {
+          "max_width": "custom_max_dimension",
+          "max_height": "custom_max_dimension"
+        },
+        "enabled_when": {
+          "param": "max_dimension",
+          "equals": "custom"
+        }
+      },
+      {
+        "op": "image.color",
+        "mode": "srgb"
+      },
+      {
+        "op": "image.convert",
+        "format": "jpeg",
+        "quality": 95,
+        "bindings": {
+          "quality": "jpeg_quality"
+        }
+      },
+      {
+        "op": "metadata.creator",
+        "value": "",
+        "bindings": {
+          "value": "creator"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.copyright_notice",
+        "value": "",
+        "bindings": {
+          "value": "copyright_notice"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.usage_rights",
+        "value": "",
+        "bindings": {
+          "value": "usage_rights"
+        },
+        "enabled_when": {
+          "param": "apply_attribution",
+          "equals": true
+        }
+      },
+      {
+        "op": "metadata.set_description",
+        "value": "",
+        "bindings": {
+          "value": "caption"
+        }
+      },
+      {
+        "op": "metadata.set_keywords",
+        "mode": "unchanged",
+        "keywords": "",
+        "bindings": {
+          "mode": "keyword_mode",
+          "keywords": "keywords"
+        },
+        "enabled_when": {
+          "param": "keyword_mode",
+          "in": [
+            "append",
+            "replace"
+          ]
+        }
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_editorial"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Editorial/{param:project_name}"
+    },
+    "description": "Prepare publication-ready sRGB JPEG copies while preserving photographic, descriptive and rights metadata. Optional resizing, attribution, caption and keyword updates are available under settings.",
+    "category": "Asset Management"
+  },
+  {
+    "schema": 4,
+    "id": "organize-by-capture-date",
+    "name": "Organize by Capture Date",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "project_name",
+        "label": "Project name",
+        "type": "text",
+        "required": false,
+        "default": "",
+        "help": "Optional project subfolder under By Date (for example, By Date/Malta/2026/2026-11-20)."
+      }
+    ],
+    "steps": [
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "By Date/{param:project_name}/{year}/{capture_date}"
+    },
+    "description": "Create byte-for-byte copies organized by original capture date (By Date/YYYY/YYYY-MM-DD, or By Date/Project/YYYY/YYYY-MM-DD) without altering image content, filenames or metadata. Blocks images without a reliable embedded capture date.",
+    "category": "Asset Management"
+  },
+  {
+    "schema": 4,
+    "id": "apply-photographer-attribution",
+    "name": "Apply Photographer Attribution",
+    "media": "image",
+    "parameters": [
+      {
+        "id": "creator",
+        "label": "Creator or artist",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.creator",
+        "help": "Leave blank to keep existing creator metadata unchanged."
+      },
+      {
+        "id": "copyright_notice",
+        "label": "Copyright notice",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.notice",
+        "help": "Leave blank to keep existing copyright metadata unchanged."
+      },
+      {
+        "id": "usage_rights",
+        "label": "Usage rights",
+        "type": "text",
+        "required": false,
+        "default_source": "copyright.rights",
+        "help": "Leave blank to keep existing usage rights metadata unchanged."
+      }
+    ],
+    "steps": [
+      {
+        "op": "metadata.creator",
+        "value": "",
+        "bindings": {
+          "value": "creator"
+        }
+      },
+      {
+        "op": "metadata.copyright_notice",
+        "value": "",
+        "bindings": {
+          "value": "copyright_notice"
+        }
+      },
+      {
+        "op": "metadata.usage_rights",
+        "value": "",
+        "bindings": {
+          "value": "usage_rights"
+        }
+      },
+      {
+        "op": "file.rename_output",
+        "pattern": "{filename}_attributed"
+      }
+    ],
+    "destination": {
+      "mode": "subfolder",
+      "folder": "Attributed"
+    },
+    "description": "Create attributed copies without re-encoding image pixels, applying only the creator, copyright notice or usage rights fields you provide while preserving unrelated metadata.",
+    "category": "Asset Management"
   }
 ]

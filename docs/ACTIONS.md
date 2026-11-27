@@ -38,7 +38,7 @@ Saved recipes assigned to Root may also appear dynamically in the Recipes submen
 
 [View submenu screenshot](images/screenshots/03-create-publish.png)
 
-**Create a gallery…** opens a chooser with two different workflows. **Image gallery** uses the classic gallery creator; **Photo story** opens the three-panel Gallery Publishing editor. It supports five image arrangements, named **Sections**, single-page and multiple-page websites, a local gallery folder or ZIP archive, and mandatory **Review Changes**. See [Gallery Publishing in the User Guide](index.html#gallery-publishing). The `kim_all gallery` command remains available directly and is also invoked by the Image gallery choice.
+**Create a gallery…** opens a chooser with two different workflows. **Image gallery** uses the classic gallery creator; **Photo story** opens the three-panel Gallery Publishing editor. It supports five image arrangements, named **Sections**, single-page and multiple-page websites, a local gallery folder or ZIP archive, and mandatory **Review Changes**. See [Publishing your image gallery](commandconfig.md#publishing-your-image-gallery) for static web hosting instructions and [Gallery Publishing in the User Guide](index.html#gallery-publishing). The `kim_all gallery` command remains available directly and is also invoked by the Image gallery choice.
 
 | Menu action | Dispatcher command |
 |---|---|
@@ -197,7 +197,7 @@ Removing GPS or AI-related metadata does not guarantee complete anonymity. Other
 
 ### Web Export and Recipes
 
-The top-level Web Export submenu provides twelve format-and-size presets (JPEG, PNG, WebP and AVIF at 1600 × 1600, 800 × 800 or 128 × 128 maximum dimensions). JPEG, WebP and AVIF quality settings are independently configurable, with shipped defaults of 95; a screenshot may show the user's saved quality instead. The built-in Web Export recipe is a separate multi-step workflow selected through Recipes: JPEG quality 95, a 1600 × 1600 maximum without upscaling, metadata stripping and output to a `Web` subfolder.
+The top-level Web Export submenu provides twelve format-and-size presets (JPEG, PNG, WebP, and AVIF at 1600 × 1600, 800 × 800, or 128 × 128 maximum dimensions). JPEG, WebP, and AVIF quality settings are independently configurable, with shipped defaults of 95; a screenshot may show the user's saved quality instead. The **KIMng - Recipes** submenu provides eight built-in multi-step Recipes across **Common** (**Web Export**, **Share Privately**), **Adventure** (**Protect Sensitive Locations**), and **Asset Management** (**Create Client Proofs**, **Prepare Client Delivery**, **Prepare Editorial Submission**, **Organize by Capture Date**, and **Apply Photographer Attribution**), plus 30 operations for custom Recipes. See [Recipes](RECIPES.md) for full details.
 
 ## Related documentation
 

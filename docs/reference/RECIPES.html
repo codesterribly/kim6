@@ -31,298 +31,394 @@
       <div class="reference-source">KIMng DOCUMENTATION · docs/RECIPES.md</div>
       <article class="markdown-body">
 <h1 id="recipes-reusable-image-workflows">Recipes: Reusable Image Workflows</h1>
-<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIMng - Recipes menu</strong>. A recipe can handle one image or a batch. KIMng shows what it intends to produce before processing, and <strong>recipes never modify the source images</strong>.</p>
+<p>Recipes let you combine image operations into a saved workflow and run them directly from <strong>Dolphin's KIMng - Recipes menu</strong>. A Recipe can process one image or an entire batch. KIMng previews every planned output before processing, and <strong>Recipes never modify or overwrite your original images</strong>.</p>
 <h2 id="start-in-dolphin">Start in Dolphin</h2>
-<p><img src="../images/screenshots/06-recipes.png" alt="Screenshot needed: 06 recipes" /></p>
+<p><img src="../images/screenshots/06-recipes.png" alt="KIMng Recipes submenu in Dolphin" /></p>
 <ol type="1">
-<li>Select one or more supported images and right-click.</li>
-<li>Open <strong>KIMng - Recipes → Run a recipe…</strong>, then choose <strong>Web Export</strong> or another saved recipe in the recipe selector. A user recipe placed in the <strong>Root</strong> group can also be launched directly from the Dolphin submenu.</li>
-<li>Review the selected images and the <strong>Run a Recipe</strong> window before starting. Inspect any reported problems, the planned operations, the expected filenames, and the destination.</li>
-<li>When all files are ready, use the Runner destination selector to keep the recipe default, save beside each source, or choose another directory. Review the resulting filenames and directory before running. The finished results are separate files.</li>
+<li>Select one or more supported images in Dolphin and right-click.</li>
+<li>Open <strong>KIMng - Recipes → Run a recipe…</strong>, then pick a built-in Recipe (such as <strong>Web Export</strong>, <strong>Create Client Proofs</strong>, or <strong>Organize by Capture Date</strong>) or one of your saved user Recipes. User Recipes assigned to <strong>Root</strong> also appear directly in the Dolphin submenu.</li>
+<li>If the Recipe asks questions, adjust the run-time settings in the <strong>Run a Recipe</strong> window (for example, an optional project name or maximum image dimension) and click <strong>Review Changes</strong>. Fixed Recipes go directly to <strong>Review Changes</strong>.</li>
+<li>Inspect the selected images, planned output filenames, output directory, image dimensions, metadata effects, and any blocked items.</li>
+<li>When every selected image is <strong>Ready</strong>, click <strong>Run Recipe</strong> to publish the new derivative files.</li>
 </ol>
-<p>The Recipes menu also provides <strong>Recipe editor…</strong> for creating and managing your own workflows. The runner and editor group recipes under <strong>Built-In</strong>, <strong>Root</strong>, user-created folders, and <strong>Unfiled</strong>. Only user recipes assigned to <strong>Root</strong> are published directly into the Dolphin submenu; folders do not become nested Dolphin menus.</p>
-<p><img src="../images/screenshots/11-run-recipe.png" alt="Screenshot needed: 11 run recipe" /></p>
-<p>Inspect the selected images, enabled processing steps, planned output filenames, metadata consequences, and destination before running a recipe.</p>
-<h2 id="web-export-a-ready-to-use-recipe">Web Export: a ready-to-use recipe</h2>
-<p>The supplied <strong>Web Export</strong> recipe auto-orients images, fits them within <strong>1600 × 1600 pixels</strong> without enlarging smaller images, applies <strong>sRGB</strong> color handling, converts to <strong>JPEG at quality 95</strong>, and applies <strong>Remove All Metadata</strong>. It names outputs <code>{filename}_web.jpg</code> and saves them in a <strong>Web</strong> subfolder beside each source. The built-in recipe supplies the default Web subfolder, while the Runner allows a per-run destination override without changing that saved default. Originals are unchanged.</p>
-<p>Metadata stripping should not be treated as a guarantee of anonymity. Inspect the resulting files before sharing sensitive images. Color-management information, signed credentials, or other identifying information may require separate consideration.</p>
-<p>This workflow is more than a change of file extension. Its three optional rights-metadata steps, <strong>Set Creator / Artist</strong>, <strong>Set Copyright Notice</strong>, and <strong>Set Usage Rights</strong>, are present but disabled. You can inspect the steps in Recipe Editor. Built-in definitions are protected: <strong>Duplicate to Edit</strong> creates a customizable copy rather than changing the supplied recipe.</p>
-<h3 id="included-recipes">Included recipes</h3>
-<p>The following recipes are shipped with this checkout. You can duplicate a built-in to customize it.</p>
+<p>Generated images are saved in the reviewed destination folder (for example, a <code>Web/</code>, <code>Proofs/Project/</code>, or <code>By Date/YYYY/YYYY-MM-DD/</code> subfolder beside your originals, or a custom directory chosen in the Runner). Your original files remain untouched.</p>
+<p><img src="../images/screenshots/11-run-recipe.png" alt="Run a Recipe contextual settings page" /></p>
+<h2 id="fixed-recipes-and-recipes-that-ask-questions">Fixed Recipes and Recipes that ask questions</h2>
+<p>All KIMng Recipes belong to the same unified Recipe system and follow the same mandatory <strong>Review Changes</strong> and publication-safety rules:</p>
+<ul>
+<li><strong>Fixed Recipes</strong> (such as <strong>Web Export</strong> and <strong>Share Privately</strong>) use fixed operation settings and open directly in <strong>Review Changes</strong>.</li>
+<li><strong>Recipes that ask questions</strong> (such as <strong>Create Client Proofs</strong>, <strong>Prepare Client Delivery</strong>, <strong>Prepare Editorial Submission</strong>, <strong>Protect Sensitive Locations</strong>, <strong>Organize by Capture Date</strong>, and <strong>Apply Photographer Attribution</strong>) display a concise <strong>Recipe settings</strong> panel first, then proceed to <strong>Review Changes</strong>.</li>
+</ul>
+<p>You do not need to duplicate a built-in Recipe just to change a run-time option such as a project folder, resize limit, GPS precision grid, or proof watermark. Changing settings in the Runner affects only the current run and never alters the saved Recipe.</p>
+<h3 id="advanced-settings-remembered-answers-and-resetting-defaults">Advanced settings, remembered answers, and resetting defaults</h3>
+<p>To keep everyday runs concise, less frequently changed options (such as JPEG quality, optional photographer attribution, captions, keywords, or optional proof watermarks) are tucked inside a collapsible <strong>Advanced settings</strong> section.</p>
+<ul>
+<li><strong>Remembered answers:</strong> Parameters configured to remember answers store your last-used values locally in your user configuration so you do not have to retype them. Remembered answers are local convenience state and are never written into exported Recipe files.</li>
+<li><strong>Reset to defaults:</strong> Click <strong>Reset to defaults</strong> in the Settings panel at any time to restore a Recipe's declared defaults (or linked KIMng Settings defaults).</li>
+</ul>
+<h3 id="optional-project-organization-and-nested-output-directories">Optional project organization and nested output directories</h3>
+<p>Recipes support relative nested subfolders up to 8 levels deep. When a subfolder template includes an optional project parameter (such as <code>Proofs/{param:project_name}</code> or <code>By Date/{param:project_name}/{year}/{capture_date}</code>):</p>
+<ul>
+<li>Leaving the project name blank cleanly omits that folder level (<code>Proofs/</code> or <code>By Date/2026/2026-11-20/</code>).</li>
+<li>Entering a project name creates the nested subfolder (<code>Proofs/Acme/</code> or <code>By Date/Malta/2026/2026-11-20/</code>).</li>
+</ul>
+<p>Capture-date directory tokens (<code>{year}</code> for <code>YYYY</code> and <code>{capture_date}</code> for <code>YYYY-MM-DD</code>) are resolved per image from embedded capture metadata (EXIF/XMP). KIMng never substitutes the filesystem modification time (<code>mtime</code>) for a missing or invalid embedded capture date; images without a reliable embedded capture date are explicitly blocked in <strong>Review Changes</strong>.</p>
+<p>No output directories are created during preview or <strong>Review Changes</strong>. Nested directories are created only during approved execution, with symlink and external-modification checks enabled.</p>
+<h2 id="complete-built-in-recipe-reference">Complete built-in Recipe reference</h2>
+<p>KIMng ships with <strong>eight built-in Recipes</strong> organized into three categories (<strong>Common</strong>, <strong>Adventure</strong>, and <strong>Asset Management</strong>). Built-in Recipes are read-only; use <strong>Duplicate</strong> in Recipe Editor to create an editable copy.</p>
+<h3 id="common">Common</h3>
+<h4 id="web-export-web-export">Web Export (<code>web-export</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Prepare standard sRGB JPEG copies for web publishing with embedded metadata removed.</li>
+<li><strong>Default operations:</strong> Auto-Orient, Resize to Fit (1600 × 1600, no enlargement), Color Profile (sRGB), Convert Format (JPEG, quality 95), Remove All Metadata, Rename Output File. Three attribution steps (Creator / Artist, Copyright Notice, Usage Rights) are included disabled.</li>
+<li><strong>Ordinary questions:</strong> None (fixed Recipe; opens directly in Review Changes).</li>
+<li><strong>Advanced settings:</strong> None.</li>
+<li><strong>Output format, dimensions, and quality:</strong> sRGB JPEG, max 1600 × 1600 pixels (no upscaling), quality 95.</li>
+<li><strong>Metadata behavior:</strong> Removes all EXIF, IPTC, XMP, GPS, and ICC profile metadata. Metadata removal does not guarantee complete anonymity or remove visible identifying details.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_web.jpg</code> in <code>Web/</code> beside each source.</li>
+<li><strong>Limitations:</strong> Distinct from the twelve direct presets in the top-level <strong>KIMng - Web Export</strong> Dolphin submenu, which use configurable Web Export quality and suffix settings.</li>
+</ul>
+<h4 id="share-privately-share-privately">Share Privately (<code>share-privately</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Create privacy-focused sRGB JPEG copies suitable for sharing online or in messaging apps, stripping embedded metadata.</li>
+<li><strong>Default operations:</strong> Auto-Orient, Resize to Fit (2048 × 2048, no enlargement), Color Profile (sRGB), Convert Format (JPEG, quality 90), Remove All Metadata, Rename Output File.</li>
+<li><strong>Ordinary questions:</strong> None (fixed Recipe).</li>
+<li><strong>Advanced settings:</strong> None.</li>
+<li><strong>Output format, dimensions, and quality:</strong> sRGB JPEG, max 2048 × 2048 pixels (no upscaling), quality 90.</li>
+<li><strong>Metadata behavior:</strong> Removes all embedded EXIF, IPTC, XMP, GPS, and ICC metadata. Stripping metadata does not obscure visible landmarks, faces, or other scene details.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_private.jpg</code> in <code>Private Share/</code> beside each source.</li>
+<li><strong>Limitations:</strong> Lossy JPEG conversion; transparency from PNG or other inputs is flattened onto white.</li>
+</ul>
+<h3 id="adventure">Adventure</h3>
+<h4 id="protect-sensitive-locations-protect-sensitive-locations">Protect Sensitive Locations (<code>protect-sensitive-locations</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Protect sensitive wildlife, archaeological, or private sites by either removing GPS coordinates completely or reducing coordinate precision to an approximate grid cell, while preserving original image quality and unrelated metadata.</li>
+<li><strong>Default operations:</strong> Conditional Remove GPS Location (default) or Reduce GPS Precision, Rename Output File. No pixel or format conversion steps are included, so images are copied without re-encoding.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Location protection:</strong> <code>Remove GPS coordinates</code> (default) or <code>Reduce GPS precision (approximate grid)</code>.</li>
+<li><strong>Approximate area size</strong> (visible only when reducing GPS precision): <code>~100 m grid</code>, <code>~1 km grid</code> (default), <code>~5 km grid</code>, or <code>~10 km grid</code>.</li>
+</ul></li>
+<li><strong>Advanced settings:</strong> None.</li>
+<li><strong>Output format, dimensions, and quality:</strong> Preserves original image format, dimensions, and pixel encoding (no re-encoding).</li>
+<li><strong>Metadata behavior:</strong> Remove mode strips recognized GPS/location tags while keeping camera, date, caption, and rights metadata. Reduce mode replaces exact coordinates with the center of the chosen WGS84 grid cell and clears altitude, direction, destination coordinates, structured location blocks, and place-name tags. Neither mode removes location clues from free-text captions or image pixels, and neither guarantees anonymity.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_protected.&lt;ext&gt;</code> in <code>Protected Locations/</code> beside each source.</li>
+<li><strong>Limitations:</strong> Reduce mode blocks images that have no camera GPS coordinates or invalid GPS tags. Pixel-export containers (BMP, GIF, PDF) cannot carry GPS metadata writes.</li>
+</ul>
+<h3 id="asset-management">Asset Management</h3>
+<h4 id="create-client-proofs-create-client-proofs">Create Client Proofs (<code>create-client-proofs</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Create smaller sRGB JPEG proof copies for client review, removing GPS location by default while preserving photographic and rights metadata, with optional text or image watermarking.</li>
+<li><strong>Default operations:</strong> Auto-Orient, Resize to Fit (1600 × 1600, no enlargement), Color Profile (sRGB), conditional text or image Add Watermark / Overlay (off by default), Convert Format (JPEG, quality 95), conditional Remove GPS Location (on by default), conditional photographer attribution steps (off by default), Rename Output File.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Client or project name:</strong> Optional text (default blank).</li>
+<li><strong>Maximum image dimension:</strong> Integer pixels (default <code>1600</code>, range 1 to 100000; never enlarges smaller images).</li>
+</ul></li>
+<li><strong>Advanced settings:</strong>
+<ul>
+<li><strong>JPEG quality:</strong> Default <code>95</code> (1 to 100).</li>
+<li><strong>Remove GPS metadata:</strong> Default <code>Yes</code>.</li>
+<li><strong>Apply photographer attribution:</strong> Default <code>No</code>. When enabled, reveals <strong>Creator or artist</strong>, <strong>Copyright notice</strong>, and <strong>Usage rights</strong> (pre-filled from KIMng Settings where configured).</li>
+<li><strong>Add watermark:</strong> Default <code>No</code>. When enabled, reveals:
+<ul>
+<li><strong>Watermark type:</strong> <code>Text watermark</code> (default) or <code>Image / logo watermark</code>.</li>
+<li><strong>Watermark text:</strong> Shown for text watermarks (default <code>PROOF</code>).</li>
+<li><strong>Watermark image:</strong> Shown for image watermarks; uses a read-only display with the native file chooser (<strong>Choose image…</strong>) rather than a free-text path field.</li>
+<li><strong>Watermark position:</strong> Nine anchor positions (default <code>Bottom right</code>).</li>
+<li><strong>Watermark opacity:</strong> Default <code>65%</code> (1 to 100).</li>
+<li><strong>Watermark size:</strong> Default <code>5.0%</code> of the shorter image edge (1.0 to 50.0; font height for text, bounding box for logo images).</li>
+</ul></li>
+</ul></li>
+<li><strong>Output format, dimensions, and quality:</strong> sRGB JPEG, max 1600 × 1600 by default (no upscaling), quality 95.</li>
+<li><strong>Metadata behavior:</strong> Removes GPS by default; preserves camera, capture date, descriptive, and rights metadata unless attribution is explicitly enabled.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_proof.jpg</code> in <code>Proofs/</code> (no project name) or <code>Proofs/Project/</code>.</li>
+<li><strong>Limitations:</strong> Text watermarks use fixed readable typography (<code>DejaVu Sans</code>, white with dark outline) in the built-in Settings panel; duplicate and edit the Recipe in Recipe Editor if you want custom fonts, colors, or shadow styles. Symlink, missing, or unreadable watermark assets are blocked during Review Changes, and changing a watermark asset after approval fails closed.</li>
+</ul>
+<h4 id="prepare-client-delivery-prepare-client-delivery">Prepare Client Delivery (<code>prepare-client-delivery</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Create full-resolution sRGB JPEG delivery copies while preserving supported descriptive and rights metadata.</li>
+<li><strong>Default operations:</strong> Auto-Orient, Color Profile (sRGB), Convert Format (JPEG, quality 95), conditional photographer attribution steps (off by default), Rename Output File.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Client or project name:</strong> Optional text (default blank).</li>
+</ul></li>
+<li><strong>Advanced settings:</strong>
+<ul>
+<li><strong>JPEG quality:</strong> Default <code>95</code> (1 to 100).</li>
+<li><strong>Apply photographer attribution:</strong> Default <code>No</code>. When enabled, reveals <strong>Creator or artist</strong>, <strong>Copyright notice</strong>, and <strong>Usage rights</strong> (defaulting from KIMng Settings).</li>
+</ul></li>
+<li><strong>Output format, dimensions, and quality:</strong> sRGB JPEG, full original resolution, quality 95.</li>
+<li><strong>Metadata behavior:</strong> Preserves camera, capture date, GPS, descriptive, and existing rights metadata unless attribution is explicitly enabled.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_delivery.jpg</code> in <code>Delivery/</code> (no project name) or <code>Delivery/Project/</code>.</li>
+<li><strong>Limitations:</strong> Converts to 8-bit sRGB JPEG; transparency is flattened onto white.</li>
+</ul>
+<h4 id="prepare-editorial-submission-prepare-editorial-submission">Prepare Editorial Submission (<code>prepare-editorial-submission</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Prepare publication-ready sRGB JPEG copies while preserving photographic, descriptive, and rights metadata, with optional resizing, attribution, caption, and keyword updates.</li>
+<li><strong>Default operations:</strong> Auto-Orient, conditional Resize to Fit (full resolution by default; no enlargement), Color Profile (sRGB), Convert Format (JPEG, quality 95), conditional attribution steps (off by default), Set Caption / Description (no-op when blank), conditional Set Keywords (off by default), Rename Output File.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Publication or project name:</strong> Optional text (default blank).</li>
+<li><strong>Maximum image dimension:</strong> <code>Full resolution (no resize)</code> (default), <code>4000 px</code>, <code>3000 px</code>, <code>2400 px</code>, <code>2048 px</code>, or <code>Custom pixel limit</code> (reveals <code>Custom maximum dimension</code>, default <code>3000</code>). Never enlarges smaller images.</li>
+</ul></li>
+<li><strong>Advanced settings:</strong>
+<ul>
+<li><strong>JPEG quality:</strong> Default <code>95</code> (1 to 100).</li>
+<li><strong>Apply photographer attribution:</strong> Default <code>No</code> (reveals Creator or artist, Copyright notice, Usage rights).</li>
+<li><strong>Caption or description:</strong> Optional text (default blank; leaving blank preserves existing descriptions and all XMP language alternatives).</li>
+<li><strong>Keyword handling:</strong> <code>Leave unchanged</code> (default), <code>Append keywords</code>, or <code>Replace keywords</code>.</li>
+<li><strong>Keywords:</strong> Visible only when Keyword handling is <code>Append keywords</code> or <code>Replace keywords</code> (comma- or semicolon-separated).</li>
+</ul></li>
+<li><strong>Output format, dimensions, and quality:</strong> sRGB JPEG, full resolution by default (no upscaling), quality 95.</li>
+<li><strong>Metadata behavior:</strong> Preserves all existing camera, capture date, GPS, caption, language-alternative, keyword, and rights metadata unless explicitly updated. Blank optional fields never clear existing metadata.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_editorial.jpg</code> in <code>Editorial/</code> (no publication/project name) or <code>Editorial/Publication/</code>.</li>
+<li><strong>Limitations:</strong> Legacy IPTC byte limits apply (2000 UTF-8 bytes for <code>IPTC:Caption-Abstract</code>, 64 UTF-8 bytes per <code>IPTC:Keywords</code> entry). Choosing <code>Replace keywords</code> with blank input is blocked rather than silently clearing keywords.</li>
+</ul>
+<h4 id="organize-by-capture-date-organize-by-capture-date">Organize by Capture Date (<code>organize-by-capture-date</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Create byte-for-byte copies organized into date folders based on original embedded capture date, without altering image pixels, filenames, or metadata.</li>
+<li><strong>Default operations:</strong> Rename Output File (<code>{filename}</code>) with nested capture-date destination. No pixel, format, or metadata-writing steps run.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Project name:</strong> Optional text (default blank).</li>
+</ul></li>
+<li><strong>Advanced settings:</strong> None.</li>
+<li><strong>Output format, dimensions, and quality:</strong> Byte-for-byte copy of the original file (format, dimensions, filename, and metadata unchanged).</li>
+<li><strong>Metadata behavior:</strong> Reads embedded capture metadata (EXIF <code>DateTimeOriginal</code> / XMP equivalents) without modifying the file. Never falls back to file <code>mtime</code>.</li>
+<li><strong>Filename suffix and output directory:</strong> Original filename unchanged in <code>By Date/YYYY/YYYY-MM-DD/</code> (no project name) or <code>By Date/Project/YYYY/YYYY-MM-DD/</code>.</li>
+<li><strong>Limitations:</strong> Blocks any image with a missing or malformed embedded capture date. Existing destination files or intra-batch duplicates are blocked rather than overwritten.</li>
+</ul>
+<h4 id="apply-photographer-attribution-apply-photographer-attribution">Apply Photographer Attribution (<code>apply-photographer-attribution</code>)</h4>
+<ul>
+<li><strong>Purpose:</strong> Create attributed copies without re-encoding image pixels, applying only the creator, copyright notice, or usage rights fields you supply while preserving unrelated metadata.</li>
+<li><strong>Default operations:</strong> Set Creator / Artist, Set Copyright Notice, Set Usage Rights, Rename Output File. No pixel or format conversion steps run.</li>
+<li><strong>Ordinary questions:</strong>
+<ul>
+<li><strong>Creator or artist:</strong> Optional text (defaulting from KIMng Settings; blank leaves existing tag unchanged).</li>
+<li><strong>Copyright notice:</strong> Optional text (defaulting from KIMng Settings; blank leaves existing tag unchanged).</li>
+<li><strong>Usage rights:</strong> Optional text (defaulting from KIMng Settings; blank leaves existing tag unchanged).</li>
+</ul></li>
+<li><strong>Advanced settings:</strong> None.</li>
+<li><strong>Output format, dimensions, and quality:</strong> Preserves original image format, dimensions, and pixel encoding (no re-encoding).</li>
+<li><strong>Metadata behavior:</strong> Updates only the non-empty rights fields (<code>EXIF:Artist</code>, <code>IPTC:By-line</code>, <code>XMP-dc:Creator</code>; <code>EXIF:Copyright</code>, <code>IPTC:CopyrightNotice</code>, <code>XMP-dc:Rights</code>; <code>XMP-xmpRights:UsageTerms</code>) while preserving camera, capture date, GPS, captions, and keywords.</li>
+<li><strong>Filename suffix and output directory:</strong> <code>{filename}_attributed.&lt;ext&gt;</code> in <code>Attributed/</code> beside each source.</li>
+<li><strong>Limitations:</strong> Pixel-export containers (BMP, GIF, PDF) cannot carry attribution writes; WebP, HEIC, HEIF, AVIF, and JXL write EXIF/XMP without legacy IPTC-IIM.</li>
+</ul>
+<h2 id="practical-recipe-examples">Practical Recipe examples</h2>
+<ol type="1">
+<li><strong>Export images for a website:</strong> Select images in Dolphin, open <strong>KIMng - Recipes → Run a recipe… → Web Export</strong>, review the planned <code>Web/photo_web.jpg</code> outputs (1600 px max, sRGB JPEG Q95, metadata stripped), and click <strong>Run Recipe</strong>.</li>
+<li><strong>Share images privately:</strong> Run <strong>Share Privately</strong> to produce <code>Private Share/photo_private.jpg</code> (2048 px max, sRGB JPEG Q90, metadata removed) without modifying originals.</li>
+<li><strong>Protect a sensitive wildlife or archaeological location:</strong> Run <strong>Protect Sensitive Locations</strong>, choose <strong>Reduce GPS precision (approximate grid)</strong> and <strong>~5 km grid</strong>, review the planned displacement and cleared altitude/place tags, and publish <code>Protected Locations/photo_protected.jpg</code> without re-encoding pixels.</li>
+<li><strong>Create client proofs with an optional watermark:</strong> Run <strong>Create Client Proofs</strong>, enter <code>Acme</code> as the client/project name, expand <strong>Advanced settings</strong>, check <strong>Add watermark</strong>, pick <strong>Text watermark</strong> (or <strong>Image / logo watermark</strong> and choose a transparent PNG via <strong>Choose image…</strong>), review <code>Proofs/Acme/photo_proof.jpg</code>, and run.</li>
+<li><strong>Deliver full-resolution client images:</strong> Run <strong>Prepare Client Delivery</strong>, enter <code>Acme</code> as the project name, keep defaults for full-resolution sRGB JPEG Q95, and publish to <code>Delivery/Acme/photo_delivery.jpg</code>.</li>
+<li><strong>Prepare editorial images with captions and keywords:</strong> Run <strong>Prepare Editorial Submission</strong>, enter <code>AutumnIssue</code> as the publication name, optionally select <code>2400 px</code> for maximum dimension, expand <strong>Advanced settings</strong> to enter a caption and set <strong>Keyword handling</strong> to <strong>Append keywords</strong> (<code>malta, architecture, editorial</code>), review <code>Editorial/AutumnIssue/photo_editorial.jpg</code>, and run.</li>
+<li><strong>Organize a batch by original capture date:</strong> Select mixed-date images and run <strong>Organize by Capture Date</strong> (optionally entering <code>Malta</code> as the project name). KIMng plans <code>By Date/Malta/2024/2024-07-04/IMG_001.jpg</code> and <code>By Date/Malta/2026/2026-11-20/IMG_002.jpg</code>, blocking any image without a reliable embedded capture date.</li>
+<li><strong>Apply photographer attribution without re-encoding:</strong> Select JPEGs or PNGs and run <strong>Apply Photographer Attribution</strong>. Confirm or edit the pre-filled Creator, Copyright notice, and Usage rights values, review <code>Attributed/photo_attributed.jpg</code>, and run to copy pixels verbatim and update only the requested rights tags.</li>
+</ol>
+<h2 id="create-and-edit-custom-recipes">Create and edit custom Recipes</h2>
+<p><img src="../images/screenshots/12-recipe-editor.png" alt="Recipe Editor showing the completed eight-Recipe catalog" /></p>
+<p>Open <strong>KIMng - Recipes → Recipe editor…</strong> from Dolphin. The Editor provides:</p>
+<ul>
+<li><strong>Recipes list:</strong> Browse and search <strong>Built-ins</strong> (<code>Common</code>, <code>Adventure</code>, <code>Asset Management</code>) and <strong>User</strong> Recipes (<code>Root</code>, named folders, <code>Unfiled</code>), manage folders, and import or export definitions.</li>
+<li><strong>Workspace tabs:</strong>
+<ul>
+<li><strong>Operations:</strong> Add, reorder, enable/disable, and configure processing steps, bind operation fields to questions, and set conditional activation (<code>enabled_when</code>).</li>
+<li><strong>Parameters:</strong> Create and manage run-time questions (Text, Whole number, Decimal number, Yes / No, List of choices, Capture date and time), defaults, visibility conditions, <strong>Advanced settings</strong> grouping, and remembered answers. One answer can be reused across multiple operations (for example, binding one <code>max_dimension</code> question to both width and height, or sharing one project name in both subfolder and filename).</li>
+<li><strong>Preview:</strong> Inspect planned filenames, output properties, metadata effects, and contextual Settings preview.</li>
+</ul></li>
+</ul>
+<p>Built-in Recipes are protected. Use <strong>Duplicate</strong> to create an editable user copy. When opened with images selected in Dolphin, the Editor provides <strong>Run with selected images</strong> and preserves your selection when switching between Runner and Editor.</p>
+<h3 id="folders-dolphin-shortcuts-and-importexport">Folders, Dolphin shortcuts, and import/export</h3>
+<ul>
+<li><strong>Root:</strong> User Recipes assigned to <strong>Root</strong> receive direct shortcuts in Dolphin's <strong>KIMng - Recipes</strong> submenu.</li>
+<li><strong>Named folders and Unfiled:</strong> Organize Recipes in the Editor and Runner without cluttering Dolphin with nested submenus. Drag a saved user Recipe onto a folder or use <strong>Move to Folder…</strong> to reorganize it.</li>
+<li><strong>Import/Export:</strong> Export individual Recipes (portable JSON without local folder IDs or remembered answers) or full user-library bundles (<code>kind: "kimng-recipe-bundle"</code>). Both <strong>schema 3</strong> (fixed Recipes) and <strong>schema 4</strong> (Recipes with parameters and conditional operations) are validated on import; importing never silently replaces an existing Recipe.</li>
+</ul>
+<h2 id="complete-operation-reference-30-operations">Complete operation reference (30 operations)</h2>
+<p>The Recipe Editor registers <strong>30 operations</strong> across four categories. Each label matches <strong>Add Operation…</strong>. Pixel and format operations must precede metadata-editing operations (and <strong>Convert Format</strong> must precede metadata operations because the target format determines which metadata tags can be represented).</p>
+<h3 id="geometry--orientation">Geometry &amp; Orientation</h3>
 <table>
 <thead>
 <tr>
-<th>Built-in recipe</th>
+<th>Operation</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Web Export</td>
-<td>Auto-orient, fit within 1600 × 1600 without upscaling, sRGB, JPEG quality 95, strip metadata, and save to a Web subfolder.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="web-export-preset-submenu-versus-recipe">Web Export preset submenu versus recipe</h2>
-<p>KIMng provides two distinct Web Export workflows:</p>
-<ul>
-<li><strong>KIMng - Web Export</strong> offers twelve direct Dolphin presets, covering JPEG, PNG, WebP, and AVIF at three maximum image sizes (1600, 800, and 128 pixels).</li>
-<li><strong>KIMng - Recipes → Run a recipe… → Web Export</strong> runs the built-in, multi-step recipe.</li>
-</ul>
-<p>The built-in recipe auto-orients images, fits them within 1600 × 1600 without enlargement, applies sRGB handling, converts to JPEG at quality <strong>95</strong>, strips metadata, and writes <code>{filename}_web.jpg</code> into a <code>Web</code> subfolder.</p>
-<p>These workflows have different configuration and processing paths. Do not assume their output settings are identical.</p>
-<h2 id="create-and-edit-recipes">Create and edit recipes</h2>
-<p><img src="../images/screenshots/12-recipe-editor.png" alt="Screenshot needed: 12 recipe editor" /></p>
-<p>Open <strong>Recipe editor…</strong> from the Recipes submenu. The Editor uses three resizable panels:</p>
-<ul>
-<li><strong>Recipes:</strong> Browse and search built-in and user Recipes, manage folders, and import or export definitions.</li>
-<li><strong>Editing:</strong> Change the Recipe title, optional description, ordered operations, step settings, and output destination.</li>
-<li><strong>Preview:</strong> Inspect example images, planned filenames, image properties, metadata effects, and publication information.</li>
-</ul>
-<p>Each Recipe has a name and an optional multiline description. Descriptions explain what a Recipe does and when to use it. The Recipe search includes descriptions as well as names and folders. Hovering over a Recipe displays its title alongside its description.</p>
-<p>Add processing steps, configure their options, arrange them in execution order, and enable or disable individual steps. Disabled steps remain in the definition but are not executed.</p>
-<p>Built-in Recipes are read-only. Use <strong>Duplicate Recipe</strong> (toolbar) or <strong>Duplicate to Edit</strong> (context/action control) to create an editable user copy.</p>
-<p>When the Editor opens with images already selected in Dolphin, it provides <strong>Run with selected images</strong>. Use <strong>Choose other images &amp; run…</strong> to select another set. The Editor also supports opening without an initial image selection.</p>
-<h3 id="recipe-folders-and-organization">Recipe folders and organization</h3>
-<p>User Recipes may be assigned to <strong>Root</strong>, <strong>Unfiled</strong>, or a named folder.</p>
-<ul>
-<li><strong>Root:</strong> Recipes receive direct shortcuts in Dolphin's KIMng Recipes submenu.</li>
-<li><strong>Unfiled:</strong> Recipes remain available in the Editor and Runner without a folder assignment.</li>
-<li><strong>Named folders:</strong> Organize Recipes in the Editor and Runner without creating nested Dolphin submenus.</li>
-</ul>
-<p>Drag a saved user Recipe onto a valid folder to move it. Valid destinations are highlighted during dragging. Alternatively, select a Recipe and use <strong>Move to Folder…</strong> or its context-menu action.</p>
-<p>Built-in Recipes cannot be moved. Moving a Recipe changes its library organization, not its configured image output destination.</p>
-<p>The Editor protects unsaved changes when switching or moving Recipes.</p>
-<h3 id="descriptions-and-recipe-search">Descriptions and Recipe search</h3>
-<p>Descriptions support multiple lines and up to 5,000 characters. They are stored with the Recipe and preserved during import, export, and duplication.</p>
-<p>The Editor searches Recipe names, descriptions, and folder names. The Runner displays the selected Recipe's description in a read-only <strong>About this recipe</strong> section. Recipes without descriptions do not require that section.</p>
-<h3 id="import-and-export">Import and export</h3>
-<p>The <strong>Import/Export</strong> dropdown sits below the selected-Recipe management controls and provides four actions:</p>
-<table>
-<thead>
-<tr>
-<th>Action</th>
-<th>Behavior</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Import Recipe…</strong></td>
-<td>Import one validated schema 3 Recipe from JSON, assigning a new user Recipe ID.</td>
-</tr>
-<tr>
-<td><strong>Export Recipe…</strong></td>
-<td>Export a built-in or saved user Recipe to portable JSON, without its local folder assignment.</td>
-</tr>
-<tr>
-<td><strong>Import Recipe bundle…</strong></td>
-<td>Import multiple Recipes and their folder organization from one validated bundle.</td>
-</tr>
-<tr>
-<td><strong>Export Recipe bundle…</strong></td>
-<td>Export the saved user Recipe library, including its folder definitions, as one JSON file.</td>
-</tr>
-</tbody>
-</table>
-<p>Individual Recipe exports suggest a descriptive filename containing the Recipe name and an ID suffix. Existing export files are not overwritten.</p>
-<p>Individual imports preserve descriptions, operations, and output settings, but create new user identities. Duplicate names can be renamed during import, and existing Recipes are not replaced.</p>
-<p>A Recipe bundle preserves the collection's folder organization. On import, matching folder names reuse existing folders; new folder names create new folders. Imported Recipes receive new IDs, and conflicting Recipe names receive an imported suffix. The Editor requests confirmation before saving a bundle import.</p>
-<p>Bundle exports contain saved user Recipes rather than built-in definitions. Export files remain separate from the application's active Recipe library.</p>
-<h3 id="json-schema-3">JSON schema 3</h3>
-<p>KIMng currently uses Recipe schema <strong>3</strong> for individual Recipes, the user library, and Recipe bundles. Older schema versions are not supported by this new project.</p>
-<p>An individual Recipe contains:</p>
-<ul>
-<li><code>schema</code>: Integer <code>3</code>.</li>
-<li><code>id</code>: Recipe identifier.</li>
-<li><code>name</code>: Display name.</li>
-<li><code>description</code>: Multiline plain text.</li>
-<li><code>media</code>: Supported media type, currently <code>image</code>.</li>
-<li><code>steps</code>: Ordered operations with their parameters and enabled states.</li>
-<li><code>destination</code>: Output destination configuration.</li>
-<li><code>folder</code>: Optional assignment inside the local user library.</li>
-</ul>
-<p>A portable individual Recipe omits <code>folder</code>, because another KIMng installation may not have the same folder IDs.</p>
-<p>The active user library contains <code>schema</code>, <code>recipes</code>, and <code>folders</code>. Portable bundles additionally identify themselves with <code>kind: "kimng-recipe-bundle"</code> and contain <code>schema</code>, <code>recipes</code>, and <code>folders</code>.</p>
-<p>KIMng validates imported JSON and Recipe operations before adding them to the user library. Importing never replaces an existing Recipe silently. Recipe definitions do not themselves contain the source image files.</p>
-<p>The JSON files are UTF-8. Use the Editor's import/export actions rather than manually editing the active library unless you are deliberately developing or debugging KIMng.</p>
-<h3 id="processing-steps">Processing steps</h3>
-<p>The Recipe Editor offers <strong>27 operations</strong> in four groups. Each entry below uses the label shown in <strong>Add Operation…</strong>. Some operations have format-dependent parameters or ordering requirements.</p>
-<h4 id="geometry--orientation">Geometry &amp; Orientation</h4>
-<table>
-<thead>
-<tr>
-<th>Operation</th>
-<th>Behavior</th>
-</tr>
-</thead>
-<tbody>
-<tr>
 <td><strong>Auto-Orient</strong></td>
-<td>Apply embedded camera orientation to the rendered image.</td>
+<td>Rotates pixels to match the camera orientation tag and clears the orientation flag.</td>
 </tr>
 <tr>
 <td><strong>Crop Image</strong></td>
-<td>Crop the rendered image using the configured geometry or selection.</td>
+<td>Crops the oriented image, then optionally resizes proportionally. Manual areas use relative coordinates on every image.</td>
 </tr>
 <tr>
 <td><strong>Flip Image</strong></td>
-<td>Mirror horizontally or vertically.</td>
+<td>Mirrors the image horizontally (left to right) or vertically (top to bottom).</td>
 </tr>
 <tr>
 <td><strong>Resize by Percentage</strong></td>
-<td>Resize by a percentage, including enlargement above 100%.</td>
+<td>Scales both width and height by a percentage of the current dimensions.</td>
 </tr>
 <tr>
 <td><strong>Resize Long Edge</strong></td>
-<td>Fit the longest dimension to a pixel limit, with optional upscaling.</td>
+<td>Scales the longest side to a single pixel target while keeping the aspect ratio (optional upscaling).</td>
 </tr>
 <tr>
 <td><strong>Resize to Exact Dimensions</strong></td>
-<td>Set both width and height exactly; may stretch the picture.</td>
+<td>Sets both dimensions exactly; the image may stretch.</td>
 </tr>
 <tr>
 <td><strong>Resize to Fit</strong></td>
-<td>Fit inside maximum width and height, preserving proportions; optional upscaling.</td>
+<td>Fits the image within maximum width and height limits while keeping its aspect ratio (optional upscaling).</td>
 </tr>
 <tr>
 <td><strong>Resize with Custom Geometry</strong></td>
-<td>Use supported ImageMagick geometry, including fit, fill, and conditional resize.</td>
+<td>Applies bounded ImageMagick geometry (such as <code>1600x1200&gt;</code>, <code>1600x</code>, <code>x1200</code>, or <code>1000000@</code>).</td>
 </tr>
 <tr>
 <td><strong>Rotate</strong></td>
-<td>Rotate through an angle; supports conditional landscape/portrait application.</td>
+<td>Rotates the displayed image (optional landscape/portrait condition); orientation is baked into pixels.</td>
 </tr>
 </tbody>
 </table>
-<h4 id="format--color">Format &amp; Color</h4>
+<h3 id="format--color">Format &amp; Color</h3>
 <table>
 <thead>
 <tr>
 <th>Operation</th>
-<th>Behavior</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Color Profile</strong></td>
-<td>Preserve a supported profile or convert to sRGB.</td>
+<td>Converts to sRGB for web viewing or preserves the embedded ICC profile.</td>
 </tr>
 <tr>
 <td><strong>Compress Image</strong></td>
-<td>Set final compression preset or custom encoder quality, PNG level, and JPEG options.</td>
+<td>Adjusts final output compression without changing format (Recommended, Maximum, or Custom quality, PNG level, and JPEG options).</td>
 </tr>
 <tr>
 <td><strong>Convert Format</strong></td>
-<td>Choose output format and applicable encoder options, including JPEG quality.</td>
+<td>Changes the output file format (JPEG, PNG, WebP, AVIF, TIFF, HEIC, HEIF, JP2, JXL, GIF, BMP, PDF) with format-specific options and optional Settings-inherited quality.</td>
 </tr>
 </tbody>
 </table>
-<h4 id="metadata--copyright">Metadata &amp; Copyright</h4>
+<h3 id="metadata--copyright">Metadata &amp; Copyright</h3>
 <table>
 <thead>
 <tr>
 <th>Operation</th>
-<th>Behavior</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Add Watermark / Overlay</strong></td>
-<td>Render a text, image, camera-detail, or caption overlay where supported.</td>
+<td>Renders visible text, image/logo, camera/EXIF detail, or caption overlays onto final pixels. Place after all geometry and color steps.</td>
+</tr>
+<tr>
+<td><strong>Reduce GPS Precision</strong></td>
+<td>Replaces exact GPS coordinates with the center of an approximate WGS84 grid cell (<code>100 m</code>, <code>1 km</code>, <code>5 km</code>, or <code>10 km</code>) and clears altitude, direction, destination coordinates, structured location blocks, and place-name tags. Does not remove location clues in captions or image pixels.</td>
 </tr>
 <tr>
 <td><strong>Remove AI Metadata</strong></td>
-<td>Remove recognized AI-related metadata.</td>
+<td>Removes recognized IPTC AI generation prompt and system tags while keeping other metadata.</td>
 </tr>
 <tr>
 <td><strong>Remove All Metadata</strong></td>
-<td>Apply the full metadata-stripping operation; normalize orientation first if required. Do not assume complete anonymity.</td>
+<td>Removes all EXIF, IPTC, XMP, and ICC profile metadata while keeping image pixels. Requires normalized orientation first when an image carries a non-1 orientation tag.</td>
 </tr>
 <tr>
 <td><strong>Remove Descriptive Metadata</strong></td>
-<td>Remove descriptive EXIF/IPTC/XMP while keeping the ICC profile and orientation.</td>
+<td>Removes descriptive EXIF, IPTC, and XMP metadata while keeping the ICC profile and orientation.</td>
 </tr>
 <tr>
 <td><strong>Remove GPS Location</strong></td>
-<td>Remove recognized GPS/location metadata.</td>
+<td>Removes recognized GPS coordinates and location tags while keeping other camera and descriptive metadata.</td>
+</tr>
+<tr>
+<td><strong>Set Caption / Description</strong></td>
+<td>Sets <code>XMP-dc:Description</code> (<code>x-default</code>) and <code>IPTC:Caption-Abstract</code> (with UTF-8 IPTC encoding) while preserving unrelated metadata and non-default XMP language alternatives (such as <code>XMP-dc:Description-fr</code>). A blank value leaves existing descriptions unchanged.</td>
 </tr>
 <tr>
 <td><strong>Set Copyright</strong></td>
-<td>Set creator, copyright notice, and usage rights, inherited or overridden.</td>
+<td>Sets creator, copyright notice, usage rights, and optional <code>{YEAR}</code> together in one step, inheriting KIMng Settings or using overrides.</td>
 </tr>
 <tr>
 <td><strong>Set Copyright Notice</strong></td>
-<td>Set copyright notice, inherited from Settings unless overridden.</td>
+<td>Sets only the copyright notice (<code>EXIF:Copyright</code>, <code>IPTC:CopyrightNotice</code>, <code>XMP-dc:Rights</code>).</td>
 </tr>
 <tr>
 <td><strong>Set Creator / Artist</strong></td>
-<td>Set creator/artist, inherited from Settings unless overridden.</td>
+<td>Sets only the creator/artist (<code>EXIF:Artist</code>, <code>IPTC:By-line</code>, <code>XMP-dc:Creator</code>).</td>
+</tr>
+<tr>
+<td><strong>Set Keywords</strong></td>
+<td>Updates <code>XMP-dc:Subject</code> and <code>IPTC:Keywords</code> (UTF-8 IPTC). Modes: <code>Leave unchanged</code>, <code>Append</code> (preserves existing entries without duplicates), or <code>Replace</code> (explicit selection; blank replace is blocked). Separate multiple keywords with commas (<code>,</code>), semicolons (<code>;</code>), or newlines.</td>
 </tr>
 <tr>
 <td><strong>Set Usage Rights</strong></td>
-<td>Set usage terms, inherited from Settings unless overridden.</td>
+<td>Sets only usage terms (<code>XMP-xmpRights:UsageTerms</code>).</td>
 </tr>
 </tbody>
 </table>
-<h4 id="filenames--dates">Filenames &amp; Dates</h4>
+<h3 id="filenames--dates">Filenames &amp; Dates</h3>
 <table>
 <thead>
 <tr>
 <th>Operation</th>
-<th>Behavior</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Adjust Image Capture Date</strong></td>
-<td>Adjust existing camera capture timestamps by a fixed offset.</td>
+<td>Shifts an existing embedded capture clock by days, hours, minutes, and seconds while preserving timezone and fractional seconds.</td>
 </tr>
 <tr>
 <td><strong>Change Output Filename</strong></td>
-<td>Transform the planned output name, such as case, prefix, suffix, replacement, sequence, or capture date.</td>
+<td>Transforms the current planned output filename (without extension) using case change, prefix, suffix, find/replace, numbering, or capture date.</td>
 </tr>
 <tr>
 <td><strong>Keep Source File Date</strong></td>
-<td>Preserve the source file modification timestamp on the derivative.</td>
+<td>Copies the original file modification time onto the output file.</td>
 </tr>
 <tr>
 <td><strong>Rename Output File</strong></td>
-<td>Set output filename pattern, for example <code>{filename}_recipe</code>; preview includes extension.</td>
+<td>Replaces the output filename using a template with <code>{filename}</code>, <code>{date}</code>, <code>{index}</code>, or Recipe questions.</td>
 </tr>
 <tr>
 <td><strong>Set Image Capture Date</strong></td>
-<td>Use a specific time, embedded capture time, or file mtime as the capture date.</td>
+<td>Sets embedded capture date from a specific date/time, embedded capture date, or source file modification time.</td>
 </tr>
 <tr>
 <td><strong>Synchronize File Date</strong></td>
-<td>Synchronize the derivative filesystem date with the planned capture time.</td>
+<td>Sets the output file modification time to match the embedded capture date (requires an explicit timezone offset).</td>
 </tr>
 </tbody>
 </table>
-<p><strong>JPEG quality is not a separate operation.</strong> Configure quality through <strong>Convert Format</strong> or <strong>Compress Image</strong>. The final encoding options are applied during output creation. Step order matters, especially for orientation, metadata removal, date operations and naming. All operations can be enabled or disabled independently.</p>
-<h3 id="output-filename-patterns">Output filename patterns</h3>
-<p>In <strong>Rename Output File</strong>, <code>{filename}</code> means the original name without its extension. A pattern of <code>{filename}_recipe</code> produces <code>vacation_recipe.jpg</code> from <code>vacation.jpg</code> when the output format is JPEG. The editor shows an output example so you can verify the result without decoding placeholder syntax.</p>
-<p>KIMng determines the output extension from the chosen format, so the pattern does not need to repeat <code>.jpg</code>, <code>.png</code>, or another extension. Output patterns also support <code>{date}</code> (capture-date component, when available) and <code>{index}</code> (batch position). The preview shows each resolved name; missing required date information blocks that planned name rather than inventing a date.</p>
-<p>When a planned output filename already exists, the Recipe planner can choose a free numbered filename <strong>before</strong> Review Changes approval. It also checks for collisions between images in the batch. The final filename is shown in the reviewed output plan. If the planner cannot resolve a conflict safely, the affected result is blocked.</p>
-<p>After approval, the filename is binding. If another process creates that target before publication, KIMng blocks the affected output and requires renewed review rather than silently renumbering or overwriting it.</p>
-<h2 id="preflight-and-output-preview">Preflight and output preview</h2>
-<p><strong>Run a Recipe</strong> lists each selected image and provides an output preview for the selected file. With no recipe selected, the files wait for a recipe instead of beginning an unnecessary inspection. After selection, status changes as files are inspected, and each is marked <strong>Ready</strong> or <strong>Blocked</strong> as appropriate. The Run button stays disabled until every required preflight check succeeds.</p>
-<p>The preview can include the input and output filenames, output folder, format and dimensions, capture-time handling, orientation, metadata handling, and ICC profile information. Disabled steps are visible in the configured operation list but do not affect the output.</p>
-<p>The Editor groups preview properties into expandable <strong>Files</strong>, <strong>Image details</strong>, <strong>Metadata</strong>, and <strong>Publication details</strong> sections. Full property values remain available through tooltips and copying even when the columns truncate their display. The expansion state of each group can be remembered.</p>
-<p>Adding JPEG and PSD files does not require the interface to freeze until the batch is analyzed: pending filenames appear promptly and input inspection continues in background workers. A large PSD may still take time to decode, but the window remains usable.</p>
-<h2 id="photoshop-psd-inputs-and-fix-recipe">Photoshop PSD inputs and Fix Recipe</h2>
-<p>KIMng can <strong>read</strong> PSD images in supported workflows but <strong>does not create PSD output files</strong>. If a selected PSD lacks a valid output format in the recipe, preflight reports a problem and offers <strong>Fix recipe…</strong>. This opens the existing editor so you can add <strong>Convert Format</strong> and select a supported output type. KIMng does not silently choose a format on your behalf.</p>
-<p>After saving a correction and returning, preflight starts again using the updated recipe. Closing the editor without saving keeps the existing recipe and diagnostic. For a protected built-in recipe, duplicate it before editing. The source PSD remains unchanged.</p>
-<p>PSD inputs are treated as rendered image sources rather than editable Photoshop documents with preserved layers. Color-profile and precision handling depend on the input and the selected output format. See <a href="FORMATS.html#photoshop-psd-inputs">Image and Video Format Support</a> for details.</p>
-<h2 id="destinations-safety-and-cancellation">Destinations, safety, and cancellation</h2>
-<p>Recipes are <strong>derivative-only</strong>. They do not offer in-place modification or overwrite of source images. The recipe's configured destination and exact output names appear before processing. Destination modes include beside each original, a named subfolder beside each original, and one directory (fixed or chosen when running). The Runner always presents a destination override selector with <strong>Use recipe default</strong>, <strong>Beside each source</strong>, and <strong>Choose another directory…</strong>; the user can retain the recipe setting without modifying the saved recipe. Existing filenames and duplicate batch targets are resolved during planning when safe numbering is available. Unresolved conflicts block approval. Execution uses the frozen reviewed source identities, exact output paths and operations. A target created after review blocks that output without renaming it; earlier successful outputs remain in place.</p>
-<p>Recipes and standalone Crop stage complete derivatives privately on the destination filesystem and publish them with an atomic no-replace hard link. Filesystems or permissions that cannot support this publication fail closed; KIMng does not write a partial image directly to the final filename. Source or destination identity changes require a new review. Cancellation and failures remove private stages while retaining published outputs; a durability-sync failure after publication is reported as a warning alongside the created path. Support for exFAT, FAT32, NTFS and network destinations must be verified individually.</p>
-<p>File inspection, required encoder checks, and the preflight plan must succeed before a run begins. A failed or cancelled operation must not be reported as a completed publication. Successfully committed outputs can remain available if a later file in the batch fails or the user cancels.</p>
-<h2 id="completion-messages-and-diagnostic-details">Completion messages and diagnostic details</h2>
-<p>Publication tools such as PDF Album can show a compact completion window with the saved output path, <strong>Open folder</strong>, and <strong>Done</strong>. Where there is additional information about the source files, <strong>Details (N)</strong> expands to grouped, selectable diagnostics with <strong>Copy Details</strong>. The details control is omitted when there is nothing to disclose. Informational details are not necessarily failures. Successful background publications can finish without a separate completion dialog when there are no source advisories. A publication failure is reported through the existing error path, not as a success notice. Previously published outputs remain available when a later item fails.</p>
-<h2 id="current-scope">Current scope</h2>
-<p>Recipes currently process images. Video recipes, visual thumbnail previews, and in-place recipe operations are not part of this workflow. The text/table output preview reports planned results rather than attempting to simulate every rendered pixel.</p>
-<p>For the exact Dolphin entry points, see <a href="ACTIONS.html">Dolphin Menu Actions</a>. For global output settings, see <a href="commandconfig.html">Command and Configuration Reference</a>. The <a href="../index.html#recipes">illustrated User Guide</a> starts with the Recipes menu in Dolphin.</p>
+<p><strong>Format limits and metadata note:</strong></p>
+<ul>
+<li>Full XMP and IPTC-IIM metadata writes are supported on <strong>JPEG</strong>, <strong>TIFF</strong>, <strong>PNG</strong> (IPTC via ExifTool PNG raw profile), and <strong>JP2</strong>.</li>
+<li><strong>WebP</strong>, <strong>HEIC</strong>, <strong>HEIF</strong>, <strong>AVIF</strong>, and <strong>JXL</strong> write EXIF and XMP without legacy IPTC-IIM.</li>
+<li><strong>BMP</strong>, <strong>GIF</strong>, and <strong>PDF</strong> cannot carry descriptive, capture-date, copyright, or GPS metadata writes; Recipes block incompatible combinations with an explanation rather than silently dropping metadata.</li>
+<li>Legacy IPTC limits are enforced: <strong>2000 UTF-8 bytes</strong> for <code>IPTC:Caption-Abstract</code> and <strong>64 UTF-8 bytes</strong> per <code>IPTC:Keywords</code> entry.</li>
+<li>Metadata-writing operations in Recipes apply only to new derivative copies. The standalone <strong>Metadata Editor</strong> (<code>KIMng - Metadata/Organize → Edit metadata…</code>) remains a <strong>read-only change planner</strong> and does not write metadata or sidecars directly.</li>
+</ul>
+<h2 id="review-changes-publication-safety-and-collision-handling">Review Changes, publication safety, and collision handling</h2>
+<p><img src="../images/screenshots/13-preview-changes.png" alt="Review Changes showing planned output directory, dimensions, and enabled steps" /></p>
+<p>Every Recipe run requires <strong>Review Changes</strong> before any file is written:</p>
+<ul>
+<li><strong>Protected source reads:</strong> Recipes read original images and watermark assets using protected <code>O_NOATIME</code> descriptors so original file content and all five filesystem attributes (SHA-256, size, <code>atime</code>, <code>mtime</code>, <code>ctime</code>) remain unchanged.</li>
+<li><strong>Duplicate-output blocking:</strong> If two or more selected images would write to the same planned output path, all conflicting rows are marked <strong>Blocked</strong> and the <strong>Run Recipe</strong> button stays disabled until the conflict is resolved.</li>
+<li><strong>Exact approved paths and late-collision refusal:</strong> Approved output paths, source identities, and watermark-asset identities are frozen at approval. Complete derivatives are staged privately on the destination filesystem and published with an atomic no-replace hard link. If a target filename becomes occupied or a source/watermark asset changes after approval, publication fails closed without overwriting or silently renumbering.</li>
+<li><strong>PSD inputs:</strong> KIMng can read Photoshop PSD files in Recipes but cannot save PSD outputs. If a Recipe lacks a supported output format for a PSD input, <strong>Fix recipe…</strong> opens Recipe Editor so you can add <strong>Convert Format</strong>.</li>
+</ul>
+<p>For Dolphin entry points, see <a href="ACTIONS.html">Dolphin Menu Actions</a>. For CLI syntax and global settings, see <a href="commandconfig.html">Command and Configuration Reference</a>.</p>
 
       </article>
     </main>

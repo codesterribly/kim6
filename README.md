@@ -34,20 +34,21 @@ KIMng is a modernized rewrite of the KDE Image Menu project, bringing its famili
 
 ## Quick Start
 
-For a reusable photo workflow, select images and open **KIMng - Recipes → Run a recipe…** from Dolphin's right-click menu. Select the built-in **Web Export** recipe or another saved recipe in the runner. You can also open **KIMng - Recipes → Recipe editor…** to create your own. Recipes always create separate output files and leave the source images untouched.
+For a reusable image workflow, select images and open **KIMng - Recipes → Run a recipe…** from Dolphin's right-click menu. Choose one of the eight built-in Recipes (such as **Web Export**, **Create Client Proofs**, **Prepare Editorial Submission**, **Protect Sensitive Locations**, or **Organize by Capture Date**) or one of your own saved Recipes. Recipes that ask questions show a concise settings panel before **Review Changes**, while fixed Recipes go straight to **Review Changes**. You can also open **KIMng - Recipes → Recipe editor…** to build custom workflows. Recipes always create separate output files and leave the source images untouched.
 
 Select one or more images in Dolphin, right-click, and choose a KIMng action. To configure how KIMng handles your files, open **Actions → KIMng - Settings/About → Settings**. You can choose whether supported operations create separate files automatically or ask you how to proceed. Save your preferences once, and KIMng uses them for subsequent operations. Creating separate files preserves the selected originals. The default output-policy choice is **Create new files (originals untouched)**.
 
 | Task | Dolphin menu action | Example output |
 |---|---|---|
-| Run the built-in Web Export recipe | KIMng - Recipes → Run a recipe… → Web Export | `lake_web.jpg` in a `Web` subfolder beside `lake.jpg` |
+| Run a built-in Recipe | KIMng - Recipes → Run a recipe… → Web Export | `lake_web.jpg` in a `Web/` subfolder beside `lake.jpg` |
+| Create client proofs | KIMng - Recipes → Run a recipe… → Create Client Proofs | `lake_proof.jpg` in `Proofs/Project/` (with optional watermark) |
+| Organize by capture date | KIMng - Recipes → Run a recipe… → Organize by Capture Date | `lake.jpg` copied into `By Date/YYYY/YYYY-MM-DD/` |
 | Resize an image | KIMng - Resize/Crop/Rotate → Resize to fit 1600 × 1600 | `lake_resized.jpg` |
 | Compress a JPEG | KIMng - Convert/Compress → Compress recommended | `lake_compressed.jpg` |
 | Convert PNG to JPEG | KIMng - Convert/Compress → Convert to JPEG | `garden.jpg` |
 | Remove GPS coordinates | KIMng - Location/GPS → Remove GPS metadata… | `trip_gps.jpg` |
-| Resize several images | KIMng - Resize/Crop/Rotate → Resize to fit 1280 × 1280 | `lake_resized.jpg`, `garden_resized.jpg`, `portrait_resized.jpg` |
 
-These examples assume default suffix naming. KIMng numbers output names when collisions occur in these legacy actions. Standalone Crop and GUI Recipe workflows can resolve known filename collisions by assigning available numbered names during planning. The final reviewed filenames are binding. Late collisions block publication. Resize presets preserve aspect ratio. Allow enlargement is off by default, so smaller images are not enlarged unless you explicitly enable that option. JPEG compression is lossy, and JPEG does not support PNG transparency.
+These examples assume default suffix naming. Recipes block duplicate output targets during **Review Changes** and refuse late collisions after approval rather than silently overwriting or renumbering. Legacy standalone actions still number occupied output names when collisions occur. Recipes, standalone Crop, and standalone Web Export use protected source reads (`O_NOATIME`) to preserve all five original-file attributes; several older standalone actions still require a protected-read audit. Resize presets preserve aspect ratio. Allow enlargement is off by default, so smaller images are not enlarged unless you explicitly enable that option. JPEG compression is lossy, and JPEG does not support PNG transparency.
 
 GPS removal targets recognized coordinate fields, but other metadata or visible scene details may still reveal a location. AI metadata removal targets recognized generation fields, but generator-specific metadata and signed C2PA / Content Credentials may remain. The examples assume Create mode and, for AI removal, a file containing recognized AI metadata. If no matching GPS fields are present, no GPS-stripped copy is created. Completed batch outputs remain available even if a later item fails.
 
@@ -61,29 +62,26 @@ KDE Image Menu Next Generation.
 Video selections expose three video conversion submenus (AV1, H.264, and H.265) plus Video Utilities. See the [illustrated video workflows](docs/index.html#video) for the presets and extraction tools.
 
 
-### Recipes: reusable photo workflows
+### Recipes: reusable image workflows
 
 <p>
-  <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="Screenshot needed: 12 recipe editor" width="760"></a>
+  <a href="docs/images/screenshots/12-recipe-editor.png"><img src="docs/images/screenshots/12-recipe-editor.png" alt="KIMng Recipe Editor showing all eight built-in Recipes" width="760"></a>
 </p>
-<p><em>The Recipe Editor and its planned-output preview.</em></p>
+<p><em>The Recipe Editor showing all eight built-in Recipes across Common, Adventure, and Asset Management.</em></p>
 
 
-KIMng includes a dedicated **KIMng - Recipes** submenu in Dolphin. A recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire selection.
+KIMng includes a dedicated **KIMng - Recipes** submenu in Dolphin. A Recipe combines multiple image-processing steps into one saved workflow, so the same operations can be applied consistently to one image or an entire batch.
 
-- **Run saved recipes:** Open **Run a recipe…** to select the built-in Web Export recipe or browse saved recipes by Built-In, Root, folder, or Unfiled group. User recipes assigned to Root can also appear directly in the Dolphin submenu.
-- **Build and edit workflows:** Use **Recipe editor…** to create, duplicate, and organize recipes. Give each recipe a meaningful name.
-- **Combine processing steps:** Choose among 27 operations covering geometry, orientation, conversion, compression, color profiles, metadata, capture dates, and output filenames. JPEG quality belongs to Convert Format and Compress Image, not a separate step.
-- **Enable or disable steps:** Keep operations in a recipe without requiring every step to run each time.
-- **Preview before processing:** Review selected images, the enabled operations, and planned output filenames. The Run button remains unavailable until preflight requirements are satisfied.
-- **Correct recipe problems:** When a PSD input requires an explicit output format, **Fix recipe…** opens the existing editor so you can add Convert Format and choose an appropriate format.
-- **Protect original files:** Recipes always create derivatives. They never overwrite source images, and existing destination filenames are protected against collisions.
+- **Eight ready-to-use built-ins:** Shipped under **Common** (**Web Export**, **Share Privately**), **Adventure** (**Protect Sensitive Locations**), and **Asset Management** (**Create Client Proofs** with optional text/image watermarking, **Prepare Client Delivery**, **Prepare Editorial Submission**, **Organize by Capture Date**, and **Apply Photographer Attribution**).
+- **Fixed Recipes and Recipes that ask questions:** Fixed Recipes go straight to **Review Changes**, while parameterized Recipes present concise run-time settings (with collapsible **Advanced settings**, optional project subfolders, and remembered answers) without altering the saved Recipe.
+- **30 processing operations:** Combine operations across Geometry & Orientation, Format & Color, Metadata & Copyright (including **Reduce GPS Precision**, **Set Caption / Description**, and **Set Keywords**), and Filenames & Dates. JPEG quality belongs to Convert Format and Compress Image, not a separate step.
+- **Nested destinations and capture-date organization:** Save derivatives into nested relative folders such as `Proofs/Project/`, `Delivery/Project/`, `Editorial/Publication/`, or `By Date/Project/YYYY/YYYY-MM-DD/` derived from embedded capture dates.
+- **Mandatory Review Changes and publication safety:** Recipes always create separate derivatives, never overwrite originals, block duplicate output targets before running, refuse late collisions after approval, and protect original files and watermark assets with `O_NOATIME` reads.
+- **Build, organize, and share workflows:** Use **Recipe editor…** to duplicate built-ins, author custom Recipes with questions and conditional steps, organize user folders, pin **Root** Recipes to Dolphin, and import/export portable JSON Recipes and bundles.
 
-The built-in **Web Export** recipe auto-orients images, reduces them to fit within 1600 × 1600 pixels without enlarging smaller images, applies sRGB handling, converts to JPEG at quality 95, applies the Remove All Metadata operation, and saves `{filename}_web.jpg` in a `Web` subfolder beside each source. Its three optional rights-metadata steps are disabled. Built-in recipes can be duplicated and customized without modifying the supplied definitions. Metadata removal is not a guarantee that every identifying field, signed credential, or visible identifying detail has been eliminated.
+Photoshop PSD files can be used as inputs in supported workflows, but KIMng does not create PSD output files. When a Recipe lacks a supported output format for a PSD input, **Fix recipe…** opens the editor so you can add **Convert Format**.
 
-Photoshop PSD files can be used as inputs in supported workflows, but KIMng does not create PSD output files. A suitable output format must be selected when conversion is required.
-
-See the [Recipes walkthrough in the User Guide](docs/index.html#recipes) for the Dolphin workflow and illustrated examples.
+See the [Detailed Recipes Reference](docs/RECIPES.md) for all eight built-in Recipes, practical workflows, and all 30 operations, or the [Recipes walkthrough in the User Guide](docs/index.html#recipes).
 
 ### Resize, compress, and convert images
 
@@ -143,7 +141,7 @@ Select images in Dolphin and choose **KIMng - Create/Publish → Create a galler
 
 In **Photo story**, choose **Travelogue**, **Photo essay**, **Illustrated story**, or **Simple gallery**, and one of the five image arrangements: **One image**, **Up to two images**, **Adaptive**, **Justified**, or **Masonry**. **Sections…** assigns selected images and existing story headings/paragraphs to named sections, with optional descriptions and covers. Unassigned content is retained. **Single page** creates a scrolling website; **Multiple pages** creates a home page and section pages. Preview the site, select **Gallery folder (recommended)** or **ZIP archive**, and inspect the full publication plan in **Review Changes** before applying it.
 
-Published websites work locally in a browser without an online account or hosting service. KIMng does not upload them. Publication creates a new destination rather than overwriting selected images or an existing gallery. See the [User Guide walkthrough](docs/index.html#gallery-publishing) and [command reference](docs/commandconfig.md#gallery-choose).
+Published websites are completely static (HTML, CSS, JavaScript, and JPEG images) and work locally in a browser or on any static web host without an online account, server-side runtime, or database. KIMng does not upload them automatically. Publication creates a new destination rather than overwriting selected images or an existing gallery. See [Publishing your image gallery](docs/commandconfig.md#publishing-your-image-gallery) for local HTTP preview and static hosting instructions, the [User Guide walkthrough](docs/index.html#gallery-publishing), and [command reference](docs/commandconfig.md#gallery-choose).
 
 ### Video tools
 

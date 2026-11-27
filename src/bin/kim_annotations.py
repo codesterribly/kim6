@@ -20,7 +20,7 @@ import stat
 import subprocess
 import sys
 
-from kim_process import run_process
+from kim_process import open_inspection_fd, run_process
 
 CAPTURE = ('ExifIFD:DateTimeOriginal', 'XMP-exif:DateTimeOriginal',
            'XMP-photoshop:DateCreated', 'ExifIFD:CreateDate', 'XMP-xmp:CreateDate')
@@ -65,19 +65,20 @@ def identity(info):
 def read_tags(path, tags, numeric=False):
     """Read the opened regular file, then verify both the descriptor and name."""
     path = os.path.abspath(path)
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    fd = open_inspection_fd(path)
     try:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode): raise ValueError('Source is not a regular file')
         before = identity(info)
         result = run_process(['exiftool', '-json', '-G1', '-a'] +
-                             (['-n'] if numeric else []) + ['-' + tag for tag in tags] + [f'/proc/{os.getpid()}/fd/{fd}'])
+                             (['-n'] if numeric else []) + ['-' + tag for tag in tags] + ['-'], stdin=fd)
         # A recognized FileType is useful even when ExifTool flags incomplete
         # metadata. Callers decide whether an Error prevents their operation.
         rows = json.loads(result.stdout)
         if len(rows) != 1 or not isinstance(rows[0], dict): raise ValueError('Invalid metadata response')
         if before != identity(os.fstat(fd)) or before != identity(os.lstat(path)):
             raise ValueError('Source changed during inspection')
+        rows[0]['SourceFile'] = path
         return rows[0], before, result.returncode
     finally:
         os.close(fd)

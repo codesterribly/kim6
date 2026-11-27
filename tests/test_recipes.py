@@ -66,7 +66,7 @@ class RecipeContracts(unittest.TestCase):
 
     def test_single_builtin_web_export_defaults(self):
         recipes = core.builtins()
-        self.assertEqual(len(recipes), 1)
+        self.assertGreaterEqual(len(recipes), 1)
         r = recipes[0]
         self.assertEqual((r['name'], r['media']), ('Web Export', 'image'))
         self.assertEqual(r['destination'], {'mode': 'subfolder', 'folder': 'Web'})
@@ -131,19 +131,20 @@ class RecipeContracts(unittest.TestCase):
     def test_storage_atomic_and_defensive(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'recipes.json'
-            core.save_users([recipe()], path)
-            self.assertEqual(core.read_recipes(path), [recipe()])
+            authored = {**recipe(), 'schema': core.AUTHORED_SCHEMA, 'dolphin_shortcut': False}
+            core.save_users([authored], path)
+            self.assertEqual(core.read_recipes(path), [authored])
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             before = path.read_bytes()
-            with self.assertRaises(core.RecipeError): core.save_users([recipe(), recipe()], path)
+            with self.assertRaises(core.RecipeError): core.save_users([authored, authored], path)
             self.assertEqual(path.read_bytes(), before)
             path.unlink(); target = Path(tmp)/'target'; target.write_text('untouched')
             path.symlink_to(target)
-            with self.assertRaises(core.RecipeError): core.save_users([recipe()], path)
+            with self.assertRaises(core.RecipeError): core.save_users([authored], path)
             with self.assertRaises(OSError): core.read_recipes(path)
             self.assertEqual(target.read_text(), 'untouched')
             path.unlink(); os.link(target, path)
-            with self.assertRaises(core.RecipeError): core.save_users([recipe()], path)
+            with self.assertRaises(core.RecipeError): core.save_users([authored], path)
             path.unlink(); path.write_text('[{"bad":true}]')
             with self.assertRaises(core.RecipeError): core.read_recipes(path)
 
@@ -182,6 +183,9 @@ class RecipeContracts(unittest.TestCase):
 
         for relative in (
             'bin/kim_recipe_core.py',
+            'bin/kim_recipe_params.py',
+            'bin/kim_recipe_param_ui.py',
+            'bin/kim_recipe_author_ui.py',
             'bin/kim_recipe_image.py',
             'bin/kim_recipe_dialog.py',
             'recipes/builtins.json',
@@ -197,8 +201,10 @@ class RecipeContracts(unittest.TestCase):
             'kim_recipe_core.py',
             (ROOT / 'src/bin/kim_all').read_text()
         )
+        from kim_recipe_params import validate_authored, resolve_recipe
         for recipe in core.builtins():
-            core.validate(recipe)
+            validate_authored(recipe)
+            core.validate(resolve_recipe(recipe))
 
 @unittest.skipUnless(shutil.which('magick') and shutil.which('exiftool'), 'ImageMagick and ExifTool required')
 class RealRecipeTests(unittest.TestCase):
@@ -310,8 +316,9 @@ class RealRecipeTests(unittest.TestCase):
                 self.assert_original()
 
     def test_builtins(self):
+        from kim_recipe_params import resolve_recipe
         for r in core.builtins():
-            results = core.execute(r, [self.source]); self.assertTrue(results[0]['ok'], results)
+            results = core.execute(resolve_recipe(r), [self.source]); self.assertTrue(results[0]['ok'], results)
         self.assert_original()
 
     def test_date_sync_and_metadata_order(self):
@@ -706,7 +713,7 @@ class RecipePackagingTests(unittest.TestCase):
             self.addCleanup(helper.doCleanups)
             with patch.object(packaging, 'ROOT', checkout):
                 helper.run_installer('install.sh')
-                for relative in ('bin/kim_recipe_core.py', 'bin/kim_recipe_image.py',
+                for relative in ('bin/kim_recipe_core.py', 'bin/kim_recipe_params.py', 'bin/kim_recipe_param_ui.py', 'bin/kim_recipe_image.py',
                                  'bin/kim_recipe_dialog.py', 'bin/kim_recipe_run.py', 'recipes/builtins.json'):
                     self.assertEqual((helper.runtime/relative).read_bytes(), (ROOT/'src'/relative).read_bytes())
                 menu = helper.prefix/'kim_recipes.desktop'

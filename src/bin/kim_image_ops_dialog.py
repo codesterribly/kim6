@@ -465,7 +465,7 @@ class VisualWorker(QThread):
         from kim_psd_source import source_session
         from kim_process import inspection_context, checkpoint
         from kim_recipe_core import preview
-        from kim_recipe_image import ImageHandler, run, srgb_profile
+        from kim_recipe_image import ImageHandler, magick_input, run, srgb_profile
         from kim_image_ops import overlay_arguments
         try:
             with inspection_context(self.stage_changed.emit, self.isInterruptionRequested):
@@ -494,11 +494,11 @@ class VisualWorker(QThread):
                         checkpoint()
                         output = Path(workspace) / 'preview.png'
                         run([
-                            'magick', str(source), '-auto-orient',
+                            'magick', magick_input(info['FileType']), '-auto-orient',
                             '-profile', srgb_profile(),
                             '-thumbnail', '1000x750>',
                             '-strip', 'PNG:' + str(output)
-                        ])
+                        ], source=source)
                         after = source.stat()
                         if (
                             before.st_dev, before.st_ino,
@@ -553,8 +553,8 @@ class VisualWorker(QThread):
                     overlay_args = overlay_arguments(source, state, workspace)
                     output = Path(workspace) / 'preview.png'
                     background = ['-background', 'white', '-alpha', 'remove', '-alpha', 'off'] if self.rendered_overlay and state['format'] in ('jpeg', 'bmp', 'pdf', 'heic', 'heif') else []
-                    run(['magick', str(source), *state['pixel_args'], *overlay_args, *background,
-                         '-profile', srgb_profile(), '-thumbnail', '1000x750>', '-strip', 'PNG:' + str(output)])
+                    run(['magick', magick_input(state['properties']['source_format']), *state['pixel_args'], *overlay_args, *background,
+                         '-profile', srgb_profile(), '-thumbnail', '1000x750>', '-strip', 'PNG:' + str(output)], source=source)
                     after = source.stat()
                     if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
                             after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
@@ -905,8 +905,15 @@ class ImageOperationDialog(QDialog):
         mode = self.destination.currentData(); dest = dict(mode=mode)
         if mode == 'subfolder': dest['folder'] = self.folder.text()
         elif mode == 'directory': dest.update(path=self.directory.text(), ask=False)
-        return validate(dict(schema=1, id='standalone-crop' if self.crop else 'standalone-overlay',
-                             name=self.windowTitle(), media='image', steps=steps, destination=dest))
+        return validate(dict(
+            schema=3,
+            id='standalone-crop' if self.crop else 'standalone-overlay',
+            name=self.windowTitle(),
+            description='',
+            media='image',
+            steps=steps,
+            destination=dest
+        ))
 
     def schedule(self, *_):
         if self.loading or self.closing: return

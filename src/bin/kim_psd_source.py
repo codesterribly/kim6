@@ -45,6 +45,15 @@ def header(path):
             data = stream.read(26)
     except (OSError, ValueError):
         return None
+    return parse_header(data)
+
+
+def protected_header(path):
+    with os.fdopen(process.open_inspection_fd(path), 'rb') as stream:
+        return parse_header(stream.read(26))
+
+
+def parse_header(data):
     if not data.startswith(b'8BPS'):
         return None
     if len(data) != 26:
@@ -68,15 +77,17 @@ def srgb():
     raise PSDError('An installed sRGB ICC profile is required for PSD color interpretation')
 
 
-def normalize(path, directory, rgb=False):
+def normalize(path, directory, rgb=False, *, source_fd=None):
     """Return one verified TIFF, or the original path for non-PSD inputs."""
-    document = header(path)
+    document = header(path) if source_fd is None else parse_header(os.pread(source_fd, 26, 0))
     if document is None:
+        if source_fd is not None:
+            raise PSDError('PSD changed during protected inspection')
         return str(path)
     width, height, depth, mode = document
     directory = Path(directory)
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    source_stat = os.stat(path)
+    source_stat = os.stat(path) if source_fd is None else os.fstat(source_fd)
     identity = (source_stat.st_dev, source_stat.st_ino, source_stat.st_size,
                 source_stat.st_mtime_ns, source_stat.st_ctime_ns)
     target = directory / (hashlib.sha256(repr((identity, rgb)).encode()).hexdigest() + '.tiff')
@@ -91,12 +102,24 @@ def normalize(path, directory, rgb=False):
         # Inspect the document profile too: a decoder may discard a damaged
         # resource, which must not turn a malformed ICC into an sRGB assumption.
         process.stage('Inspecting Photoshop color profile')
-        command(['exiftool', '-s3', '-ICC_Profile:ProfileFileSignature', str(path)])
+        source_arg = str(path) if source_fd is None else '-'
+
+        def source_command(args):
+            if source_fd is None:
+                return command(args)
+            os.lseek(source_fd, 0, os.SEEK_SET)
+            return command(args, stdin=source_fd)
+
+        source_command(['exiftool', '-s3', '-ICC_Profile:ProfileFileSignature', source_arg])
         # Decode real pixels, not a ping: a plausible header is insufficient.
         process.stage('Preparing Photoshop composite')
-        with open(path, 'rb') as source:
-            command(['magick', *LIMITS, '-regard-warnings', 'psd:-[0]',
-                     '+repage', '-compress', 'Zip', 'TIFF:' + temporary], stdin=source)
+        decode = ['magick', *LIMITS, '-regard-warnings', 'psd:-[0]',
+                  '+repage', '-compress', 'Zip', 'TIFF:' + temporary]
+        if source_fd is None:
+            with open(path, 'rb') as source:
+                command(decode, stdin=source)
+        else:
+            source_command(decode)
         record = command(['magick', 'identify', '-format', '%w|%h|%z|%[colorspace]\n', temporary]).decode().splitlines()
         if len(record) != 1:
             raise PSDError('PSD did not produce exactly one composite')
@@ -131,9 +154,9 @@ def normalize(path, directory, rgb=False):
         process.stage('Preserving Photoshop metadata')
         blocks = {}
         for tag in ('IPTC','XMP'):
-            blocks[tag] = command(['exiftool','-b','-' + tag,str(path)])
+            blocks[tag] = source_command(['exiftool','-b','-' + tag,source_arg])
         if any(blocks.values()):
-            command(['exiftool','-overwrite_original','-TagsFromFile',str(path),'-IPTC','-XMP',temporary])
+            source_command(['exiftool','-overwrite_original','-TagsFromFile',source_arg,'-IPTC','-XMP',temporary])
             for tag, payload in blocks.items():
                 actual = command(['exiftool','-b','-' + tag,temporary])
                 # TIFF's IPTC tag uses four-byte LONG values. ExifTool pads
@@ -176,6 +199,27 @@ def source_session():
                 yield
         finally:
             _SESSION.reset(token)
+
+
+@contextlib.contextmanager
+def prepared_read(args, path, fd=None):
+    """Resolve the designated stdin source to protected stdin or the session's PSD composite."""
+    with contextlib.ExitStack() as stack:
+        if fd is None:
+            fd = process.open_inspection_fd(path)
+            stack.callback(os.close, fd)
+        pixels = args[0] in ('magick', 'identify')
+        profile = any(arg.startswith('-ICC_Profile') for arg in args)
+        if (pixels or profile) and parse_header(os.pread(fd, 26, 0)) is not None:
+            stack.enter_context(source_session())
+            composite = normalize(path, _SESSION.get(), source_fd=fd)
+            args = list(args)
+            index = next(i for i, arg in enumerate(args) if arg == '-' or arg.endswith(':fd:0'))
+            args[index] = composite
+            yield args, None
+        else:
+            os.lseek(fd, 0, os.SEEK_SET)
+            yield args, fd
 
 
 @contextlib.contextmanager
@@ -226,8 +270,8 @@ def main():
     try:
         if stat.S_ISREG(os.fstat(0).st_mode):
             source = f'/proc/{os.getpid()}/fd/0'
-            if header(source) is not None:
-                replacement = normalize(source, directory, rgb=True)
+            if parse_header(os.pread(0, 26, 0)) is not None:
+                replacement = normalize(source, directory, rgb=True, source_fd=0)
     except OSError:
         pass
     with prepared(args, directory, rgb=True) as resolved:

@@ -170,8 +170,12 @@ def validate_overlay(step):
     if not isinstance(step['color'], str) or not re.fullmatch('#[0-9a-fA-F]{6}', step['color']):
         raise RecipeError('Choose a text color in #RRGGBB form')
     if step['assistance'] not in ('none', 'shadow', 'outline'): raise RecipeError('Choose readability assistance')
-    if step['kind'] == 'image' and (not step['logo'] or not Path(step['logo']).is_absolute()):
-        raise RecipeError('Choose an absolute local watermark image filename')
+    if step['kind'] == 'image':
+        if step['logo']:
+            if not Path(step['logo']).is_absolute():
+                raise RecipeError('Choose an absolute local watermark image filename')
+        elif step.get('enabled', True):
+            raise RecipeError('Choose an absolute local watermark image filename')
 
 
 def reference_identity(path):
@@ -198,7 +202,7 @@ def logo_inspections():
 
 
 def inspect_logo(path):
-    from kim_recipe_image import inspect, run, srgb_profile, inspection_identity
+    from kim_recipe_image import inspect, magick_input, run, srgb_profile, inspection_identity
     before = reference_identity(path)
     cache = _LOGO_INSPECTIONS.get()
     key = os.path.abspath(path)
@@ -216,13 +220,13 @@ def inspect_logo(path):
         if info.get('Orientation') in (5, 6, 7, 8): width, height = height, width
         if min(width, height) < 1 or width * height > 100000000:
             raise RecipeError('Watermark image exceeds safe dimensions')
-        profile = run(['exiftool', '-s3', '-ICC_Profile:ProfileDescription', str(path)]).strip()
-        space = run(['magick', 'identify', '-format', '%[colorspace]', str(path)]).strip().lower()
+        profile = run(['exiftool', '-s3', '-ICC_Profile:ProfileDescription', '-'], source=path).strip()
+        space = run(['magick', 'identify', '-format', '%[colorspace]', magick_input(info['FileType'])], source=path).strip().lower()
         if 'cmyk' in space and not profile:
             raise RecipeError('Unprofiled CMYK watermark has unknown colors')
         # Full decode and ICC conversion are checked before batch publication.
-        opaque = run(['magick', str(path), '-auto-orient', '-profile', srgb_profile(),
-                      '-format', '%[opaque]', 'info:']).strip().lower() == 'true'
+        opaque = run(['magick', magick_input(info['FileType']), '-auto-orient', '-profile', srgb_profile(),
+                      '-format', '%[opaque]', 'info:'], source=path).strip().lower() == 'true'
     except (OSError, RecipeError) as exc:
         raise RecipeError('Cannot decode watermark image ' + str(path) + ': ' + str(exc)) from exc
     if before != reference_identity(path): raise RecipeError('Watermark image changed during inspection: ' + str(path))
@@ -400,16 +404,16 @@ def anchor_position(width, height, lw, lh, step):
 def overlay_arguments(source, state, workspace):
     """Build fixed composite arguments with private, color-managed raster layers."""
     from kim_recipe_image import run, srgb_profile
-    from kim_psd_source import prepared
-    from kim_process import run_process, checkpoint
+    from kim_psd_source import prepared_read
+    from kim_process import open_inspection_fd, run_process, checkpoint
     args = []
     overlays = state.get('overlays', [])
     if not overlays: return args
     # Map sRGB overlay samples into the same profile as the final base pixels.
     target_profile = srgb_profile() if state['profile_srgb'] else None
     if not target_profile:
-        with prepared(['exiftool', '-b', '-ICC_Profile', str(source)]) as resolved:
-            response = run_process(resolved, timeout=180)
+        with prepared_read(['exiftool', '-b', '-ICC_Profile', '-'], source) as (resolved, stdin):
+            response = run_process(resolved, timeout=180, stdin=stdin)
             if response.returncode: raise RecipeError('Cannot read base image ICC profile')
             profile = response.stdout
         if profile:
@@ -424,7 +428,7 @@ def overlay_arguments(source, state, workspace):
             logo = Path(step['logo']); before = reference_identity(logo)
             if before != record['identity']: raise RecipeError('Watermark image changed since planning: ' + str(logo))
             snapshot = Path(workspace) / f'logo-{index}.input'
-            fd = os.open(logo, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            fd = open_inspection_fd(logo)
             with os.fdopen(fd, 'rb') as inp, snapshot.open('xb') as out:
                 opened = os.fstat(inp.fileno())
                 if (not stat.S_ISREG(opened.st_mode) or
@@ -504,7 +508,7 @@ def picker_preview(path, edge, workspace):
     """
     from kim_psd_source import source_session
     from kim_process import _SHELL_GROUP
-    from kim_recipe_image import inspect, run, srgb_profile
+    from kim_recipe_image import inspect, magick_input, run, srgb_profile
     _SHELL_GROUP.set(True)
     before = reference_identity(path)
     with source_session():
@@ -514,15 +518,15 @@ def picker_preview(path, edge, workspace):
         if info.get('Orientation') in (5, 6, 7, 8): width, height = height, width
         Path(workspace, 'info.json').write_text(json.dumps(dict(width=width, height=height,
                                                               format=info.get('FileType', fmt.upper()))))
-        profile = run(['exiftool', '-s3', '-ICC_Profile:ProfileDescription', str(path)]).strip()
-        space = run(['magick', 'identify', '-ping', '-format', '%[colorspace]', str(path)]).strip().lower()
+        profile = run(['exiftool', '-s3', '-ICC_Profile:ProfileDescription', '-'], source=path).strip()
+        space = run(['magick', 'identify', '-ping', '-format', '%[colorspace]', magick_input(info['FileType'])], source=path).strip().lower()
         if 'cmyk' in space and not profile: raise RecipeError('Unprofiled CMYK has unknown colors')
         color = ['-profile', srgb_profile()] if profile else ['-colorspace', 'sRGB', '-profile', srgb_profile()]
         # JPEG can shrink during decoding. Other readers may need a full decode,
         # but only for requested visible files, under the caller's limits.
-        run(['magick', '-define', f'jpeg:size={edge * 2}x{edge * 2}', str(path), '-auto-orient',
+        run(['magick', '-define', f'jpeg:size={edge * 2}x{edge * 2}', magick_input(info['FileType']), '-auto-orient',
              *color, '-thumbnail', f'{edge}x{edge}>', '-depth', '8', '-strip',
-             'PNG:' + str(Path(workspace, 'preview.png'))])
+             'PNG:' + str(Path(workspace, 'preview.png'))], source=path)
     if reference_identity(path) != before: raise RecipeError('Image changed while loading its preview')
 
 

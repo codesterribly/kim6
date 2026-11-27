@@ -28,6 +28,7 @@ For the complete list of Dolphin menu entries, see [ACTIONS.md](ACTIONS.md).
 - [Command Syntax](#command-syntax)
 - [Output and File Handling](#output-and-file-handling)
 - [Recipes](#recipes)
+- [Publishing your image gallery](#publishing-your-image-gallery)
 - [Configuration and Defaults](#configuration-and-defaults)
 - [Still-image actions](#still-image-actions): album, animate, capturedate, checkextensions, collage, compress, contactsheet, convert, copyright, datesync, flipflop, gallery-choose, gallery, photo-story, location-gpx, location-copy, location-apply, location-report, location-reduce, metadata-view, metadata-edit, pdf-pages, pdf-extract, print, rename, resize, resizeandsend, rotate, rotatewithexif, stripmeta, tiffjoin, timeshift, webexport, crop, overlay
 - [Video actions](#video-actions): slideshow, video, videoaudio, videoframes, videogif
@@ -184,17 +185,15 @@ See [copyright](#copyright), [webexport](#webexport), and the earlier [file-pres
 
 ## Recipes
 
-The **KIMng - Recipes** submenu in Dolphin provides **Run a recipe…** and **Recipe editor…**. Open Run a Recipe to choose the supplied Web Export recipe or browse saved recipes under Built-In, Root, named folders, and Unfiled. User recipes explicitly assigned to Root also appear as direct shortcuts in Dolphin; other folders are presented in the selector, not as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
+The **KIMng - Recipes** submenu in Dolphin provides **Run a recipe…** and **Recipe editor…**. Open **Run a recipe…** to select one of the **eight built-in Recipes** grouped under **Common** (**Web Export**, **Share Privately**), **Adventure** (**Protect Sensitive Locations**), and **Asset Management** (**Create Client Proofs**, **Prepare Client Delivery**, **Prepare Editorial Submission**, **Organize by Capture Date**, **Apply Photographer Attribution**), or browse saved user Recipes under **Root**, named folders, and **Unfiled**. User Recipes explicitly assigned to **Root** also appear as direct shortcuts in Dolphin; other folders appear in the selector rather than as nested Dolphin menus. See [ACTIONS.md](ACTIONS.md) for the two static service-menu entry points.
 
-Recipes use versioned JSON definitions, including a name, ordered enabled/disabled processing steps, and their options. A recipe may be selected directly from Dolphin or opened in the editor, which offers **Run with selected images** or **Choose images & run…** according to the current selection. The dedicated **Run a Recipe** window performs preflight and displays a per-file planned-output preview before processing. The Run button remains disabled until all selected inputs pass required checks.
+Recipes use versioned JSON definitions: **schema 3** for fixed Recipes and **schema 4** for Recipes with run-time parameters, conditional operations (`enabled_when`), visibility conditions (`visible_when`), **Advanced settings**, and remembered answers. All 30 registered operations cover Geometry & Orientation, Format & Color, Metadata & Copyright (including **Reduce GPS Precision**, **Set Caption / Description**, and **Set Keywords**), and Filenames & Dates.
 
-Recipes are derivative-only: originals are never replaced. They support output filename patterns such as `{filename}_recipe`, where `{filename}` is the input basename without its extension. Previously saved `{stem}` patterns remain valid. The final extension is set by the output format. In the GUI Recipe Runner and Editor, known occupied filenames and duplicate batch targets can be resolved by assigning numbered filenames during planning. The exact reviewed paths become binding. Late collisions block publication without renaming or overwriting. Noninteractive Recipe CLI execution instead blocks occupied or duplicate targets without automatic numbering.
+Recipes are derivative-only: originals are never replaced, and both source images and watermark assets are read through protected `O_NOATIME` descriptors. Output patterns support `{filename}` (plus legacy `{stem}`), `{date}`, `{index}`, and Recipe questions; nested relative subfolders up to 8 levels deep support optional `{param:...}` segments and per-image capture-date tokens (`{year}`, `{capture_date}`). Duplicate output targets within a batch are blocked during **Review Changes** before execution, and late collisions or post-approval source/asset changes fail closed without overwriting or silently renumbering.
 
 PSD sources are readable in supported workflows, but KIMng cannot publish PSD output. A missing required format causes a preflight problem and can be corrected through **Fix recipe…** by adding **Convert Format** and choosing an available output type. KIMng does not silently choose a fallback encoder.
 
-The supplied **Web Export** recipe auto-orients the input, fits it within 1600 × 1600 pixels without upscaling, applies sRGB color handling, converts to JPEG at quality 95, strips all metadata, and saves `{filename}_web.jpg` in a `Web` subfolder beside each original. Set Creator / Artist, Set Copyright Notice, and Set Usage Rights are present but disabled in the shipped recipe. The recipe defines a default destination; the GUI Runner also offers per-run choices to keep that default, publish beside each source, or choose another directory.
-
-For every supported step, editor behavior, folder organization, preview, safety rules, and troubleshooting, see the [Recipes reference](RECIPES.md).
+For all eight built-in Recipes, practical workflows, all 30 operations, folder organization, and safety rules, see the [Recipes reference](RECIPES.md).
 
 ### `recipe`
 
@@ -207,9 +206,9 @@ kim_all recipe --recipe ID_OR_JSON_FILE [--preview] [--destination DIR] -- FILE.
 kim_all recipe --sync-menu
 ```
 
-`--list` prints built-in and saved user recipe definitions as JSON. `--editor` opens Recipe Editor; omitting `--recipe` also opens the editor. `--choose` opens Run a Recipe with no recipe selected. `--run-id` opens confirmation for a saved recipe ID; opening it does not execute the recipe automatically. These graphical forms accept an optional initial file selection.
+`--list` prints built-in and saved user Recipe definitions as JSON. `--editor` opens Recipe Editor; omitting `--recipe` also opens the editor. `--choose` opens Run a Recipe with no Recipe selected. `--run-id` opens the Runner for a saved Recipe ID without executing automatically. These graphical forms accept an optional initial file selection.
 
-`--recipe` selects a built-in or saved user recipe by ID, or reads one recipe from a JSON file, and requires at least one input file. It executes directly and prints per-file results as JSON. `--preview` instead prints planned outputs and problems as JSON without publishing files. `--destination` supplies or overrides the directory for a recipe with a directory destination, including one configured to ask on run; beside-source and subfolder destinations use the recipe definition. Preflight problems or execution failures return a nonzero status. `--sync-menu` rebuilds installed Root shortcuts from the saved library. `--help` shows the accepted arguments. Recipes always create derivatives. CLI execution binds one complete plan before publication and blocks occupied or duplicate targets without numbering; late collisions also fail without overwriting.
+`--recipe` selects a fixed (schema 3) built-in or saved user Recipe by ID, or reads one from a JSON file, and requires at least one input file. Parameterized (schema 4) Recipes that ask questions require the interactive GUI Runner (`--run-id` or `--choose`) and are rejected in noninteractive `--recipe` CLI mode. `--preview` prints planned outputs and problems as JSON without publishing files. `--destination` supplies or overrides the directory for a Recipe with a directory destination; beside-source and subfolder destinations use the Recipe definition. Preflight problems or execution failures return a nonzero status. `--sync-menu` rebuilds installed Root shortcuts from the saved library. `--help` shows the accepted arguments. Recipes always create derivatives; CLI execution binds one complete plan before publication and blocks occupied or duplicate targets without numbering.
 
 ## Still-image actions
 
@@ -398,6 +397,52 @@ kim_all gallery -- IMAGE...
 ```
 
 This command opens the classic HTML gallery creator directly. Dolphin's **Create a gallery… → Image gallery** choice also invokes this workflow through [`gallery-choose`](#gallery-choose). The creator supports image ordering, captions, Clean Light and Dark Portfolio themes, Standard and High image resolution, column selection, and gallery preview. Choose **Photo story** for the separate story editor.
+
+## Publishing your image gallery
+
+A KIMng-generated gallery is a self-contained static website made of plain HTML, CSS, JavaScript, and JPEG images. It requires **no server-side runtime** (no PHP, Python, or Node.js on the server), **no database**, and **no external CDN dependencies**. KIMng does not upload galleries automatically; after generating a gallery folder (or extracting a generated ZIP archive), you can preview it locally or publish it to any static web host.
+
+### Generated files and directory layout
+
+Upload the **entire contents** of the generated gallery folder while keeping its directory structure intact:
+
+- **Photo story** (`Create a gallery… → Photo story`):
+  - `index.html` (and section `.html` pages when using **Multiple pages**)
+  - `style.css`, `gallery-viewer.css`, `gallery-viewer.js`
+  - `images/` containing the generated web-sized JPEG files (`0001.jpg`, `0002.jpg`, ...)
+- **Classic Image gallery** (`Create a gallery… → Image gallery`):
+  - `index.html` and generated stylesheet/navigation files
+  - `images/` (web-sized images) and `thumbnails/` (gallery thumbnails)
+
+All internal links and asset references use **relative paths** (for example, `style.css` and `images/0001.jpg`). Because no root-relative (`/images/...`) URLs are hardcoded, the same generated folder works both at a domain root (`https://example.com/`) and beneath a website subdirectory (`https://example.com/galleries/malta/`).
+
+### Local preview with Python
+
+To test a generated gallery over HTTP before uploading:
+
+```sh
+python3 -m http.server 8000 --directory /path/to/your-gallery
+```
+
+Then open `http://127.0.0.1:8000/` in a web browser. To test subdirectory hosting, serve the parent directory instead and open `http://127.0.0.1:8000/your-gallery/`. Press `Ctrl+C` in the terminal to stop the preview server.
+
+### Hosting options
+
+- **Traditional web hosting (SFTP or hosting control panel):** Connect with SFTP (or your host's file manager) and upload all files and subdirectories from the generated gallery folder into your web root (such as `public_html/`) or a subfolder (such as `public_html/galleries/trip/`).
+- **GitHub Pages:** Create a GitHub repository, commit the contents of the generated gallery folder (`index.html` at the repository root or inside `docs/`), and enable **Settings → Pages** pointing to that branch and folder. Relative paths ensure the site works cleanly at `https://<user>.github.io/<repo>/`.
+- **Cloudflare Pages:** Upload the generated gallery folder directly via Cloudflare Pages **Direct Upload** (drag-and-drop or Wrangler CLI), or connect a Git repository with no build command and the gallery folder as the output directory.
+- **Netlify:** Drag and drop the generated gallery folder onto **Netlify Drop** in the dashboard, or deploy from a Git repository with an empty build command and the gallery folder as the publish directory.
+- **Self-hosting with Apache or Nginx:** Copy the gallery folder into your server's document root (for example, `/var/www/html/galleries/trip/`). Ensure the web server user has read permissions on files (`0644`) and traverse permissions on directories (`0755`), and that `DirectoryIndex index.html` (Apache) or `index index.html;` (Nginx) is enabled. No rewrite rules or application proxies are needed.
+
+### Updating an existing gallery
+
+Because KIMng publishes each new export into a fresh destination directory rather than overwriting an existing gallery, update a hosted site by generating a new gallery folder locally and then replacing the remote folder's contents (for example, syncing with `rsync --delete` over SSH/SFTP, uploading a new Cloudflare Pages / Netlify deploy, or pushing an updated commit to GitHub Pages). Removing stale files on the remote host prevents orphaned old images from remaining publicly accessible.
+
+### Metadata and location privacy
+
+Generated **Photo story** gallery images omit embedded source EXIF, IPTC, XMP, and GPS metadata. However, visible scene details, landmarks, faces, captions, titles, and visible filenames (if shown) can still reveal identifying or location information. Always review the generated gallery locally before publishing it publicly.
+
+*Future design note:* Static gallery hosting conventions here were informed by [Fussel](https://github.com/cbenning/fussel), and the [Fussel demo gallery](https://benninger.ca/fussel-demo/) is recorded as a visual presentation reference for a future KIMng gallery presentation milestone. KIMng does not require or depend on Fussel.
 
 ### `location-gpx`, `location-copy`, `location-apply`, `location-report`, `location-reduce`
 

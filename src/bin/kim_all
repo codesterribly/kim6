@@ -247,6 +247,23 @@ job_run_tool() {
     command "${command[@]}" "$@"
   fi
 }
+webexport_run_tool_on_source() {
+  local source="$1" tool="$2"; shift 2
+  local -a command=("$tool")
+  if [ -n "${KIM_PSD_CACHE:-}" ]; then command=(python3 "$DISPATCHER_DIR/kim_psd_source.py" "$tool"); fi
+  if [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/job.ref" ] && command -v python3 >/dev/null 2>&1; then
+    KIM_JOB_STAGE="$KIMDIR/job.stage" python3 "$DISPATCHER_DIR/kim_process.py" run-stdin "$source" -- \
+      python3 "$DISPATCHER_DIR/kim_job_process.py" "$KIMDIR" "${command[@]}" "$@"
+  else
+    python3 "$DISPATCHER_DIR/kim_process.py" run-stdin "$source" -- "${command[@]}" "$@"
+  fi
+}
+webexport_is_psd_source() {
+  python3 "$DISPATCHER_DIR/kim_process.py" is-psd "$1"
+}
+webexport_has_apng_control_chunk() {
+  python3 "$DISPATCHER_DIR/kim_process.py" has-apng "$1"
+}
 job_run_command() {
   if [ -n "${KIMDIR:-}" ] && [ -f "$KIMDIR/job.ref" ] && command -v python3 >/dev/null 2>&1; then
     python3 "$DISPATCHER_DIR/kim_job_process.py" "$KIMDIR" "$@"
@@ -327,6 +344,10 @@ count_valid_files() {
 # This boundary is activated only after an in-scope consumer receives a PSD.
 # Non-PSD commands keep their original external-tool invocation paths.
 is_psd_source() {
+  if [ "${cmd:-}" = webexport ]; then
+    webexport_is_psd_source "$1"
+    return $?
+  fi
   if [ "${preview:-false}" = true ] && ! preview_active; then
     python3 "$DISPATCHER_DIR/kim_preview.py" is-psd "$1"
     return $?
@@ -343,12 +364,16 @@ enable_psd_sources() {
     *) return 0 ;;
   esac
   [ -z "${KIM_PSD_CACHE:-}" ] || return 0
-  local source
+  local source psd_rc
   for source in "$@"; do
-    if is_psd_source "$source"; then
+    psd_rc=0
+    is_psd_source "$source" || psd_rc=$?
+    if [ "$psd_rc" -eq 0 ]; then
       require_action_tools "$cmd PSD sources" python3 exiftool || return 1
       export KIM_PSD_CACHE="$KIMDIR/psd"
       break
+    elif [ "$psd_rc" -ge 2 ]; then
+      return 1
     fi
   done
   return 0
@@ -8511,8 +8536,8 @@ ${web_source##*/}"; then
     web_icc=absent
     web_target=''
 
-    web_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%[colorspace]\n' - \
-      < "$web_source" 2>/dev/null)" || web_issue='Cannot inspect image'
+    web_info="$(webexport_run_tool_on_source "$web_source" identify -ping -format '%m|%w|%h|%[orientation]|%[colorspace]\n' - \
+      2>/dev/null)" || web_issue='Cannot inspect image'
 
     if [ -z "$web_issue" ]; then
       while IFS='|' read -r web_format_entry web_width web_height web_orientation web_color_entry; do
@@ -8546,13 +8571,23 @@ ${web_source##*/}"; then
       [ "$web_frames" -gt 0 ] || web_issue='No decodable image frames'
     fi
 
-    if [ -z "$web_issue" ] && image_has_apng_control_chunk "$web_source"; then
-      web_issue='Animated PNG export is unsupported'
+    if [ -z "$web_issue" ]; then
+      local web_apng_rc=0
+      webexport_has_apng_control_chunk "$web_source" 2>/dev/null || web_apng_rc=$?
+      if [ "$web_apng_rc" -eq 0 ]; then
+        web_issue='Animated PNG export is unsupported'
+      elif [ "$web_apng_rc" -ge 2 ]; then
+        web_issue='Cannot inspect image safely'
+      fi
     fi
 
     web_profile="$KIMDIR/web-review-source.icc"
-    if exiftool -b -ICC_Profile -- "$web_source" \
-        > "$web_profile" 2>/dev/null && [ -s "$web_profile" ]; then
+    local web_icc_rc=0
+    webexport_run_tool_on_source "$web_source" exiftool -b -ICC_Profile - \
+      > "$web_profile" 2>/dev/null || web_icc_rc=$?
+    if [ "$web_icc_rc" -eq 125 ]; then
+      [ -n "$web_issue" ] || web_issue='Cannot inspect image safely'
+    elif [ "$web_icc_rc" -eq 0 ] && [ -s "$web_profile" ]; then
       web_icc=present
     fi
 
@@ -8769,7 +8804,7 @@ KIMNG_DISCLOSURE_CHECK
     rc=0
     if progress_cancelled "$dbusRef"; then interrupted=true; break; fi
 
-    input_info="$(identify -ping -format '%m|%w|%h|%[orientation]|%n|%[colorspace]\n' - < "$i" 2>/dev/null)" || rc=1
+    input_info="$(webexport_run_tool_on_source "$i" identify -ping -format '%m|%w|%h|%[orientation]|%n|%[colorspace]\n' - 2>/dev/null)" || rc=1
     input_format=''
     colorspace=''
     source_frames=0
@@ -8788,16 +8823,31 @@ KIMNG_DISCLOSURE_CHECK
     [ "$source_frames" -gt 0 ] || rc=1
     # Web export is not an animation editor. A decoded APNG may appear to
     # ImageMagick as one still frame, so never publish a flattened export.
-    if [ "$rc" -eq 0 ] && image_has_apng_control_chunk "$i"; then
-      report_fail "$i: $(gettext 'Animated PNG web export is unavailable: the original animation is unchanged.')"
-      failures=$((failures + 1))
-      progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
-      continue
+    if [ "$rc" -eq 0 ]; then
+      local web_apng_rc=0
+      webexport_has_apng_control_chunk "$i" 2>/dev/null || web_apng_rc=$?
+      if [ "$web_apng_rc" -eq 0 ]; then
+        report_fail "$i: $(gettext 'Animated PNG web export is unavailable: the original animation is unchanged.')"
+        failures=$((failures + 1))
+        progress_value "$dbusRef" "$counter" || { interrupted=true; break; }
+        continue
+      elif [ "$web_apng_rc" -ge 2 ]; then
+        rc=1
+      fi
     fi
     has_icc=false
     profile_path="$KIMDIR/web-source.icc"
-    if exiftool -b -ICC_Profile -- "$i" > "$profile_path" 2>/dev/null && [ -s "$profile_path" ]; then
-      has_icc=true
+    local web_icc_rc=0
+    if [ "$rc" -eq 0 ]; then
+      webexport_run_tool_on_source "$i" exiftool -b -ICC_Profile - > "$profile_path" 2>/dev/null || web_icc_rc=$?
+      if [ "$web_icc_rc" -eq 125 ]; then
+        rc=1
+        profile_path=''
+      elif [ "$web_icc_rc" -eq 0 ] && [ -s "$profile_path" ]; then
+        has_icc=true
+      else
+        profile_path=''
+      fi
     else
       profile_path=''
     fi
@@ -8879,15 +8929,15 @@ KIMNG_DISCLOSURE_CHECK
         # With an embedded profile ImageMagick performs an ICC transform;
         # without one, applying the sRGB profile records the documented RGB
         # working-space assumption without changing sample values.
-        magick - -auto-orient -profile "$srgb_profile" -resize "${size}>" "${jpeg_options[@]}" \
+        webexport_run_tool_on_source "$i" magick - -auto-orient -profile "$srgb_profile" -resize "${size}>" "${jpeg_options[@]}" \
           -quality "$quality" -strip -profile "$srgb_profile" "$coder:$OUTTMP" \
-          < "$i" >/dev/null 2>&1 || rc=$?
+          >/dev/null 2>&1 || rc=$?
       elif [ -n "$profile_path" ]; then
-        magick - -auto-orient -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" -strip \
-          -profile "$profile_path" "$coder:$OUTTMP" < "$i" >/dev/null 2>&1 || rc=$?
+        webexport_run_tool_on_source "$i" magick - -auto-orient -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" -strip \
+          -profile "$profile_path" "$coder:$OUTTMP" >/dev/null 2>&1 || rc=$?
       else
-        magick - -auto-orient -strip -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" "$coder:$OUTTMP" \
-          < "$i" >/dev/null 2>&1 || rc=$?
+        webexport_run_tool_on_source "$i" magick - -auto-orient -strip -resize "${size}>" -quality "$quality" "${jpeg_options[@]}" "$coder:$OUTTMP" \
+          >/dev/null 2>&1 || rc=$?
       fi
     else
       rc=1

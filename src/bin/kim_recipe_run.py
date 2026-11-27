@@ -7,15 +7,16 @@ import sys
 import time
 from pathlib import Path
 from kim_photo_selection import choose_images, RECIPE_IMAGE_EXTENSIONS
-from PySide6.QtCore import QThread, Signal, Slot, Qt, QTimer, QStandardPaths, QSettings
-from PySide6.QtGui import QPalette, QIcon
+from PySide6.QtCore import QThread, Signal, Slot, Qt, QTimer, QStandardPaths, QSettings, QUrl
+from PySide6.QtGui import QPalette, QIcon, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QPlainTextEdit, QFileDialog, QProgressDialog, QMessageBox, QProgressBar, QScrollArea, QSizePolicy)
 from kim_job import JobStatus, grouped_warnings, WarningGroups
-from kim_recipe_core import (RecipeError, PreviewRow, builtins, load_library, lookup_recipe,
+from kim_recipe_core import (CONCRETE_SCHEMA, AUTHORED_SCHEMA, RecipeError, PreviewRow, builtins, load_library, lookup_recipe,
                              recipe_title, RecipeLibrary, library_groups, handler, preview, execute, validate,
-                             approve_rows, block_output_collisions, number_review_outputs, output_key)
+                             approve_rows, block_output_collisions, number_review_outputs, output_key,
+                             load_remembered_values, save_remembered_values, clear_remembered_values)
 
 from kim_review_ui import (exact_field, set_exact, restore_review_geometry,
                            clamp_review_geometry, restore_splitter)
@@ -35,17 +36,35 @@ class JobProgressDialog(QDialog):
     canceled = Signal()
 
     def __init__(self, text, cancel_text, minimum, maximum, parent=None):
-        super().__init__(parent); self.finished_job=False; self.resize(640,200)
+        super().__init__(parent); self.finished_job=False; self.resize(520, 165)
         self.setWindowTitle('KIMng - Job progress')
-        layout=QVBoxLayout(self); self.label=QLabel(text); self.label.setWordWrap(True); self.label.setTextFormat(Qt.PlainText)
+        layout=QVBoxLayout(self)
+        layout.setSpacing(8)
+        self.label=QLabel(text); self.label.setWordWrap(True); self.label.setTextFormat(Qt.PlainText)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard); layout.addWidget(self.label)
         self.bar=QProgressBar(); self.bar.setRange(minimum,maximum); layout.addWidget(self.bar)
-        self.cancel_button=QPushButton(cancel_text); self.cancel_button.clicked.connect(self.cancel); layout.addWidget(self.cancel_button)
+        self.status_label = QLabel('')
+        self.status_label.setWordWrap(True)
+        self.status_label.setTextFormat(Qt.PlainText)
+        self.status_label.hide()
+        layout.addWidget(self.status_label)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 4, 0, 0)
+        btn_row.addStretch(1)
+        stop_icon = QIcon.fromTheme('process-stop')
+        self.cancel_button = QPushButton(stop_icon, cancel_text) if not stop_icon.isNull() else QPushButton(cancel_text)
+        self.cancel_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.cancel_button.clicked.connect(self.cancel)
+        btn_row.addWidget(self.cancel_button)
+        layout.addLayout(btn_row)
 
     def setMinimumDuration(self,_): self.show()
     def setAutoClose(self,_): pass
     def setAutoReset(self,_): pass
     def setLabelText(self,text): self.label.setText(text)
+    def setStatusText(self, text):
+        self.status_label.setText(text)
+        self.status_label.setVisible(bool(text))
     def setValue(self,value): self.bar.setValue(value)
 
     def cancel(self):
@@ -290,7 +309,7 @@ class AddFilesWorker(QThread):
 
     def run(self):
         from kim_recipe_image import inspect, checked_input_headers
-        from kim_psd_source import source_session, header as psd_header
+        from kim_psd_source import source_session, protected_header as psd_header
         from kim_process import inspection_context
         identities = {os.path.normcase(os.path.abspath(p)) for p in self.current}
         file_identities = set()
@@ -430,15 +449,21 @@ class PreflightWorker(QThread):
             and not self.isInterruptionRequested()
             and len(inspected_rows) == len(self.files)
         ):
-            # Resolve occupied filenames AND collisions between
-            # selected images in a single batch-wide namespace.
-            #
-            # This runs before approve_rows() binds the exact
-            # output filenames. Publication never renumbers.
-            number_review_outputs(inspected_rows)
-
-            # Retain fail-closed duplicate detection, including
-            # destination aliases and other unresolved conflicts.
+            # Block intra-batch duplicate output targets fail-closed before
+            # resolving pre-existing filenames on disk. Conflicting selected
+            # sources must never be silently renumbered into separate outputs.
+            block_output_collisions(inspected_rows)
+            non_duplicate = [
+                row for row in inspected_rows
+                if not any(
+                    'multiple selected sources target ' in p
+                    for p in row.problems
+                )
+            ]
+            if non_duplicate:
+                number_review_outputs(non_duplicate)
+            # Re-verify across the entire batch in case numbering touched
+            # another selected source's target or an aliased destination.
             block_output_collisions(inspected_rows)
 
             for index, row in enumerate(inspected_rows):
@@ -451,46 +476,128 @@ class PreflightWorker(QThread):
                 )
 
 
-def confirmation_snapshot(recipe):
-    """Bind inherited text for this confirmation only; saved references remain untouched."""
+def confirmation_snapshot(recipe, values=None):
+    """Resolve parameters and bind inherited Settings for this confirmation only.
+
+    Saved references and authored definitions remain untouched. Parameterized
+    definitions resolve strictly via kim_recipe_params.resolve_recipe(); ordinary
+    concrete definitions keep the established best-effort (snapshot, error) return.
+    """
+    from kim_recipe_params import (
+        is_parameterized,
+        materialize_settings,
+        resolve_recipe,
+    )
+    if is_parameterized(recipe) or values is not None:
+        try:
+            return resolve_recipe(recipe, values), None
+        except (OSError, RecipeError) as exc:
+            return None, str(exc)
+
     snapshot = copy.deepcopy(recipe)
+    if snapshot.get('schema') == AUTHORED_SCHEMA:
+        snapshot['schema'] = CONCRETE_SCHEMA
+        snapshot.pop('parameters', None)
     media = handler(recipe['media'])
-    definitions = media.operation_definitions()
     error = None
     try:
         media.validate_context(recipe['steps'])
     except (OSError, RecipeError) as exc:
         error = str(exc)
-    for step in snapshot['steps']:
-        if step['op'] == 'image.overlay' and step['kind'] == 'text':
-            try:
-                from kim_image_ops import resolved_watermark_fields
-                step['text_fields'] = resolved_watermark_fields(step)
-            except (OSError, RecipeError) as exc:
-                if step.get('enabled', True): error = str(exc)
-        for key, spec in definitions[step['op']]['parameters'].items():
-            if key=='quality' and step['op']=='image.convert' and any(s['op']=='image.compress' and s.get('enabled',True) for s in snapshot['steps']):
-                continue  # Disabled compression restores this saved reference.
-            if spec.get('settings_key') and step.get(key) is None:
-                try:
-                    step[key] = media.parameter_value(step, key)
-                except (OSError, RecipeError) as exc:
-                    if step.get('enabled', True): error = str(exc)
+    settings_error = materialize_settings(
+        snapshot, media, strict=False, include_disabled=True
+    )
+    if error is None and settings_error is not None:
+        error = settings_error
     return snapshot, error
 
 
 def selection_title(recipe, folders):
-    return recipe_title(recipe, folders)
+    try:
+        return recipe_title(recipe, folders)
+    except RecipeError:
+        return recipe.get('name', '')
+
+
+def verify_editor_handoff(recipe, baseline):
+    """Verify the stored definition without discarding temporary edits."""
+    if not isinstance(recipe, dict) or not isinstance(baseline, dict):
+        raise RecipeError('Missing saved Recipe definition.')
+
+    if recipe.get('id') != baseline.get('id'):
+        raise RecipeError('The selected Recipe identity has changed.')
+
+    saved = lookup_recipe(recipe['id'])
+
+    if saved != baseline:
+        raise RecipeError(
+            'The selected recipe has changed. '
+            'Open the editor and review it again.'
+        )
+
+    if recipe != saved:
+        if 'dolphin_shortcut' in saved:
+            raise RecipeError(
+                'Save the User Recipe before running it.'
+            )
+
+        # Built-ins permit temporary step settings, not
+        # changes to their identity, structure or destination.
+        requested_header = {
+            key: value for key, value in recipe.items()
+            if key != 'steps'
+        }
+        saved_header = {
+            key: value for key, value in saved.items()
+            if key != 'steps'
+        }
+
+        if requested_header != saved_header:
+            raise RecipeError(
+                'A built-in Recipe must be duplicated '
+                'before changing its definition.'
+            )
+
+        if (
+            [step['op'] for step in recipe['steps']]
+            != [step['op'] for step in saved['steps']]
+        ):
+            raise RecipeError(
+                'A built-in Recipe must be duplicated '
+                'before changing its operations.'
+            )
+
+    return copy.deepcopy(saved)
 
 
 class RunRecipeDialog(QDialog):
-    def __init__(self, recipe, files, folders=(), parent=None, chosen=None, operation_title=None):
+    def __init__(
+        self, recipe, files, folders=(), parent=None,
+        chosen=None, operation_title=None, *, saved_baseline=None
+    ):
         super().__init__(parent)
         self.recipe = copy.deepcopy(recipe)
         self.operation_title = operation_title
         self.omit_overlay_metadata = False
         self.files = list(files)
-        self.execution_recipe, self.binding_error = confirmation_snapshot(recipe) if recipe else (None, None)
+        self.authored_recipe = None
+        self._session_param_values = {}
+        self._approved_run_remember = None
+        if recipe is None:
+            self.runner_phase = 'empty'
+            self.execution_recipe, self.binding_error = None, None
+        elif not operation_title:
+            from kim_recipe_params import is_parameterized, validate_authored
+            if is_parameterized(recipe):
+                self.authored_recipe = validate_authored(recipe)
+                self.runner_phase = 'settings'
+                self.execution_recipe, self.binding_error = None, None
+            else:
+                self.runner_phase = 'review'
+                self.execution_recipe, self.binding_error = confirmation_snapshot(recipe)
+        else:
+            self.runner_phase = 'review'
+            self.execution_recipe, self.binding_error = confirmation_snapshot(recipe)
         self.base_execution_recipe = copy.deepcopy(self.execution_recipe)
         self.add_worker = None; self._addition_queue = []; self._addition_items = []; self.input_revision = 0
         self.checked_inputs = {}
@@ -504,11 +611,17 @@ class RunRecipeDialog(QDialog):
         self.selected_id = recipe['id'] if recipe else None
         self.saved_definition = None
         if recipe and not operation_title:
-            try:
-                saved = lookup_recipe(recipe['id'])
-                if saved == recipe: self.saved_definition = saved
-            except RecipeError:
-                pass
+            if saved_baseline is not None:
+                self.saved_definition = verify_editor_handoff(
+                    recipe, saved_baseline
+                )
+            else:
+                try:
+                    saved = lookup_recipe(recipe['id'])
+                    if saved == recipe:
+                        self.saved_definition = copy.deepcopy(saved)
+                except RecipeError:
+                    pass
         self.chosen = chosen
         self.default_chosen = chosen
         self.destination_mode = 'default'
@@ -517,16 +630,14 @@ class RunRecipeDialog(QDialog):
         self.ready_count = self.problem_count = self.repair_count = 0
         self.problem_messages = {}; self._last_problem_index = -1; self._selected_presentation = None
         self.rows = {}; self._restart = False; self._closing = False
+        self._scroll_review_to_top = self.runner_phase == 'review'
         self.preflight_active = None
         self.preflight_clock = QTimer(self); self.preflight_clock.setInterval(1000)
         self.preflight_clock.timeout.connect(self.refresh_preflight_status)
         self.results = []
         self.execution_succeeded = False
         self.editor_dialog = None; self._close_after_editor = False
-        self.setWindowTitle(
-            operation_title + ' - Review Changes'
-            if operation_title else 'KIMng - Run a Recipe'
-        )
+        self._update_window_title()
         self.resize(
             1010 if operation_title else 1100,
             635 if operation_title else 780
@@ -635,13 +746,16 @@ class RunRecipeDialog(QDialog):
         self.inputs.setAccessibleName('Selected images and review status')
         self.inputs.header().setStretchLastSection(False)
         self.inputs.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.inputs.header().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.inputs.setColumnWidth(
-            1, 175 if operation_title else 110
-        )
+        if operation_title:
+            self.inputs.header().setSectionResizeMode(1, QHeaderView.Fixed)
+            self.inputs.setColumnWidth(1, 175)
+        else:
+            self.inputs.header().setMinimumSectionSize(80)
+            self.inputs.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.inputs.setRootIsDecorated(False)
+        initial_status = self._initial_queue_status()
         for source in self.files:
-            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Select recipe']); item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
+            item = QTreeWidgetItem([Path(source).name, initial_status]); item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.inputs.currentItemChanged.connect(self.show_selected)
         inp_layout.addWidget(self.inputs)
         actions = QHBoxLayout()
@@ -819,6 +933,16 @@ class RunRecipeDialog(QDialog):
             self.review_stack.addWidget(welcome)
             self.review_stack.addWidget(right)
 
+            from kim_recipe_param_ui import RecipeSettingsPage
+            self.settings_page = RecipeSettingsPage(self.review_stack)
+            self.settings_page.changed.connect(self.settings_changed)
+            self.settings_page.clear_remembered_requested.connect(
+                self._clear_remembered_for_current_recipe
+            )
+            self.review_stack.addWidget(self.settings_page)
+            if self.authored_recipe is not None:
+                self._load_settings_for_authored(self.authored_recipe, self.selected_id)
+
             self.properties_button.hide()
             self.operations_button.hide()
 
@@ -955,12 +1079,15 @@ class RunRecipeDialog(QDialog):
         self.destination_label.setWordWrap(True)
         self.choose_destination = QPushButton(QIcon.fromTheme('folder-open'), 'Choose output directory…')
         self.choose_destination.clicked.connect(self.select_destination)
-        self.choose_destination.setVisible(bool(recipe and recipe['destination'].get('ask')))
+        self.choose_destination.setVisible(
+            self.runner_phase == 'review'
+            and bool(recipe and recipe['destination'].get('ask'))
+        )
         self.destination_label.setText(
             (
                 ('Destination: ' if operation_title else '')
                 + self.destination_description()
-            ) if recipe else ''
+            ) if recipe and self.runner_phase == 'review' else ''
         )
         self.destination_choice = QComboBox()
         self.destination_choice.setAccessibleName('Destination for this run')
@@ -1000,6 +1127,12 @@ class RunRecipeDialog(QDialog):
         )
         self.technical_details_button.setCheckable(True)
         self.technical_details_button.hide()
+        self.open_output_button = QPushButton(
+            QIcon.fromTheme('folder-open'),
+            'Open output directory',
+        )
+        self.open_output_button.clicked.connect(self.open_selected_output_directory)
+        self.open_output_button.hide()
         if operation_title:
             layout.addWidget(self.technical_details_button)
 
@@ -1012,7 +1145,13 @@ class RunRecipeDialog(QDialog):
         if operation_title:
             self.technical_details_button.toggled.connect(self.diagnostics.setVisible)
         else:
-            layout.insertWidget(layout.indexOf(self.diagnostics), self.technical_details_button)
+            self.completion_tools = QHBoxLayout()
+            self.completion_tools.setContentsMargins(0, 0, 0, 0)
+            self.completion_tools.setSpacing(8)
+            self.completion_tools.addWidget(self.open_output_button)
+            self.completion_tools.addWidget(self.technical_details_button)
+            self.completion_tools.addStretch(1)
+            layout.insertLayout(layout.indexOf(self.diagnostics), self.completion_tools)
             self.technical_details_button.toggled.connect(self.sync_diagnostics)
             self.diagnostics.textChanged.connect(self.sync_diagnostics)
         self.fix_recipe_button=QPushButton('Fix recipe…'); self.fix_recipe_button.setAccessibleName('Fix recipe: choose a Photoshop output format')
@@ -1048,7 +1187,24 @@ class RunRecipeDialog(QDialog):
                 self.return_to_settings
             )
             buttons.addWidget(self.back_button)
+        else:
+            self.settings_back_button = QPushButton('Back')
+            style_button(self.settings_back_button, 'back')
+            self.settings_back_button.clicked.connect(
+                self.open_settings_page
+            )
+            self.settings_back_button.hide()
+            buttons.addWidget(self.settings_back_button)
         buttons.addStretch(1)
+        if not operation_title:
+            self.review_button = QPushButton('Review Changes')
+            style_button(self.review_button, 'review')
+            self.review_button.setEnabled(False)
+            self.review_button.clicked.connect(
+                self.enter_review_from_settings
+            )
+            self.review_button.hide()
+            buttons.addWidget(self.review_button)
         self.run_button = QPushButton(
             ('Apply Changes to ' + file_count(len(self.files)).title()
              if operation_title else
@@ -1070,18 +1226,67 @@ class RunRecipeDialog(QDialog):
         self.update_file_actions()
         self.update_edit_button()
         if not operation_title:
-            self.technical_details_button.setChecked(self.settings.value('technical_expanded', False, type=bool))
+            self.technical_details_button.setChecked(False)
+        default_size = (1010, 635) if operation_title else (1060, 700)
+        if not operation_title and self.runner_phase == 'settings':
+            param_count = len((self.authored_recipe or {}).get('parameters', ()))
+            if param_count <= 2:
+                default_size = (1060, 540)
         restore_review_geometry(
-            self, self.settings,
-            (1060, 700) if not operation_title else (1010, 635)
+            self, self.settings, default_size
         )
         restore_splitter(
             self.splitter, self.settings, 'splitter',
             [650, 430] if operation_title else [380, 680]
         )
         self.finished.connect(self.save_display_preferences)
+        self._sync_settings_example_source()
         self.update_recipe_review_presentation()
+        self.update_summary()
         self.start_preflight()
+        if not operation_title and self.runner_phase == 'settings':
+            QTimer.singleShot(0, self._focus_initial_settings)
+
+    def _update_window_title(self):
+        if self.operation_title:
+            self.setWindowTitle(self.operation_title + ' - Review Changes')
+        elif self.runner_phase == 'settings':
+            self.setWindowTitle('KIMng - Run a Recipe - Settings')
+        elif getattr(self, '_execution_completed', False):
+            self.setWindowTitle('KIMng - Run a Recipe - Results')
+        elif self.recipe is not None:
+            self.setWindowTitle('KIMng - Run a Recipe - Review Changes')
+        else:
+            self.setWindowTitle('KIMng - Run a Recipe')
+
+    def _initial_queue_status(self):
+        if self.runner_phase == 'settings':
+            return ''
+        return 'Queued' if self.recipe else 'Select recipe'
+
+    def _sync_settings_example_source(self):
+        if self.operation_title or not hasattr(self, 'settings_page'):
+            return
+        source = None
+        item = self.inputs.currentItem()
+        if item is not None:
+            index = self.inputs.indexOfTopLevelItem(item)
+            if 0 <= index < len(self.files):
+                source = self.files[index]
+        if source is None and self.files:
+            source = self.files[0]
+        self.settings_page.set_example_source(source)
+
+    def _focus_initial_settings(self):
+        if (
+            self.operation_title
+            or self._closing
+            or self.runner_phase != 'settings'
+            or self.authored_recipe is None
+            or not hasattr(self, 'settings_page')
+        ):
+            return
+        self.settings_page.focus_first_required()
 
     def set_recipe_description(self, description):
         from html import escape
@@ -1112,12 +1317,15 @@ class RunRecipeDialog(QDialog):
             return
 
         selected = self.recipe is not None
+        in_settings = selected and self.runner_phase == 'settings'
+        in_review = selected and self.runner_phase == 'review'
         has_images = bool(self.files)
-        show_output = selected and has_images
+        show_output = in_review and has_images
 
         self.review_stack.setCurrentIndex(
-            1 if selected else 0
+            2 if in_settings else 1 if in_review else 0
         )
+        self._update_window_title()
 
         self.properties_button.hide()
         self.operations_button.hide()
@@ -1141,32 +1349,43 @@ class RunRecipeDialog(QDialog):
         self.properties.setVisible(show_output)
         self.property_tools.setVisible(show_output)
         self.no_images_message.setVisible(
-            selected and not has_images
+            in_review and not has_images
         )
 
-        self.operations_panel.setVisible(selected)
+        self.operations_panel.setVisible(in_review)
 
-        steps = self.recipe['steps'] if selected else []
+        effective_steps = (
+            self.execution_recipe['steps']
+            if self.execution_recipe is not None
+            else (self.recipe['steps'] if selected else [])
+        )
         enabled = sum(
-            step.get('enabled', True) for step in steps
+            step.get('enabled', True) for step in effective_steps
         )
 
         self.operations_panel.setTitle(
-            f'Recipe operations ({enabled} enabled, {len(steps)} total)'
+            f'Recipe operations ({enabled} enabled, {len(effective_steps)} total)'
         )
 
-        # Operation parameters remain individually expandable.
-
-        # During construction, the destination row is created
+        # During construction, destination and action buttons are created
         # after the review workspace.
         if hasattr(self, 'destination_caption'):
-            self.destination_caption.setVisible(selected)
-            self.destination_choice.setVisible(selected)
-            self.destination_label.setVisible(selected)
+            self.destination_caption.setVisible(in_review)
+            self.destination_choice.setVisible(in_review)
+            self.destination_label.setVisible(in_review)
             self.normalize_destination_caption()
 
-            if not selected:
+            if not in_review:
                 self.choose_destination.hide()
+
+        if hasattr(self, 'review_button'):
+            self.review_button.setVisible(in_settings)
+        if hasattr(self, 'run_button'):
+            self.run_button.setVisible(not in_settings)
+        if hasattr(self, 'settings_back_button'):
+            self.settings_back_button.setVisible(
+                in_review and self.authored_recipe is not None
+            )
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1181,21 +1400,6 @@ class RunRecipeDialog(QDialog):
 
     def sync_diagnostics(self, *_):
         present = bool(self.diagnostics.toPlainText())
-
-        if not self.operation_title:
-            blocked = bool(
-                self.problem_count or self.approval_error
-            )
-
-            was_blocked = getattr(
-                self, '_diagnostics_was_blocked', False
-            )
-
-            self._diagnostics_was_blocked = blocked and present
-
-            if present and blocked and not was_blocked:
-                self.technical_details_button.setChecked(True)
-
         expanded = self.technical_details_button.isChecked()
 
         self.technical_details_button.setText(
@@ -1207,15 +1411,30 @@ class RunRecipeDialog(QDialog):
         self.diagnostics.setVisible(present and expanded)
 
     def update_operation_summary(self):
-        steps = self.recipe['steps'] if self.recipe else []
+        steps = (
+            self.execution_recipe['steps']
+            if self.execution_recipe is not None
+            else (self.recipe['steps'] if self.recipe else [])
+        )
         enabled = sum(step.get('enabled', True) for step in steps)
         action = 'Hide' if self.operations_button.isChecked() else 'Show'
         self.operations_button.setText(f'{action} operations ({enabled} enabled, {len(steps)} total)')
 
     def update_edit_button(self):
-        immutable = bool(self.recipe and any(r['id'] == self.recipe['id'] for r in builtins()))
         self.edit_button.setText('Edit Recipe…')
-        self.edit_button.setEnabled(bool(self.recipe) and self.editor_dialog is None and self.worker is None)
+        is_dev_draft = bool(
+            self.selected_id and self.selected_id.startswith('dev-draft-')
+        )
+        self.edit_button.setEnabled(
+            bool(self.recipe)
+            and not is_dev_draft
+            and self.editor_dialog is None
+            and self.worker is None
+        )
+        self.edit_button.setToolTip(
+            'Temporary development drafts are edited in the development Editor.'
+            if is_dev_draft else ''
+        )
 
     def edit_recipe(self):
         if self.recipe is not None:
@@ -1369,8 +1588,9 @@ class RunRecipeDialog(QDialog):
         selected={os.path.abspath(p) for p in self.files}
         self.checked_inputs={key:value for key,value in self.checked_inputs.items() if key in selected}
         self.inputs.clear()
+        status_text = self._initial_queue_status()
         for source in self.files:
-            item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Select recipe'])
+            item = QTreeWidgetItem([Path(source).name, status_text])
             item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.count.setText('Inputs: ' + file_count(len(self.files)))
         self.run_button.setText(
@@ -1382,6 +1602,7 @@ class RunRecipeDialog(QDialog):
         self.update_file_actions()
         if preflight: self.start_preflight()
         if self.files: self.inputs.setCurrentItem(self.inputs.topLevelItem(0))
+        self._sync_settings_example_source()
 
     def remove_files(self):
         if self.add_worker is not None: return
@@ -1395,23 +1616,49 @@ class RunRecipeDialog(QDialog):
             self.replace_files([])
 
     def destination_description(self):
-        d = self.recipe['destination']
+        source = self.base_execution_recipe or self.recipe
+        d = source['destination']
         if d['mode'] == 'beside': return 'Beside each source'
-        if d['mode'] == 'subfolder': return d['folder'] + ' subfolder beside each source'
+        if d['mode'] == 'subfolder':
+            if self.authored_recipe is not None:
+                from kim_recipe_params import has_parameter_references
+                authored_folder = (self.authored_recipe.get('destination') or {}).get('folder', '')
+                if has_parameter_references(authored_folder):
+                    return 'Subfolder beside each source: ' + d['folder']
+            return d['folder'] + ' subfolder beside each source'
         return d.get('path', '')
 
     def fill_operations(self):
         self.operations.clear()
-        if self.recipe is None: return
-        media = handler(self.recipe['media'])
+        if self.recipe is None or self.execution_recipe is None:
+            return
+        from kim_recipe_params import has_parameter_references
+
+        format_display = {
+            'jpeg': 'JPEG', 'png': 'PNG', 'webp': 'WebP', 'avif': 'AVIF',
+            'bmp': 'BMP', 'gif': 'GIF', 'heic': 'HEIC', 'heif': 'HEIF',
+            'jp2': 'JP2', 'jxl': 'JXL', 'pdf': 'PDF', 'tiff': 'TIFF',
+        }
+        pixel_fields = {
+            ('image.resize', 'max_width'),
+            ('image.resize', 'max_height'),
+            ('image.resize_exact', 'width'),
+            ('image.resize_exact', 'height'),
+            ('image.resize_long_edge', 'pixels'),
+        }
+
+        media = handler(self.execution_recipe['media'])
         for index, (original, effective) in enumerate(zip(self.recipe['steps'], self.execution_recipe['steps']), 1):
             label, details = media.operation_details(effective)
-            enabled = original.get('enabled', True)
+            if original['op'] == 'image.auto_orient' and label == 'Auto-Orient':
+                label = 'Auto-orient'
+            enabled = effective.get('enabled', True)
             item = QTreeWidgetItem([
                 f'{index}. {label}'
                 + ('' if enabled else ' (Disabled)')
             ])
             definitions = media.operation_definitions()[original['op']]['parameters']
+            bound_fields = original.get('bindings') or {}
             for (key, spec), (name, value) in zip(definitions.items(), details):
                 if original['op'] == 'image.convert':
                     fmt = effective.get('format')
@@ -1441,8 +1688,34 @@ class RunRecipeDialog(QDialog):
                     ):
                         continue
 
+                    if key == 'format':
+                        value = format_display.get(str(value).casefold(), str(value).upper())
+
+                elif original['op'] == 'image.color' and key == 'mode':
+                    name = 'Color profile'
+                    value = {'srgb': 'sRGB', 'preserve': 'Preserve'}.get(
+                        str(value).casefold(), value
+                    )
+
+                if (original['op'], key) in pixel_fields and value.isdigit():
+                    value = value + ' px'
+
+                from_settings = (
+                    key in bound_fields
+                    or (
+                        original['op'] == 'file.rename_output'
+                        and key == 'pattern'
+                        and has_parameter_references(original.get('pattern', ''))
+                    )
+                )
+
                 if spec.get('settings_key'):
-                    value = value.rsplit(' (', 1)[0] + (' (inherited from Settings)' if original.get(key) is None else ' (recipe override)')
+                    if from_settings:
+                        value = value.rsplit(' (', 1)[0] + ' (from run settings)'
+                    else:
+                        value = value.rsplit(' (', 1)[0] + (' (inherited from Settings)' if original.get(key) is None else ' (recipe override)')
+                elif from_settings:
+                    value = value + ' (from run settings)'
                 child = QTreeWidgetItem([name + ': ' + value]); child.setToolTip(0, child.text(0)); item.addChild(child)
             if not enabled:
                 font = item.font(0)
@@ -1540,17 +1813,30 @@ class RunRecipeDialog(QDialog):
 
             self.selector.addItem(name, None)
             self.selector.model().item(self.selector.count() - 1).setEnabled(False)
+            from kim_recipe_params import is_parameterized
+            param_icon = QIcon.fromTheme('configure')
             for recipe in matches:
                 self._search_matches.append((
                     name + ' / ' + recipe['name'],
                     recipe['id']
                 ))
 
-                self.selector.addItem(
-                    name + ' / ' + recipe['name'],
-                    recipe['id']
-                )
-                self.selector.setItemData(self.selector.count() - 1, name + ' / ' + recipe['name'], Qt.ToolTipRole)
+                parameterized = is_parameterized(recipe)
+                if parameterized and not param_icon.isNull():
+                    self.selector.addItem(
+                        param_icon,
+                        name + ' / ' + recipe['name'],
+                        recipe['id']
+                    )
+                else:
+                    self.selector.addItem(
+                        name + ' / ' + recipe['name'],
+                        recipe['id']
+                    )
+                tip = name + ' / ' + recipe['name']
+                if parameterized:
+                    tip += '\nAsks for settings when running.'
+                self.selector.setItemData(self.selector.count() - 1, tip, Qt.ToolTipRole)
         if not match_count:
             self.selector.addItem('No matching recipes', None)
             self.selector.model().item(
@@ -1586,9 +1872,61 @@ class RunRecipeDialog(QDialog):
             self.saved_definition=None; self.apply_recipe(None)
             self.diagnostics.setPlainText(str(exc))
 
+    def _load_settings_for_authored(self, authored, recipe_id):
+        from kim_recipe_params import initial_remembered_values
+        raw_rem = {}
+        if recipe_id and not recipe_id.startswith('dev-draft-'):
+            try:
+                raw_rem = load_remembered_values(recipe_id)
+            except (OSError, RecipeError):
+                raw_rem = {}
+        valid_rem = initial_remembered_values(authored, raw_rem, validated=True)
+        session_vals = self._session_param_values.get(recipe_id) or {}
+        if session_vals:
+            all_remember = {
+                **authored,
+                'parameters': [
+                    {**p, 'remember': True}
+                    for p in authored.get('parameters', ())
+                ],
+            }
+            valid_session = initial_remembered_values(
+                all_remember, session_vals, validated=True
+            )
+            if valid_session:
+                self._session_param_values[recipe_id] = dict(valid_session)
+            else:
+                self._session_param_values.pop(recipe_id, None)
+            initial = {**valid_rem, **valid_session}
+        else:
+            initial = valid_rem
+        self.settings_page.set_recipe(
+            authored, entered_values=initial or None
+        )
+        self.settings_page.set_has_remembered(bool(raw_rem))
+
+    def _clear_remembered_for_current_recipe(self):
+        if self.operation_title or self.authored_recipe is None or not self.selected_id:
+            return
+        if not self.selected_id.startswith('dev-draft-'):
+            try:
+                clear_remembered_values(self.selected_id)
+            except (OSError, RecipeError):
+                pass
+        self._session_param_values.pop(self.selected_id, None)
+        self.settings_page.form.reset_to_defaults()
+        self.settings_page.set_has_remembered(False)
+
     def apply_recipe(self, recipe):
+        self.invalidate_preflight()
+        self._approved_run_remember = None
+        self.results = []
+        self._execution_completed = False
+        if hasattr(self, 'open_output_button'):
+            self.open_output_button.hide()
         self.recipe = copy.deepcopy(recipe)
         self.selected_id = recipe['id'] if recipe else None
+        self.authored_recipe = None
         self.selection_hint.setVisible(recipe is None)
         self.preview_scroll.setVisible(
             recipe is not None or not self.operation_title
@@ -1599,7 +1937,26 @@ class RunRecipeDialog(QDialog):
             recipe is not None and not self.operation_title
             and self.operations_button.isChecked()
         )
-        self.execution_recipe, self.binding_error = confirmation_snapshot(recipe) if recipe else (None, None)
+        if recipe is None:
+            self.runner_phase = 'empty'
+            self.execution_recipe, self.binding_error = None, None
+            if hasattr(self, 'settings_page'):
+                self.settings_page.set_has_remembered(False)
+        elif not self.operation_title:
+            from kim_recipe_params import is_parameterized, validate_authored
+            if is_parameterized(recipe):
+                self.authored_recipe = validate_authored(recipe)
+                self.runner_phase = 'settings'
+                self.execution_recipe, self.binding_error = None, None
+                self._load_settings_for_authored(self.authored_recipe, self.selected_id)
+            else:
+                self.runner_phase = 'review'
+                self.execution_recipe, self.binding_error = confirmation_snapshot(recipe)
+                if hasattr(self, 'settings_page'):
+                    self.settings_page.set_has_remembered(False)
+        else:
+            self.runner_phase = 'review'
+            self.execution_recipe, self.binding_error = confirmation_snapshot(recipe)
         self.base_execution_recipe = copy.deepcopy(self.execution_recipe)
         self.refresh_selector()
         if self.selected_id and self.selector.findData(self.selected_id) < 0 and self.search.text():
@@ -1614,16 +1971,109 @@ class RunRecipeDialog(QDialog):
         self.recipe_description_group.setVisible(bool(description))
 
         self.fill_operations()
-        ask = bool(recipe and recipe['destination'].get('ask'))
-        self.choose_destination.setVisible(ask)
-        self.destination_label.setText(('Output directory: ' + (self.chosen or 'choose before running')) if ask else
-                                       ('Destination: ' + self.destination_description() if recipe else 'Choose a recipe.'))
-        self.apply_destination_override()
+        if self.runner_phase == 'review':
+            effective_dest = (self.base_execution_recipe or recipe)['destination']
+            ask = bool(effective_dest.get('ask'))
+            self.choose_destination.setVisible(ask)
+            self.destination_label.setText(
+                ('Output directory: ' + (self.chosen or 'choose before running')) if ask
+                else ('Destination: ' + self.destination_description())
+            )
+            self.apply_destination_override()
+        else:
+            self.choose_destination.hide()
+            self.destination_label.setText('Choose a recipe.' if recipe is None else '')
         self.update_edit_button()
         self.update_operation_summary()
+        self._scroll_review_to_top = self.runner_phase == 'review'
+        self._sync_settings_example_source()
+        self.update_recipe_review_presentation()
+        self.update_summary()
+        self.start_preflight()
+        if not self.operation_title and self.runner_phase == 'settings':
+            QTimer.singleShot(0, self._focus_initial_settings)
+
+    def settings_changed(self):
+        if self.operation_title or self.authored_recipe is None:
+            return
+        if self.selected_id:
+            self._session_param_values[self.selected_id] = self.settings_page.entered_values()
+        self.execution_recipe = None
+        self.base_execution_recipe = None
+        self.binding_error = None
+        self.runner_phase = 'settings'
+        self.invalidate_preflight()
+        self.update_recipe_review_presentation()
+        self.update_summary()
+
+    def enter_review_from_settings(self):
+        if (
+            self.operation_title
+            or self.runner_phase != 'settings'
+            or self.authored_recipe is None
+            or self.worker is not None
+            or self.add_worker is not None
+            or self._addition_queue
+            or self.editor_dialog is not None
+            or not self.files
+        ):
+            return
+        if self.settings_page.has_errors():
+            self.update_summary()
+            return
+        if self.selected_id:
+            self._session_param_values[self.selected_id] = self.settings_page.entered_values()
+        snapshot, error = confirmation_snapshot(
+            self.recipe,
+            self.settings_page.active_values(),
+        )
+        if error or snapshot is None:
+            self.execution_recipe = None
+            self.base_execution_recipe = None
+            self.binding_error = error
+            self.settings_page.set_diagnostic(
+                error or 'Cannot resolve recipe settings.'
+            )
+            self.update_summary()
+            return
+        self.settings_page.set_diagnostic('')
+        ev = self.settings_page.form.evaluation()
+        self._approved_run_remember = (
+            self.selected_id,
+            {p['id'] for p in ev['active']},
+            copy.deepcopy(ev['values']),
+        )
+        self.base_execution_recipe = copy.deepcopy(snapshot)
+        self.execution_recipe = copy.deepcopy(snapshot)
+        self.binding_error = None
+        self.runner_phase = 'review'
+        self._scroll_review_to_top = True
+        self.apply_destination_override()
+        self.fill_operations()
+        self.update_operation_summary()
+        self.update_recipe_review_presentation()
         self.start_preflight()
 
+    def open_settings_page(self):
+        if (
+            self.operation_title
+            or self.authored_recipe is None
+            or self.worker is not None
+            or self.editor_dialog is not None
+        ):
+            return
+        self.runner_phase = 'settings'
+        self.execution_recipe = None
+        self.base_execution_recipe = None
+        self.binding_error = None
+        self.invalidate_preflight()
+        self.settings_page.set_diagnostic('')
+        self._sync_settings_example_source()
         self.update_recipe_review_presentation()
+        self.update_summary()
+        focused = self.focusWidget()
+        if focused is None or not focused.isVisible():
+            self.settings_page.focus_first_required() or self.settings_page.focus_first_control()
 
     def create_recipe(self):
         self.open_editor()
@@ -1685,9 +2135,14 @@ class RunRecipeDialog(QDialog):
 
     @Slot(int)
     def editor_finished(self, result):
+        if self.editor_dialog is None:
+            return
         dialog,self.editor_dialog=self.editor_dialog,None
         saved_id=dialog.widget.saved_recipe_id
-        run_request = getattr(dialog, 'run_request', None)
+        run_request = (
+            getattr(dialog, 'run_request', None)
+            if result == QDialog.Accepted else None
+        )
         previous,previous_definition=self._editor_previous
         self.create_button.setEnabled(True)
         for control in (self.selector, self.search, self.destination_choice, self.choose_destination): control.setEnabled(True)
@@ -1695,17 +2150,12 @@ class RunRecipeDialog(QDialog):
         try:
             self.library=load_library()
             if run_request is not None:
-                requested_recipe, requested_files = run_request
+                requested_recipe, requested_files, baseline = run_request
 
-                recipe = lookup_recipe(requested_recipe['id'])
-
-                if recipe != requested_recipe:
-                    raise RecipeError(
-                        'The selected recipe has changed. '
-                        'Open the editor and review it again.'
-                    )
-
-                self.saved_definition = copy.deepcopy(recipe)
+                self.saved_definition = verify_editor_handoff(
+                    requested_recipe, baseline
+                )
+                recipe = copy.deepcopy(requested_recipe)
             else:
                 recipe = lookup_recipe(saved_id) if saved_id else previous
                 self.saved_definition = (
@@ -1740,7 +2190,12 @@ class RunRecipeDialog(QDialog):
                 if recipe else 'Choose a recipe…'
             )
             self.update_summary()
-            if self.validated_snapshot is None and self.preflight_worker is None: self.start_preflight()
+            if (
+                self.runner_phase == 'review'
+                and self.validated_snapshot is None
+                and self.preflight_worker is None
+            ):
+                self.start_preflight()
         else:
             # New or changed recipe: existing validation cannot be reused.
             self.apply_recipe(recipe)
@@ -1749,6 +2204,7 @@ class RunRecipeDialog(QDialog):
 
     def invalidate_preflight(self):
         self.generation += 1
+        self._restart = False
         self.reviewed_generation = None
         self.validated_snapshot = None
         self.approved_plan = None
@@ -1760,10 +2216,13 @@ class RunRecipeDialog(QDialog):
         self.rows.clear(); self.properties.set_fields([]); self.diagnostics.clear(); self.warning_view.set_rows([])
         self.blocking_summary.clear(); self.blocking_summary.hide()
         for field in (self.output_filename, self.output_directory): set_recipe_output_text(field, '')
-        if not self.operation_title: self.sync_diagnostics()
+        if not self.operation_title:
+            self.technical_details_button.setChecked(False)
+            self.sync_diagnostics()
         self.fix_recipe_button.hide()
+        status_text = self._initial_queue_status()
         for index in range(len(self.files)):
-            self.inputs.topLevelItem(index).setText(1, 'Queued' if self.recipe else 'Select recipe')
+            self.inputs.topLevelItem(index).setText(1, status_text)
             self.inputs.topLevelItem(index).setToolTip(1, '')
         if self.preflight_worker is not None:
             self.preflight_worker.requestInterruption()
@@ -1771,13 +2230,17 @@ class RunRecipeDialog(QDialog):
     def start_preflight(self):
         if self.worker is not None: return
         self.invalidate_preflight()
-        if self.recipe is None: self.summary.setText('Waiting for recipe selection' if self.operation_title else '')
+        if self.recipe is None:
+            self.summary.setText('Waiting for recipe selection' if self.operation_title else '')
+            return
+        if self.runner_phase != 'review' or self.execution_recipe is None:
+            self.update_summary()
+            return
         if self.preflight_worker is not None:
-            self._restart = self.recipe is not None; return
+            self._restart = True
+            return
         self._restart = False
         if self.editor_dialog is not None or self.add_worker is not None or self._addition_queue: return
-        if self.recipe is None:
-            self.summary.setText('Waiting for recipe selection' if self.operation_title else ''); return
         self.summary.setText(file_count(len(self.files)) + ' selected; inspecting…')
         if not self.files:
             self.summary.setText(
@@ -1873,8 +2336,16 @@ class RunRecipeDialog(QDialog):
                 if index not in self.rows: self.inputs.topLevelItem(index).setText(1,'Skipped')
             self.finish_close_if_idle(); return
         if self._restart:
-            self._restart = False; self.start_preflight(); return
-        if worker.generation == self.generation and not worker.cancelled:
+            self._restart = False
+            if self.runner_phase == 'review' and self.execution_recipe is not None:
+                self.start_preflight()
+                return
+        if (
+            self.runner_phase == 'review'
+            and self.execution_recipe is not None
+            and worker.generation == self.generation
+            and not worker.cancelled
+        ):
             self.checked_inputs.update(worker.checked_inputs)
             self.reviewed_generation = self.generation
             self.validated_snapshot = (copy.deepcopy(worker.recipe), list(worker.files), worker.chosen)
@@ -1891,7 +2362,38 @@ class RunRecipeDialog(QDialog):
 
     def update_summary(self):
         if self.recipe is None:
-            self.summary.setText('Waiting for recipe selection' if self.operation_title else ''); self.run_button.setEnabled(False); return
+            self.summary.setText('Waiting for recipe selection' if self.operation_title else '')
+            self.run_button.setEnabled(False)
+            if hasattr(self, 'review_button'):
+                self.review_button.setEnabled(False)
+            return
+        if not self.operation_title and self.runner_phase == 'settings':
+            self.blocking_summary.clear()
+            self.blocking_summary.hide()
+            self.fix_recipe_button.hide()
+            self.run_button.setEnabled(False)
+            can_review = (
+                bool(self.files)
+                and not self.settings_page.has_errors()
+                and self.worker is None
+                and not self._closing
+                and self.add_worker is None
+                and not self._addition_queue
+                and self.editor_dialog is None
+                and not self._pending_picker
+            )
+            self.review_button.setEnabled(can_review)
+            if not self.files:
+                self.summary.setText('Add images to review changes.')
+            elif self.settings_page.has_errors():
+                self.summary.setText('Complete the required recipe settings to review changes.')
+            else:
+                self.summary.setText(
+                    file_count(len(self.files)) + ' selected; ready to review changes.'
+                )
+            return
+        if hasattr(self, 'review_button'):
+            self.review_button.setEnabled(False)
         self.update_blocking_summary()
         ready, problems = self.ready_count, self.problem_count
         pending = len(self.files) - len(self.rows)
@@ -1913,7 +2415,24 @@ class RunRecipeDialog(QDialog):
 
             self.summary.setText('; '.join(parts))
         self.fix_recipe_button.setVisible(not self.operation_title and self.repair_count > 0 and self.editor_dialog is None and not self._pending_picker)
-        self.run_button.setEnabled(self.recipe is not None and self.reviewed_generation == self.generation and bool(getattr(self, 'approved_plan', None)) and bool(self.files) and ready == len(self.files) and not pending and not problems and self.preflight_worker is None and self.worker is None and not self._closing and self.add_worker is None and not self._addition_queue and self.editor_dialog is None and not self._pending_picker)
+        self.run_button.setEnabled(
+            self.recipe is not None
+            and self.runner_phase == 'review'
+            and self.execution_recipe is not None
+            and self.reviewed_generation == self.generation
+            and bool(getattr(self, 'approved_plan', None))
+            and bool(self.files)
+            and ready == len(self.files)
+            and not pending
+            and not problems
+            and self.preflight_worker is None
+            and self.worker is None
+            and not self._closing
+            and self.add_worker is None
+            and not self._addition_queue
+            and self.editor_dialog is None
+            and not self._pending_picker
+        )
 
     def update_blocking_summary(self):
         blocked = [row for row in self.rows.values() if row.problems]
@@ -1932,8 +2451,7 @@ class RunRecipeDialog(QDialog):
         other = [row for row in blocked if row not in duplicates and row not in occupied]
         if other:
             caption = '1 image is blocked: ' if len(other) == 1 else f'{len(other)} images are blocked: '
-            lines.append(caption +
-                         self.fontMetrics().elidedText(other[0].problems[0], Qt.ElideMiddle, 500))
+            lines.append(caption + other[0].problems[0])
         if duplicates or occupied:
             lines.append("Change the recipe's filename pattern or destination, or select different images, then review again.")
         if self.approval_error:
@@ -1943,6 +2461,8 @@ class RunRecipeDialog(QDialog):
         self.blocking_summary.setVisible(bool(lines))
 
     def show_selected(self, *args):
+        if not self.operation_title and self.runner_phase == 'settings':
+            self._sync_settings_example_source()
         item = self.inputs.currentItem()
         index = self.inputs.indexOfTopLevelItem(item) if item else -1
         row = self.rows.get(index)
@@ -1971,9 +2491,44 @@ class RunRecipeDialog(QDialog):
                 ]
             ) if row else []
         )
+        if row is not None and self._scroll_review_to_top:
+            self._scroll_review_to_top = False
+            self.properties.scrollToTop()
+        self._update_open_output_button()
+
+    def _selected_output_directory(self):
+        results = getattr(self, 'results', None) or []
+        if not results:
+            return None
+        item = self.inputs.currentItem()
+        index = self.inputs.indexOfTopLevelItem(item) if item else -1
+        if 0 <= index < len(results):
+            res = results[index]
+            if res.get('ok') and res.get('output'):
+                return Path(res['output']).parent
+        for res in results:
+            if res.get('ok') and res.get('output'):
+                return Path(res['output']).parent
+        return None
+
+    def _update_open_output_button(self):
+        if self.operation_title or not hasattr(self, 'open_output_button'):
+            return
+        out_dir = self._selected_output_directory()
+        self.open_output_button.setVisible(out_dir is not None)
+        if out_dir is not None:
+            self.open_output_button.setToolTip(f'Open output directory: {out_dir}')
+
+    def open_selected_output_directory(self):
+        out_dir = self._selected_output_directory()
+        if out_dir is not None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
+            vbar = self.properties.verticalScrollBar()
+            if vbar is not None:
+                vbar.setValue(vbar.minimum())
 
     def apply_destination_override(self):
-        if self.recipe is None:
+        if self.recipe is None or self.base_execution_recipe is None:
             return
         # Change only the private resolved snapshot. Both review and execution
         # consume this definition and the same chosen directory.
@@ -1993,12 +2548,19 @@ class RunRecipeDialog(QDialog):
             description = self.chosen or self.destination_description()
         self.destination_label.setText('Destination: ' + description)
         self.destination_label.setToolTip(description)
-        self.choose_destination.setVisible(self.destination_mode == 'directory' or
-                                          (self.destination_mode == 'default' and bool(self.recipe['destination'].get('ask'))))
+        self.choose_destination.setVisible(
+            self.destination_mode == 'directory'
+            or (
+                self.destination_mode == 'default'
+                and bool(self.base_execution_recipe['destination'].get('ask'))
+            )
+        )
 
         self.normalize_destination_caption()
 
     def change_destination_mode(self, *_):
+        if self.runner_phase != 'review':
+            return
         previous_mode = self.destination_mode
         if previous_mode == 'default': self.default_chosen = self.chosen
         self.destination_mode = self.destination_choice.currentData()
@@ -2009,6 +2571,8 @@ class RunRecipeDialog(QDialog):
             self.select_destination()
 
     def select_destination(self):
+        if self.runner_phase != 'review':
+            return
         directory = QFileDialog.getExistingDirectory(self, 'Choose output directory')
         if directory:
             self.chosen = directory
@@ -2017,7 +2581,13 @@ class RunRecipeDialog(QDialog):
             self.start_preflight()
 
     def start_execution(self):
-        if not self.run_button.isEnabled() or self.worker is not None: return
+        if (
+            self.runner_phase != 'review'
+            or self.execution_recipe is None
+            or not self.run_button.isEnabled()
+            or self.worker is not None
+        ):
+            return
         if self.validated_snapshot != (self.execution_recipe, self.files, self.chosen):
             self.start_preflight(); return
         if self.saved_definition is not None:
@@ -2031,6 +2601,8 @@ class RunRecipeDialog(QDialog):
         self.run_button.setEnabled(False); self.choose_destination.setEnabled(False)
         if self.operation_title:
             self.back_button.setEnabled(False)
+        elif hasattr(self, 'settings_back_button'):
+            self.settings_back_button.setEnabled(False)
         self.selector.setEnabled(False); self.search.setEnabled(False); self.create_button.setEnabled(False)
         self.edit_button.setEnabled(False); self.destination_choice.setEnabled(False)
         self.add_photos.setEnabled(False); self.remove_selected.setEnabled(False); self.clear_list.setEnabled(False); self.inputs.setEnabled(False)
@@ -2048,6 +2620,11 @@ class RunRecipeDialog(QDialog):
         self.progress.setWindowModality(Qt.WindowModal); self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False); self.progress.setAutoReset(False)
         self.execution_succeeded = False
+        self._execution_completed = False
+        self.results = []
+        self._execution_started_at = time.monotonic()
+        if hasattr(self, 'open_output_button'):
+            self.open_output_button.hide()
         self.worker = RecipeWorker(
             recipe, files, chosen, self,
             approved_plan=self.approved_plan,
@@ -2068,24 +2645,46 @@ class RunRecipeDialog(QDialog):
         self.cancel_button.setText('Cancel all')
         self.worker.start()
 
+    def _update_progress_dialog(self):
+        if self.progress is None or self.job_status is None:
+            return
+        ok, failed, cancelled, skipped, _remaining = self.job_status.counts()
+        stage = 'Cancelling current operation…' if self.job_status.cancelling else self.job_status.stage
+        source = self.job_status.source
+        name = Path(source).name if source else ''
+        if self.job_status.index > 0 and name:
+            headline = f'Image {self.job_status.index} of {self.job_status.total}: {name}'
+        else:
+            headline = f'{self.job_status.action}…'
+        self.progress.setLabelText(f'{headline}\n{stage}')
+        self.progress.label.setToolTip(source)
+        parts = [f'Completed: {ok} of {self.job_status.total}']
+        if failed:
+            parts.append(f'{failed} failed')
+        if cancelled:
+            parts.append(f'{cancelled} cancelled')
+        if skipped:
+            parts.append(f'{skipped} skipped')
+        self.progress.setStatusText(', '.join(parts))
+
     @Slot(str, int)
     def execution_started(self, source, index):
         self.job_status.start(source,index)
-        self.progress.setLabelText(self.job_status.label()); self.progress.setValue(index - 1)
+        self._update_progress_dialog(); self.progress.setValue(index - 1)
 
     @Slot(dict, int)
     def execution_item(self, result, index):
         self.job_status.finish(result)
-        self.progress.setLabelText(self.job_status.label()); self.progress.setValue(index)
+        self._update_progress_dialog(); self.progress.setValue(index)
 
     def execution_stage(self, message):
         if self.worker is not None and self.sender() == self.worker:
-            self.job_status.stage = message; self.progress.setLabelText(self.job_status.label())
+            self.job_status.stage = message; self._update_progress_dialog()
 
     def cancel_execution(self):
         if self.worker is not None:
             self.worker.requestInterruption(); self.job_status.cancelling=True
-            self.progress.setLabelText(self.job_status.label())
+            self._update_progress_dialog()
 
     @Slot()
     def execution_finished(self):
@@ -2093,6 +2692,33 @@ class RunRecipeDialog(QDialog):
         self.execution_succeeded = (bool(self.files) and not worker.cancelled and not worker.error
                                     and len(worker.results) == len(self.files)
                                     and all(result['ok'] for result in worker.results))
+        if (
+            self.execution_succeeded
+            and not self.operation_title
+            and self.authored_recipe is not None
+            and self._approved_run_remember is not None
+        ):
+            rem_rid, active_ids, resolved_vals = self._approved_run_remember
+            if rem_rid and rem_rid == self.selected_id and not rem_rid.startswith('dev-draft-'):
+                remember_ids = {
+                    p['id'] for p in self.authored_recipe.get('parameters', ())
+                    if p.get('remember', False)
+                }
+                if remember_ids:
+                    try:
+                        updated = {
+                            pid: val
+                            for pid, val in load_remembered_values(rem_rid).items()
+                            if pid in remember_ids
+                        }
+                        for pid in remember_ids:
+                            if pid in active_ids and pid in resolved_vals:
+                                updated[pid] = resolved_vals[pid]
+                        save_remembered_values(rem_rid, updated)
+                        if hasattr(self, 'settings_page'):
+                            self.settings_page.set_has_remembered(bool(updated))
+                    except (OSError, RecipeError):
+                        pass
         self.progress.complete(); self.progress.deleteLater()
         skipped=[]
         for index,result in enumerate(worker.results):
@@ -2102,20 +2728,60 @@ class RunRecipeDialog(QDialog):
                 result={'source':str(self.files[index]),'ok':False,'skipped':True,'error':'Not scheduled after cancellation' if worker.cancelled else 'Not scheduled after job error'}
                 skipped.append(result); self.job_status.finish(result)
                 self.inputs.topLevelItem(index).setText(1,'Skipped')
-        self.summary.setText(self.job_status.label().split('\n')[-1] + ('; cancelled before remaining files' if worker.cancelled else '') + ('; execution error' if worker.error else ''))
-        report = [r['output'] if r['ok'] else r['source'] + ': ' + r['error'] for r in worker.results+skipped]
-        if worker.error: report.append(worker.error)
-        self.diagnostics.setPlainText('\n'.join(report))
-        self.diagnostics.setMaximumHeight(200)
-        # The existing bottom panel becomes the completion report.
-        # No popup or additional report window.
+        elapsed = max(0.0, time.monotonic() - getattr(self, '_execution_started_at', time.monotonic()))
+        ok, failed, cancelled, skipped_count, _remaining = self.job_status.counts()
+        metadata_warnings = [
+            result.get('warning', '')
+            for result in worker.results
+            if result.get('ok')
+            and result.get('warning')
+        ]
         if not self.operation_title:
-            self.technical_details_button.setChecked(True)
+            self._execution_completed = True
+            self._update_window_title()
+            if self.execution_succeeded:
+                noun = 'image' if ok == 1 else 'images'
+                self.summary.setText(f'{ok} {noun} successfully processed.')
+            else:
+                parts = []
+                if ok:
+                    parts.append(f'{ok} succeeded')
+                if failed:
+                    parts.append(f'{failed} failed')
+                if cancelled:
+                    parts.append(f'{cancelled} cancelled')
+                if skipped_count:
+                    parts.append(f'{skipped_count} skipped')
+                summary_text = (', '.join(parts) + '.') if parts else 'No images were processed.'
+                if failed:
+                    summary_text += ' Failed outputs were not published.'
+                elif worker.error:
+                    summary_text += ' Execution error.'
+                self.summary.setText(summary_text)
+            detail_lines = [f'Elapsed time: {elapsed:.2f} s']
+            for r in worker.results + skipped:
+                if r.get('ok'):
+                    detail_lines.append(f"Created: {r['output']} (from {r['source']})")
+                    if r.get('warning'):
+                        detail_lines.append(f"Warning: {r['warning']}")
+                else:
+                    detail_lines.append(f"{r['source']}: {r.get('error', 'Failed')}")
+            if worker.error:
+                detail_lines.append(f'Error: {worker.error}')
+            self.diagnostics.setPlainText('\n'.join(detail_lines))
+            self.diagnostics.setMaximumHeight(160)
+            has_issues = bool(worker.error or not self.execution_succeeded or metadata_warnings)
+            self.technical_details_button.setChecked(has_issues)
             self.sync_diagnostics()
-        if worker.error or not self.execution_succeeded:
-            if self.operation_title: self.diagnostics.show()
-            else: self.sync_diagnostics()
-        if self.operation_title:
+            self._update_open_output_button()
+        else:
+            self.summary.setText(self.job_status.label().split('\n')[-1] + ('; cancelled before remaining files' if worker.cancelled else '') + ('; execution error' if worker.error else ''))
+            report = [r['output'] if r['ok'] else r['source'] + ': ' + r['error'] for r in worker.results+skipped]
+            if worker.error: report.append(worker.error)
+            self.diagnostics.setPlainText('\n'.join(report))
+            self.diagnostics.setMaximumHeight(200)
+            if worker.error or not self.execution_succeeded:
+                self.diagnostics.show()
             failures = [
                 result.get('error', '')
                 for result in worker.results
@@ -2131,19 +2797,12 @@ class RunRecipeDialog(QDialog):
                     bool(result.get('ok'))
                     for result in worker.results
                 )
-                failed = len(failures)
+                failed_n = len(failures)
                 self.summary.setText(
                     f"{succeeded} succeeded, "
-                    f"{failed} failed. "
+                    f"{failed_n} failed. "
                     "Failed outputs were not published."
                 )
-
-        metadata_warnings = [
-            result.get('warning', '')
-            for result in worker.results
-            if result.get('ok')
-            and result.get('warning')
-        ]
 
         if self.operation_title and metadata_warnings:
             self.summary.setText(metadata_warnings[0])
@@ -2155,7 +2814,7 @@ class RunRecipeDialog(QDialog):
             ]
 
             self.diagnostics.setPlainText(
-                'Created: ' + '\\n'.join(created)
+                'Created: ' + '\n'.join(created)
             )
             self.diagnostics.setMaximumHeight(72)
             self.diagnostics.show()
@@ -2167,17 +2826,11 @@ class RunRecipeDialog(QDialog):
 
         self.cancel_button.setText('Close')
 
-        failures = [
-            item.get("error", "")
-            for item in worker.results
-            if not item.get("ok")
-        ]
-        if worker.error:
-            failures.append(worker.error)
-
-
         if not self._closing:
+            self.inputs.setEnabled(True)
             for control in (self.selector,self.search,self.create_button,self.choose_destination,self.destination_choice): control.setEnabled(True)
+            if hasattr(self, 'settings_back_button'):
+                self.settings_back_button.setEnabled(True)
             self.update_edit_button()
             self.update_file_actions()
         worker.deleteLater()

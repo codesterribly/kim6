@@ -62,6 +62,9 @@ src/bin/kim_desktop_exec.py|bin/kim_desktop_exec.py|0644
 src/bin/kim_recipe_run.py|bin/kim_recipe_run.py|0644
 src/bin/kim_review_ui.py|bin/kim_review_ui.py|0644
 src/bin/kim_recipe_core.py|bin/kim_recipe_core.py|0644
+src/bin/kim_recipe_params.py|bin/kim_recipe_params.py|0644
+src/bin/kim_recipe_param_ui.py|bin/kim_recipe_param_ui.py|0644
+src/bin/kim_recipe_author_ui.py|bin/kim_recipe_author_ui.py|0644
 src/bin/kim_recipe_image.py|bin/kim_recipe_image.py|0644
 src/bin/kim_recipe_dates.py|bin/kim_recipe_dates.py|0644
 src/bin/kim_psd_source.py|bin/kim_psd_source.py|0644

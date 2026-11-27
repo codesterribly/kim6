@@ -1,5 +1,5 @@
 """Declarative recipes, storage, planning and create-only batch publication."""
-from kim_psd_source import source_session, header as psd_header, PSDError
+from kim_psd_source import source_session, parse_header as psd_header, PSDError
 import argparse
 import contextlib
 import copy
@@ -21,7 +21,17 @@ if __name__ == '__main__':
     sys.modules['kim_recipe_core'] = sys.modules[__name__]
 
 
-LIBRARY_SCHEMA = 4
+CONCRETE_SCHEMA = 3
+AUTHORED_SCHEMA = 4
+LIBRARY_SCHEMA = 5
+REMEMBERED_SCHEMA = 1
+REMEMBERED_LIMIT = 256 * 1024
+
+
+def _validate_persisted_recipe(recipe):
+    """Validate one persisted authored Recipe definition (fixed or parameterized)."""
+    from kim_recipe_params import validate_authored
+    return validate_authored(recipe)
 
 
 class RecipeError(ValueError):
@@ -64,6 +74,28 @@ def component(value):
     if not value or value in ('.', '..') or '/' in value or '\\' in value:
         raise RecipeError('Expected one safe filename component')
     return value
+
+
+SUBFOLDER_DATE_TOKENS = ('year', 'capture_date')
+
+
+def subfolder_parts(value, *, allow_date_tokens=False):
+    """Validate a relative single- or multi-component subfolder path."""
+    text(value, 500)
+    if not value or value.startswith('/') or value.endswith('/') or '\\' in value:
+        raise RecipeError('Expected a safe relative subfolder path')
+    parts = value.split('/')
+    if not 1 <= len(parts) <= 8:
+        raise RecipeError('Subfolder path must have 1 to 8 directory levels')
+    for part in parts:
+        if not part or part in ('.', '..'):
+            raise RecipeError('Expected a safe relative subfolder path')
+        if allow_date_tokens and ('{year}' in part or '{capture_date}' in part):
+            sample = part.replace('{year}', '2026').replace('{capture_date}', '2026-11-20')
+            component(sample)
+        else:
+            component(part)
+    return tuple(parts)
 
 
 def pattern(value):
@@ -143,7 +175,7 @@ def validate(recipe):
         keys(destination, ('mode',))
     elif mode == 'subfolder':
         keys(destination, ('mode', 'folder'))
-        component(destination['folder'])
+        subfolder_parts(destination['folder'], allow_date_tokens=True)
     elif mode == 'directory':
         keys(destination, ('mode', 'ask'), ('path',))
         if type(destination['ask']) is not bool:
@@ -178,7 +210,7 @@ def validate(recipe):
 
 
 def read_portable_recipe(path):
-    """Read a bounded, validated individual schema 3 Recipe."""
+    """Read a bounded, validated individual authored Recipe (schema 4)."""
     fd = os.open(
         path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     )
@@ -202,12 +234,12 @@ def read_portable_recipe(path):
         raise RecipeError(
             'Individual Recipe files cannot assign local library settings'
         )
-    return validate(recipe)
+    return _validate_persisted_recipe(recipe)
 
 
 def write_portable_recipe(recipe, path):
-    """Export one Recipe without overwriting an existing file."""
-    portable = validate(copy.deepcopy(recipe))
+    """Export one authored Recipe without overwriting an existing file."""
+    portable = _validate_persisted_recipe(copy.deepcopy(recipe))
     portable.pop('folder', None)
     portable.pop('dolphin_shortcut', None)
 
@@ -392,7 +424,7 @@ def merge_recipe_bundle(existing, imported, shipped=()):
             item['folder'] = folder_map[original_folder]
         item['dolphin_shortcut'] = False
 
-        result.recipes.append(validate(item))
+        result.recipes.append(_validate_persisted_recipe(item))
 
     result = validate_library({
         'schema': LIBRARY_SCHEMA,
@@ -404,6 +436,128 @@ def merge_recipe_bundle(existing, imported, shipped=()):
 
 def config_path():
     return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kimng' / 'recipes.json'
+
+
+def remembered_path():
+    return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kimng' / 'recipe_remembered.json'
+
+
+def _read_remembered_store(path=None):
+    target = Path(path or remembered_path())
+    if not os.path.lexists(target):
+        return {}
+    try:
+        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, encoding='utf-8') as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                return {}
+            payload = stream.read(REMEMBERED_LIMIT + 1)
+    except OSError:
+        return {}
+    if len(payload) > REMEMBERED_LIMIT:
+        return {}
+    try:
+        data = strict_json(payload)
+    except RecipeError:
+        return {}
+    if (
+        not isinstance(data, dict)
+        or data.get('schema') != REMEMBERED_SCHEMA
+        or not isinstance(data.get('recipes'), dict)
+    ):
+        return {}
+    cleaned = {}
+    for rid, mapping in data['recipes'].items():
+        if isinstance(rid, str) and isinstance(mapping, dict):
+            cleaned[rid] = {
+                pid: copy.deepcopy(val)
+                for pid, val in mapping.items()
+                if isinstance(pid, str) and val is not None
+            }
+    return cleaned
+
+
+def _write_remembered_store(store, path=None):
+    target = Path(path or remembered_path())
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if target.parent.resolve() != target.parent.absolute() or (
+        os.path.lexists(target)
+        and (target.is_symlink() or not target.is_file() or target.stat().st_nlink != 1)
+    ):
+        raise RecipeError('Unsafe remembered-answers storage')
+    data = {
+        'schema': REMEMBERED_SCHEMA,
+        'recipes': {
+            rid: mapping for rid, mapping in store.items()
+            if isinstance(rid, str) and isinstance(mapping, dict) and mapping
+        },
+    }
+    encoded = (json.dumps(data, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+    if len(encoded) > REMEMBERED_LIMIT:
+        raise RecipeError('Remembered-answers storage exceeds size limit')
+    with tempfile.NamedTemporaryFile(
+        mode='wb', dir=target.parent, prefix='.recipe-remembered-', delete=False
+    ) as stream:
+        stage = Path(stream.name)
+        try:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.replace(stage, target)
+        finally:
+            stage.unlink(missing_ok=True)
+
+
+def load_remembered_values(recipe_id, path=None):
+    """Load local remembered answers for one saved Recipe ID (never raises on missing)."""
+    if not isinstance(recipe_id, str) or not recipe_id:
+        return {}
+    store = _read_remembered_store(path=path)
+    return copy.deepcopy(store.get(recipe_id, {}))
+
+
+def save_remembered_values(recipe_id, values, path=None):
+    """Atomically save remembered answers for one saved Recipe ID with 0600 permissions."""
+    if not isinstance(recipe_id, str) or not recipe_id:
+        return
+    store = _read_remembered_store(path=path)
+    cleaned = {
+        pid: copy.deepcopy(val)
+        for pid, val in (values or {}).items()
+        if isinstance(pid, str) and val is not None
+    }
+    if cleaned:
+        store[recipe_id] = cleaned
+    else:
+        store.pop(recipe_id, None)
+    _write_remembered_store(store, path=path)
+
+
+def clear_remembered_values(recipe_id, param_ids=None, path=None):
+    """Remove remembered answers for one Recipe ID (or specific parameter IDs)."""
+    if not isinstance(recipe_id, str) or not recipe_id:
+        return
+    target = Path(path or remembered_path())
+    if not os.path.lexists(target):
+        return
+    store = _read_remembered_store(path=target)
+    if recipe_id not in store:
+        return
+    if param_ids is None:
+        store.pop(recipe_id, None)
+    else:
+        entry = store[recipe_id]
+        changed = False
+        for pid in param_ids:
+            if pid in entry:
+                entry.pop(pid, None)
+                changed = True
+        if not changed:
+            return
+        if not entry:
+            store.pop(recipe_id, None)
+    _write_remembered_store(store, path=target)
 
 
 def folder_name(value):
@@ -558,7 +712,7 @@ def validate_library(data):
             seen.add(parent_id)
             parent_id = by_id[parent_id]['parent_id']
 
-    recipes = [validate(item) for item in data['recipes']]
+    recipes = [_validate_persisted_recipe(item) for item in data['recipes']]
 
     if len({r['id'] for r in recipes}) != len(recipes):
         raise RecipeError('Duplicate Recipe ID')
@@ -590,15 +744,49 @@ def read_recipes(path, missing=False):
     return read_library(path, missing).recipes
 
 
-def builtins():
+BUILTIN_CATEGORIES = (
+    'Common',
+    'Adventure',
+    'Asset Management',
+)
+
+
+def builtin_catalog():
     path = Path(__file__).resolve().parent.parent / 'recipes' / 'builtins.json'
     data = strict_json(path.read_text(encoding='utf-8'))
+
     if not isinstance(data, list):
         raise RecipeError('Invalid built-in Recipe collection')
-    recipes = [validate(item) for item in data]
-    if any('folder' in r for r in recipes):
-        raise RecipeError('Built-in recipes must remain unfiled')
-    return recipes
+
+    entries = []
+    seen = set()
+
+    for item in data:
+        if not isinstance(item, dict):
+            raise RecipeError('Invalid built-in Recipe entry')
+
+        definition = copy.deepcopy(item)
+        category = definition.pop('category', None)
+
+        if category not in BUILTIN_CATEGORIES:
+            raise RecipeError('Invalid built-in Recipe category')
+
+        recipe = _validate_persisted_recipe(definition)
+
+        if 'folder' in recipe or 'dolphin_shortcut' in recipe:
+            raise RecipeError('Built-in recipes must remain unfiled')
+
+        if recipe['id'] in seen:
+            raise RecipeError('Duplicate built-in Recipe id')
+
+        seen.add(recipe['id'])
+        entries.append((category, recipe))
+
+    return entries
+
+
+def builtins():
+    return [recipe for _, recipe in builtin_catalog()]
 
 
 def load_library():
@@ -642,9 +830,10 @@ def folder_path(folder_id, folders):
 
 
 def builtin_category(recipe):
-    return {
-        'web-export': 'Everyday',
-    }.get(recipe['id'], 'Everyday')
+    for category, definition in builtin_catalog():
+        if definition['id'] == recipe['id']:
+            return category
+    raise RecipeError('Unknown built-in Recipe category')
 
 
 def recipe_title(recipe, folders=()):
@@ -666,16 +855,24 @@ def library_groups(library, shipped=None):
         recipes, key=lambda r: (r['name'].casefold(), r['id'])
     )
 
-    shipped = builtins() if shipped is None else shipped
+    catalog = builtin_catalog()
+    categories = {
+        recipe['id']: category
+        for category, recipe in catalog
+    }
+    shipped = (
+        [recipe for _, recipe in catalog]
+        if shipped is None else shipped
+    )
     groups = []
 
-    for category in ('Everyday', 'Hiker', 'Digital asset manager'):
+    for category in BUILTIN_CATEGORIES:
         groups.append((
             None,
             'Built-ins / ' + category,
             ordered([
                 r for r in shipped
-                if builtin_category(r) == category
+                if categories.get(r['id']) == category
             ]),
         ))
 
@@ -792,8 +989,9 @@ def directory_binding(directory):
             try:
                 child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             except FileNotFoundError:
-                if index != len(directory.parts) - 1: raise
-                identities.append(None)
+                for remaining in directory.parts[index:]:
+                    component(remaining)
+                    identities.append(None)
                 break
             os.close(fd)
             fd = child
@@ -805,9 +1003,9 @@ def directory_binding(directory):
 
 def output_key(item):
     path = Path(item.output)
-    identity = item.destination[-1]
-    return ((identity, path.name) if identity is not None
-            else (item.destination[-2], path.parent.name, path.name))
+    dest = item.destination
+    deepest = next((i for i in range(len(dest) - 1, -1, -1) if dest[i] is not None), 0)
+    return (dest[deepest], tuple(path.parts[deepest + 1:]))
 
 
 def block_output_collisions(rows):
@@ -835,7 +1033,8 @@ def approve_rows(recipe, sources, rows, chosen=None):
         item = row.approved
         if row.problems:
             raise RecipeError('Publication blocked: ' + '; '.join(row.problems))
-        directory = destination_for(recipe, Path(os.path.abspath(source)), chosen)
+        item_state = json.loads(item.state_json) if item is not None else None
+        directory = destination_for(recipe, Path(os.path.abspath(source)), chosen, state=item_state)
         if directory is None:
             raise RecipeError('Choose a destination directory before applying')
         if (item is None or item.source != os.path.abspath(source)
@@ -858,16 +1057,37 @@ class Plan:
     row: PreviewRow
 
 
-def destination_for(recipe, source, chosen=None, create=False):
+def destination_for(recipe, source, chosen=None, create=False, *, state=None):
     dest = recipe['destination']
     if dest['mode'] == 'beside':
         directory = source.parent
     elif dest['mode'] == 'subfolder':
-        directory = source.parent / dest['folder']
-        if directory.is_symlink():
-            raise RecipeError('Subfolder destination is a symlink')
-        if create:
-            directory.mkdir(exist_ok=True, mode=0o700)
+        parts = subfolder_parts(dest['folder'], allow_date_tokens=True)
+        resolved_parts = []
+        for part in parts:
+            if '{year}' in part or '{capture_date}' in part:
+                if state is None or not state.get('capture_year') or not state.get('capture_date_iso'):
+                    detail = (state or {}).get('capture_problem') or 'no usable embedded capture date was found'
+                    raise RecipeError(
+                        'Capture date metadata is missing or invalid ('
+                        + str(detail)
+                        + '). Organize by Capture Date requires a reliable embedded capture date and never substitutes file modification time.'
+                    )
+                part = part.replace('{year}', state['capture_year']).replace('{capture_date}', state['capture_date_iso'])
+            resolved_parts.append(component(part))
+        if chosen:
+            root = Path(chosen)
+            if not root.is_absolute():
+                raise RecipeError('Choose a destination directory')
+        else:
+            root = source.parent
+        directory = root
+        for part in resolved_parts:
+            directory = directory / part
+            if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+                raise RecipeError('Subfolder destination is a symlink' if directory.is_symlink() else 'Unsafe destination directory')
+            if create and not directory.exists():
+                directory.mkdir(mode=0o700)
     else:
         if dest['ask'] and not chosen and not create:
             return None
@@ -877,9 +1097,17 @@ def destination_for(recipe, source, chosen=None, create=False):
     if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
         raise RecipeError('Unsafe destination directory')
     if not directory.exists():
-        if create or not directory.parent.is_dir():
+        if create:
             raise RecipeError('Destination directory does not exist')
-    check = directory if directory.exists() else directory.parent
+        if dest['mode'] != 'subfolder' and not directory.parent.is_dir():
+            raise RecipeError('Destination directory does not exist')
+    check = directory
+    while not check.exists() and check != check.parent:
+        if check.is_symlink():
+            raise RecipeError('Unsafe destination directory')
+        check = check.parent
+    if check.is_symlink() or not check.is_dir():
+        raise RecipeError('Unsafe destination directory')
     if not os.access(check, os.W_OK | os.X_OK):
         raise RecipeError('Destination is not writable')
     return directory.absolute()
@@ -890,8 +1118,6 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     source = Path(os.path.abspath(source))
     if source.is_symlink() or not source.is_file():
         raise RecipeError('Source must be a regular file, not a symlink')
-    directory = destination_for(recipe, source, chosen, create)
-    binding = directory_binding(directory) if directory is not None else None
     before = source.lstat()
     if not stat.S_ISREG(before.st_mode):
         raise RecipeError('Source must be a regular file, not a symlink')
@@ -899,6 +1125,8 @@ def plan(recipe, source, index=1, chosen=None, create=False):
     after = source.lstat()
     if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):
         raise RecipeError('Source changed during inspection; try again')
+    directory = destination_for(recipe, source, chosen, create, state=state)
+    binding = directory_binding(directory) if directory is not None else None
     from kim_process import stage as job_stage
     job_stage('Planning output filename')
     name = component(state['name']) + '.' + state['extension']
@@ -1069,30 +1297,53 @@ def verify_directory_binding(directory, binding):
 def open_approved_directory(item, cache, stack):
     directory = Path(item.output).parent
     key = str(directory)
+    created_map = cache.setdefault('_created', {})
     if key in cache:
         fd, binding, reviewed = cache[key]
         if reviewed != item.destination:
             raise RecipeError('Destination directory changed between reviewed sources')
     else:
-        verify_directory_binding(directory, item.destination)
-        if item.destination[-1] is None:
-            parent_fd = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            try:
-                if (directory_binding(directory.parent) != item.destination[:-1]
-                        or source_identity(os.fstat(parent_fd))[:2] != item.destination[-2]):
+        expected = item.destination
+        deepest = next((i for i in range(len(expected) - 1, -1, -1) if expected[i] is not None), 0)
+        parts = directory.parts
+        # Build effective expected prefix, accepting directories created by THIS batch only.
+        effective_expected = list(expected)
+        cur_path = Path(parts[0])
+        for i in range(1, len(parts)):
+            cur_path = cur_path / parts[i]
+            if i > deepest and str(cur_path) in created_map:
+                effective_expected[i] = created_map[str(cur_path)]
+        verify_directory_binding(directory, tuple(effective_expected))
+
+        # Walk from deepest existing/batch-created ancestor to target, creating missing levels safely.
+        cur_fd = os.open(parts[0], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            cur_path = Path(parts[0])
+            for i in range(1, len(parts)):
+                part = parts[i]
+                cur_path = cur_path / part
+                exp_id = effective_expected[i]
+                if exp_id is None:
+                    # Must not exist yet (any independent creation fails closed).
+                    os.mkdir(part, mode=0o700, dir_fd=cur_fd)
+                    os.fsync(cur_fd)
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=cur_fd)
+                os.close(cur_fd)
+                cur_fd = child
+                actual_id = source_identity(os.fstat(cur_fd))[:2]
+                if exp_id is not None and actual_id != exp_id:
                     raise RecipeError('Destination directory changed since review')
-                # An independently created entry requires renewed review.
-                os.mkdir(directory.name, mode=0o700, dir_fd=parent_fd)
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
-        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                if exp_id is None:
+                    created_map[str(cur_path)] = actual_id
+            fd = cur_fd
+            cur_fd = None
+        finally:
+            if cur_fd is not None:
+                os.close(cur_fd)
+
         stack.callback(os.close, fd)
         binding = directory_binding(directory)
-        expected = item.destination
-        if ((binding[:-1] != expected[:-1])
-                or (expected[-1] is not None and binding[-1] != expected[-1])
-                or source_identity(os.fstat(fd))[:2] != binding[-1]):
+        if binding[:deepest + 1] != expected[:deepest + 1] or source_identity(os.fstat(fd))[:2] != binding[-1]:
             raise RecipeError('Destination directory changed since review')
         cache[key] = fd, binding, item.destination
     verify_directory_binding(directory, binding)
@@ -1109,7 +1360,7 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1,
     """
     recipe = validate(recipe)
     sources = list(sources)
-    from kim_process import cancelled, checkpoint, stage as job_stage, ProcessError
+    from kim_process import open_inspection_fd, cancelled, checkpoint, stage as job_stage, ProcessError
     try:
         if approved_plan is None:
             approved_plan = approve_rows(recipe, sources,
@@ -1122,7 +1373,8 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1,
             if (not isinstance(item, ApprovedOutput) or item.source != os.path.abspath(source)
                     or json.loads(item.recipe_json) != recipe):
                 raise RecipeError('Approved plan changed; review the source and operations again')
-            directory = destination_for(recipe, Path(item.source), chosen)
+            item_state = json.loads(item.state_json)
+            directory = destination_for(recipe, Path(item.source), chosen, state=item_state)
             if directory is None or directory != Path(item.output).parent:
                 raise RecipeError('Approved destination changed; review again')
             key = output_key(item)
@@ -1155,12 +1407,12 @@ def execute(recipe, sources, chosen=None, progress=None, start_index=1,
                     pinned = Path(f'/proc/{os.getpid()}/fd/{fd}')
                     with tempfile.TemporaryDirectory(prefix='.kimng-stage.', dir=pinned) as tmp:
                         original = Path(tmp) / 'input'
-                        srcfd = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                        srcfd = open_inspection_fd(source_path)
                         with os.fdopen(srcfd, 'rb') as inp, original.open('xb') as out:
                             before = os.fstat(inp.fileno())
                             if not stat.S_ISREG(before.st_mode) or source_identity(before) != item.identity:
                                 raise RecipeError('Source changed before copying; review again')
-                            try: psd_header(Path(f'/proc/{os.getpid()}/fd/{inp.fileno()}'))
+                            try: psd_header(os.pread(inp.fileno(), 26, 0))
                             except PSDError as exc: raise RecipeError(str(exc)) from exc
                             while block := inp.read(1024*1024):
                                 checkpoint(); out.write(block)
@@ -1233,15 +1485,22 @@ def main():
             return launch(args.files)
         recipe = next((r for r in recipes if r['id'] == args.recipe), None)
         if recipe is None:
-            recipe = validate(strict_json(Path(args.recipe).read_text()))
+            recipe = _validate_persisted_recipe(strict_json(Path(args.recipe).read_text()))
+        from kim_recipe_params import is_parameterized, resolve_recipe
+        if is_parameterized(recipe):
+            raise RecipeError(
+                'This Recipe asks for settings when running and cannot run noninteractively. '
+                'Open it with --run-id or Run a Recipe.'
+            )
+        concrete = resolve_recipe(recipe, validated=True)
         if not args.files:
             raise RecipeError('Select at least one input')
         if args.preview:
             from dataclasses import asdict
-            result = [asdict(row) for row in preview(recipe, args.files, args.destination)]
+            result = [asdict(row) for row in preview(concrete, args.files, args.destination)]
             for row in result: row.pop('approved', None)
             print(json.dumps(result, indent=2)); return int(any(r['problems'] for r in result))
-        result = execute(recipe, args.files, args.destination)
+        result = execute(concrete, args.files, args.destination)
         print(json.dumps(result, indent=2))
         return int(any(not r['ok'] for r in result))
     except (OSError, RecipeError, ImportError) as exc:

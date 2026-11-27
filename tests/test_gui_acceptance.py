@@ -120,7 +120,7 @@ class GuiAcceptanceTests(unittest.TestCase):
         import kim_psd_source as psd
         command=psd.command;decodes=[]
         def trace(path,*a,**kw):
-            calls.append((os.readlink(path),threading.get_ident()));return real(path,*a,**kw)
+            calls.append((str(path),threading.get_ident()));return real(path,*a,**kw)
         def decode(args,**kw):
             if 'psd:-[0]' in args:decodes.append(1)
             return command(args,**kw)
