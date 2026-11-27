@@ -314,7 +314,7 @@ from kim_crop_standalone import CropReview, CropExecution
 from kim_image_ops import CROP_DEFAULTS
 long_source = first.with_name('a_very_long_descriptive_source_filename_' * 3 + '.png')
 first.rename(long_source); before[long_source] = before.pop(first)
-recipe = {'schema': 1, 'id': 'crop-check', 'name': 'Crop', 'media': 'image',
+recipe = {'schema': 3, 'id': 'crop-check', 'name': 'Crop', 'description': '', 'media': 'image',
           'steps': [dict(op='image.crop', **{**CROP_DEFAULTS, 'aspect': '1:1'}),
                     {'op': 'file.rename_output', 'pattern': '{stem}_crop'}],
           'destination': {'mode': 'beside'}}
@@ -346,7 +346,7 @@ for index in range(5):
     source = first_dir / (('long_descriptive_source_filename_' * 4) + f'{index}.png')
     subprocess.run(['magick', '-size', '24x16', 'xc:blue', str(source)], check=True)
     sources.append(str(source))
-recipe = {'schema': 1, 'id': 'crop-check', 'name': 'Crop', 'media': 'image',
+recipe = {'schema': 3, 'id': 'crop-check', 'name': 'Crop', 'description': '', 'media': 'image',
           'steps': [dict(op='image.crop', **{**CROP_DEFAULTS, 'aspect': '1:1'}),
                     {'op': 'file.rename_output', 'pattern': '{stem}_crop'}],
           'destination': {'mode': 'beside'}}
@@ -393,7 +393,7 @@ assert all(result['ok'] and Path(result['output']).is_file() for result in worke
     def test_crop_duplicate_batch_summary_and_destination_recheck(self):
         self.run_gui(REAL + '''
 from kim_crop_standalone import CropReview
-recipe = {'schema': 1, 'id': 'duplicate-crop', 'name': 'Crop', 'media': 'image',
+recipe = {'schema': 3, 'id': 'duplicate-crop', 'name': 'Crop', 'description': '', 'media': 'image',
           'steps': [{'op': 'file.rename_output', 'pattern': '{stem}_copy'}],
           'destination': {'mode': 'directory', 'ask': False, 'path': str(shared)}}
 d = CropReview(recipe, files); d.show()
@@ -432,7 +432,7 @@ d.reject(); unchanged()
     def test_crop_disk_collision_summary_and_details_disable_apply(self):
         self.run_gui(REAL + '''
 from kim_crop_standalone import CropReview
-recipe = {'schema': 1, 'id': 'crop-check', 'name': 'Crop', 'media': 'image',
+recipe = {'schema': 3, 'id': 'crop-check', 'name': 'Crop', 'description': '', 'media': 'image',
           'steps': [{'op': 'file.rename_output', 'pattern': '{stem}_crop'}],
           'destination': {'mode': 'beside'}}
 output = first.with_name('sample_crop.png'); output.write_bytes(b'occupied')

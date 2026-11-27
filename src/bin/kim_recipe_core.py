@@ -21,7 +21,7 @@ if __name__ == '__main__':
     sys.modules['kim_recipe_core'] = sys.modules[__name__]
 
 
-ROOT_FOLDER = "@kimng-root"  # Virtual assignment; impossible as an ordinary folder ID.
+LIBRARY_SCHEMA = 4
 
 
 class RecipeError(ValueError):
@@ -113,12 +113,14 @@ def enabled_steps(steps):
 
 
 def validate(recipe):
-    keys(recipe, ('schema', 'id', 'name', 'description', 'media', 'steps', 'destination'), ('folder',))
+    keys(recipe, ('schema', 'id', 'name', 'description', 'media', 'steps', 'destination'), ('folder', 'dolphin_shortcut'))
+    if 'dolphin_shortcut' in recipe and type(recipe['dolphin_shortcut']) is not bool:
+        raise RecipeError('Dolphin shortcut must be boolean')
     if type(recipe['schema']) is not int or recipe['schema'] != 3:
         raise RecipeError('Unsupported recipe schema')
     if not isinstance(recipe['id'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', recipe['id']):
         raise RecipeError('Invalid recipe id')
-    if 'folder' in recipe and recipe['folder'] != ROOT_FOLDER and (not isinstance(recipe['folder'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', recipe['folder'])):
+    if 'folder' in recipe and (not isinstance(recipe['folder'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', recipe['folder'])):
         raise RecipeError('Invalid recipe folder id')
     if not text(recipe['name'], 100).strip():
         raise RecipeError('Recipe name is empty')
@@ -196,9 +198,9 @@ def read_portable_recipe(path):
     recipe = strict_json(decoded)
     if not isinstance(recipe, dict):
         raise RecipeError('Expected one Recipe JSON object')
-    if 'folder' in recipe:
+    if 'folder' in recipe or 'dolphin_shortcut' in recipe:
         raise RecipeError(
-            'Individual Recipe files cannot assign a library folder'
+            'Individual Recipe files cannot assign local library settings'
         )
     return validate(recipe)
 
@@ -207,6 +209,7 @@ def write_portable_recipe(recipe, path):
     """Export one Recipe without overwriting an existing file."""
     portable = validate(copy.deepcopy(recipe))
     portable.pop('folder', None)
+    portable.pop('dolphin_shortcut', None)
 
     data = (
         json.dumps(portable, indent=2, ensure_ascii=False) + '\n'
@@ -239,13 +242,13 @@ BUNDLE_LIMIT = 2 * 1024 * 1024
 
 def validate_recipe_bundle(data):
     keys(data, ('schema', 'kind', 'recipes', 'folders'))
-    if type(data['schema']) is not int or data['schema'] != 3:
+    if type(data['schema']) is not int or data['schema'] != LIBRARY_SCHEMA:
         raise RecipeError('Unsupported Recipe bundle schema')
     if data['kind'] != BUNDLE_KIND:
         raise RecipeError('Not a KIMng Recipe bundle')
 
     library = validate_library({
-        'schema': 3,
+        'schema': LIBRARY_SCHEMA,
         'recipes': data['recipes'],
         'folders': data['folders'],
     })
@@ -255,7 +258,7 @@ def validate_recipe_bundle(data):
 
 
 def read_recipe_bundle(path):
-    """Read and fully validate one bounded schema 3 JSON bundle."""
+    """Read and fully validate one bounded Recipe library bundle."""
     fd = os.open(
         path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     )
@@ -278,11 +281,13 @@ def read_recipe_bundle(path):
 def write_recipe_bundle(library, path):
     """Export the saved user library without overwriting any file."""
     contents = {
-        'schema': 3,
+        'schema': LIBRARY_SCHEMA,
         'kind': BUNDLE_KIND,
         'folders': copy.deepcopy(library.folders),
         'recipes': copy.deepcopy(library.recipes),
     }
+    for recipe in contents['recipes']:
+        recipe['dolphin_shortcut'] = False
     validate_recipe_bundle(contents)
 
     payload = (
@@ -313,37 +318,47 @@ def write_recipe_bundle(library, path):
 def merge_recipe_bundle(existing, imported, shipped=()):
     """Return a new validated library without changing existing data."""
     existing = validate_library({
-        'schema': 3,
+        'schema': LIBRARY_SCHEMA,
         'recipes': existing.recipes,
         'folders': existing.folders,
     })
     imported = validate_library({
-        'schema': 3,
+        'schema': LIBRARY_SCHEMA,
         'recipes': imported.recipes,
         'folders': imported.folders,
     })
 
     result = copy.deepcopy(existing)
-    folder_map = {}
-    existing_folders = {
-        name_key(folder['name']): folder['id']
-        for folder in result.folders
+    folder_map = {
+        folder['id']: 'folder-' + uuid.uuid4().hex
+        for folder in imported.folders
     }
 
-    # Matching folder names reuse the destination library's folder.
-    # Other folders receive fresh IDs.
+    # Reconstruct imported hierarchy using new local identities.
+    # Same-named sibling folders receive an imported suffix.
     for folder in imported.folders:
-        normalized = name_key(folder['name'])
-        if normalized in existing_folders:
-            destination_id = existing_folders[normalized]
-        else:
-            destination_id = 'folder-' + uuid.uuid4().hex
-            result.folders.append({
-                'id': destination_id,
-                'name': folder['name'],
-            })
-            existing_folders[normalized] = destination_id
-        folder_map[folder['id']] = destination_id
+        parent_id = folder_map.get(folder['parent_id'])
+        candidate = folder['name']
+        number = 1
+
+        while any(
+            f['parent_id'] == parent_id
+            and name_key(f['name']) == name_key(candidate)
+            for f in result.folders
+        ):
+            suffix = (
+                ' (imported)' if number == 1
+                else f' (imported {number})'
+            )
+            candidate = folder['name'][:60-len(suffix)] + suffix
+            number += 1
+
+        result.folders.append({
+            'id': folder_map[folder['id']],
+            'name': candidate,
+            'parent_id': parent_id,
+        })
+
 
     occupied_names = {
         name_key(recipe['name'])
@@ -373,13 +388,14 @@ def merge_recipe_bundle(existing, imported, shipped=()):
         imported_ids.append(item['id'])
 
         original_folder = item.get('folder')
-        if original_folder not in (None, ROOT_FOLDER):
+        if original_folder is not None:
             item['folder'] = folder_map[original_folder]
+        item['dolphin_shortcut'] = False
 
         result.recipes.append(validate(item))
 
     result = validate_library({
-        'schema': 3,
+        'schema': LIBRARY_SCHEMA,
         'recipes': result.recipes,
         'folders': result.folders,
     })
@@ -390,11 +406,13 @@ def config_path():
     return Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'kimng' / 'recipes.json'
 
 
-def folder_name(value, existing=False):
+def folder_name(value):
     component(value)
     if len(value) > 60 or value != value.strip() or any(unicodedata.category(c).startswith('C') for c in value):
         raise RecipeError('Folder names must be 1–60 characters, without controls or surrounding spaces')
-    if not existing and name_key(value) in ('root', 'unfiled', 'built-in'):
+    if name_key(value) in (
+        'root', 'unfiled', 'built-in', 'built-ins', 'user'
+    ):
         raise RecipeError('This folder name is reserved for a library presentation group')
     return value
 
@@ -408,35 +426,74 @@ class RecipeLibrary:
     recipes: list = field(default_factory=list)
     folders: list = field(default_factory=list)
 
-    def create_folder(self, name):
-        name = folder_name(name)
-        if any(name_key(f['name']) == name_key(name) for f in self.folders):
-            raise RecipeError('A folder with this name already exists')
-        folder = {'id': 'folder-' + uuid.uuid4().hex, 'name': name}
-        self.folders.append(folder)
-        return folder['id']
-
-    def rename_folder(self, folder_id, name):
-        name = folder_name(name)
-        if any(f['id'] != folder_id and name_key(f['name']) == name_key(name) for f in self.folders):
-            raise RecipeError('A folder with this name already exists')
-        self.find_folder(folder_id)['name'] = name
-
     def find_folder(self, folder_id):
         for folder in self.folders:
             if folder['id'] == folder_id:
                 return folder
-        raise RecipeError('Unknown recipe folder id')
+        raise RecipeError('Unknown Recipe folder')
+
+    def check_folder_name(self, name, parent_id, exclude=None):
+        name = folder_name(name)
+        if parent_id is not None:
+            self.find_folder(parent_id)
+        if any(
+            f['id'] != exclude
+            and f['parent_id'] == parent_id
+            and name_key(f['name']) == name_key(name)
+            for f in self.folders
+        ):
+            raise RecipeError('A sibling folder already uses this name')
+        return name
+
+    def create_folder(self, name, parent_id=None):
+        name = self.check_folder_name(name, parent_id)
+        folder = {
+            'id': 'folder-' + uuid.uuid4().hex,
+            'name': name,
+            'parent_id': parent_id,
+        }
+        self.folders.append(folder)
+        return folder['id']
+
+    def rename_folder(self, folder_id, name):
+        folder = self.find_folder(folder_id)
+        folder['name'] = self.check_folder_name(
+            name, folder['parent_id'], exclude=folder_id
+        )
+
+    def descendants(self, folder_id):
+        self.find_folder(folder_id)
+        result = {folder_id}
+        while True:
+            children = {
+                f['id'] for f in self.folders
+                if f['parent_id'] in result
+            }
+            expanded = result | children
+            if expanded == result:
+                return result
+            result = expanded
+
+    def move_folder(self, folder_id, parent_id=None):
+        folder = self.find_folder(folder_id)
+        if parent_id in self.descendants(folder_id):
+            raise RecipeError('A folder cannot contain itself')
+        self.check_folder_name(
+            folder['name'], parent_id, exclude=folder_id
+        )
+        folder['parent_id'] = parent_id
 
     def delete_folder(self, folder_id):
-        self.find_folder(folder_id)
-        self.folders = [f for f in self.folders if f['id'] != folder_id]
+        removed = self.descendants(folder_id)
+        self.folders = [
+            f for f in self.folders if f['id'] not in removed
+        ]
         for recipe in self.recipes:
-            if recipe.get('folder') == folder_id:
-                recipe.pop('folder')
+            if recipe.get('folder') in removed:
+                recipe.pop('folder', None)
 
     def move_recipe(self, recipe_id, folder_id=None):
-        if folder_id is not None and folder_id != ROOT_FOLDER:
+        if folder_id is not None:
             self.find_folder(folder_id)
         for recipe in self.recipes:
             if recipe['id'] == recipe_id:
@@ -445,33 +502,74 @@ class RecipeLibrary:
                 else:
                     recipe['folder'] = folder_id
                 return
-        raise RecipeError('Unknown user recipe id')
+        raise RecipeError('Unknown user Recipe')
 
 
 def validate_library(data):
-    if isinstance(data, list):
-        data = {'schema': 3, 'recipes': data, 'folders': []}
     keys(data, ('schema', 'recipes', 'folders'))
-    if type(data['schema']) is not int or data['schema'] != 3:
-        raise RecipeError('Unsupported recipe library schema')
+
+    if type(data['schema']) is not int or data['schema'] != LIBRARY_SCHEMA:
+        raise RecipeError('Unsupported Recipe library schema')
+
     if not isinstance(data['recipes'], list) or len(data['recipes']) > 500:
-        raise RecipeError('Invalid recipe collection')
+        raise RecipeError('Invalid Recipe collection')
+
     if not isinstance(data['folders'], list) or len(data['folders']) > 100:
-        raise RecipeError('Invalid recipe folders')
+        raise RecipeError('Invalid Recipe folders')
+
     folders = copy.deepcopy(data['folders'])
+
     for folder in folders:
-        keys(folder, ('id', 'name'))
-        if not isinstance(folder['id'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', folder['id']):
-            raise RecipeError('Invalid folder id')
-        folder_name(folder['name'], existing=True)
-    if len({f['id'] for f in folders}) != len(folders) or len({name_key(f['name']) for f in folders}) != len(folders):
-        raise RecipeError('Duplicate recipe folder')
+        keys(folder, ('id', 'name', 'parent_id'))
+
+        if not isinstance(folder['id'], str) or not re.fullmatch(
+            r'[a-z0-9][a-z0-9-]{0,79}', folder['id']
+        ):
+            raise RecipeError('Invalid folder ID')
+
+        if folder['parent_id'] is not None and not isinstance(
+            folder['parent_id'], str
+        ):
+            raise RecipeError('Invalid folder parent ID')
+
+        folder_name(folder['name'])
+
+    by_id = {f['id']: f for f in folders}
+
+    if len(by_id) != len(folders):
+        raise RecipeError('Duplicate folder ID')
+
+    siblings = {
+        (f['parent_id'], name_key(f['name'])) for f in folders
+    }
+
+    if len(siblings) != len(folders):
+        raise RecipeError('Duplicate sibling folder name')
+
+    for folder in folders:
+        seen = {folder['id']}
+        parent_id = folder['parent_id']
+
+        while parent_id is not None:
+            if parent_id not in by_id:
+                raise RecipeError('Folder references a missing parent')
+            if parent_id in seen:
+                raise RecipeError('Circular folder hierarchy')
+            seen.add(parent_id)
+            parent_id = by_id[parent_id]['parent_id']
+
     recipes = [validate(item) for item in data['recipes']]
+
     if len({r['id'] for r in recipes}) != len(recipes):
-        raise RecipeError('Duplicate recipe id')
-    ids = {f['id'] for f in folders} | {ROOT_FOLDER}
-    if any('folder' in r and r['folder'] not in ids for r in recipes):
-        raise RecipeError('Recipe references a missing folder')
+        raise RecipeError('Duplicate Recipe ID')
+
+    for recipe in recipes:
+        if type(recipe.get('dolphin_shortcut')) is not bool:
+            raise RecipeError('User Recipe requires explicit shortcut membership')
+
+        if 'folder' in recipe and recipe['folder'] not in by_id:
+            raise RecipeError('Recipe references a missing folder')
+
     return RecipeLibrary(recipes, folders)
 
 
@@ -493,7 +591,11 @@ def read_recipes(path, missing=False):
 
 
 def builtins():
-    recipes = read_recipes(Path(__file__).resolve().parent.parent / 'recipes' / 'builtins.json')
+    path = Path(__file__).resolve().parent.parent / 'recipes' / 'builtins.json'
+    data = strict_json(path.read_text(encoding='utf-8'))
+    if not isinstance(data, list):
+        raise RecipeError('Invalid built-in Recipe collection')
+    recipes = [validate(item) for item in data]
     if any('folder' in r for r in recipes):
         raise RecipeError('Built-in recipes must remain unfiled')
     return recipes
@@ -520,37 +622,99 @@ def lookup_recipe(recipe_id):
 
 
 def folder_label(folder):
-    return folder['name'] + (' (existing user folder)' if name_key(folder['name']) in ('root', 'built-in', 'unfiled') else '')
+    return folder['name']
+
+
+def folder_path(folder_id, folders):
+    by_id = {folder['id']: folder for folder in folders}
+    names = []
+    seen = set()
+
+    while folder_id is not None:
+        if folder_id in seen or folder_id not in by_id:
+            raise RecipeError('Invalid folder hierarchy')
+        seen.add(folder_id)
+        folder = by_id[folder_id]
+        names.append(folder['name'])
+        folder_id = folder['parent_id']
+
+    return ' / '.join(reversed(names))
+
+
+def builtin_category(recipe):
+    return {
+        'web-export': 'Everyday',
+    }.get(recipe['id'], 'Everyday')
 
 
 def recipe_title(recipe, folders=()):
-    folder = 'Root' if recipe.get('folder') == ROOT_FOLDER else next((folder_label(f) for f in folders if f['id'] == recipe.get('folder')), None)
-    return (folder + ' / ' if folder else '') + recipe['name']
+    if recipe.get('folder'):
+        return 'User / ' + folder_path(
+            recipe['folder'], folders
+        ) + ' / ' + recipe['name']
+
+    if 'dolphin_shortcut' not in recipe:
+        return 'Built-ins / ' + builtin_category(
+            recipe
+        ) + ' / ' + recipe['name']
+
+    return 'User / Unfiled / ' + recipe['name']
 
 
 def library_groups(library, shipped=None):
-    """Presentation only: portable IDs, schemas, overrides and enabled states stay intact.
+    ordered = lambda recipes: sorted(
+        recipes, key=lambda r: (r['name'].casefold(), r['id'])
+    )
 
-    Future collections belong to users; only shipped definitions enter Built-In.
-    """
-    ordered = lambda recipes: sorted(recipes, key=lambda r: (r['name'].casefold(), r['id']))
-    return [(None, 'Built-In', ordered(builtins() if shipped is None else shipped)),
-            (ROOT_FOLDER, 'Root', ordered([r for r in library.recipes if r.get('folder') == ROOT_FOLDER]))] + [
-        (f['id'], folder_label(f), ordered([r for r in library.recipes if r.get('folder') == f['id']]))
-        for f in sorted(library.folders, key=lambda f: (f['name'].casefold(), f['id']))
-    ] + [('', 'Unfiled', ordered([r for r in library.recipes if 'folder' not in r]))]
+    shipped = builtins() if shipped is None else shipped
+    groups = []
+
+    for category in ('Everyday', 'Hiker', 'Digital asset manager'):
+        groups.append((
+            None,
+            'Built-ins / ' + category,
+            ordered([
+                r for r in shipped
+                if builtin_category(r) == category
+            ]),
+        ))
+
+    groups.append((
+        '',
+        'User / Unfiled',
+        ordered([
+            r for r in library.recipes if 'folder' not in r
+        ]),
+    ))
+
+    for folder in sorted(
+        library.folders,
+        key=lambda f: folder_path(
+            f['id'], library.folders
+        ).casefold(),
+    ):
+        groups.append((
+            folder['id'],
+            'User / ' + folder_path(folder['id'], library.folders),
+            ordered([
+                r for r in library.recipes
+                if r.get('folder') == folder['id']
+            ]),
+        ))
+
+    return groups
 
 
 def save_library(library, path=None):
     path = Path(path or config_path())
-    data = {'schema': 3, 'recipes': library.recipes, 'folders': library.folders}
+    data = {'schema': LIBRARY_SCHEMA, 'recipes': library.recipes, 'folders': library.folders}
     validated = validate_library(data)
     if {r['id'] for r in validated.recipes} & {r['id'] for r in builtins()}:
         raise RecipeError('Duplicate or reserved recipe id')
     def shortcuts(items):
-        return sorted((r['id'], r['name']) for r in items if r.get('folder') == ROOT_FOLDER)
+        return sorted((r['id'], r['name']) for r in items if r['dolphin_shortcut'])
     previous = read_library(path, missing=True)
-    root_changed = shortcuts(previous.recipes) != shortcuts(validated.recipes)
+    shortcuts_changed = shortcuts(previous.recipes) != shortcuts(validated.recipes)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if path.parent.resolve() != path.parent.absolute() or (os.path.lexists(path) and (path.is_symlink() or not path.is_file() or path.stat().st_nlink != 1)):
         raise RecipeError('Unsafe recipe storage')
@@ -563,7 +727,7 @@ def save_library(library, path=None):
             os.replace(stage, path)
         finally:
             stage.unlink(missing_ok=True)
-    if path == config_path() and root_changed:
+    if path == config_path() and shortcuts_changed:
         try:
             from kim_recipe_menu import sync_menu
             sync_menu()

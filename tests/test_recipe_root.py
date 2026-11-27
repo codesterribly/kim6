@@ -63,7 +63,7 @@ class RootTests(unittest.TestCase):
     def test_virtual_assignment_and_reserved_categories(self):
         r = base.recipe(); library = core.RecipeLibrary([r])
         library.move_recipe(r['id'], core.ROOT_FOLDER)
-        core.validate_library(dict(schema=1, recipes=library.recipes, folders=[]))
+        core.validate_library(dict(schema=3, recipes=library.recipes, folders=[]))
         self.assertEqual(core.library_groups(library)[1][2], [r])
         for name in ['ROOT', 'Built-In', 'unfiled']:
             with self.assertRaises(core.RecipeError): library.create_folder(name)
@@ -168,7 +168,7 @@ class RootInstallerTests(unittest.TestCase):
             (config / 'kimng').mkdir(parents=True)
             r = base.recipe(); r['folder'] = core.ROOT_FOLDER
             library = config / 'kimng/recipes.json'
-            library.write_text(json.dumps(dict(schema=1, recipes=[r], folders=[])))
+            library.write_text(json.dumps(dict(schema=3, recipes=[r], folders=[])))
             fixture.env['XDG_CONFIG_HOME'] = str(config)
             for _ in range(2):
                 fixture.run_installer('install.sh')

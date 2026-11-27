@@ -409,7 +409,7 @@ with patch('kim_recipe_dialog.preview',side_effect=preview):
     w.set_examples(['/tmp/second.psd'])
     wait_until(lambda:w.preview_worker is None)
     assert len(ticks)>10
-    text=' '.join(w.table.item(r,1).text() for r in range(w.table.rowCount()))
+    text=' '.join(group.child(i).text(1) for group in w.table.groups.values() for i in range(group.childCount()))
     assert 'first.psd' not in text and 'second.psd' in text
     w.duplicate();w.add_step('image.compress');w.recipe['steps'][-1]['enabled']=False
     w.add_step('metadata.set_capture');r=len(w.recipe['steps'])-1

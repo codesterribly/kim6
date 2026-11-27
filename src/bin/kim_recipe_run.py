@@ -480,10 +480,7 @@ def confirmation_snapshot(recipe):
 
 
 def selection_title(recipe, folders):
-    if recipe.get('folder'):
-        return recipe_title(recipe, folders)
-    group = 'Built-In' if recipe['id'] in {r['id'] for r in builtins()} else 'Unfiled'
-    return group + ' / ' + recipe['name']
+    return recipe_title(recipe, folders)
 
 
 class RunRecipeDialog(QDialog):
@@ -528,32 +525,56 @@ class RunRecipeDialog(QDialog):
         self.editor_dialog = None; self._close_after_editor = False
         self.setWindowTitle(
             operation_title + ' - Review Changes'
-            if operation_title else 'Run a Recipe'
+            if operation_title else 'KIMng - Run a Recipe'
         )
         self.resize(
-            1010 if operation_title else 1120,
-            635 if operation_title else 820
+            1010 if operation_title else 1100,
+            635 if operation_title else 780
         )
-        self.settings = QSettings('KIMng', 'RecipeReview' if operation_title else 'RecipeRun')
+        self.settings = QSettings('KIMng', 'RecipeReview' if operation_title else 'RecipeRunner')
         layout = QVBoxLayout(self)
         selection = QHBoxLayout()
         label = QLabel('&Recipe:')
-        self.search = QLineEdit(); self.search.setPlaceholderText('Search recipes or folders…')
+        self.search = QLineEdit(); self.search.setPlaceholderText('Search recipes…')
         self.search.setAccessibleName('Search recipes or folders')
         self.selector = QComboBox(); self.selector.setPlaceholderText('Choose a recipe…')
         self.selector.setMinimumContentsLength(24)
         self.selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         label.setBuddy(self.selector)
-        selection.addWidget(label); selection.addWidget(self.search, 1); selection.addWidget(self.selector, 2)
-        self.create_button = QPushButton('Create new recipe…')
+        self.search.setClearButtonEnabled(True)
+        self.search.setMinimumWidth(210)
+        self.search.setMaximumWidth(300)
+        selection.addWidget(label)
+        selection.addWidget(self.search)
+        selection.addWidget(self.selector, 1)
+        self.create_button = QPushButton('New Recipe…')
         self.create_button.clicked.connect(self.create_recipe)
         self.edit_button = QPushButton()
         self.edit_button.clicked.connect(self.edit_recipe)
         selection.addWidget(self.edit_button)
-        selection.addWidget(self.create_button); layout.addLayout(selection)
-        self.selection_hint=QLabel('Select a recipe to preview its outputs and operations. Choose the output location below before running.')
+        selection.addWidget(self.create_button)
+        layout.addLayout(selection)
+
+        self.search_results = QTreeWidget()
+        self.search_results.setAccessibleName(
+            'Matching recipes'
+        )
+        self.search_results.setHeaderHidden(True)
+        self.search_results.setRootIsDecorated(False)
+        self.search_results.setUniformRowHeights(True)
+        self.search_results.setMaximumHeight(130)
+        self.search_results.itemClicked.connect(
+            self.choose_search_result
+        )
+        self.search_results.itemActivated.connect(
+            self.choose_search_result
+        )
+        self.search_results.hide()
+
+        layout.addWidget(self.search_results)
+        self.selection_hint=QLabel('Select a recipe to preview its planned outputs.')
         self.selection_hint.setWordWrap(True); self.selection_hint.setVisible(recipe is None); layout.addWidget(self.selection_hint)
-        self.search.textChanged.connect(self.refresh_selector)
+        self.search.textChanged.connect(self.search_recipes)
         self.selector.currentIndexChanged.connect(self.select_recipe)
         self.refresh_selector()
         if operation_title:
@@ -566,13 +587,23 @@ class RunRecipeDialog(QDialog):
             )
         layout.addWidget(self.heading)
 
-        self.recipe_description_group = QGroupBox('About this recipe')
+        self.recipe_description_group = QWidget()
         description_layout = QVBoxLayout(
             self.recipe_description_group
         )
-        self.recipe_description = QPlainTextEdit()
-        self.recipe_description.setReadOnly(True)
-        self.recipe_description.setMaximumHeight(100)
+        description_layout.setContentsMargins(0, 0, 0, 0)
+        from PySide6.QtWidgets import QSizePolicy
+
+        self.recipe_description = QLabel()
+        self.recipe_description.setTextFormat(Qt.RichText)
+        self.recipe_description.setWordWrap(True)
+        self.recipe_description.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self.recipe_description.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.recipe_description.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Maximum
+        )
         self.recipe_description.setAccessibleName(
             'Selected Recipe description'
         )
@@ -583,17 +614,21 @@ class RunRecipeDialog(QDialog):
             recipe.get('description', '').strip()
             if recipe and not operation_title else ''
         )
-        self.recipe_description.setPlainText(description)
+        self.set_recipe_description(description)
         self.recipe_description_group.setVisible(bool(description))
 
-        self.count = QLabel('Inputs: ' + file_count(len(self.files))); layout.addWidget(self.count)
+        self.count = QLabel('Inputs: ' + file_count(len(self.files)))
+        if operation_title:
+            layout.addWidget(self.count)
+        else:
+            self.count.hide()
         split = self.splitter = QSplitter(Qt.Horizontal); layout.addWidget(split, 1)
         split.setChildrenCollapsible(False)
         left = QWidget(); left.setMinimumWidth(0); left_layout = QVBoxLayout(left); left_layout.setContentsMargins(0,0,0,0); split.addWidget(left)
         inputs = QGroupBox(
             'Selected images: choose one to review'
             if operation_title
-            else 'Selected files: select one for detailed preview'
+            else 'Selected images'
         )
         inp_layout = QVBoxLayout(inputs)
         self.inputs = InputFilesView(); self.inputs.setHeaderLabels(['Filename', 'Status'])
@@ -601,7 +636,9 @@ class RunRecipeDialog(QDialog):
         self.inputs.header().setStretchLastSection(False)
         self.inputs.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.inputs.header().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.inputs.setColumnWidth(1, 175)
+        self.inputs.setColumnWidth(
+            1, 175 if operation_title else 110
+        )
         self.inputs.setRootIsDecorated(False)
         for source in self.files:
             item = QTreeWidgetItem([Path(source).name, 'Queued' if self.recipe else 'Select recipe']); item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
@@ -609,8 +646,17 @@ class RunRecipeDialog(QDialog):
         inp_layout.addWidget(self.inputs)
         actions = QHBoxLayout()
         self.add_photos = QPushButton('Add images…'); self.add_photos.clicked.connect(self.pick_files)
-        self.remove_selected = QPushButton('Remove selected'); self.remove_selected.clicked.connect(self.remove_files)
-        self.clear_list = QPushButton('Clear list'); self.clear_list.clicked.connect(self.clear_files)
+        self.remove_selected = QPushButton(
+            'Remove selected' if operation_title else 'Remove'
+        )
+        self.remove_selected.clicked.connect(self.remove_files)
+        self.remove_selected.setToolTip('Remove selected images')
+
+        self.clear_list = QPushButton(
+            'Clear list' if operation_title else 'Clear'
+        )
+        self.clear_list.clicked.connect(self.clear_files)
+        self.clear_list.setToolTip('Clear the selected image list')
         for button in (self.add_photos, self.remove_selected, self.clear_list): actions.addWidget(button)
         inp_layout.addLayout(actions); left_layout.addWidget(inputs, 1)
         self.blocking_summary = QLabel(); self.blocking_summary.setWordWrap(True)
@@ -624,15 +670,37 @@ class RunRecipeDialog(QDialog):
         self.fill_operations()
         op_layout.addWidget(self.operations)
         if not operation_title:
-            operations.setMinimumHeight(260)
+            operations.setMinimumHeight(130)
         self.operations_panel = operations
+
+        if not operation_title:
+            operation_tools = QHBoxLayout()
+            operation_tools.addStretch(1)
+
+            self.expand_operations = QPushButton(
+                'Expand all'
+            )
+            self.collapse_operations = QPushButton(
+                'Collapse all'
+            )
+
+            self.expand_operations.clicked.connect(
+                self.operations.expandAll
+            )
+            self.collapse_operations.clicked.connect(
+                self.operations.collapseAll
+            )
+
+            operation_tools.addWidget(self.expand_operations)
+            operation_tools.addWidget(self.collapse_operations)
+            op_layout.insertLayout(0, operation_tools)
 
         # Internal Recipe steps remain available to the engine,
         # but standalone image operations do not show the tree.
         if operation_title:
             operations.hide()
         right = QGroupBox(
-            'Planned output' if operation_title else 'Output preview'
+            'Planned output'
         )
         right_layout = QVBoxLayout(right)
         right.setMinimumWidth(0)
@@ -640,12 +708,16 @@ class RunRecipeDialog(QDialog):
             self.output_filename = exact_field(right_layout, 'Filename')
             self.output_directory = exact_field(right_layout, 'Output Directory')
         else:
-            # Display planned information as text, not input controls.
+            from PySide6.QtWidgets import QFormLayout
+
+            self.output_fields = output_fields = QFormLayout()
+            output_fields.setSpacing(5)
+            right_layout.addLayout(output_fields)
+
             for caption, attribute in (
                 ('Filename', 'output_filename'),
-                ('Output Directory', 'output_directory'),
+                ('Output directory', 'output_directory'),
             ):
-                right_layout.addWidget(QLabel(caption))
                 value = QLabel()
                 value.setTextFormat(Qt.PlainText)
                 value.setTextInteractionFlags(
@@ -656,18 +728,28 @@ class RunRecipeDialog(QDialog):
                 )
                 value.setAccessibleName(caption)
                 setattr(self, attribute, value)
-                right_layout.addWidget(value)
+                output_fields.addRow(caption, value)
         self.properties_button = QPushButton('Show output properties')
         self.properties_button.setCheckable(True)
         right_layout.addWidget(self.properties_button)
-        self.properties = PropertyView(); self.properties.setMinimumHeight(140)
-        if not operation_title:
-            self.properties.setMaximumHeight(220)
-        right_layout.addWidget(self.properties)
+        if operation_title:
+            self.properties = PropertyView()
+        else:
+            from kim_recipe_dialog import RecipePreviewTree
+            self.properties = RecipePreviewTree()
+
+        self.properties.setMinimumHeight(140)
+        right_layout.addWidget(
+            self.properties, 0 if operation_title else 2
+        )
         self.properties_button.toggled.connect(self.properties.setVisible)
         self.properties_button.toggled.connect(lambda expanded: self.properties_button.setText(
             'Hide output properties' if expanded else 'Show output properties'))
-        self.properties_button.setChecked(self.settings.value('properties_expanded', bool(operation_title), type=bool))
+        self.properties_button.setChecked(
+            self.settings.value(
+                'properties_expanded', True, type=bool
+            )
+        )
         self.properties.setVisible(self.properties_button.isChecked())
         self.operations_button = QPushButton()
         self.operations_button.setCheckable(True)
@@ -675,27 +757,211 @@ class RunRecipeDialog(QDialog):
         right_layout.addWidget(operations, 1 if not operation_title else 0)
         self.operations_button.toggled.connect(operations.setVisible)
         self.operations_button.toggled.connect(self.update_operation_summary)
-        self.operations_button.setChecked(not operation_title)
+        self.operations_button.setChecked(
+            not operation_title and self.settings.value(
+                'operations_expanded', False, type=bool
+            )
+        )
         operations.setVisible(self.operations_button.isChecked() and not operation_title and self.recipe is not None)
         self.operations_button.setVisible(not operation_title and self.recipe is not None)
         self.update_operation_summary()
         if operation_title:
             right_layout.addStretch(1)
         preview_scroll = self.preview_scroll = QScrollArea(); preview_scroll.setWidgetResizable(True)
-        preview_scroll.setMinimumWidth(220); preview_scroll.setWidget(right)
+        preview_scroll.setMinimumWidth(220)
+
+        if operation_title:
+            preview_scroll.setWidget(right)
+        else:
+            from PySide6.QtWidgets import QStackedWidget
+
+            self.review_stack = QStackedWidget()
+            self.review_stack.setMinimumSize(0, 0)
+
+            welcome = QWidget()
+            welcome_layout = QVBoxLayout(welcome)
+            welcome_layout.setContentsMargins(24, 24, 24, 24)
+            welcome_layout.addStretch(1)
+
+            welcome_title = QLabel('Choose a Recipe to start')
+            font = welcome_title.font()
+            font.setBold(True)
+            font.setPointSize(font.pointSize() + 3)
+            welcome_title.setFont(font)
+            welcome_title.setAlignment(Qt.AlignCenter)
+
+            welcome_description = QLabel(
+                'Choose from the list above or search for a recipe.\n\n'
+                'Review the planned changes before running.'
+            )
+            welcome_description.setWordWrap(True)
+            welcome_description.setAlignment(Qt.AlignCenter)
+
+            arrow = QLabel()
+            arrow.setAlignment(Qt.AlignCenter)
+
+            arrow_icon = QIcon.fromTheme('go-up')
+            if not arrow_icon.isNull():
+                arrow.setPixmap(arrow_icon.pixmap(48, 48))
+            else:
+                arrow.setText('↑')
+                arrow_font = arrow.font()
+                arrow_font.setPointSize(32)
+                arrow.setFont(arrow_font)
+
+            welcome_layout.addWidget(arrow)
+            welcome_layout.addSpacing(6)
+            welcome_layout.addWidget(welcome_title)
+            welcome_layout.addSpacing(10)
+            welcome_layout.addWidget(welcome_description)
+            welcome_layout.addStretch(1)
+
+            self.review_stack.addWidget(welcome)
+            self.review_stack.addWidget(right)
+
+            self.properties_button.hide()
+            self.operations_button.hide()
+
+            self.properties_button.setChecked(True)
+            self.operations_button.setChecked(True)
+
+            self.properties.setMinimumHeight(100)
+            self.operations_panel.setMinimumHeight(100)
+
+            self.planned_output_group = right
+            self.output_properties_group = properties_group = QGroupBox(
+                'Output properties'
+            )
+            properties_layout = QVBoxLayout(properties_group)
+            self.property_tools = QWidget()
+            property_tools_layout = QHBoxLayout(self.property_tools)
+            property_tools_layout.setContentsMargins(0, 0, 0, 0)
+            property_tools_layout.addStretch(1)
+
+            self.expand_properties = QPushButton('Expand all')
+            self.collapse_properties = QPushButton('Collapse all')
+
+            self.expand_properties.clicked.connect(
+                self.properties.expandAll
+            )
+            self.collapse_properties.clicked.connect(
+                self.properties.collapseAll
+            )
+
+            property_tools_layout.addWidget(self.expand_properties)
+            property_tools_layout.addWidget(self.collapse_properties)
+
+            properties_layout.addWidget(self.property_tools)
+            properties_layout.addWidget(self.properties)
+
+            self.no_images_message = QWidget()
+            empty_layout = QVBoxLayout(self.no_images_message)
+            empty_layout.addStretch(1)
+
+            from PySide6.QtCore import QSize
+            from PySide6.QtWidgets import QStyle
+
+            add_icon = QIcon.fromTheme('image-x-generic')
+
+            if add_icon.isNull():
+                add_icon = QIcon.fromTheme('document-open')
+
+            if add_icon.isNull():
+                add_icon = self.style().standardIcon(
+                    QStyle.StandardPixmap.SP_DialogOpenButton
+                )
+
+            self.empty_add_images_button = QPushButton(
+                add_icon,
+                'Add Images to start'
+            )
+
+            self.empty_add_images_button.setIconSize(
+                QSize(32, 32)
+            )
+
+            self.empty_add_images_button.setMinimumSize(
+                220, 58
+            )
+
+            self.empty_add_images_button.setCursor(
+                Qt.PointingHandCursor
+            )
+
+            self.empty_add_images_button.setToolTip(
+                'Choose images to run this recipe on'
+            )
+            self.empty_add_images_button.clicked.connect(
+                self.pick_files
+            )
+
+            font = self.empty_add_images_button.font()
+            font.setBold(True)
+            font.setPointSize(font.pointSize() + 2)
+            self.empty_add_images_button.setFont(font)
+
+            empty_layout.addWidget(
+                self.empty_add_images_button,
+                0, Qt.AlignCenter
+            )
+
+            empty_layout.addSpacing(6)
+
+            hint = QLabel('Or drag images into the list on the left.')
+            hint.setAlignment(Qt.AlignCenter)
+            hint.setWordWrap(True)
+
+            empty_layout.addWidget(hint)
+            empty_layout.addStretch(1)
+
+            properties_layout.addWidget(
+                self.no_images_message, 1
+            )
+            self.no_images_message.hide()
+
+            self.review_sections = QSplitter(Qt.Vertical)
+            self.review_sections.setChildrenCollapsible(False)
+            self.review_sections.addWidget(properties_group)
+            self.review_sections.addWidget(self.operations_panel)
+            self.review_sections.setStretchFactor(0, 3)
+            self.review_sections.setStretchFactor(1, 2)
+            self.review_sections.setSizes([260, 180])
+
+            right_layout.addWidget(self.review_sections, 1)
+
+            preview_scroll.setWidget(self.review_stack)
+            preview_scroll.setFrameShape(QScrollArea.NoFrame)
+            preview_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarAlwaysOff
+            )
+            preview_scroll.setHorizontalScrollBarPolicy(
+                Qt.ScrollBarAlwaysOff
+            )
+
+            self.update_recipe_review_presentation()
         split.addWidget(preview_scroll)
-        preview_scroll.setVisible(recipe is not None)
+        preview_scroll.setVisible(
+            recipe is not None or not operation_title
+        )
         split.setSizes(
-            [390, 730] if operation_title else [460, 640]
+            [390, 730] if operation_title else [380, 680]
         )
         dest = QHBoxLayout()
-        dest.addWidget(QLabel('Output location:'))
+        self.destination_caption = QLabel(
+            'Output location:' if operation_title else 'Destination:'
+        )
+        dest.addWidget(self.destination_caption)
         self.destination_label = QLabel(); self.destination_label.setTextFormat(Qt.PlainText)
         self.destination_label.setWordWrap(True)
         self.choose_destination = QPushButton(QIcon.fromTheme('folder-open'), 'Choose output directory…')
         self.choose_destination.clicked.connect(self.select_destination)
         self.choose_destination.setVisible(bool(recipe and recipe['destination'].get('ask')))
-        self.destination_label.setText('Destination: ' + self.destination_description() if recipe else 'Choose a recipe to inspect its destination.')
+        self.destination_label.setText(
+            (
+                ('Destination: ' if operation_title else '')
+                + self.destination_description()
+            ) if recipe else ''
+        )
         self.destination_choice = QComboBox()
         self.destination_choice.setAccessibleName('Destination for this run')
         self.destination_choice.addItem('Use recipe default', 'default')
@@ -707,8 +973,7 @@ class RunRecipeDialog(QDialog):
         dest.addWidget(self.destination_choice)
         dest.addWidget(self.destination_label, 1)
         dest.addWidget(self.choose_destination)
-        if not operation_title:
-            layout.insertLayout(layout.indexOf(split), dest)
+        # Destination appears below the review workspace.
         self.summary = QLabel()
         self.summary.setTextFormat(Qt.PlainText)
         layout.addWidget(self.summary)
@@ -761,9 +1026,17 @@ class RunRecipeDialog(QDialog):
             if hasattr(self, 'technical_details_button'):
                 self.technical_details_button.hide()
 
-        if operation_title:
-            layout.addLayout(dest)
-        safety = QLabel('Originals are not being changed. KIMng saves only the exact reviewed filenames. A collision blocks publication and requires a new review. Finished results stay put if you cancel or something fails.')
+        layout.addSpacing(6)
+        layout.addLayout(dest)
+        safety = QLabel(
+            'Originals are not being changed. KIMng saves only the '
+            'exact reviewed filenames. A collision blocks publication '
+            'and requires a new review. Finished results stay put '
+            'if you cancel or something fails.'
+            if operation_title else
+            'Originals remain unchanged. Outputs are saved exactly '
+            'as reviewed. Filename conflicts require a new review.'
+        )
         safety.setWordWrap(True); layout.addWidget(safety)
         from kim_dialog_buttons import style_button
 
@@ -777,9 +1050,10 @@ class RunRecipeDialog(QDialog):
             buttons.addWidget(self.back_button)
         buttons.addStretch(1)
         self.run_button = QPushButton(
-            ('Apply Changes to ' if operation_title
-             else 'Run Recipe on ')
-            + file_count(len(self.files)).title()
+            ('Apply Changes to ' + file_count(len(self.files)).title()
+             if operation_title else
+             f'Run Recipe on {len(self.files)} '
+             + ('image' if len(self.files) == 1 else 'images'))
         )
         self.run_button.setEnabled(False)
         self.run_button.clicked.connect(self.start_execution)
@@ -797,10 +1071,102 @@ class RunRecipeDialog(QDialog):
         self.update_edit_button()
         if not operation_title:
             self.technical_details_button.setChecked(self.settings.value('technical_expanded', False, type=bool))
-        restore_review_geometry(self, self.settings, (1120, 680) if not operation_title else (1010, 635))
-        restore_splitter(self.splitter, self.settings, 'splitter', [650, 430])
+        restore_review_geometry(
+            self, self.settings,
+            (1060, 700) if not operation_title else (1010, 635)
+        )
+        restore_splitter(
+            self.splitter, self.settings, 'splitter',
+            [650, 430] if operation_title else [380, 680]
+        )
         self.finished.connect(self.save_display_preferences)
+        self.update_recipe_review_presentation()
         self.start_preflight()
+
+    def set_recipe_description(self, description):
+        from html import escape
+
+        safe = escape(description).replace(chr(10), '<br>')
+        self.recipe_description.setText(
+            '<b>Description:</b> ' + safe if safe else ''
+        )
+
+    def normalize_destination_caption(self):
+        if self.operation_title:
+            return
+
+        label = self.destination_label.text()
+
+        if label.startswith('Destination: '):
+            self.destination_label.setText(
+                label.removeprefix('Destination: ')
+            )
+
+        elif label.startswith('Output directory: '):
+            self.destination_label.setText(
+                label.removeprefix('Output directory: ')
+            )
+
+    def update_recipe_review_presentation(self):
+        if self.operation_title or not hasattr(self, 'review_stack'):
+            return
+
+        selected = self.recipe is not None
+        has_images = bool(self.files)
+        show_output = selected and has_images
+
+        self.review_stack.setCurrentIndex(
+            1 if selected else 0
+        )
+
+        self.properties_button.hide()
+        self.operations_button.hide()
+        self.selection_hint.hide()
+        self.heading.hide()
+
+        self.planned_output_group.setTitle(
+            'Planned output' if show_output else ''
+        )
+
+        self.output_properties_group.setTitle(
+            'Output properties' if show_output else ''
+        )
+
+        for index in range(self.output_fields.count()):
+            item = self.output_fields.itemAt(index)
+            widget = item.widget()
+            if widget is not None:
+                widget.setVisible(show_output)
+
+        self.properties.setVisible(show_output)
+        self.property_tools.setVisible(show_output)
+        self.no_images_message.setVisible(
+            selected and not has_images
+        )
+
+        self.operations_panel.setVisible(selected)
+
+        steps = self.recipe['steps'] if selected else []
+        enabled = sum(
+            step.get('enabled', True) for step in steps
+        )
+
+        self.operations_panel.setTitle(
+            f'Recipe operations ({enabled} enabled, {len(steps)} total)'
+        )
+
+        # Operation parameters remain individually expandable.
+
+        # During construction, the destination row is created
+        # after the review workspace.
+        if hasattr(self, 'destination_caption'):
+            self.destination_caption.setVisible(selected)
+            self.destination_choice.setVisible(selected)
+            self.destination_label.setVisible(selected)
+            self.normalize_destination_caption()
+
+            if not selected:
+                self.choose_destination.hide()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -814,10 +1180,31 @@ class RunRecipeDialog(QDialog):
         self.settings.setValue('technical_expanded', self.technical_details_button.isChecked())
 
     def sync_diagnostics(self, *_):
-        self.technical_details_button.setText('Hide technical details' if self.technical_details_button.isChecked() else 'Show technical details')
         present = bool(self.diagnostics.toPlainText())
+
+        if not self.operation_title:
+            blocked = bool(
+                self.problem_count or self.approval_error
+            )
+
+            was_blocked = getattr(
+                self, '_diagnostics_was_blocked', False
+            )
+
+            self._diagnostics_was_blocked = blocked and present
+
+            if present and blocked and not was_blocked:
+                self.technical_details_button.setChecked(True)
+
+        expanded = self.technical_details_button.isChecked()
+
+        self.technical_details_button.setText(
+            'Hide technical details' if expanded
+            else 'Show technical details'
+        )
+
         self.technical_details_button.setVisible(present)
-        self.diagnostics.setVisible(present and self.technical_details_button.isChecked())
+        self.diagnostics.setVisible(present and expanded)
 
     def update_operation_summary(self):
         steps = self.recipe['steps'] if self.recipe else []
@@ -827,7 +1214,7 @@ class RunRecipeDialog(QDialog):
 
     def update_edit_button(self):
         immutable = bool(self.recipe and any(r['id'] == self.recipe['id'] for r in builtins()))
-        self.edit_button.setText('Customize built-in…' if immutable else 'Edit recipe…')
+        self.edit_button.setText('Edit Recipe…')
         self.edit_button.setEnabled(bool(self.recipe) and self.editor_dialog is None and self.worker is None)
 
     def edit_recipe(self):
@@ -881,6 +1268,11 @@ class RunRecipeDialog(QDialog):
     def update_file_actions(self):
         idle = self.worker is None and not self._closing
         self.add_photos.setEnabled(idle and self.filters_worker is None)
+
+        if hasattr(self, 'empty_add_images_button'):
+            self.empty_add_images_button.setEnabled(
+                self.add_photos.isEnabled()
+            )
         self.remove_selected.setEnabled(idle and self.add_worker is None and bool(self.inputs.selectedItems()))
         self.clear_list.setEnabled(idle and (bool(self.files) or self.add_worker is not None))
         self.inputs.setEnabled(idle)
@@ -973,6 +1365,7 @@ class RunRecipeDialog(QDialog):
         if self.add_worker is not None: self.add_worker.requestInterruption()
         self._addition_queue.clear(); self._addition_items.clear()
         self.files = list(files)
+        self.update_recipe_review_presentation()
         selected={os.path.abspath(p) for p in self.files}
         self.checked_inputs={key:value for key,value in self.checked_inputs.items() if key in selected}
         self.inputs.clear()
@@ -981,9 +1374,10 @@ class RunRecipeDialog(QDialog):
             item.setToolTip(0, str(source)); self.inputs.addTopLevelItem(item)
         self.count.setText('Inputs: ' + file_count(len(self.files)))
         self.run_button.setText(
-            ('Apply Changes to ' if self.operation_title
-             else 'Run Recipe on ')
-            + file_count(len(self.files)).title()
+            ('Apply Changes to ' + file_count(len(self.files)).title()
+             if self.operation_title else
+             f'Run Recipe on {len(self.files)} '
+             + ('image' if len(self.files) == 1 else 'images'))
         )
         self.update_file_actions()
         if preflight: self.start_preflight()
@@ -1013,39 +1407,171 @@ class RunRecipeDialog(QDialog):
         for index, (original, effective) in enumerate(zip(self.recipe['steps'], self.execution_recipe['steps']), 1):
             label, details = media.operation_details(effective)
             enabled = original.get('enabled', True)
-            item = QTreeWidgetItem([f'{index}. {label}: ' + ('Enabled' if enabled else 'Disabled')])
+            item = QTreeWidgetItem([
+                f'{index}. {label}'
+                + ('' if enabled else ' (Disabled)')
+            ])
             definitions = media.operation_definitions()[original['op']]['parameters']
             for (key, spec), (name, value) in zip(definitions.items(), details):
+                if original['op'] == 'image.convert':
+                    fmt = effective.get('format')
+
+                    relevant_formats = {
+                        'jpeg_progressive': ('jpeg',),
+                        'jpeg_optimize': ('jpeg',),
+                        'jp2_mode': ('jp2',),
+                        'tiff_compression': ('tiff',),
+                        'depth': ('png', 'jp2', 'tiff'),
+                        'quality': (
+                            'jpeg', 'webp', 'avif',
+                            'heic', 'heif', 'jxl', 'jp2'
+                        ),
+                    }
+
+                    if (
+                        key in relevant_formats
+                        and fmt not in relevant_formats[key]
+                    ):
+                        continue
+
+                    if (
+                        key == 'quality'
+                        and fmt == 'jp2'
+                        and effective.get('jp2_mode') != 'lossy'
+                    ):
+                        continue
+
                 if spec.get('settings_key'):
                     value = value.rsplit(' (', 1)[0] + (' (inherited from Settings)' if original.get(key) is None else ' (recipe override)')
                 child = QTreeWidgetItem([name + ': ' + value]); child.setToolTip(0, child.text(0)); item.addChild(child)
             if not enabled:
-                item.setForeground(0, self.palette().brush(QPalette.Disabled, QPalette.Text))
+                font = item.font(0)
+                font.setItalic(True)
+                item.setFont(0, font)
+
             self.operations.addTopLevelItem(item)
-        self.operations.expandAll()
+
+        self.operations.collapseAll()
+
+    def search_recipes(self, *_):
+        if self.operation_title:
+            return
+
+        self.refresh_selector()
+        self.search_results.clear()
+
+        if not self.search.text().strip():
+            self.search_results.hide()
+            return
+
+        if self._search_matches:
+            for title, recipe_id in self._search_matches:
+                item = QTreeWidgetItem([title])
+                item.setData(0, Qt.UserRole, recipe_id)
+                item.setToolTip(0, title)
+                self.search_results.addTopLevelItem(item)
+        else:
+            item = QTreeWidgetItem(['No matching recipes'])
+            item.setFlags(Qt.NoItemFlags)
+            self.search_results.addTopLevelItem(item)
+
+        row_height = max(
+            self.search_results.sizeHintForRow(0),
+            self.search_results.fontMetrics().height() + 4
+        )
+
+        visible_rows = min(
+            self.search_results.topLevelItemCount(), 7
+        )
+
+        frame = self.search_results.frameWidth() * 2
+
+        self.search_results.setFixedHeight(
+            row_height * visible_rows + frame + 4
+        )
+
+        self.search_results.show()
+
+    def choose_search_result(self, item, column=0):
+        if not self.search_results.isVisible():
+            return
+
+        recipe_id = item.data(0, Qt.UserRole)
+
+        if not recipe_id:
+            return
+
+        index = self.selector.findData(recipe_id)
+
+        if index < 0:
+            return
+
+        self.search_results.hide()
+
+        # Use the existing selection workflow. Searching itself
+        # never changes the selected Recipe or image queue.
+        if index != self.selector.currentIndex():
+            self.selector.setCurrentIndex(index)
+
+        self.selector.setFocus(Qt.OtherFocusReason)
 
     def refresh_selector(self, *args):
         if self.operation_title: return
         query = self.search.text().casefold().strip()
         self.selector.blockSignals(True); self.selector.clear()
+        match_count = 0
+        self._search_matches = []
+
         for folder_id, name, recipes in library_groups(self.library):
-            matches = [r for r in recipes if not query or query in (name + ' ' + r['name']).casefold()]
-            if query and not matches: continue
+            matches = [
+                r for r in recipes
+                if all(
+                    word in (
+                        name + ' ' + r['name'] + ' '
+                        + r.get('description', '')
+                    ).casefold()
+                    for word in query.split()
+                )
+            ]
+            if not matches:
+                continue
+
+            match_count += len(matches)
+
             self.selector.addItem(name, None)
             self.selector.model().item(self.selector.count() - 1).setEnabled(False)
             for recipe in matches:
-                self.selector.addItem('    ' + recipe['name'], recipe['id'])
+                self._search_matches.append((
+                    name + ' / ' + recipe['name'],
+                    recipe['id']
+                ))
+
+                self.selector.addItem(
+                    name + ' / ' + recipe['name'],
+                    recipe['id']
+                )
                 self.selector.setItemData(self.selector.count() - 1, name + ' / ' + recipe['name'], Qt.ToolTipRole)
+        if not match_count:
+            self.selector.addItem('No matching recipes', None)
+            self.selector.model().item(
+                self.selector.count() - 1
+            ).setEnabled(False)
+
         index=self.selector.findData(self.selected_id) if self.selected_id else -1
         if self.selected_id and index < 0 and self.recipe:
             # Filtering choices must not display 'Choose a recipe' while a
             # current (possibly unsaved) recipe is still being inspected.
-            self.selector.addItem('    '+self.recipe['name']+' (current recipe)',self.selected_id)
+            self.selector.addItem(
+                selection_title(self.recipe, self.library.folders)
+                + ' (current recipe)',
+                self.selected_id
+            )
             index=self.selector.count()-1
         self.selector.setCurrentIndex(index)
         self.selector.blockSignals(False)
 
     def select_recipe(self, index):
+        self.search_results.hide()
         recipe_id = self.selector.itemData(index)
         if self.worker is not None: return
         if not recipe_id:
@@ -1064,7 +1590,9 @@ class RunRecipeDialog(QDialog):
         self.recipe = copy.deepcopy(recipe)
         self.selected_id = recipe['id'] if recipe else None
         self.selection_hint.setVisible(recipe is None)
-        self.preview_scroll.setVisible(recipe is not None)
+        self.preview_scroll.setVisible(
+            recipe is not None or not self.operation_title
+        )
         self.destination_choice.setEnabled(recipe is not None)
         self.operations_button.setVisible(recipe is not None and not self.operation_title)
         self.operations_panel.setVisible(
@@ -1082,7 +1610,7 @@ class RunRecipeDialog(QDialog):
             recipe.get('description', '').strip()
             if recipe and not self.operation_title else ''
         )
-        self.recipe_description.setPlainText(description)
+        self.set_recipe_description(description)
         self.recipe_description_group.setVisible(bool(description))
 
         self.fill_operations()
@@ -1094,6 +1622,8 @@ class RunRecipeDialog(QDialog):
         self.update_edit_button()
         self.update_operation_summary()
         self.start_preflight()
+
+        self.update_recipe_review_presentation()
 
     def create_recipe(self):
         self.open_editor()
@@ -1116,7 +1646,28 @@ class RunRecipeDialog(QDialog):
         # Opening the editor does not change the selected recipe or inputs.
         # Retain completed inspection and let an active preflight finish.
         try:
-            dialog=make_editor_dialog(self,from_run=True,recipe=self.recipe if repair or edit else None,repair=repair)
+            dialog = make_editor_dialog(
+                self,
+                from_run=True,
+                files=list(self.files),
+                recipe=self.recipe if repair or edit else None,
+                repair=repair,
+            )
+
+            selected = self.inputs.currentItem()
+
+            if selected is not None:
+                index = self.inputs.indexOfTopLevelItem(selected)
+
+                if 0 <= index < len(self.files):
+                    sample = dialog.widget.example_selector.findData(
+                        self.files[index]
+                    )
+
+                    if sample >= 0:
+                        dialog.widget.example_selector.setCurrentIndex(
+                            sample
+                        )
         except (OSError,RecipeError) as exc:
             self.saved_definition=None; self.apply_recipe(None)
             self.diagnostics.setPlainText('Cannot open Recipe Editor: '+str(exc)); return
@@ -1136,20 +1687,50 @@ class RunRecipeDialog(QDialog):
     def editor_finished(self, result):
         dialog,self.editor_dialog=self.editor_dialog,None
         saved_id=dialog.widget.saved_recipe_id
+        run_request = getattr(dialog, 'run_request', None)
         previous,previous_definition=self._editor_previous
         self.create_button.setEnabled(True)
         for control in (self.selector, self.search, self.destination_choice, self.choose_destination): control.setEnabled(True)
         error=None
         try:
             self.library=load_library()
-            recipe=lookup_recipe(saved_id) if saved_id else previous
-            self.saved_definition=copy.deepcopy(recipe) if saved_id else previous_definition
+            if run_request is not None:
+                requested_recipe, requested_files = run_request
+
+                recipe = lookup_recipe(requested_recipe['id'])
+
+                if recipe != requested_recipe:
+                    raise RecipeError(
+                        'The selected recipe has changed. '
+                        'Open the editor and review it again.'
+                    )
+
+                self.saved_definition = copy.deepcopy(recipe)
+            else:
+                recipe = lookup_recipe(saved_id) if saved_id else previous
+                self.saved_definition = (
+                    copy.deepcopy(recipe)
+                    if saved_id else previous_definition
+                )
         except (OSError,RecipeError) as exc:
             recipe=None; self.saved_definition=None; error=str(exc)
         dialog.deleteLater()
         self.update_edit_button()
         if self._close_after_editor:
             self._close_after_editor=False; self.reject(); return
+        if error is None and run_request is not None:
+            self.invalidate_preflight()
+
+            if list(self.files) != list(requested_files):
+                self.replace_files(
+                    requested_files,
+                    preflight=False
+                )
+
+            self.apply_recipe(recipe)
+            self.selector.setFocus()
+            return
+
         if error is None and recipe == previous:
             # No change to the active recipe: preserve its reviewed plan
             # and any inspection still running.
@@ -1190,16 +1771,19 @@ class RunRecipeDialog(QDialog):
     def start_preflight(self):
         if self.worker is not None: return
         self.invalidate_preflight()
-        if self.recipe is None: self.summary.setText('Waiting for recipe selection')
+        if self.recipe is None: self.summary.setText('Waiting for recipe selection' if self.operation_title else '')
         if self.preflight_worker is not None:
             self._restart = self.recipe is not None; return
         self._restart = False
         if self.editor_dialog is not None or self.add_worker is not None or self._addition_queue: return
         if self.recipe is None:
-            self.summary.setText('Waiting for recipe selection'); return
+            self.summary.setText('Waiting for recipe selection' if self.operation_title else ''); return
         self.summary.setText(file_count(len(self.files)) + ' selected; inspecting…')
         if not self.files:
-            self.summary.setText('0 files selected; use Add images or drop images here.'); return
+            self.summary.setText(
+                '0 files selected; use Add images or drop images here.'
+                if self.operation_title else 'No images selected.'
+            ); return
         worker = PreflightWorker(
             self.execution_recipe,
             self.files,
@@ -1307,11 +1891,27 @@ class RunRecipeDialog(QDialog):
 
     def update_summary(self):
         if self.recipe is None:
-            self.summary.setText('Waiting for recipe selection'); self.run_button.setEnabled(False); return
+            self.summary.setText('Waiting for recipe selection' if self.operation_title else ''); self.run_button.setEnabled(False); return
         self.update_blocking_summary()
         ready, problems = self.ready_count, self.problem_count
         pending = len(self.files) - len(self.rows)
-        self.summary.setText(file_count(len(self.files)) + f' selected; {ready} ready; {problems} ' + ('problem' if problems == 1 else 'problems') + (f'; {pending} pending' if pending else ''))
+        if self.operation_title:
+            self.summary.setText(
+                file_count(len(self.files))
+                + f' selected; {ready} ready; {problems} '
+                + ('problem' if problems == 1 else 'problems')
+                + (f'; {pending} pending' if pending else '')
+            )
+        else:
+            parts = [f'{ready} ready']
+
+            if problems:
+                parts.append(f'{problems} blocked')
+
+            if pending:
+                parts.append(f'{pending} pending')
+
+            self.summary.setText('; '.join(parts))
         self.fix_recipe_button.setVisible(not self.operation_title and self.repair_count > 0 and self.editor_dialog is None and not self._pending_picker)
         self.run_button.setEnabled(self.recipe is not None and self.reviewed_generation == self.generation and bool(getattr(self, 'approved_plan', None)) and bool(self.files) and ready == len(self.files) and not pending and not problems and self.preflight_worker is None and self.worker is None and not self._closing and self.add_worker is None and not self._addition_queue and self.editor_dialog is None and not self._pending_picker)
 
@@ -1358,9 +1958,17 @@ class RunRecipeDialog(QDialog):
                     self.execution_recipe, row
                 )
                 if self.operation_title
-                else property_fields(
-                    self.execution_recipe, row
-                )
+                else [
+                    (key, value)
+                    for key, value in property_fields(
+                        self.execution_recipe, row
+                    )
+                    if key not in (
+                        'Output filename',
+                        'Output folder',
+                        'Output directory',
+                    )
+                ]
             ) if row else []
         )
 
@@ -1387,6 +1995,8 @@ class RunRecipeDialog(QDialog):
         self.destination_label.setToolTip(description)
         self.choose_destination.setVisible(self.destination_mode == 'directory' or
                                           (self.destination_mode == 'default' and bool(self.recipe['destination'].get('ask'))))
+
+        self.normalize_destination_caption()
 
     def change_destination_mode(self, *_):
         previous_mode = self.destination_mode

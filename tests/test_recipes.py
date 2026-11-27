@@ -18,7 +18,7 @@ from kim_recipe_image import ImageHandler
 
 
 def recipe(steps=None):
-    return {'schema': 1, 'id': 'test', 'name': 'Test', 'media': 'image',
+    return {'schema': 3, 'id': 'test', 'name': 'Test', 'description': '', 'media': 'image',
             'steps': steps or [{'op': 'file.rename_output', 'pattern': '{stem}_copy'}],
             'destination': {'mode': 'beside'}}
 
@@ -29,6 +29,11 @@ class RecipeContracts(unittest.TestCase):
         r = recipe(); r['command'] = 'touch /tmp/never'; cases.append(r)
         r = recipe(); r['steps'] = [{'op': 'shell', 'command': 'true'}]; cases.append(r)
         r = recipe(); r['schema'] = True; cases.append(r)
+        for unsupported_schema in (1, 2, 4):
+            r = recipe()
+            r['schema'] = unsupported_schema
+            cases.append(r)
+        r = recipe(); r.pop('description'); cases.append(r)
         r = recipe(); r['media'] = 'video'; cases.append(r)
         r = recipe(); r['steps'] = [{'op': 'image.convert', 'format': 'jpeg', 'quality': True}]; cases.append(r)
         for name in ('../escape', '{stem.__class__}', '{stem!r}', '{date:%Y}', '', '{unknown}'):
@@ -932,7 +937,7 @@ assert builtins()[0] == original
 w.close()
 """)
 
-    def test_two_panel_preview_example_selection(self):
+    def test_three_panel_preview_example_selection(self):
         self.run_gui("""
 from unittest.mock import patch
 from PySide6.QtCore import Qt
@@ -947,10 +952,10 @@ def planned(recipe, files, **kwargs):
 with patch('kim_recipe_dialog.preview', side_effect=planned) as preview:
     w = RecipeWidget(files=['/photos/first.jpg', '/photos/second.jpg'])
     w.resize(1150, 820); w.show(); app.processEvents(); _wait_for_preview(w)
-    assert w.splitter.orientation() == Qt.Horizontal and w.splitter.count() == 2
-    assert w.splitter.sizes()[0] > w.splitter.sizes()[1] > 0
+    assert w.splitter.orientation() == Qt.Horizontal and w.splitter.count() == 3
+    assert len(w.splitter.sizes()) == 3 and all(size > 0 for size in w.splitter.sizes())
     assert w.table.columnCount() == 2
-    assert w.table.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+    assert w.table.header().sectionResizeMode(0).name == 'Interactive'
     assert not w.table.horizontalScrollBar().isVisible()
     assert w.reset_examples.isHidden()
     assert w.example_selector.count() == 2
@@ -966,9 +971,9 @@ with patch('kim_recipe_dialog.preview', side_effect=planned) as preview:
     w.reset_examples.click(); _wait_for_preview(w)
     assert w.reset_examples.isHidden() and w.example_files is None
     assert w.example_selector.count() == 2
-    values = {w.table.item(i, 0).text(): w.table.item(i, 1).text() for i in range(w.table.rowCount())}
+    values = {group.child(i).text(0): group.child(i).text(1) for group in w.table.groups.values() for i in range(group.childCount())}
     assert 'Compressed size' not in values
-    assert values['GPS'] == 'None detected (recognized fields)' and values['Originals'] == 'Always unchanged'
+    assert values['GPS'] == 'None detected (recognized fields)' and values['Originals'] == 'Not being changed'
     w.duplicate()
     assert w.folder.isVisible() and not w.ask.isVisible()
     w.mode.setCurrentIndex(w.mode.findData('directory'))
@@ -996,7 +1001,7 @@ before = sample.read_bytes()
 w = RecipeWidget(files=[str(sample)])
 def values():
     _wait_for_preview(w)
-    return {w.table.item(i, 0).text(): w.table.item(i, 1).text() for i in range(w.table.rowCount())}
+    return {group.child(i).text(0): group.child(i).text(1) for group in w.table.groups.values() for i in range(group.childCount())}
 assert values()['Final format'] == 'JPEG'
 assert values()['Output dimensions'].startswith('1600 × 800')
 w.steps.item(3).setCheckState(Qt.Unchecked); w.update_preview()
@@ -1180,7 +1185,7 @@ app = QApplication([])
 with patch('kim_recipe_dialog.preview', return_value=[]):
     w = RecipeWidget(files=['/photos/Photo One.jpg', '/photos/Photo Two.jpg'])
     w.resize(1180, 850); w.show(); app.processEvents()
-    assert w.example_label.text() == 'Example image (preview only)'
+    assert w.choose_example_button.text() == 'Choose images for preview…'
     assert w.example_selector.currentText() == 'Photo One.jpg'
     assert isinstance(w.move_up, QToolButton) and isinstance(w.move_down, QToolButton)
     assert w.move_up.text() == '' and w.move_down.text() == ''

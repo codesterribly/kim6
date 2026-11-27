@@ -8,7 +8,7 @@ import stat
 import subprocess
 import tempfile
 
-from kim_recipe_core import ROOT_FOLDER, RecipeError, load_library
+from kim_recipe_core import LIBRARY_SCHEMA, RecipeError, load_library
 from kim_desktop_exec import exec_argument as desktop_exec_argument
 
 
@@ -28,10 +28,10 @@ def exec_argument(text):
 
 def render(library, dispatcher):
     from kim_recipe_core import validate_library
-    library = validate_library({'schema': 3, 'recipes': library.recipes, 'folders': library.folders})
-    recipes = sorted((r for r in library.recipes if r.get('folder') == ROOT_FOLDER),
+    library = validate_library({'schema': LIBRARY_SCHEMA, 'recipes': library.recipes, 'folders': library.folders})
+    recipes = sorted((r for r in library.recipes if r['dolphin_shortcut']),
                      key=lambda r: (r['name'].casefold(), r['id']))
-    actions = ['KIMRoot-' + r['id'] for r in recipes]
+    actions = ['KIMShortcut-' + r['id'] for r in recipes]
     if recipes: actions.append('_SEPARATOR_')
     actions += ['KIMRecipe0Run', 'KIMRecipe1Editor']
     command = exec_argument(str(dispatcher)) + ' recipe '
@@ -42,7 +42,7 @@ def render(library, dispatcher):
     for r in recipes:
         duplicate = sum(x['name'].casefold() == r['name'].casefold() for x in recipes) > 1
         label = r['name'] + (' [' + r['id'] + ']' if duplicate else '')
-        lines += ['', '[Desktop Action KIMRoot-' + r['id'] + ']', 'Name=' + value(label),
+        lines += ['', '[Desktop Action KIMShortcut-' + r['id'] + ']', 'Name=' + value(label),
                   'Exec=' + command + '--run-id ' + r['id'] + ' -- %F']
     if recipes: lines += ['', '[Desktop Action _SEPARATOR_]', 'Name=Separator']
     lines += ['', '[Desktop Action KIMRecipe0Run]', 'Name=Run a recipe…',

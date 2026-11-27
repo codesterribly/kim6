@@ -27,7 +27,7 @@ class RecipeFolderTests(unittest.TestCase):
             library.move_recipe(original['id'], portfolio)
             core.save_library(library, path)
             payload = json.loads(path.read_text())
-            self.assertEqual(payload['schema'], 1)
+            self.assertEqual(payload['schema'], 3)
             self.assertEqual(len(payload['folders']), 2)
             library = core.read_library(path)
             library.rename_folder(portfolio, 'Portfolio Renamed')
@@ -48,10 +48,10 @@ class RecipeFolderTests(unittest.TestCase):
         library.create_folder('Portfolio')
         for name in ('', ' ', '../nested', 'a/b', 'a\\b', 'a\nb', 'a\x7fb', 'x'*61, 'Unfiled', 'Built-In', 'portfolio', 'Ｐortfolio'):
             with self.subTest(name=name), self.assertRaises(core.RecipeError): library.create_folder(name)
-        data = {'schema': 1, 'recipes': [], 'folders': [{'id': 'folder-one', 'name': 'One', 'parent': 'folder-two'}]}
+        data = {'schema': 3, 'recipes': [], 'folders': [{'id': 'folder-one', 'name': 'One', 'parent': 'folder-two'}]}
         with self.assertRaises(core.RecipeError): core.validate_library(data)
         recipe = base.recipe(); recipe['folder'] = 'missing'
-        with self.assertRaises(core.RecipeError): core.validate_library({'schema': 1, 'recipes': [recipe], 'folders': []})
+        with self.assertRaises(core.RecipeError): core.validate_library({'schema': 3, 'recipes': [recipe], 'folders': []})
 
     def test_saved_recipe_references_use_ids_not_names(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'XDG_CONFIG_HOME': tmp}):
@@ -472,11 +472,12 @@ def settle_editor():
         app.processEvents();time.sleep(.005)
     assert w.preview_worker is None, 'Editor preview did not finish'
 settle_editor()
-def values(): return {w.table.item(i, 0).text(): w.table.item(i, 1).text() for i in range(w.table.rowCount())}
+def values(): return {group.child(i).text(0): group.child(i).text(1) for group in w.table.groups.values() for i in range(group.childCount())}
 assert values()['Original dimensions'].startswith('20 × 40') and values()['Output dimensions'].startswith('20 × 40')
 assert 'Compressed size' not in values() and values()['GPS'].startswith('Removed')
-gps_row = next(i for i in range(w.table.rowCount()) if w.table.item(i, 0).text() == 'GPS')
-assert w.table.item(gps_row, 1).font().italic()
+gps_item = next(group.child(i) for group in w.table.groups.values() for i in range(group.childCount()) if group.child(i).text(0) == 'GPS')
+assert gps_item.parent().text(0) == 'Metadata'
+assert gps_item.text(1).startswith('Removed')
 w.steps.setCurrentRow(3); w.move(1); w.update_preview()
 settle_editor()
 assert values()['Original dimensions'].startswith('20 × 40')
