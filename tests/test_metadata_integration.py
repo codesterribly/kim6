@@ -13,6 +13,7 @@ from support import Workspace
 
 METADATA_MODULES = (
     'kim_metadata_browser', 'kim_metadata_compare', 'kim_metadata_editor',
+    'kim_metadata_execution_plan', 'kim_metadata_gps_actions',
     'kim_metadata_reader', 'kim_metadata_sources',
 )
 
@@ -93,8 +94,12 @@ if os.environ.get('KIM_TEST_LAUNCH_FAILURE'):
             for missing, message in (
                 ('bin/python3', 'python3'), ('bin/exiftool', 'ExifTool'),
                 ('kim_metadata_reader.py', 'Reinstall KIMng'),
-                ('kim_metadata_browser.py' if command == 'metadata-view'
-                 else 'kim_metadata_editor.py', 'Reinstall KIMng'),
+                ('kim_metadata_browser.py', 'Reinstall KIMng'),
+                ('kim_metadata_editor.py', 'Reinstall KIMng'),
+                ('kim_metadata_gps_actions.py', 'Reinstall KIMng'),
+                ('kim_metadata_execution_plan.py', 'Reinstall KIMng'),
+                ('kim_location.py', 'Reinstall KIMng'),
+                ('kim_preview.py', 'Reinstall KIMng'),
             ):
                 with self.subTest(command=command, missing=missing):
                     path = self.workspace.control / missing
@@ -135,25 +140,75 @@ if os.environ.get('KIM_TEST_LAUNCH_FAILURE'):
 
     def test_metadata_actions_do_not_require_processing_dependencies(self):
         source = self.workspace.jpeg('photo.jpg')
+        second = self.workspace.jpeg('second.jpg')
         for tool in ('magick', 'identify', 'ffmpeg', 'ffprobe'):
             (self.workspace.bin / tool).unlink()
-        for command in ('metadata-view', 'metadata-edit'):
+        for command, operands in (
+            ('metadata-view', (source,)),
+            ('metadata-compare', (source, second)),
+            ('metadata-edit', (source,)),
+        ):
             with self.subTest(command=command):
-                result = self.workspace.dispatch(command, '--', source)
+                result = self.workspace.dispatch(command, '--', *operands)
                 self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_compare_dispatch_requires_two_eligible_images_and_preserves_order(self):
+        first = self.workspace.jpeg('first/-photo 雪.jpg')
+        second = self.workspace.jpeg('second/another image.jpg')
+        third = self.workspace.jpeg('third/extra.jpg')
+        pdf = self.workspace.root / 'doc.pdf'
+        pdf.write_bytes(b'%PDF-1.4\n%%EOF\n')
+        before = {path: signature(path) for path in (first, second, third, pdf)}
+
+        result = self.workspace.dispatch('metadata-compare', '--', second, first)
+        self.assertEqual(0, result.returncode, result.stderr)
+        calls = [json.loads(line) for line in self.launches.read_text().splitlines()]
+        self.assertEqual(
+            [[str(self.workspace.control / 'kim_metadata_browser.py'), '--compare', '--', str(second), str(first)]],
+            calls,
+        )
+        self.assertEqual({}, result.outputs)
+
+        # Two eligible images plus an excluded PDF still compares the two images cleanly.
+        self.launches.unlink(missing_ok=True)
+        result = self.workspace.dispatch('metadata-compare', '--', first, pdf, second)
+        self.assertEqual(0, result.returncode, result.stderr)
+        calls = [json.loads(line) for line in self.launches.read_text().splitlines()]
+        self.assertEqual(
+            [[str(self.workspace.control / 'kim_metadata_browser.py'), '--compare', '--', str(first), str(second)]],
+            calls,
+        )
+
+        # Invalid selection counts fail cleanly with an actionable explanation.
+        for label, operands in (
+            ('none', ()),
+            ('one', (first,)),
+            ('three', (first, second, third)),
+            ('one-plus-pdf', (first, pdf)),
+            ('pdfs-only', (pdf,)),
+        ):
+            with self.subTest(case=label):
+                self.launches.unlink(missing_ok=True)
+                result = self.workspace.dispatch('metadata-compare', '--', *operands)
+                self.assert_failure(result, 'Select exactly two images')
+
+        self.assertEqual(before, {path: signature(path) for path in before})
 
 
 class MetadataMenuTests(unittest.TestCase):
     def test_actions_append_to_existing_group_and_forward_the_complete_selection(self):
         menu = configparser.ConfigParser(interpolation=None)
         menu.read(installation.ROOT / 'src/kim_metadata.desktop.in')
-        self.assertEqual('KIMng - Organize/Metadata', menu['Desktop Entry']['_X-KDE-Submenu'])
+        self.assertEqual('KIMng - Metadata/Organize', menu['Desktop Entry']['_X-KDE-Submenu'])
         self.assertEqual(
-            '00CheckExtensions;01Rename;02SetDates;04SetCopyright;04Overlay;'
-            '05StripMetadata;06ViewMetadata;07EditMetadata;', menu['Desktop Entry']['Actions'])
+            '00ViewMetadata;03CompareMetadata;01EditMetadata;02StripMetadata;08SetCopyright;'
+            '_SEPARATOR_;04Rename;05SetDates;06CheckExtensions;07Overlay;',
+            menu['Desktop Entry']['Actions'],
+        )
         for action, label, command in (
-            ('06ViewMetadata', 'View metadata…', 'metadata-view'),
-            ('07EditMetadata', 'Edit metadata…', 'metadata-edit'),
+            ('00ViewMetadata', 'View metadata', 'metadata-view'),
+            ('03CompareMetadata', 'Compare metadata', 'metadata-compare'),
+            ('01EditMetadata', 'Edit metadata…', 'metadata-edit'),
         ):
             with self.subTest(action=action):
                 section = menu['Desktop Action ' + action]

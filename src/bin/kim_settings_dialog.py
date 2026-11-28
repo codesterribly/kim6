@@ -164,24 +164,29 @@ def save_settings(path, settings):
 class MetadataSettingsTab(QWidget):
     """Pending controls for the existing shared metadata preferences."""
 
-    def __init__(self, preferences, parent=None):
+    def __init__(self, preferences, parent=None, *, sources_only=False):
         super().__init__(parent)
         self.preferences = preferences
+        self.sources_only = sources_only
         layout = QVBoxLayout(self)
         description = QLabel(
-            "Metadata reading priority, highest first. The first available "
-            "supported source supplies the preferred value in Browser and Editor."
+            "Arrange metadata sources in order of preference. "
+            "The first available supported value takes precedence."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
         self.sources = QListWidget()
         self.sources.setAccessibleName("Metadata reading priority")
         self.sources.addItems(preferences.priority)
+        self._number_sources()
         self.sources.setCurrentRow(0)
         layout.addWidget(self.sources)
         controls = QHBoxLayout()
         up = QPushButton("Move up")
         down = QPushButton("Move down")
+        from PySide6.QtGui import QIcon
+        up.setIcon(QIcon.fromTheme("go-up"))
+        down.setIcon(QIcon.fromTheme("go-down"))
         controls.addWidget(up)
         controls.addWidget(down)
         controls.addStretch()
@@ -213,7 +218,21 @@ class MetadataSettingsTab(QWidget):
         )
         pins.setWordWrap(True)
         layout.addWidget(pins)
+        if self.sources_only:
+            self.sync_default.hide()
+            note.hide()
+            pins.hide()
         layout.addStretch()
+
+    def _number_sources(self):
+        from PySide6.QtCore import Qt
+        for index in range(self.sources.count()):
+            item = self.sources.item(index)
+            source = item.data(Qt.UserRole)
+            if source is None:
+                source = item.text()
+                item.setData(Qt.UserRole, source)
+            item.setText(f"{index + 1}. {source}")
 
     def move_source(self, delta):
         row = self.sources.currentRow()
@@ -221,17 +240,26 @@ class MetadataSettingsTab(QWidget):
         if 0 <= row < self.sources.count() and 0 <= target < self.sources.count():
             item = self.sources.takeItem(row)
             self.sources.insertItem(target, item)
+            self._number_sources()
             self.sources.setCurrentRow(target)
 
     def restore_defaults(self):
         self.sources.clear()
         self.sources.addItems(SOURCE_PRIORITY_DEFAULT)
+        self._number_sources()
         self.sources.setCurrentRow(0)
-        self.sync_default.setChecked(False)
+        if not self.sources_only:
+            self.sync_default.setChecked(False)
 
     def snapshot(self):
-        return (tuple(self.sources.item(i).text() for i in range(self.sources.count())),
-                self.sync_default.isChecked())
+        from PySide6.QtCore import Qt
+        return (
+            tuple(
+                self.sources.item(i).data(Qt.UserRole)
+                for i in range(self.sources.count())
+            ),
+            self.sync_default.isChecked(),
+        )
 
 
 def create_dialog(about_path, path=None, metadata_preferences=None):

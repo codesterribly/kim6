@@ -1138,6 +1138,161 @@ print(json.dumps([doc]))
         self.assertEqual(str(link), window.paths[0])
         self.assertEqual(before, link.lstat())
 
+    def test_edit_metadata_action_preserves_selection_and_active_image(self):
+        from unittest.mock import patch
+        from kim_metadata_editor import MetadataEditor
+
+        window = self.open_browser()
+        window.image_list.setCurrentRow(1)
+        self.assertEqual(str(self.paths[1]), window._current_path())
+        self.assertTrue(window.edit_metadata_button.isEnabled())
+
+        for name in ('_pump_load', '_pump_thumbnails', '_ensure_preview', '_persist_splitter_sizes', '_restore_splitter_sizes'):
+            patcher = patch.object(MetadataEditor, name, lambda self, *args, **kwargs: None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        editor = window.open_in_editor()
+        self.assertIsInstance(editor, MetadataEditor)
+        self.addCleanup(lambda: (editor.close(), editor.deleteLater(), self.app.processEvents()))
+        self.assertEqual([str(p) for p in self.paths], editor.paths)
+        self.assertEqual(str(self.paths[1]), editor._active_path())
+        self.assertEqual(1, window.image_list.currentRow())
+        self.assertEqual([str(p) for p in self.paths], window.paths)
+
+    def test_edit_metadata_excludes_pdfs_and_explains_pdf_only_unavailability(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QMessageBox
+        from kim_metadata_editor import MetadataEditor
+
+        pdf = self.paths[0].with_name('brochure.pdf')
+        pdf.write_bytes(b'%PDF-1.4\n%%EOF\n')
+
+        for name in ('_pump_load', '_pump_thumbnails', '_ensure_preview', '_persist_splitter_sizes', '_restore_splitter_sizes'):
+            patcher = patch.object(MetadataEditor, name, lambda self, *args, **kwargs: None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        mixed = MetadataBrowser([str(self.paths[0]), str(pdf), str(self.paths[1])])
+        self.windows.append(mixed)
+        mixed.show()
+        mixed.image_list.setCurrentRow(1)
+        self.assertTrue(mixed.edit_metadata_button.isEnabled())
+        self.assertIn('PDF', mixed.edit_metadata_button.toolTip())
+
+        editor = mixed.open_in_editor()
+        self.assertIsNotNone(editor)
+        self.addCleanup(lambda: (editor.close(), editor.deleteLater(), self.app.processEvents()))
+        self.assertEqual([str(self.paths[0]), str(self.paths[1])], editor.paths)
+        self.assertEqual(str(self.paths[0]), editor._active_path())
+        self.assertIn('Excluded 1 PDF', mixed.statusBar().currentMessage())
+
+        pdf_only = MetadataBrowser([str(pdf)])
+        self.windows.append(pdf_only)
+        pdf_only.show()
+        self.assertFalse(pdf_only.edit_metadata_button.isEnabled())
+        self.assertIn('PDF', pdf_only.edit_metadata_button.toolTip())
+        with patch.object(QMessageBox, 'information') as info:
+            self.assertIsNone(pdf_only.open_in_editor())
+            info.assert_called_once()
+            self.assertIn('PDF', info.call_args.args[2])
+
+    def test_direct_compare_startup_and_argument_parsing(self):
+        from unittest.mock import patch
+        import kim_metadata_browser as browser_module
+
+        two = MetadataBrowser([str(self.paths[0]), str(self.paths[1])], start_compare=True)
+        self.windows.append(two)
+        two.show()
+        self.assertEqual(2, two.tabs.currentIndex())
+        self.assertEqual([str(self.paths[0]), str(self.paths[1])], two.comparison_slots)
+
+        one = MetadataBrowser([str(self.paths[0])], start_compare=True)
+        self.windows.append(one)
+        one.show()
+        self.assertEqual(2, one.tabs.currentIndex())
+        self.assertIn('two images', one.comparison_empty.text().lower())
+
+        captured = {}
+
+        class DummyWindow:
+            def __init__(self, paths, *, start_compare=False):
+                captured['paths'] = list(paths)
+                captured['start_compare'] = start_compare
+            def show(self): pass
+            def close(self): pass
+
+        with patch.object(browser_module, 'MetadataBrowser', DummyWindow), \
+             patch.object(browser_module, 'QApplication') as fake_app, \
+             patch.object(browser_module, 'QTimer'):
+            fake_app.return_value.exec.return_value = 0
+            rc = browser_module.main(['--compare', '--', '-leading.jpg', 'second.jpg'])
+        self.assertEqual(0, rc)
+        self.assertEqual({'paths': ['-leading.jpg', 'second.jpg'], 'start_compare': True}, captured)
+
+    def test_browser_metadata_settings_reuses_shared_preferences_and_reloads(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QPushButton
+        from kim_settings_dialog import MetadataSettingsTab
+
+        window = self.open_browser()
+        self.assertEqual('Metadata sources…', window.metadata_sources_button.text())
+        self.assertIs(window.tabs.cornerWidget(), window.metadata_sources_button)
+        original = window.metadata_preferences.priority
+
+        def accept_reordered(dialog):
+            tab = dialog.findChild(MetadataSettingsTab)
+            self.assertIsNotNone(tab)
+            sources = tab.findChild(QListWidget)
+            sources.setCurrentRow(0)
+            move_down = next(b for b in tab.findChildren(QPushButton) if b.text() == 'Move down')
+            move_down.click()
+            buttons = dialog.findChild(QDialogButtonBox)
+            buttons.button(QDialogButtonBox.Save).click()
+            return QDialog.Accepted
+
+        with patch.object(QDialog, 'exec', accept_reordered):
+            window.metadata_sources_button.click()
+
+        expected = (original[1], original[0], *original[2:])
+        self.assertEqual(expected, window.metadata_preferences.priority)
+
+    def test_aged_fixtures_with_ordinary_read_control_preserve_exact_signatures(self):
+        from unittest.mock import patch
+        from metadata_integrity import sha256_noatime
+        from kim_metadata_editor import MetadataEditor
+
+        aged = time.time() - 7200
+        control = self.paths[0].with_name('ordinary-read-control.jpg')
+        control.write_bytes(self.paths[0].read_bytes())
+        for path in (*self.paths[:2], control):
+            os.utime(path, (aged, aged))
+
+        control_before = control.stat().st_atime_ns
+        _ = control.read_bytes()
+        control_after = control.stat().st_atime_ns
+        if control_after == control_before:
+            self.skipTest('Filesystem does not update atime on ordinary reads (noatime mount)')
+
+        def sig(p):
+            st = p.stat()
+            return (sha256_noatime(p), st.st_size, st.st_atime_ns, st.st_mtime_ns, st.st_ctime_ns)
+
+        before = {p: sig(p) for p in self.paths[:2]}
+        window = MetadataBrowser([str(self.paths[0]), str(self.paths[1])], start_compare=True)
+        self.windows.append(window)
+        window.show()
+        self.wait_for(lambda: window._overview_record(str(self.paths[0])) is not None)
+
+        for name in ('_pump_load', '_pump_thumbnails', '_ensure_preview', '_persist_splitter_sizes', '_restore_splitter_sizes'):
+            patcher = patch.object(MetadataEditor, name, lambda self, *args, **kwargs: None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        editor = window.open_in_editor()
+        self.addCleanup(lambda: (editor.close(), editor.deleteLater(), self.app.processEvents()))
+        self.assertEqual(before, {p: sig(p) for p in self.paths[:2]})
+
 
 if __name__ == '__main__':
     unittest.main()

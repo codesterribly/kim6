@@ -9658,20 +9658,44 @@ action_settings() {
 
 action_metadata_ui() {
   local mode="$1" label script companion diagnostic status=0
+  local -a extra_args=()
   shift
   case "$mode" in
     browser) label="$(gettext 'View metadata')"; script=kim_metadata_browser.py ;;
+    compare) label="$(gettext 'Compare metadata')"; script=kim_metadata_browser.py; extra_args=(--compare --) ;;
     editor) label="$(gettext 'Edit metadata')"; script=kim_metadata_editor.py ;;
     *) return 1 ;;
   esac
   if [ "${1:-}" = -- ]; then shift; fi
-  if [ "$#" -eq 0 ]; then
+  if [ "$mode" = compare ]; then
+    if [ "$#" -ne 2 ]; then
+      progress_error "$label: $(gettext 'Select exactly two images to compare their metadata.')"
+      return 1
+    fi
+  elif [ "$#" -eq 0 ]; then
     progress_error "$label: $(gettext 'Select at least one image.')"
     return 1
   fi
   require_action_tools "$label" python3 exiftool || return 1
-  local -a companions=("$script" kim_metadata_reader.py kim_metadata_sources.py)
-  if [ "$mode" = browser ]; then companions+=(kim_metadata_compare.py); fi
+  local -a companions=(
+    kim_metadata_browser.py
+    kim_metadata_editor.py
+    kim_metadata_reader.py
+    kim_metadata_sources.py
+    kim_metadata_compare.py
+    kim_metadata_gps_actions.py
+    kim_metadata_execution_plan.py
+    kim_location.py
+    kim_location_dialog.py
+    kim_location_map.py
+    kim_location_ui.py
+    kim_photo_selection.py
+    kim_preview.py
+    kim_process.py
+    kim_dialog_buttons.py
+    kim_settings_dialog.py
+    kim_settings_file.py
+  )
   for companion in "${companions[@]}"; do
     if [ ! -f "$DISPATCHER_DIR/$companion" ] || [ ! -r "$DISPATCHER_DIR/$companion" ] ||
        [ -L "$DISPATCHER_DIR/$companion" ]; then
@@ -9684,7 +9708,7 @@ action_metadata_ui() {
 $diagnostic"
     return 1
   fi
-  diagnostic="$(python3 -B "$DISPATCHER_DIR/$script" "$@" 2>&1)" || status=$?
+  diagnostic="$(python3 -B "$DISPATCHER_DIR/$script" "${extra_args[@]}" "$@" 2>&1)" || status=$?
   if [ "$status" -ne 0 ]; then
     progress_error "$label: $(gettext 'Could not open the metadata application. Check the diagnostic below and reinstall KIMng if an installed component is missing.')
 $diagnostic"
@@ -11972,7 +11996,7 @@ filter_selected_pdfs() {
     convert|flipflop|rotate|rotatewithexif|stripmeta|webexport|resizeandsend|\
     crop|overlay|copyright|timeshift|capturedate|datesync|\
     location-gpx|location-copy|location-apply|location-reduce|location-report|\
-    checkextensions|metadata-view|metadata-edit|recipe|rename|slideshow|photo-story|gallery-choose)
+    checkextensions|metadata-view|metadata-compare|metadata-edit|recipe|rename|slideshow|photo-story|gallery-choose)
       ;;
     *)
       return 0
@@ -12075,6 +12099,9 @@ Commands:
 
   metadata-view -- <files...>
       Open the Metadata Browser with all selected images. Read-only.
+
+  metadata-compare -- <image1> <image2>
+      Open the Metadata Browser directly in Compare view for two images. Read-only.
 
   metadata-edit -- <files...>
       Open the Metadata Editor change planner with all selected images.
@@ -12311,10 +12338,10 @@ main() {
     # Preserve the complete Dolphin selection and its order.
     # No PDF raster conversion or metadata writing occurs here.
     :
-  elif [ "$cmd" = metadata-edit ]; then
+  elif [ "$cmd" = metadata-edit ] || [ "$cmd" = metadata-compare ]; then
     # Dolphin supplies local selection paths after --.
     # Keep every supported selected image in its original order.
-    # PDF is not an image input for Browser or Editor.
+    # PDF is not an eligible image input for Editor or Compare.
     local -a metadata_args=()
     local metadata_arg
     local metadata_operands=0
@@ -12343,20 +12370,26 @@ main() {
       fi
     done
 
+    if [ "$cmd" = metadata-compare ] && [ "$metadata_pdfs" -gt 0 ] &&
+       [ "$metadata_operands" -ne 2 ]; then
+      progress_error "$(gettext 'Compare metadata'): $(gettext 'Select exactly two images to compare their metadata. PDF documents are excluded.')"
+      return 1
+    fi
+
     if [ "$metadata_pdfs" -gt 0 ] &&
        [ "$metadata_operands" -eq 0 ]; then
       if command -v kdialog >/dev/null 2>&1; then
         kdialog --title 'KIMng - Metadata' --error \
           'No image files remain after excluding PDF documents. Select at least one image.' || true
       else
-        printf '%s\\n' \
+        printf '%s\n' \
           'KIMng: Select at least one image. PDF documents are excluded.' >&2
       fi
       return 0
     fi
 
     if [ "$metadata_pdfs" -gt 0 ]; then
-      printf 'KIMng: Excluded %s PDF document(s); opening %s image(s).\\n' \
+      printf 'KIMng: Excluded %s PDF document(s); opening %s image(s).\n' \
         "$metadata_pdfs" "$metadata_operands" >&2
     fi
 
@@ -12397,6 +12430,7 @@ main() {
       python3 "$DISPATCHER_DIR/kim_photo_story_dialog.py" "$@" ;;
     recipe)          python3 "$DISPATCHER_DIR/kim_recipe_core.py" "$@" ;;
     metadata-view)   action_metadata_ui browser "$@" ;;
+    metadata-compare) action_metadata_ui compare "$@" ;;
     metadata-edit)   action_metadata_ui editor "$@" ;;
     album)           mk_workdir; action_album "$@" ;;
     animate)         mk_workdir; action_animate "$@" ;;

@@ -320,6 +320,7 @@ class GalleryVisualQABrowserTests(unittest.TestCase):
     @staticmethod
     def _write_gallery(root, *, style, publication_type, chapters):
         (root / "images").mkdir(parents=True)
+        (root / "thumbs").mkdir(parents=True)
         image_specs = (
             ("hero", 900, 600, 0xff39718e, "Cover description."),
             ("portrait", 600, 900, 0xffb76c42, "Portrait description paragraph one.\n\nPortrait description paragraph two."),
@@ -333,18 +334,30 @@ class GalleryVisualQABrowserTests(unittest.TestCase):
             output = f"images/{element_id}.jpg"
             if not image.save(str(root / output), "JPEG"):
                 raise RuntimeError(f"Could not create browser fixture image {output}")
+            thumb_rel = ""
+            tw, th = 0, 0
+            if publication_type == "simple-gallery":
+                scale = min(1.0, 640 / max(width, height))
+                tw = max(1, round(width * scale))
+                th = max(1, round(height * scale))
+                thumb_img = image.scaled(tw, th)
+                thumb_rel = f"thumbs/{element_id}.jpg"
+                if not thumb_img.save(str(root / thumb_rel), "JPEG"):
+                    raise RuntimeError(f"Could not create browser fixture thumb {thumb_rel}")
             elements.append(StoryElement(
                 "image", element_id,
                 "" if element_id == "hero" else f"{element_id.title()} heading",
                 "", "", output, f"/private/source-{element_id}.jpg",
                 image_width=width, image_height=height, description=description,
+                thumb_image=thumb_rel, thumb_width=tw, thumb_height=th,
             ))
         if chapters:
             elements.insert(2, StoryElement("heading", "chapter-field-notes", "Field notes"))
             elements.insert(3, StoryElement("heading", "chapter-long-view", "The long view"))
+        layout = "masonry" if publication_type == "simple-gallery" else "one-per-section"
         rendered = render_website(StoryDocument(
             "Gallery visual QA", "A generated browser fixture.", publication_type,
-            style, True, tuple(elements), layout="one-per-section",
+            style, True, tuple(elements), layout=layout,
         ))
         root.mkdir(parents=True, exist_ok=True)
         (root / "index.html").write_text(rendered.html, encoding="utf-8")
@@ -358,9 +371,11 @@ class GalleryVisualQABrowserTests(unittest.TestCase):
             "JSON.stringify((() => { const rect = element => { if(!element)return null; "
             "const r=element.getBoundingClientRect(); "
             "return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}; }; "
+            "const pubType=document.body.dataset.publicationType || ''; "
             "const items=[...document.querySelectorAll('.image-story-item')].map(item => { "
             "const image=item.querySelector('.photograph img'); const heading=item.querySelector('.image-heading'); "
             "const description=item.querySelector('.image-description'); return {id:item.dataset.elementId, "
+            "src:image?image.getAttribute('src'):'', "
             "item:rect(item), image:rect(image), naturalWidth:image.naturalWidth, "
             "naturalHeight:image.naturalHeight, heading:heading?rect(heading):null, "
             "description:description?rect(description):null}; }); "
@@ -371,20 +386,20 @@ class GalleryVisualQABrowserTests(unittest.TestCase):
             "const heroImageHeading=document.querySelector('.hero-image .image-heading'); "
             "const heroDescription=document.querySelector('.hero-image .image-description'); "
             "const story=document.querySelector('#story'); "
-            "return {configuredViewport:CONFIGURED_VIEWPORT, "
+            "const grid=document.querySelector('.image-group'); "
+            "const cw = el => el ? getComputedStyle(el).width : null; "
+            "return {configuredViewport:CONFIGURED_VIEWPORT, publicationType:pubType, "
             "width:innerWidth, height:innerHeight, contentWidth:document.documentElement.clientWidth, "
             "media800:matchMedia('(max-width: 800px)').matches, "
             "scrollWidth:document.documentElement.scrollWidth, items, "
+            "grid:rect(grid), "
             "coverContainer:rect(coverContainer), cover:rect(coverCopy), hero:rect(hero), heroStory:rect(heroStory), "
             "heroHeading:rect(heroHeading), heroImageHeading:rect(heroImageHeading), "
             "heroDescription:rect(heroDescription), story:rect(story), "
             "intro:rect(document.querySelector('.cover-copy .introduction')), computed:{"
-            "coverCopy:getComputedStyle(coverCopy).width,"
-            "heroStory:getComputedStyle(heroStory).width,heroImage:getComputedStyle(hero).width,"
-            "heroTitle:getComputedStyle(heroHeading).width,"
-            "heroImageHeading:heroImageHeading?getComputedStyle(heroImageHeading).width:null,"
-            "heroDescription:getComputedStyle(heroDescription).width,"
-            "story:getComputedStyle(story).width}}; })())"
+            "coverCopy:cw(coverCopy), heroStory:cw(heroStory), heroImage:cw(hero), "
+            "heroTitle:cw(heroHeading), heroImageHeading:cw(heroImageHeading), "
+            "heroDescription:cw(heroDescription), story:cw(story)}}; })())"
         ).replace("CONFIGURED_VIEWPORT", json.dumps(configured_viewport))
         state_value = evaluate(expression)
         state = json.loads(state_value)
@@ -406,6 +421,25 @@ class GalleryVisualQABrowserTests(unittest.TestCase):
         self.assertEqual(state["height"], configured_viewport[1],
                          f"{context}: configured and effective viewport heights differ: {state}")
         self.assertLessEqual(state["scrollWidth"], state["width"], f"{context}: page overflow {state}")
+
+        if state["publicationType"] == "simple-gallery":
+            self.assertIsNone(state["heroStory"], f"{context}: Simple Gallery must not render mandatory editorial hero")
+            self.assertIsNone(state["coverContainer"], f"{context}: Simple Gallery must not render .cover.has-hero")
+            self.assertIsNotNone(state["grid"], f"{context}: Simple Gallery must render an immediate gallery grid")
+            self.assertLess(state["grid"]["y"], state["height"], f"{context}: Simple Gallery grid must be visible above the fold")
+            self.assertEqual(len(state["items"]), 4, f"{context}: expected 4 gallery tiles")
+            for item in state["items"]:
+                with self.subTest(context=context, element=item["id"]):
+                    self.assertTrue(item["src"].startswith("thumbs/"), f"{context}: expected thumbnail src: {item}")
+                    self.assertGreater(item["naturalWidth"], 0)
+                    self.assertGreater(item["naturalHeight"], 0)
+                    self.assertGreater(item["image"]["width"], 0)
+                    self.assertGreater(item["image"]["height"], 0)
+                    natural_ratio = item["naturalWidth"] / item["naturalHeight"]
+                    rendered_ratio = item["image"]["width"] / item["image"]["height"]
+                    self.assertAlmostEqual(rendered_ratio, natural_ratio, delta=.025,
+                                           msg=f"{context}: aspect ratio changed: {item}")
+            return
         for item in state["items"]:
             with self.subTest(context=context, element=item["id"]):
                 self.assertGreater(item["image"]["width"], 0)

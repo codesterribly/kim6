@@ -163,6 +163,21 @@ class LocationDialog(QDialog):
         self.report_copy.setEnabled(False); self.report_copy.clicked.connect(self.copy_selected_coordinates); action_row.addWidget(self.report_copy)
         self.report_map = QPushButton(QIcon.fromTheme('globe'), 'Open in &Browser')
         self.report_map.setEnabled(False); self.report_map.clicked.connect(self.map_selected_coordinates); action_row.addWidget(self.report_map)
+
+        self.report_edit_handler = None
+        self.report_edit_process = None
+        self.report_edit_busy = False
+        self.report_edit = None
+
+        if kind == 'report':
+            from kim_metadata_gps_actions import configure_gps_location_button
+            self.report_edit = QPushButton()
+            self.report_edit.setObjectName('reportEditGpsLocation')
+            configure_gps_location_button(self.report_edit, False)
+            self.report_edit.setEnabled(False)
+            self.report_edit.clicked.connect(self.edit_report_location)
+            action_row.addWidget(self.report_edit)
+
         photo_layout.addLayout(action_row)
         self.reference_options = QWidget(); options = QVBoxLayout(self.reference_options); options.setContentsMargins(0, 0, 0, 0)
         self.copy_altitude = QCheckBox('Copy altitude'); self.copy_altitude.setChecked(False)
@@ -277,7 +292,12 @@ class LocationDialog(QDialog):
         if kind == 'report': self.buttons.button(QDialogButtonBox.Close).setDefault(True)
         self.setTabOrder(self.image_list.search, self.image_list.sort); self.setTabOrder(self.image_list.sort, self.image_list.list)
         self.setTabOrder(self.image_list.list, self.report_copy); self.setTabOrder(self.report_copy, self.report_map)
-        self.setTabOrder(self.report_map, self.location_map.online); self.setTabOrder(self.location_map.online, self.location_map.canvas)
+        if self.report_edit is not None:
+            self.setTabOrder(self.report_map, self.report_edit)
+            self.setTabOrder(self.report_edit, self.location_map.online)
+        else:
+            self.setTabOrder(self.report_map, self.location_map.online)
+        self.setTabOrder(self.location_map.online, self.location_map.canvas)
         self.unit_choice.currentIndexChanged.connect(self.change_units)
         # PNG cannot scale during Qt decoding. Allow ordinary camera-sized
         # images (e.g. 3840 × 2560 RGB32 needs 37.5 MiB), retaining a finite cap.
@@ -924,6 +944,8 @@ class LocationDialog(QDialog):
         if not hasattr(self, 'details_subject'): return
         selected = self.image_list.current_path()
         destination = next((e for e in self.display_entries if e['source'] == selected), None)
+        if self.kind == 'report':
+            self.refresh_report_edit_action()
         refreshing = not self.plan and bool(self.worker or self.timer.isActive())
         inspecting = self.selection_only or bool(self.plan and self.plan.get('pending_input'))
         planned = bool(self.plan and not inspecting)
@@ -958,6 +980,176 @@ class LocationDialog(QDialog):
             QApplication.clipboard().setText(', '.join(repr(value) for value in info['position']))
         except (ValueError, OSError) as exc:
             QMessageBox.information(self, 'Copy coordinates', str(exc)); return
+
+    def set_report_edit_handler(self, handler):
+        """Route report editing through the originating application."""
+        if self.kind != 'report':
+            raise ValueError('Editing callbacks belong to GPS reports.')
+        if not callable(handler):
+            raise TypeError('A GPS editing callback is required.')
+        self.report_edit_handler = handler
+        self.refresh_report_edit_action()
+
+    def report_edit_target(self):
+        """Resolve the active image without reading or modifying its bytes."""
+        if self.kind != 'report' or self.closing:
+            return None, None, 'The GPS report is unavailable.'
+
+        path = self.image_list.current_path()
+        if not path or path not in self.files:
+            return None, None, 'Select an image first.'
+
+        entry = next(
+            (item for item in self.display_entries
+             if item['source'] == path),
+            None
+        )
+
+        if entry is None:
+            return path, None, 'Waiting for GPS inspection.'
+
+        if entry.get('error'):
+            return path, None, str(entry['error'])
+
+        info = entry.get('location_before')
+        if not info:
+            return path, None, 'GPS inspection is unavailable.'
+
+        position = info.get('position')
+
+        camera = info.get('categories', {}).get('camera', {})
+        if camera.get('issues'):
+            return (
+                path, position,
+                'Camera GPS is incomplete or ambiguous. '
+                'Inspect its metadata before editing.'
+            )
+
+        from kim_location import FORMATS
+
+        supported = {
+            suffix
+            for extensions in FORMATS.values()
+            for suffix in extensions
+        }
+
+        if Path(path).suffix.lower() not in supported:
+            return (
+                path, position,
+                'GPS editing is unavailable for this image format.'
+            )
+
+        return path, position, ''
+
+    def refresh_report_edit_action(self):
+        if self.report_edit is None:
+            return
+
+        from kim_metadata_gps_actions import configure_gps_location_button
+
+        path, position, reason = self.report_edit_target()
+        editing = position is not None
+
+        label = (
+            'Edit GPS location…' if editing
+            else 'Add GPS location…'
+        )
+
+        if self.report_edit.text() != label:
+            configure_gps_location_button(
+                self.report_edit, editing
+            )
+
+        self.report_edit.setEnabled(
+            bool(path) and not reason and not self.report_edit_busy
+        )
+
+        self.report_edit.setToolTip(
+            reason or (
+                'Edit the GPS location of the selected image.'
+                if editing else
+                'Add a GPS location to the selected image.'
+            )
+        )
+
+    def edit_report_location(self):
+        if self.kind != 'report' or self.report_edit_busy:
+            return
+
+        path, position, reason = self.report_edit_target()
+
+        if not path or reason:
+            self.refresh_report_edit_action()
+            return
+
+        self.report_edit_busy = True
+        self.refresh_report_edit_action()
+
+        if self.report_edit_handler is not None:
+            try:
+                self.report_edit_handler(path, position)
+            finally:
+                self.report_edit_busy = False
+                self.refresh_report_edit_action()
+            return
+
+        # Standalone GPS reports use the normal KIMng
+        # GPS editing entry point, including its existing
+        # review and publication protections.
+        from PySide6.QtCore import QProcess
+        from PySide6.QtWidgets import QApplication
+
+        dispatcher = Path(__file__).resolve().with_name('kim_all')
+
+        if not dispatcher.is_file():
+            self.report_edit_busy = False
+            self.refresh_report_edit_action()
+            QMessageBox.warning(
+                self, 'Edit GPS location',
+                'The KIMng GPS editing dispatcher is unavailable.'
+            )
+            return
+
+        # Keep the process independent of the report's
+        # window lifetime. Closing a report must not kill
+        # an active GPS review or publication operation.
+        process = QProcess(QApplication.instance())
+        self.report_edit_process = process
+        process.setProgram(str(dispatcher))
+        process.setArguments(['location-apply', '--', path])
+
+        process.finished.connect(self.report_edit_finished)
+        process.finished.connect(process.deleteLater)
+        process.errorOccurred.connect(self.report_edit_error)
+
+        process.start()
+
+    def report_edit_finished(self, *_):
+        self.report_edit_process = None
+        self.report_edit_busy = False
+
+        if not self.closing:
+            self.refresh_report_edit_action()
+
+    def report_edit_error(self, error):
+        from PySide6.QtCore import QProcess
+
+        if error != QProcess.FailedToStart:
+            return
+
+        process = self.report_edit_process
+        self.report_edit_process = None
+        self.report_edit_busy = False
+
+        if process is not None:
+            process.deleteLater()
+
+        if not self.closing:
+            self.refresh_report_edit_action()
+            QMessageBox.warning(
+                self, 'Edit GPS location',
+                'Could not open the KIMng GPS editing workflow.'
+            )
 
     def copy_selected_coordinates(self):
         if self.visual_source: self.copy_camera_coordinates(self.visual_source)

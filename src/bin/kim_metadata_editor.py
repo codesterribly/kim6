@@ -1436,7 +1436,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
     IMAGE_SPLITTER_KEY = "metadata/editorImagePanelSplitterSizes"
     EDIT_TAB, OVERVIEW_TAB, ALL_TAB, ADVANCED_TAB = range(4)
 
-    def __init__(self, paths, preferences=None):
+    def __init__(self, paths, preferences=None, *, current_path=None):
         super().__init__()
         self.paths = list(dict.fromkeys(_source_path(Path(path).expanduser()) for path in paths))
         self.records = InspectionCache(32, 32 * 1024 * 1024)
@@ -1486,9 +1486,6 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.setWindowTitle("KIMng Metadata Editor")
         self.resize(1120, 780)
         self.setMinimumSize(760, 560)
-        settings_menu = self.menuBar().addMenu("Settings")
-        metadata_settings = settings_menu.addAction("Metadata…")
-        metadata_settings.triggered.connect(self.open_metadata_settings)
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -1655,30 +1652,40 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.gps_status.setTextFormat(Qt.PlainText)
         self.gps_status.setWordWrap(True)
         self.gps_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        gps_layout.addWidget(self.gps_status)
         gps_actions = QHBoxLayout()
-        self.view_gps_button = QPushButton()
-        self.view_gps_button.setObjectName("viewGpsMapButton")
-        self.view_gps_button.setAccessibleName("View on map")
-        self.view_gps_button.setIcon(QIcon.fromTheme(
-            "map-globe",
-            QIcon.fromTheme(
-                "globe",
-                self.style().standardIcon(
-                    QStyle.SP_DriveNetIcon
-                ),
-            ),
-        ))
-        self.view_gps_button.setText('Map')
-        self.view_gps_button.setFixedWidth(84)
-        self.view_gps_button.setToolTip(
-            'Inspect this image in the existing read-only GPS viewer. '
-            'Pending metadata proposals are preserved.'
+        from PySide6.QtGui import (
+            QPixmap as GlobePixmap,
+            QPainter as GlobePainter,
+            QPen as GlobePen,
+            QPalette as GlobePalette,
         )
-        self.view_gps_button.clicked.connect(self._view_camera_gps_field)
+        self.view_gps_button = QToolButton()
+        self.view_gps_button.setObjectName("viewGpsMapButton")
+        globe_image = GlobePixmap(24, 24)
+        globe_image.fill(Qt.transparent)
+        painter = GlobePainter(globe_image)
+        painter.setRenderHint(GlobePainter.Antialiasing)
+        pen = GlobePen(self.palette().color(GlobePalette.WindowText))
+        pen.setWidthF(1.6)
+        painter.setPen(pen)
+        painter.drawEllipse(2, 2, 20, 20)
+        painter.drawEllipse(8, 2, 8, 20)
+        painter.drawLine(2, 12, 22, 12)
+        painter.drawLine(4, 7, 20, 7)
+        painter.drawLine(4, 17, 20, 17)
+        painter.end()
+        self.view_gps_button.setIcon(QIcon(globe_image))
+        self.view_gps_button.setIconSize(QSize(24, 24))
+        self.view_gps_button.setMinimumSize(30, 30)
+        self.view_gps_button.setAutoRaise(True)
+        self.view_gps_button.setToolTip('View the selected image GPS location on the map')
+        self.view_gps_button.setAccessibleName('View on map')
+        self.view_gps_button.setFocusPolicy(Qt.StrongFocus)
+        self.view_gps_button.clicked.connect(self.view_gps_on_map)
         gps_actions.addWidget(self.view_gps_button)
-        self.add_gps_button = QPushButton('Add GPS')
-        self.add_gps_button.setIcon(QIcon.fromTheme('document-edit'))
+        self.add_gps_button = QPushButton('Add GPS location…')
+        from kim_metadata_gps_actions import configure_gps_location_button
+        configure_gps_location_button(self.add_gps_button, False)
         self.add_gps_button.clicked.connect(self.add_gps_location)
         gps_actions.addWidget(self.add_gps_button)
         self.discard_gps_button = QPushButton('Discard change')
@@ -1687,6 +1694,7 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         gps_actions.addWidget(self.discard_gps_button)
         gps_actions.addStretch(1)
         gps_layout.addLayout(gps_actions)
+        gps_layout.addWidget(self.gps_status)
         self.gps_representation_actions = QVBoxLayout()
         gps_layout.addLayout(self.gps_representation_actions)
         capture_layout.addWidget(self.gps_section)
@@ -1720,6 +1728,13 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self._refresh_editor_pins()
         self.form_scroll.setWidget(self.form_content)
         self.tabs = QTabWidget()
+        from kim_metadata_gps_actions import metadata_sources_button
+        self.metadata_sources_button = metadata_sources_button(
+            self.tabs, self.open_metadata_settings
+        )
+        self.tabs.setCornerWidget(
+            self.metadata_sources_button, Qt.TopRightCorner
+        )
         self.tabs.addTab(self.form_scroll, 'Edit metadata')
         self.overview = MetadataOverview(self.preferences, self.overview_preferences, self)
         self.overview.view_gps_on_map = self.view_gps_on_map
@@ -1767,7 +1782,12 @@ class MetadataEditor(QMainWindow, ListThumbnails):
                 item.setSizeHint(QSize(0, 40))
                 item.setToolTip(path)
                 self.file_list.addItem(item)
-            self.file_list.setCurrentRow(0)
+            initial_row = 0
+            if current_path is not None:
+                target = _source_path(Path(current_path).expanduser())
+                if target in self._path_rows:
+                    initial_row = self._path_rows[target]
+            self.file_list.setCurrentRow(initial_row)
         else:
             self.image_heading.setText("No images selected")
             self.review_button.setEnabled(False)
@@ -2313,11 +2333,14 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         self.discard_gps_button.setVisible(proposal is not None)
         self.add_gps_button.setVisible(bool(snapshot and not snapshot['blocked']) or proposal is not None)
         self.add_gps_button.setEnabled(bool(snapshot) and not snapshot['blocked'])
-        self.add_gps_button.setText(
-            'Edit GPS' if proposal or (
+        from kim_metadata_gps_actions import configure_gps_location_button
+        configure_gps_location_button(
+            self.add_gps_button,
+            bool(proposal or (
                 snapshot and snapshot.get('existing')
                 and snapshot['existing']['position'] is not None
-            ) else 'Add GPS')
+            ))
+        )
         text = editor_gps_description(snapshot) if snapshot else 'Checking GPS location…' if path else 'Select an image to inspect its GPS location.'
         if proposal:
             from kim_location_ui import position_text
@@ -2333,9 +2356,10 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         if path:
             context = gps_field(MetadataRecord(path))
             actions = field_actions(self, context)
-            self.view_gps_button.setEnabled(actions[0][2])
+            self.view_gps_button.setEnabled(True)
             self.view_gps_button.setToolTip(
-                "View on map\n" + actions[0][3])
+                "View the selected image GPS location on the map"
+            )
             self.add_gps_button.setVisible(True)
             self.add_gps_button.setToolTip(actions[1][3])
             add_field_controls(self.sources_gps_actions, self, context)
@@ -2470,6 +2494,13 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             context = gps_field(MetadataRecord(path))
             dispatch(self, context, field_actions(self, context)[0])
 
+    def edit_gps_from_report(self, path, position):
+        """Return GPS editing to this Editor and retain its drafts."""
+        if self._closing or path != self._active_path():
+            return
+
+        self.add_gps_location()
+
     def view_gps_on_map(self):
         """Inspect GPS without changing the Editor's pending drafts."""
         path = self._active_path()
@@ -2482,6 +2513,9 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         try:
             from kim_location_dialog import LocationDialog
             dialog = LocationDialog("report", [path], "create", None)
+            dialog.set_report_edit_handler(
+                self.edit_gps_from_report
+            )
             dialog.exec()
         except (ImportError, OSError, RuntimeError, ValueError) as exc:
             QMessageBox.warning(
@@ -2704,9 +2738,8 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             entries = field.entries(record)
             if not entries:
                 value.setText("Not present")
-                if field in OVERVIEW_DEFAULTS and field.label == 'GPS altitude':
-                    add_field_controls(widgets['gps_actions'], self, gps_field(record))
-                    widgets['gps_actions'].addStretch(1)
+                # Camera GPS actions remain available in the
+                # permanent GPS location section, including Add GPS.
                 continue
 
             # GPSAltitude's overview selector also retrieves its reference.
@@ -2764,8 +2797,9 @@ class MetadataEditor(QMainWindow, ListThumbnails):
             if gps_entries:
                 context = gps_field(record, chosen) if chosen is not None else GPSField(path, None, False,
                     'Multiple GPS representations', 'Choose an exact representation in All fields to inspect its coordinates. Editing is unavailable for this ambiguous field.')
-                add_field_controls(actions, self, context)
-                actions.addStretch(1)
+                if context is not None and not context.camera:
+                    add_field_controls(actions, self, context)
+                    actions.addStretch(1)
             details.setEnabled(True)
 
     def _build_fields(self):
@@ -3021,7 +3055,33 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         return value_text(value)
 
     def open_metadata_settings(self):
-        dialog = MetadataSettingsDialog(self.preferences, self)
+        from kim_settings_dialog import MetadataSettingsTab
+        from kim_dialog_buttons import style_button_box
+        self.preferences.reload()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("KIMng - Metadata sources")
+        dialog.resize(460, 340)
+        layout = QVBoxLayout(dialog)
+        tab = MetadataSettingsTab(
+            self.preferences, dialog, sources_only=True
+        )
+        layout.addWidget(tab, 1)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Save | QDialogButtonBox.Cancel |
+            QDialogButtonBox.RestoreDefaults
+        )
+        style_button_box(buttons)
+        buttons.button(
+            QDialogButtonBox.RestoreDefaults
+        ).clicked.connect(tab.restore_defaults)
+
+        def save_sources():
+            self.preferences.save(priority=tab.snapshot()[0])
+            dialog.accept()
+
+        buttons.accepted.connect(save_sources)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
         if dialog.exec() == QDialog.Accepted:
             # Settings affect future default selection; explicitly selected
             # targets and pending drafts remain pinned to their original source.

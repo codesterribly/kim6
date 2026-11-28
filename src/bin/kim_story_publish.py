@@ -21,10 +21,10 @@ from PySide6.QtWidgets import QSizePolicy, QHeaderView
 
 from kim_dialog_buttons import style_button, style_button_box
 from kim_story_publication import (
-    DERIVATIVE_MAX_SIZE, DERIVATIVE_QUALITY,
-    PreparedPublication, StoryDocument, prepare_publication,
+    DERIVATIVE_MAX_SIZE, DERIVATIVE_QUALITY, THUMBNAIL_MAX_SIZE, THUMBNAIL_QUALITY,
+    PreparedPublication, StoryDocument, image_quality_summary, prepare_publication,
     output_pages, publication_collections, publication_slug, publish_prepared, publish_prepared_zip,
-    validate_prepared,
+    resolve_image_quality, validate_prepared,
 )
 
 
@@ -209,6 +209,7 @@ class StoryReviewDialog(QDialog):
             ("Story title", 2, 2),
             ("Website structure", 3, 0),
             ("Sections", 3, 2),
+            ("Image quality", 4, 0),
         )
         self.summary_fields = {}
         for name, row, column in fields:
@@ -438,8 +439,11 @@ class StoryReviewDialog(QDialog):
             cover_names.append(f"{collection.title}: {Path(cover.source).name if cover else 'None'}"
                                + (" (automatic)" if not collection.cover_image_id else ""))
         format_label = "ZIP archive" if prepared.document.output_format == "zip" else "Gallery folder"
+        max_dim, jpeg_quality = resolve_image_quality(prepared.document)
+        quality_label = image_quality_summary(prepared.document)
         planned_files = [*output_pages(prepared.document), "style.css", "gallery-viewer.css", "gallery-viewer.js",
-                         *(image.relative_path for image in images)]
+                         *(image.relative_path for image in images),
+                         *(image.thumb_relative_path for image in images if image.thumb_relative_path)]
         if prepared.document.output_format == "zip":
             planned_files = [f"{gallery_name}/{name}" for name in planned_files]
         headings = sum(element.kind == "heading" for element in prepared.document.elements)
@@ -462,6 +466,7 @@ class StoryReviewDialog(QDialog):
             f"Covers: {', '.join(cover_names) or 'None'}. "
             f"Captions: {'shown' if prepared.document.show_captions else 'hidden'}. "
             f"Filenames: {'shown' if not prepared.document.hide_filenames else 'hidden'}. "
+            f"Image quality: {quality_label}. "
             f"Output format: {format_label}. "
             f"Story title: {prepared.document.title if prepared.document.title.strip() else 'Untitled story'}. "
             f"{total_images} images, {headings} headings, and {passages} text passages. "
@@ -470,8 +475,8 @@ class StoryReviewDialog(QDialog):
             f"Planned output entries: {', '.join(planned_files)}\n"
             f"Warnings: {warnings_text}\n"
             f"{output_instructions} Gallery contents include index.html, style.css, the local image viewer assets, "
-            f"and {len(images)} local JPEG derivatives "
-            f"(maximum {DERIVATIVE_MAX_SIZE[0]} x {DERIVATIVE_MAX_SIZE[1]} pixels, quality {DERIVATIVE_QUALITY}). "
+            f"{len(images)} full-view JPEG derivatives (maximum {max_dim} x {max_dim} pixels, quality {jpeg_quality}), "
+            f"and {len(images)} grid thumbnails (maximum {THUMBNAIL_MAX_SIZE[0]} x {THUMBNAIL_MAX_SIZE[1]} pixels, quality {THUMBNAIL_QUALITY}). "
             "Images are freshly encoded; embedded source metadata is not copied."
         )
         if prepared.blocked:
@@ -489,6 +494,7 @@ class StoryReviewDialog(QDialog):
             "Multiple pages" if prepared.document.website_structure == "multiple-pages" else "Single page")
         self.summary_fields["Sections"].setText(
             ", ".join(item.title for item in sections) or "None")
+        self.summary_fields["Image quality"].setText(quality_label)
         self.summary_fields["Output format"].setText(format_label)
         self.summary_fields["Story content"].setText(
             f"{total_images} images, {headings} headings, {passages} passages")
@@ -555,8 +561,15 @@ class StoryReviewDialog(QDialog):
                 prefix + image.relative_path,
                 "JPEG",
                 f"{image.width} × {image.height} px; "
-                f"{image.byte_size:,} bytes"
+                f"{image.byte_size:,} bytes (full view)"
             ))
+            if image.thumb_relative_path:
+                entries.append((
+                    prefix + image.thumb_relative_path,
+                    "Thumbnail JPEG",
+                    f"{image.thumb_width} × {image.thumb_height} px; "
+                    f"{image.thumb_byte_size:,} bytes (grid thumbnail)"
+                ))
 
         self.output_inventory.setRowCount(len(entries))
         for row, values in enumerate(entries):

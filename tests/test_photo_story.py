@@ -932,11 +932,13 @@ class FullStoryPreviewTests(unittest.TestCase):
         self.assertIn("Sections: Day, Night", review.details.text())
         self.assertIn("Sections", review.summary_fields)
         self.assertIn("Day: landscape.png", review.details.text())
-        self.assertEqual(review.output_inventory.rowCount(), 8)
+        self.assertEqual(review.output_inventory.rowCount(), 10)
         inventory = {review.output_inventory.item(row, 0).text()
                      for row in range(review.output_inventory.rowCount())}
         self.assertIn("collection-day.html", inventory)
         self.assertIn("collection-night.html", inventory)
+        self.assertIn("thumbs/0001.jpg", inventory)
+        self.assertIn("thumbs/0002.jpg", inventory)
         review.reject()
 
         Path(self.paths[0]).unlink()

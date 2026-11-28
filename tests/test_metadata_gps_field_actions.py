@@ -142,8 +142,16 @@ class GPSFieldActionTests(unittest.TestCase):
         self.addCleanup(overview.deleteLater)
         overview.set_record(MetadataRecord('/empty.jpg'))
         controls = overview.findChildren(QToolButton, 'gpsFieldAction')
-        self.assertTrue(any(button.text() == 'Add GPS' for button in controls))
-        self.assertTrue(all(not button.isEnabled() for button in controls if button.text() == 'View on map…'))
+        location_buttons = [
+            button for button in overview.findChildren(QToolButton)
+            if button.objectName() == 'editGpsLocation'
+        ]
+        self.assertEqual(1, len(location_buttons))
+        self.assertEqual('Add GPS location…', location_buttons[0].text())
+        self.assertTrue(location_buttons[0].isEnabled())
+        self.assertFalse(location_buttons[0].icon().isNull())
+        self.assertFalse(location_buttons[0].isHidden())
+        self.assertTrue(all(not button.isEnabled() for button in controls if button.text() == 'Map'))
         self.assertFalse(overview.show_empty.isChecked())
 
     def test_painted_actions_work_without_row_widgets_or_eager_fetch(self):
@@ -221,11 +229,21 @@ class EditorGPSFieldActionTests(unittest.TestCase):
         with patch.object(editor, '_full_record', return_value=record):
             editor._refresh_editor_pins()
         widgets = editor._readonly_pins[altitude.key]
-        buttons = [widgets['gps_actions'].itemAt(i).widget() for i in range(2)]
-        self.assertEqual(['View on map…', 'Add GPS'], [button.text() for button in buttons])
-        self.assertTrue(buttons[1].isEnabled())
+        self.assertEqual(0, widgets['gps_actions'].count())
+        self.assertFalse(editor.gps_section.isHidden())
+        self.assertEqual(
+            'Add GPS location…',
+            editor.add_gps_button.text()
+        )
+        self.assertTrue(editor.add_gps_button.isEnabled())
+        self.assertFalse(editor.add_gps_button.icon().isNull())
+        self.assertFalse(editor.view_gps_button.icon().isNull())
+        self.assertEqual('', editor.view_gps_button.text())
+        self.assertTrue(editor.view_gps_button.isEnabled())
         with patch.object(editor, 'add_gps_location') as add:
-            buttons[1].click()
+            context = actions.gps_field(record)
+            dispatch_action = actions.field_actions(editor, context)[1]
+            actions.dispatch(editor, context, dispatch_action)
         add.assert_called_once_with()
 
     def test_altitude_actions_follow_information_icon_in_heading(self):
@@ -247,15 +265,29 @@ class EditorGPSFieldActionTests(unittest.TestCase):
             widgets['value'].maximumHeight(),
             widgets['value'].fontMetrics().lineSpacing() * 2 + 8,
         )
-        buttons = [widgets['gps_actions'].itemAt(i).widget() for i in range(2)]
-        self.assertEqual(['View on map…', 'Edit GPS'], [button.text() for button in buttons])
-        self.assertTrue(all(button.isEnabled() for button in buttons))
+        self.assertEqual(0, widgets['gps_actions'].count())
+        self.assertEqual('', editor.view_gps_button.text())
+        self.assertFalse(editor.view_gps_button.icon().isNull())
+        self.assertTrue(editor.view_gps_button.isEnabled())
+        self.assertEqual(
+            'Edit GPS location…',
+            editor.add_gps_button.text()
+        )
+        self.assertFalse(editor.add_gps_button.icon().isNull())
+        self.assertTrue(editor.add_gps_button.isEnabled())
         editor.overview_preferences.fields = [field for field in OVERVIEW_DEFAULTS if field.label in ('GPS position', 'GPS altitude')]
         editor.overview.set_record(record)
         labels = [button.text() for button in editor.overview.findChildren(QToolButton, 'gpsFieldAction')]
-        # This fixture's position prefers its sidecar, while altitude is EXIF.
-        # Keep those two distinct records; do not add a third camera cluster.
-        self.assertEqual(['View on map…', 'Edit GPS'] * 2, labels)
+        # Keep the sidecar's own map action. Camera editing belongs
+        # to the Location heading, not a duplicate field action.
+        self.assertEqual(['Map', 'Edit GPS location…'], labels)
+        location_button = editor.overview.findChild(
+            QToolButton, 'editGpsLocation'
+        )
+        self.assertIsNotNone(location_button)
+        self.assertEqual('Edit GPS location…', location_button.text())
+        self.assertTrue(location_button.isEnabled())
+        self.assertFalse(location_button.icon().isNull())
 
     def test_editor_views_preserve_drafts_and_image_sidecar_integrity(self):
         before = [fixtures.signature(path) for path in (self.image, self.sidecar)]
@@ -266,11 +298,18 @@ class EditorGPSFieldActionTests(unittest.TestCase):
         editor.drafts[path] = {'title': draft}
         editor._refresh_pending()
         self.assertIn('Proposed:', editor.sources_gps_status.text())
-        self.assertIn('Edit GPS', [button.text() for button in editor.sources_gps_section.findChildren(QToolButton)])
+        self.assertIn('Edit GPS location…', [button.text() for button in editor.sources_gps_section.findChildren(QToolButton)])
         record = read_metadata([path])[path]
         editor.overview.set_record(record)
         labels = [button.text() for button in editor.overview.findChildren(QToolButton, 'gpsFieldAction')]
-        self.assertIn('Edit GPS', labels); self.assertIn('Discard change', labels)
+        self.assertIn('Edit GPS location…', labels)
+        discard = editor.overview.findChild(
+            QToolButton, 'discardGpsLocation'
+        )
+        self.assertIsNotNone(discard)
+        self.assertEqual('Discard change', discard.text())
+        self.assertTrue(discard.isEnabled())
+        self.assertFalse(discard.isHidden())
         native = next(item for item in record.entries if item.name == 'GPSLatitude' and 'GPS' in item.groups)
         field = actions.gps_field(record, native)
         with patch.object(editor, 'add_gps_location') as edit:

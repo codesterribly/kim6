@@ -5,7 +5,7 @@ Name=KIMng
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=image/*;image/vnd.adobe.photoshop;application/x-photoshop;application/pdf;
 X-KDE-Protocol=file
-Actions=00ViewMetadata;01EditMetadata;02StripMetadata;08SetCopyright;_SEPARATOR_;04Rename;05SetDates;06CheckExtensions;07Overlay;
+Actions=00ViewMetadata;03CompareMetadata;01EditMetadata;02StripMetadata;08SetCopyright;_SEPARATOR_;04Rename;05SetDates;06CheckExtensions;07Overlay;
 _X-KDE-Submenu=KIMng - Metadata/Organize
 X-KIMng-Managed=true
 
@@ -13,6 +13,11 @@ X-KIMng-Managed=true
 Icon=document-preview
 _Name=View metadata
 Exec=kim_all metadata-view -- %F
+
+[Desktop Action 03CompareMetadata]
+Icon=view-split-left-right
+_Name=Compare metadata
+Exec=kim_all metadata-compare -- %F
 
 [Desktop Action 01EditMetadata]
 Icon=document-edit

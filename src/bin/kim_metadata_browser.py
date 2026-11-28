@@ -1191,6 +1191,38 @@ class OverviewPresentation:
         header_row.setSpacing(6)
         header_row.addWidget(heading)
 
+        if title == 'Location':
+            open_map = getattr(self, 'view_gps_on_map', None)
+            if open_map is None and self.parent() is not None:
+                open_map = getattr(self.parent(), 'view_gps_on_map', None)
+            if callable(open_map):
+                globe = QToolButton()
+                globe.setObjectName('viewGpsOnMap')
+                globe_image = QPixmap(24, 24)
+                globe_image.fill(Qt.transparent)
+                painter = QPainter(globe_image)
+                painter.setRenderHint(QPainter.Antialiasing)
+                pen = QPen(self.palette().color(QPalette.WindowText))
+                pen.setWidthF(1.6)
+                painter.setPen(pen)
+                painter.drawEllipse(2, 2, 20, 20)
+                painter.drawEllipse(8, 2, 8, 20)
+                painter.drawLine(2, 12, 22, 12)
+                painter.drawLine(4, 7, 20, 7)
+                painter.drawLine(4, 17, 20, 17)
+                painter.end()
+                globe.setIcon(QIcon(globe_image))
+                globe.setIconSize(QSize(24, 24))
+                globe.setMinimumSize(30, 30)
+                globe.setAutoRaise(True)
+                globe.setToolTip('View the selected image GPS location on the map')
+                globe.setAccessibleName('View on map')
+                globe.setFocusPolicy(Qt.StrongFocus)
+                globe.clicked.connect(lambda _checked=False, action=open_map: action())
+                header_row.addWidget(globe)
+
+            self._location_header = header_row
+
         header_row.addStretch(1)
         self.overview_layout.addLayout(header_row)
         self.overview_layout.addWidget(body)
@@ -1351,6 +1383,7 @@ class OverviewPresentation:
         if gps_default not in fields:
             fields.append(gps_default)
         camera_location_shown = False
+        self._location_header = None
         gps_cards = {}
         for field in fields:
             entries = field.entries(record)
@@ -1416,7 +1449,8 @@ class OverviewPresentation:
                     shared_card = True
                 else:
                     gps_cards[representation] = (card, self.section_layout)
-                    add_field_controls(heading, action_owner(self), context)
+                    if not (context.camera and field.section == 'Location'):
+                        add_field_controls(heading, action_owner(self), context)
                 camera_location_shown |= context.camera
             heading.addStretch(1)
             self.section_layout.addLayout(heading)
@@ -1434,6 +1468,59 @@ class OverviewPresentation:
             wide = len(shown) > 90 or len(field.label) > 45 or '\n' in shown
             if not shared_card:
                 self._overview_section.add_field(card, wide or context is not None)
+        if self._location_header is not None:
+            from kim_metadata_gps_actions import (
+                configure_gps_location_button, field_actions, dispatch
+            )
+            owner = action_owner(self)
+            camera_context = gps_field(record)
+            available_actions = field_actions(owner, camera_context)
+            if len(available_actions) > 1:
+                action = available_actions[1]
+                button = QToolButton()
+                button.setObjectName("editGpsLocation")
+                configure_gps_location_button(
+                    button, action[0] == "Edit GPS"
+                )
+                button.setAutoRaise(False)
+                button.setEnabled(action[2])
+                button.setToolTip(action[3])
+                button.clicked.connect(
+                    lambda checked=False, target=camera_context, selected=action:
+                    dispatch(owner, target, selected)
+                )
+                self._location_header.insertWidget(
+                    self._location_header.count() - 1, button
+                )
+
+                for pending_action in available_actions[2:]:
+                    if pending_action[0] != "Discard change":
+                        continue
+
+                    discard = QToolButton()
+                    discard.setObjectName("discardGpsLocation")
+                    discard.setText("Discard change")
+                    discard.setAccessibleName("Discard GPS change")
+                    discard.setIcon(QIcon.fromTheme("edit-undo"))
+                    discard.setToolButtonStyle(
+                        Qt.ToolButtonTextBesideIcon
+                    )
+                    discard.setAutoRaise(False)
+                    discard.setEnabled(pending_action[2])
+                    discard.setToolTip(pending_action[3])
+                    discard.clicked.connect(
+                        lambda checked=False,
+                        target=camera_context,
+                        selected=pending_action:
+                        dispatch(owner, target, selected)
+                    )
+                    self._location_header.insertWidget(
+                        self._location_header.count() - 1,
+                        discard
+                    )
+
+                camera_location_shown = True
+
         if not camera_location_shown:
             self._section_heading('Camera GPS location', first=section is None)
             card = QWidget()
@@ -1682,7 +1769,7 @@ class _ElidedMetadataPathLabel(QLabel):
 
 
 class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
-    def __init__(self, paths):
+    def __init__(self, paths, *, start_compare=False):
         super().__init__()
         initial_paths = [_source_path(Path(path).expanduser()) for path in paths]
         self.paths = []
@@ -1789,6 +1876,17 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self.choose_files()
         else:
             self.set_images(initial_paths)
+        if start_compare:
+            if len(self.paths) == 2:
+                self._begin_comparison(list(self.paths))
+            else:
+                self.tabs.setCurrentIndex(2)
+                self.comparison_empty.setText(
+                    "Select exactly two images to compare their metadata. "
+                    "Use Ctrl+click in the list and choose Compare images."
+                )
+                self.comparison_empty.show()
+                self.comparison_content.hide()
 
     def _build_left(self):
         self.left_panel = QWidget()
@@ -1875,6 +1973,12 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.compare_images_button.setEnabled(False)
         self.compare_images_button.clicked.connect(self.compare_images)
         selection_row.addWidget(self.compare_images_button)
+        self.edit_metadata_button = QPushButton("Edit metadata…")
+        self.edit_metadata_button.setIcon(QIcon.fromTheme("document-edit"))
+        self.edit_metadata_button.setToolTip("Open the loaded images in the read-only Metadata Editor")
+        self.edit_metadata_button.setEnabled(False)
+        self.edit_metadata_button.clicked.connect(self.open_in_editor)
+        selection_row.addWidget(self.edit_metadata_button)
         self.add_button = QPushButton("Add images…")
         self.add_button.clicked.connect(self.choose_files)
         selection_row.addWidget(self.add_button)
@@ -1911,6 +2015,13 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         self.status_summary.setWordWrap(True)
         layout.addWidget(self.status_summary)
         self.tabs = QTabWidget()
+        from kim_metadata_gps_actions import metadata_sources_button
+        self.metadata_sources_button = metadata_sources_button(
+            self.tabs, self.open_metadata_settings
+        )
+        self.tabs.setCornerWidget(
+            self.metadata_sources_button, Qt.TopRightCorner
+        )
         layout.addWidget(self.tabs, 1)
         self.overview = QWidget()
         overview_layout = QVBoxLayout(self.overview)
@@ -2325,6 +2436,9 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         rows = sorted(self.image_list.row(item) for item in self.image_list.selectedItems())
         return tuple(self.paths[row] for row in rows if 0 <= row < len(self.paths))
 
+    def _eligible_editor_paths(self):
+        return [path for path in self.paths if Path(path).suffix.lower() != ".pdf"]
+
     def _update_compare_button(self):
         selected = self._selected_image_paths()
         enabled = len(selected) == 2
@@ -2333,6 +2447,84 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
             self.compare_images_button.setToolTip("Compare the two selected images")
         else:
             self.compare_images_button.setToolTip("Select exactly two images to compare their metadata")
+        if hasattr(self, "edit_metadata_button"):
+            eligible = self._eligible_editor_paths()
+            self.edit_metadata_button.setEnabled(bool(eligible))
+            if eligible:
+                excluded = len(self.paths) - len(eligible)
+                if excluded:
+                    self.edit_metadata_button.setToolTip(
+                        f"Open {len(eligible)} eligible image(s) in the read-only Metadata Editor "
+                        f"({excluded} PDF document(s) will be excluded)"
+                    )
+                else:
+                    self.edit_metadata_button.setToolTip(
+                        "Open the loaded images in the read-only Metadata Editor"
+                    )
+            elif self.paths:
+                self.edit_metadata_button.setToolTip(
+                    "Edit metadata is unavailable: PDF documents are not editable."
+                )
+            else:
+                self.edit_metadata_button.setToolTip(
+                    "Load at least one image to open the Metadata Editor"
+                )
+
+    def open_in_editor(self):
+        """Launch the existing read-only Metadata Editor with eligible loaded images."""
+        eligible = self._eligible_editor_paths()
+        if not eligible:
+            message = (
+                "No eligible images are loaded. PDF documents are not editable in Metadata Editor."
+                if self.paths else
+                "Select at least one image first."
+            )
+            QMessageBox.information(self, "Edit metadata", message)
+            return None
+        current = self._current_path()
+        active = current if current in eligible else eligible[0]
+        excluded = len(self.paths) - len(eligible)
+        if excluded:
+            self.statusBar().showMessage(
+                f"Excluded {excluded} PDF document(s); opening {len(eligible)} image(s) in Metadata Editor.",
+                5000,
+            )
+        from kim_metadata_editor import MetadataEditor
+        editors = getattr(self, "_editors", None)
+        if editors is None:
+            editors = self._editors = []
+        editor = MetadataEditor(eligible, current_path=active)
+        editor.setAttribute(Qt.WA_DeleteOnClose)
+        editors.append(editor)
+        editor.destroyed.connect(lambda: editors.remove(editor) if editor in editors else None)
+        editor.show()
+        return editor
+
+    def open_metadata_settings(self):
+        """Open shared Metadata preferences using the central MetadataSettingsTab."""
+        from kim_settings_dialog import MetadataSettingsTab
+        self.metadata_preferences.reload()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("KIMng - Metadata sources")
+        dialog.resize(460, 340)
+        layout = QVBoxLayout(dialog)
+        tab = MetadataSettingsTab(self.metadata_preferences, dialog, sources_only=True)
+        layout.addWidget(tab, 1)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Save | QDialogButtonBox.Cancel | QDialogButtonBox.RestoreDefaults
+        )
+        style_button_box(buttons)
+        buttons.button(QDialogButtonBox.RestoreDefaults).clicked.connect(tab.restore_defaults)
+
+        def save_settings():
+            self.metadata_preferences.save(priority=tab.snapshot()[0])
+            dialog.accept()
+
+        buttons.accepted.connect(save_settings)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QDialog.Accepted:
+            self._reload_overview_preferences()
 
     def _selection_changed(self):
         self._update_compare_button()
@@ -2689,6 +2881,27 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         return GPSField(path, None, False, 'Not present · ' + exemplar.group,
                         'This representation is absent or incomplete. Inspect camera GPS in Overview; another location record will not be edited here.')
 
+    def edit_gps_from_report(self, path, position):
+        """Reuse Browser GPS proposal handling for the report's image."""
+        if getattr(self, '_closing', False):
+            return
+
+        if path != self._current_path():
+            return
+
+        from kim_metadata_gps_actions import (
+            GPSField, field_actions, dispatch
+        )
+
+        context = GPSField(
+            path, position, True, 'Embedded camera GPS'
+        )
+
+        actions = field_actions(self, context)
+
+        if len(actions) > 1:
+            dispatch(self, context, actions[1])
+
     def view_gps_on_map(self):
         """Open the existing read-only GPS report for the current image."""
         path = self._current_path()
@@ -2701,6 +2914,9 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
         try:
             from kim_location_dialog import LocationDialog
             dialog = LocationDialog("report", [path], "create", None)
+            dialog.set_report_edit_handler(
+                self.edit_gps_from_report
+            )
             dialog.exec()
         except (ImportError, OSError, RuntimeError, ValueError) as exc:
             QMessageBox.warning(
@@ -3997,6 +4213,17 @@ class MetadataBrowser(QMainWindow, OverviewPresentation, ListThumbnails):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    start_compare = False
+    paths = []
+    after_separator = False
+    for arg in argv:
+        if not after_separator and arg == "--":
+            after_separator = True
+            continue
+        if not after_separator and arg == "--compare":
+            start_compare = True
+            continue
+        paths.append(arg)
     shutdown_requested = False
 
     def request_shutdown(_signum, _frame):
@@ -4011,7 +4238,7 @@ def main(argv=None):
     app = QApplication(sys.argv[:1])
     app.setApplicationName("KIMng Metadata Browser")
     app.setOrganizationName("KIMng")
-    window = MetadataBrowser(argv)
+    window = MetadataBrowser(paths, start_compare=start_compare)
     window.show()
     shutdown_timer = QTimer()
     shutdown_timer.setInterval(100)

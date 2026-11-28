@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 from PySide6.QtCore import Qt, QRect, QEvent, QPersistentModelIndex
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QVBoxLayout, QLabel,
     QToolButton, QMenu, QStyledItemDelegate, QStyleOptionViewItem,
     QStyleOptionToolButton, QStyle, QToolTip, QMessageBox)
@@ -308,6 +308,82 @@ def dispatch(owner, field, action):
         editor.form_scroll.ensureWidgetVisible(editor.gps_section)
 
 
+
+def gps_location_icon(editing):
+    """A location pin with a visible edit or add badge."""
+    icon = QIcon.fromTheme("mark-location")
+    if icon.isNull():
+        icon = QIcon.fromTheme("find-location")
+
+    canvas = QPixmap(24, 24)
+    canvas.fill(Qt.transparent)
+    painter = QPainter(canvas)
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    if not icon.isNull():
+        icon.paint(painter, 0, 0, 20, 20)
+    else:
+        painter.setPen(QPen(QColor("#1876a7"), 1))
+        painter.setBrush(QColor("#3daee9"))
+        painter.drawEllipse(2, 1, 14, 14)
+        painter.drawPolygon([
+            __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(3, 11),
+            __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(9, 21),
+            __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(15, 11),
+        ])
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("white"))
+        painter.drawEllipse(7, 6, 4, 4)
+
+    badge = QIcon.fromTheme(
+        "document-edit" if editing else "list-add"
+    )
+    if not badge.isNull():
+        badge.paint(painter, 11, 11, 13, 13)
+    else:
+        painter.setPen(QPen(QColor("white"), 1))
+        painter.setBrush(
+            QColor("#2980b9" if editing else "#27ae60")
+        )
+        painter.drawEllipse(11, 11, 12, 12)
+        painter.setPen(QPen(QColor("white"), 2))
+        if editing:
+            painter.drawLine(14, 20, 20, 14)
+        else:
+            painter.drawLine(14, 17, 20, 17)
+            painter.drawLine(17, 14, 17, 20)
+
+    painter.end()
+    return QIcon(canvas)
+
+
+def configure_gps_location_button(button, editing):
+    """Use consistent labels and actual rendered button icons."""
+    label = "Edit GPS location…" if editing else "Add GPS location…"
+    button.setText(label)
+    button.setAccessibleName(label)
+    button.setIcon(gps_location_icon(editing))
+    from PySide6.QtCore import QSize
+    button.setIconSize(QSize(24, 24))
+    if isinstance(button, QToolButton):
+        button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+
+
+def metadata_sources_button(parent, callback):
+    from PySide6.QtWidgets import QPushButton
+    button = QPushButton("Metadata sources…", parent)
+    button.setObjectName("metadataSourcesButton")
+    button.setIcon(QIcon.fromTheme(
+        "view-sort",
+        QIcon.fromTheme("dialog-layers")
+    ))
+    button.setToolTip(
+        "Choose the order in which metadata sources are read."
+    )
+    button.clicked.connect(callback)
+    return button
+
+
 def add_field_controls(layout, owner, field):
     for action in field_actions(owner, field):
         label, icon, enabled, tip, _position = action
@@ -331,8 +407,9 @@ def add_field_controls(layout, owner, field):
             )
         else:
             if label in ("Edit GPS", "Add GPS"):
-                button.setIcon(QIcon.fromTheme("document-edit"))
-                button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+                configure_gps_location_button(
+                    button, label == "Edit GPS"
+                )
             else:
                 button.setToolButtonStyle(Qt.ToolButtonTextOnly)
         button.setAutoRaise(False)

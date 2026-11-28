@@ -49,7 +49,15 @@ class MetadataSettingsTests(unittest.TestCase):
         next(button for button in parent.findChildren(QPushButton) if button.text() == text).click()
 
     def order(self):
-        return tuple(self.sources.item(i).text() for i in range(self.sources.count()))
+        from PySide6.QtCore import Qt
+        sources = self.tab.sources
+        result = []
+        for index in range(sources.count()):
+            item = sources.item(index)
+            canonical = item.data(Qt.UserRole)
+            self.assertEqual(f"{index + 1}. {canonical}", item.text())
+            result.append(canonical)
+        return tuple(result)
 
     def test_save_reordered_priority_keeps_general_settings_byte_for_byte(self):
         values = {**settings.DEFAULTS, 'KIM_WEB_QUALITY_JPEG': '83',

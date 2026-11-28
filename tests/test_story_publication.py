@@ -243,7 +243,7 @@ class StoryPublicationRenderingTests(unittest.TestCase):
     def test_gallery_type_defaults_and_style_variants(self):
         self.assertEqual(OUTPUT_FORMATS, ("folder", "zip"))
         self.assertEqual(TYPE_DEFAULT_LAYOUTS, {
-            "simple-gallery": "one-per-section", "travelogue": "one-per-section",
+            "simple-gallery": "masonry", "travelogue": "one-per-section",
             "photo-essay": "adaptive", "illustrated-story": "one-per-section",
         })
         self.assertEqual({key: canonical_visual_style(key) for key in VISUAL_STYLES}, {
@@ -432,6 +432,9 @@ class StoryPublicationSafetyTests(unittest.TestCase):
                                collections=(StoryCollection("day", "Day", ("image-0",), cover_image_id="image-0"),
                                             StoryCollection("night", "Night", ("image-1",))))
             prepared = prepare_publication(document, str(self.workspace / output_format))
+            expected_with_thumbs = expected | {
+                image.thumb_relative_path for image in prepared.images if image.thumb_relative_path
+            }
             self.assertEqual(set(output_pages(prepared.document)) | {
                 "style.css", "gallery-viewer.css", "gallery-viewer.js",
                 *(image.relative_path for image in prepared.images)}, expected)
@@ -443,13 +446,13 @@ class StoryPublicationSafetyTests(unittest.TestCase):
             if output_format == "folder":
                 target = self.root / "multipage-folder"
                 publish_prepared(prepared, str(target))
-                self.assertEqual({path.relative_to(target).as_posix() for path in target.rglob("*") if path.is_file()}, expected)
+                self.assertEqual({path.relative_to(target).as_posix() for path in target.rglob("*") if path.is_file()}, expected_with_thumbs)
                 self.assertIn('href="collection-night.html"', (target / "collection-day.html").read_text())
             else:
                 target = self.root / "multipage.zip"
                 publish_prepared_zip(prepared, str(target), gallery_name="multipage")
                 with ZipFile(target) as archive:
-                    self.assertEqual(set(archive.namelist()), {"multipage/" + name for name in expected})
+                    self.assertEqual(set(archive.namelist()), {"multipage/" + name for name in expected_with_thumbs})
                     self.assertIsNone(archive.testzip())
             self.assertEqual([self.digest(path) for path in sources], before)
 
@@ -530,8 +533,9 @@ class StoryPublicationSafetyTests(unittest.TestCase):
         self.assertEqual(publish_prepared(prepared, str(destination)), str(destination))
         self.assertEqual(sorted(path.name for path in destination.iterdir()),
                          ["gallery-viewer.css", "gallery-viewer.js", "images",
-                          "index.html", "style.css"])
+                          "index.html", "style.css", "thumbs"])
         self.assertTrue((destination / "images/0001.jpg").is_file())
+        self.assertTrue((destination / "thumbs/0001.jpg").is_file())
         with self.assertRaises(FileExistsError):
             publish_prepared(prepared, str(destination))
         after_publish = (self.digest(source), os.stat(source).st_atime_ns,
@@ -553,7 +557,8 @@ class StoryPublicationSafetyTests(unittest.TestCase):
             self.assertEqual(names, ["light-on-water/index.html", "light-on-water/style.css",
                                      "light-on-water/gallery-viewer.css",
                                      "light-on-water/gallery-viewer.js",
-                                     "light-on-water/images/0001.jpg"])
+                                     "light-on-water/images/0001.jpg",
+                                     "light-on-water/thumbs/0001.jpg"])
             self.assertEqual(len(names), len(set(names)))
             self.assertTrue(all(not name.startswith("/") and ".." not in Path(name).parts
                                 for name in names))
@@ -713,6 +718,110 @@ class StoryPublicationSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "blocked by unavailable images"):
             publish_prepared(prepared, str(self.root / "blocked-site"))
         self.assertFalse((self.root / "blocked-site").exists())
+
+    def test_g1_simple_gallery_thumbnails_and_quality_presets(self):
+        from PySide6.QtGui import QImage
+        from types import SimpleNamespace
+        from kim_story_publication import (
+            THUMBNAIL_MAX_SIZE, image_quality_summary, resolve_image_quality,
+        )
+
+        # Create mixed-aspect fixtures: large landscape, portrait, panorama, square, and small image.
+        fixtures = []
+        for name, w, h, color in (
+            ("land.png", 3200, 2000, 0xff224466),
+            ("port.png", 1800, 2700, 0xff336644),
+            ("pano.png", 3600, 1200, 0xff664422),
+            ("sq.png", 2400, 2400, 0xff553366),
+            ("small.png", 480, 320, 0xff445566),
+        ):
+            p = self.root / name
+            img = QImage(w, h, QImage.Format_ARGB32)
+            img.fill(color)
+            self.assertTrue(img.save(str(p)))
+            os.utime(p, ns=(10**18, 15 * 10**17))
+            fixtures.append((str(p), w, h))
+
+        before_sigs = {
+            p: (self.digest(p), os.stat(p).st_size, os.stat(p).st_atime_ns,
+                os.stat(p).st_mtime_ns, os.stat(p).st_ctime_ns)
+            for p, _, _ in fixtures
+        }
+        id_map = {p: identity(p) for p, _, _ in fixtures}
+        elems = [
+            SimpleNamespace(kind="image", id=f"g{i}", heading="", caption=f"Cap {i}",
+                            text="", source=p, description="")
+            for i, (p, _, _) in enumerate(fixtures, 1)
+        ]
+
+        # 1. Verify presets & custom validation.
+        for preset, exp_dim, exp_qual in (
+            ("compact", 1600, 85),
+            ("standard", 2048, 90),
+            ("high", 3000, 95),
+        ):
+            doc = make_document(
+                "Coast", "", elems, style="modern", hide_filenames=True,
+                publication_type="simple-gallery", show_captions=True, layout="masonry",
+                image_quality_preset=preset, source_identities=id_map,
+            )
+            self.assertEqual(resolve_image_quality(doc), (exp_dim, exp_qual))
+            ws = self.root / f"ws-{preset}"
+            prep = prepare_publication(doc, str(ws))
+            self.assertFalse(prep.blocked)
+            # Large landscape bounded by preset; small image never enlarged; thumbnails bounded by 640px.
+            self.assertEqual(max(prep.images[0].width, prep.images[0].height), exp_dim)
+            self.assertEqual((prep.images[4].width, prep.images[4].height), (480, 320))
+            for im in prep.images:
+                self.assertLessEqual(max(im.thumb_width, im.thumb_height), THUMBNAIL_MAX_SIZE[0])
+                self.assertTrue(im.thumb_relative_path.startswith("thumbs/"))
+            # Small thumbnail never enlarged either
+            self.assertEqual((prep.images[4].thumb_width, prep.images[4].thumb_height), (480, 320))
+
+            if preset == "standard":
+                # Simple Gallery HTML checks: no editorial boilerplate, grid uses thumbs, links use full images.
+                self.assertNotIn("A visual story", prep.index_html)
+                self.assertNotIn("Return to opening", prep.index_html)
+                self.assertNotIn('<div class="introduction">', prep.index_html)
+                self.assertNotIn('class="hero-image"', prep.index_html)
+                self.assertIn('href="images/0001.jpg"', prep.index_html)
+                self.assertIn('src="thumbs/0001.jpg"', prep.index_html)
+                self.assertNotIn('src="images/', prep.index_html)
+                self.assertIn('loading="eager"', prep.index_html)
+                # Publish folder & verify thumbnail tamper fails closed.
+                dest = self.root / "pub-std"
+                publish_prepared(prep, str(dest))
+                self.assertTrue((dest / "thumbs/0001.jpg").is_file())
+                self.assertTrue((dest / "images/0001.jpg").is_file())
+                Path(prep.images[0].thumb_staged_path).write_bytes(b"corrupted")
+                with self.assertRaisesRegex(ValueError, "Prepared thumbnail changed"):
+                    publish_prepared(prep, str(self.root / "pub-tampered"))
+
+        # Custom valid preset
+        doc_custom = make_document(
+            "Coast", "Intro line", elems[:1], style="modern", hide_filenames=True,
+            publication_type="simple-gallery", layout="masonry",
+            image_quality_preset="custom", custom_max_dimension=1200, custom_jpeg_quality=75,
+            source_identities=id_map,
+        )
+        self.assertIn("Custom (1200 px, JPEG quality 75)", image_quality_summary(doc_custom))
+        prep_custom = prepare_publication(doc_custom, str(self.root / "ws-custom"))
+        self.assertEqual(max(prep_custom.images[0].width, prep_custom.images[0].height), 1200)
+        self.assertIn('<div class="introduction"><p>Intro line</p></div>', prep_custom.index_html)
+
+        # Invalid custom bounds rejected
+        with self.assertRaises(ValueError):
+            make_document("Bad", "", elems[:1], style="modern", hide_filenames=True,
+                          image_quality_preset="custom", custom_max_dimension=100, custom_jpeg_quality=90)
+        with self.assertRaises(ValueError):
+            make_document("Bad", "", elems[:1], style="modern", hide_filenames=True,
+                          image_quality_preset="custom", custom_max_dimension=2000, custom_jpeg_quality=20)
+
+        # Verify all 5 original-image integrity attributes remained untouched.
+        for p, before in before_sigs.items():
+            after = (self.digest(p), os.stat(p).st_size, os.stat(p).st_atime_ns,
+                     os.stat(p).st_mtime_ns, os.stat(p).st_ctime_ns)
+            self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

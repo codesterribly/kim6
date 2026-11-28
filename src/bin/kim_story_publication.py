@@ -36,13 +36,26 @@ WEBSITE_STRUCTURES = ("single-page", "multiple-pages")
 OUTPUT_FORMATS = ("folder", "zip")
 UNASSIGNED_COLLECTION_ID = "kimng-unassigned"
 TYPE_DEFAULT_LAYOUTS = {
-    "simple-gallery": "one-per-section",
+    "simple-gallery": "masonry",
     "travelogue": "one-per-section",
     "photo-essay": "adaptive",
     "illustrated-story": "one-per-section",
 }
-DERIVATIVE_MAX_SIZE = (1800, 1800)
-DERIVATIVE_QUALITY = 88
+IMAGE_QUALITY_PRESETS = {
+    "compact": (1600, 85),
+    "standard": (2048, 90),
+    "high": (3000, 95),
+}
+IMAGE_QUALITY_MODES = ("compact", "standard", "high", "custom")
+CUSTOM_DIMENSION_MIN = 320
+CUSTOM_DIMENSION_MAX = 8000
+CUSTOM_QUALITY_MIN = 50
+CUSTOM_QUALITY_MAX = 100
+THUMBNAIL_MAX_SIZE = (640, 640)
+THUMBNAIL_QUALITY = 82
+EAGER_THUMBNAIL_COUNT = 6
+DERIVATIVE_MAX_SIZE = (2048, 2048)
+DERIVATIVE_QUALITY = 90
 
 
 @dataclass(frozen=True)
@@ -60,6 +73,9 @@ class StoryElement:
     blocked_reason: str = ""
     # Kept separate from the legacy short caption for old in-memory callers.
     description: str = ""
+    thumb_image: str = ""
+    thumb_width: int = 0
+    thumb_height: int = 0
 
 
 @dataclass(frozen=True)
@@ -75,6 +91,9 @@ class StoryDocument:
     output_format: str = "folder"
     website_structure: str = "single-page"
     collections: tuple[StoryCollection, ...] = ()
+    image_quality_preset: str = "standard"
+    custom_max_dimension: int = 2048
+    custom_jpeg_quality: int = 90
 
 
 @dataclass(frozen=True)
@@ -112,6 +131,12 @@ class PreparedImage:
     byte_size: int
     sha256: str
     staged_path: str
+    thumb_relative_path: str = ""
+    thumb_width: int = 0
+    thumb_height: int = 0
+    thumb_byte_size: int = 0
+    thumb_sha256: str = ""
+    thumb_staged_path: str = ""
 
 
 @dataclass(frozen=True)
@@ -185,6 +210,37 @@ def canonical_visual_style(style: str) -> str:
     return {"journal": "classic", "editorial": "modern", "cinematic": "dramatic"}.get(style, "")
 
 
+def resolve_image_quality(document: StoryDocument) -> tuple[int, int]:
+    """Return validated (max_dimension, jpeg_quality) for display derivatives."""
+    preset = document.image_quality_preset
+    if preset not in IMAGE_QUALITY_MODES:
+        raise ValueError("Choose Compact, Standard, High quality, or Custom image quality")
+    if preset != "custom":
+        return IMAGE_QUALITY_PRESETS[preset]
+    dim = document.custom_max_dimension
+    qual = document.custom_jpeg_quality
+    if type(dim) is not int or not (CUSTOM_DIMENSION_MIN <= dim <= CUSTOM_DIMENSION_MAX):
+        raise ValueError(
+            f"Custom maximum dimension must be between {CUSTOM_DIMENSION_MIN} and {CUSTOM_DIMENSION_MAX} pixels"
+        )
+    if type(qual) is not int or not (CUSTOM_QUALITY_MIN <= qual <= CUSTOM_QUALITY_MAX):
+        raise ValueError(
+            f"Custom JPEG quality must be between {CUSTOM_QUALITY_MIN} and {CUSTOM_QUALITY_MAX}"
+        )
+    return (dim, qual)
+
+
+def image_quality_summary(document: StoryDocument) -> str:
+    dim, qual = resolve_image_quality(document)
+    labels = {
+        "compact": "Compact",
+        "standard": "Standard",
+        "high": "High quality",
+        "custom": "Custom",
+    }
+    return f"{labels[document.image_quality_preset]} ({dim} px, JPEG quality {qual})"
+
+
 def validate_document(document: StoryDocument) -> None:
     if document.publication_type not in PUBLICATION_TYPES:
         raise ValueError("Unsupported gallery type")
@@ -196,8 +252,10 @@ def validate_document(document: StoryDocument) -> None:
         raise ValueError("Choose Gallery folder or ZIP archive output format")
     if document.website_structure not in WEBSITE_STRUCTURES:
         raise ValueError("Choose Single page or Multiple pages website structure")
+    resolve_image_quality(document)
     ids = set()
     outputs = set()
+    thumbs = set()
     for element in document.elements:
         if element.kind not in {"image", "heading", "text"}:
             raise ValueError("Unknown Photo Story element type")
@@ -217,6 +275,16 @@ def validate_document(document: StoryDocument) -> None:
                 if element.output_image in outputs:
                     raise ValueError("Every website image needs a unique output filename")
                 outputs.add(element.output_image)
+            if element.thumb_image:
+                thumb_path = PurePosixPath(element.thumb_image)
+                if (thumb_path.is_absolute() or ".." in thumb_path.parts
+                        or len(thumb_path.parts) != 2 or thumb_path.parts[0] != "thumbs"
+                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.jpg",
+                                             thumb_path.name)):
+                    raise ValueError("Thumbnail output paths must be local to the website")
+                if element.thumb_image in thumbs:
+                    raise ValueError("Every website thumbnail needs a unique output filename")
+                thumbs.add(element.thumb_image)
     if document.collections:
         collection_ids = set()
         names = set()
@@ -252,12 +320,14 @@ def composition_plan(document: StoryDocument) -> tuple[CompositionBlock, ...]:
     """
     validate_document(document)
     elements = document.elements
-    if document.layout in ("justified", "masonry"):
+    is_simple = document.publication_type == "simple-gallery"
+    if document.layout in ("justified", "masonry") or (is_simple and document.layout == "adaptive"):
+        group_kind = "masonry" if (is_simple and document.layout == "adaptive") else document.layout
         result = []
         pending = []
         def flush():
             if pending:
-                result.append(CompositionBlock(document.layout, tuple(pending)))
+                result.append(CompositionBlock(group_kind, tuple(pending)))
                 pending.clear()
         for element in elements:
             if element.kind == "image":
@@ -269,7 +339,7 @@ def composition_plan(document: StoryDocument) -> tuple[CompositionBlock, ...]:
         return tuple(result)
     result: list[CompositionBlock] = []
     index = 0
-    if elements and elements[0].kind == "image":
+    if not is_simple and elements and elements[0].kind == "image":
         result.append(CompositionBlock("hero", (elements[0],)))
         index = 1
     feature_next = False
@@ -340,8 +410,10 @@ def _section_id(element: StoryElement) -> str:
     return "section-" + (token or "chapter") + "-" + suffix
 
 
-def _image_figure(element: StoryElement, *, variant: str, document: StoryDocument) -> str:
-    source = _escape(element.output_image)
+def _image_figure(element: StoryElement, *, variant: str, document: StoryDocument,
+                  eager: bool = False) -> str:
+    full_source = _escape(element.output_image)
+    grid_source = _escape(element.thumb_image or element.output_image)
     heading = element.heading or ""
     caption = element.caption or ""
     accessible_name = heading.strip() or (
@@ -349,8 +421,14 @@ def _image_figure(element: StoryElement, *, variant: str, document: StoryDocumen
         else caption.strip())
     viewer_caption = (f' data-viewer-caption="{_escape(caption)}"'
                       if document.show_captions and caption.strip() else "")
-    dimensions = (f' width="{element.image_width}" height="{element.image_height}"'
-                  if element.image_width > 0 and element.image_height > 0 else "")
+    raw_stem = PurePosixPath(element.output_image).stem if element.output_image else element.id
+    viewer_slug = re.sub(r"[^A-Za-z0-9_-]+", "-", raw_stem).strip("-") or "photo"
+    viewer_id = f"image-{viewer_slug}"
+    disp_w = element.thumb_width if (element.thumb_image and element.thumb_width > 0) else element.image_width
+    disp_h = element.thumb_height if (element.thumb_image and element.thumb_height > 0) else element.image_height
+    dimensions = (f' width="{disp_w}" height="{disp_h}"'
+                  if disp_w > 0 and disp_h > 0 else "")
+    loading_attr = ' loading="eager"' if eager else ' loading="lazy"'
     title_markup = f'<h2 class="image-heading">{_escape(heading)}</h2>' if heading.strip() else ""
     caption_markup = (f'<figcaption>{_escape(caption)}</figcaption>'
                       if document.show_captions and caption.strip() else "")
@@ -361,10 +439,11 @@ def _image_figure(element: StoryElement, *, variant: str, document: StoryDocumen
         '<div class="unavailable-image" role="img" aria-label="Photograph unavailable">'
         '<span>Photograph unavailable</span></div>'
         if element.blocked_reason else
-        f'<a class="gallery-viewer-trigger" href="{source}" '
+        f'<a class="gallery-viewer-trigger" href="{full_source}" '
+        f'data-viewer-id="{_escape(viewer_id)}" '
         f'aria-label="Enlarge image: {_escape(accessible_name or "Photograph")}" '
-        f'aria-haspopup="dialog"{viewer_caption}><img src="{source}" alt="{_escape(accessible_name)}"'
-        f'{dimensions} loading="lazy" decoding="async"></a>'
+        f'aria-haspopup="dialog"{viewer_caption}><img src="{grid_source}" alt="{_escape(accessible_name)}"'
+        f'{dimensions}{loading_attr} decoding="async"></a>'
     )
     return (
         f'<figure class="photograph {variant}">'
@@ -373,7 +452,8 @@ def _image_figure(element: StoryElement, *, variant: str, document: StoryDocumen
     )
 
 
-def _image_story(element: StoryElement, document: StoryDocument, *, variant: str) -> str:
+def _image_story(element: StoryElement, document: StoryDocument, *, variant: str,
+                 eager: bool = False) -> str:
     prose = _paragraphs(element.description)
     description = (f'<div class="image-description prose" '
                    f'data-description-for="{_escape(element.id)}">{prose}</div>'
@@ -387,7 +467,7 @@ def _image_story(element: StoryElement, document: StoryDocument, *, variant: str
     return (
         f'<article class="image-story-item {variant} type-image-{document.publication_type}" '
         f'data-element-id="{_escape(element.id)}"{image_style}>'
-        f'{_image_figure(element, variant="story-photograph", document=document)}'
+        f'{_image_figure(element, variant="story-photograph", document=document, eager=eager)}'
         f'{description}</article>'
     )
 
@@ -421,9 +501,11 @@ def render_website(document: StoryDocument, *, hero: bool = True) -> RenderedWeb
     masthead, reading_label, contents_label, chapter_label = type_labels[gallery_type]
     opening_image = ""
     hero_render_width = ""
-    if hero and blocks and blocks[0].kind == "hero":
+    rendered_images = 0
+    if hero and gallery_type != "simple-gallery" and blocks and blocks[0].kind == "hero":
         hero_element = blocks[0].elements[0]
-        opening_image = _image_story(hero_element, document, variant="hero-image")
+        opening_image = _image_story(hero_element, document, variant="hero-image", eager=True)
+        rendered_images += 1
         hero_render_width = _story_image_render_width(hero_element)
         blocks = blocks[1:]
 
@@ -458,33 +540,57 @@ def render_website(document: StoryDocument, *, hero: bool = True) -> RenderedWeb
             if paragraphs:
                 content.append(f'<section class="narrative narrative-{gallery_type}" data-element-id="{_escape(element.id)}"><div class="prose">{paragraphs}</div></section>')
         elif block.kind == "pair":
-            stories = "".join(
-                _image_story(item, document, variant="paired-image")
-                for item in block.elements)
+            pair_parts = []
+            for item in block.elements:
+                pair_parts.append(_image_story(item, document, variant="paired-image", eager=rendered_images < EAGER_THUMBNAIL_COUNT))
+                rendered_images += 1
             content.append(
-                f'<div class="image-pair layout-{document.layout}">{stories}</div>')
+                f'<div class="image-pair layout-{document.layout}">{"".join(pair_parts)}</div>')
         elif block.kind in ("justified", "masonry"):
-            stories = "".join(_image_story(item, document, variant="gallery-image")
-                              for item in block.elements)
+            group_parts = []
+            for item in block.elements:
+                group_parts.append(_image_story(item, document, variant="gallery-image", eager=rendered_images < EAGER_THUMBNAIL_COUNT))
+                rendered_images += 1
+            stories = "".join(group_parts)
             if block.kind == "justified":
                 stories += '<span class="justified-filler" aria-hidden="true"></span>'
             content.append(f'<div class="image-group layout-{block.kind}">{stories}</div>')
         else:
             element = block.elements[0]
             variant = "wide-image" if block.kind == "feature" else "story-image"
+            item_html = _image_story(element, document, variant=variant, eager=rendered_images < EAGER_THUMBNAIL_COUNT)
+            rendered_images += 1
             content.append(
                 f'<div class="image-feature layout-{document.layout}">'
-                f'{_image_story(element, document, variant=variant)}</div>')
+                f'{item_html}</div>')
 
-    nav = '<a class="home-link" href="#top" aria-label="Return to opening">Opening</a>'
-    nav += f'<a class="read-link" href="#story">{reading_label}</a>'
-    if toc:
-        nav += f'<details class="contents"><summary>{contents_label}</summary><ol>{toc}</ol></details>'
+    if gallery_type == "simple-gallery":
+        nav_markup = (
+            f'<nav class="site-nav" aria-label="Gallery navigation"><details class="contents"><summary>{contents_label}</summary><ol>{toc}</ol></details></nav>'
+            if toc else ""
+        )
+        intro_markup = f'<div class="introduction">{intro}</div>' if intro else ""
+        header_markup = f'<header class="cover simple-header" id="top"><div class="cover-copy">{title_markup}{intro_markup}</div></header>'
+        skip_label = "Skip to gallery"
+        footer_markup = '<footer class="story-ending"><a href="#top">Back to top <span aria-hidden="true">↑</span></a></footer>'
     else:
-        nav += '<span class="contents-hint">A visual story</span>'
-    cover_class = "cover has-hero" if opening_image else "cover"
-    hero_style = (f' style="--hero-image-render-width: {hero_render_width};"'
-                  if hero_render_width else "")
+        nav = '<a class="home-link" href="#top" aria-label="Return to opening">Opening</a>'
+        nav += f'<a class="read-link" href="#story">{reading_label}</a>'
+        if toc:
+            nav += f'<details class="contents"><summary>{contents_label}</summary><ol>{toc}</ol></details>'
+        else:
+            nav += '<span class="contents-hint">A visual story</span>'
+        nav_markup = f'<nav class="site-nav" aria-label="Publication navigation">{nav}</nav>'
+        cover_class = "cover has-hero" if opening_image else "cover"
+        hero_style = (f' style="--hero-image-render-width: {hero_render_width};"'
+                      if hero_render_width else "")
+        header_markup = (
+            f'<header class="{cover_class}" id="top"{hero_style}>'
+            f'<div class="cover-copy"><p class="masthead">{masthead}</p>{title_markup}'
+            f'<div class="introduction">{intro}</div></div>{opening_image}</header>'
+        )
+        skip_label = "Skip to story"
+        footer_markup = '<footer class="story-ending"><a href="#top">Return to opening <span aria-hidden="true">↑</span></a></footer>'
     body_classes = " ".join((f"publication style-{document.style}",
                               f"visual-style-{style_key}", f"gallery-type-{gallery_type}"))
     from kim_gallery_viewer import gallery_viewer_assets
@@ -501,32 +607,32 @@ def render_website(document: StoryDocument, *, hero: bool = True) -> RenderedWeb
 <script src="gallery-viewer.js" defer></script>
 </head>
 <body class="{body_classes}" data-publication-type="{_escape(document.publication_type)}" data-gallery-type="{gallery_type}" data-visual-style="{style_key}" data-image-layout="{document.layout}" data-output-format="{document.output_format}">
-<a class="skip-link" href="#story">Skip to story</a>
-<nav class="site-nav" aria-label="Publication navigation">{nav}</nav>
-<header class="{cover_class}" id="top"{hero_style}>
-<div class="cover-copy"><p class="masthead">{masthead}</p>{title_markup}
-<div class="introduction">{intro}</div></div>
-{opening_image}
-</header>
+<a class="skip-link" href="#story">{skip_label}</a>
+{nav_markup}
+{header_markup}
 <main id="story" class="story-flow">
 {''.join(content)}
 </main>
-<footer class="story-ending"><a href="#top">Return to opening <span aria-hidden="true">↑</span></a></footer>
+{footer_markup}
 <dialog class="gallery-viewer" id="gallery-viewer" aria-label="Image viewer">
 <div class="gallery-viewer__layout">
-<div class="gallery-viewer__toolbar" aria-label="Image viewer controls">
-<button type="button" data-viewer-action="close" aria-label="Close image viewer">Close</button>
-<button type="button" data-viewer-action="previous" aria-label="Previous image">Previous</button>
-<button type="button" data-viewer-action="zoom-out" aria-label="Zoom out">−</button>
-<button type="button" data-viewer-action="fit" aria-label="Fit image to screen">Fit</button>
-<button type="button" data-viewer-action="zoom-in" aria-label="Zoom in">+</button>
-<button type="button" data-viewer-action="next" aria-label="Next image">Next</button>
+<div class="gallery-viewer__topbar">
+<p class="gallery-viewer__status" aria-live="polite"></p>
+<div class="gallery-viewer__toolbar" role="toolbar" aria-label="Image zoom controls">
+<button type="button" class="gallery-viewer__btn" data-viewer-action="zoom-out" aria-label="Zoom out" title="Zoom out (-)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+<button type="button" class="gallery-viewer__btn" data-viewer-action="fit" aria-label="Fit image to screen" title="Fit to viewport (0)" aria-pressed="true">Fit</button>
+<button type="button" class="gallery-viewer__btn" data-viewer-action="zoom-in" aria-label="Zoom in" title="Zoom in (+)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
+<button type="button" class="gallery-viewer__btn gallery-viewer__close" data-viewer-action="close" aria-label="Close image viewer" title="Close (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+</div>
+<div class="gallery-viewer__stage-wrap">
+<button type="button" class="gallery-viewer__btn gallery-viewer__nav gallery-viewer__nav--prev" data-viewer-action="previous" aria-label="Previous image" title="Previous image (Left arrow)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
 <div class="gallery-viewer__stage" tabindex="0" aria-label="Enlarged image">
 <img class="gallery-viewer__image" alt="">
 </div>
+<button type="button" class="gallery-viewer__btn gallery-viewer__nav gallery-viewer__nav--next" data-viewer-action="next" aria-label="Next image" title="Next image (Right arrow)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+</div>
 <p class="gallery-viewer__caption" aria-label="Image caption"></p>
-<p class="gallery-viewer__status" aria-live="polite"></p>
 </div>
 </dialog>
 </body>
@@ -553,8 +659,9 @@ def _render_collections(document: StoryDocument) -> RenderedWebsite:
         cover_id = collection.cover_image_id or next(
             (item.id for item in members if item.kind == "image" and item.output_image), "")
         cover = by_id.get(cover_id)
-        cover_markup = (f'<img src="{_escape(cover.output_image)}" alt="" loading="lazy">'
-                        if cover and cover.output_image else
+        cover_src = (cover.thumb_image or cover.output_image) if cover else ""
+        cover_markup = (f'<img src="{_escape(cover_src)}" alt="" loading="lazy">'
+                        if cover_src else
                         '<span class="collection-card-empty">No cover image</span>')
         description = _paragraphs(collection.description)
         href = (collection_page_name(collection) if document.website_structure == "multiple-pages"
@@ -605,21 +712,25 @@ def _arrangement_css() -> str:
 .collection-section { margin: 5rem 0; scroll-margin-top: 5rem; }
 .collection-section > header { max-width: 50rem; margin: 0 auto 2rem; }
 .collection-page-nav { display: flex; gap: 1.5rem; flex-wrap: wrap; width: min(100% - 3rem, 76rem); margin: 1rem auto; }
-.image-group { width: 100%; margin: 2rem auto 4rem; }
+.image-group { width: 100%; margin: 1rem auto 3rem; }
 .image-group .image-story-item { display: block; width: 100%; max-width: none; margin: 0; }
 .image-group .photograph { width: 100%; margin: 0; }
-.image-group .photograph img { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
+.image-group .photograph img { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; transition: opacity .15s ease; }
+.image-group .gallery-viewer-trigger:hover img { opacity: .92; }
 .image-group .image-description { width: 100%; max-width: none; }
 .image-group.layout-justified { display: flex; flex-wrap: wrap; gap: .75rem; align-items: start; }
 .layout-justified .image-story-item { flex: var(--image-ratio, 1) 1 calc(var(--image-ratio, 1) * 14rem); min-width: min(100%, 9rem); }
 .layout-justified .justified-filler { flex: 1000 1 14rem; height: 0; }
-.image-group.layout-masonry { columns: 3 15rem; column-gap: .9rem; }
-.layout-masonry .image-story-item { break-inside: avoid; margin: 0 0 .9rem; }
-@media (max-width: 700px) {
-  .image-group.layout-masonry { columns: 2 10rem; }
+.image-group.layout-masonry { columns: 4 16rem; column-gap: .75rem; }
+.layout-masonry .image-story-item { break-inside: avoid; margin: 0 0 .75rem; }
+@media (max-width: 1120px) {
+  .image-group.layout-masonry { columns: 3 14rem; }
+}
+@media (max-width: 820px) {
+  .image-group.layout-masonry { columns: 2 11rem; }
   .layout-justified .image-story-item { flex-basis: calc(var(--image-ratio, 1) * 10rem); }
 }
-@media (max-width: 430px) { .image-group.layout-masonry { columns: 1; } }
+@media (max-width: 480px) { .image-group.layout-masonry { columns: 1; } }
 '''
 
 
@@ -1159,7 +1270,7 @@ def _simple_gallery_css(gallery_type: str) -> str:
     """Additional styling for the simple gallery type."""
     if gallery_type != "simple-gallery":
         return ""
-    return '\nbody.gallery-type-simple-gallery {\n    --simple-bg: #ffffff;\n    --simple-ink: #17212b;\n    --simple-muted: #536270;\n    --simple-rule: #d8e0e7;\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    font-family: system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery.visual-style-simple-dark {\n    --simple-bg: #12161c;\n    --simple-ink: #f1f4f7;\n    --simple-muted: #b4c1cc;\n    --simple-rule: #34404b;\n}\n\nbody.gallery-type-simple-gallery .site-nav {\n    min-height: 3rem;\n    padding: .6rem clamp(1rem, 3vw, 3rem);\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    border-bottom: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .contents ol {\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    border: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .cover,\nbody.gallery-type-simple-gallery .cover.has-hero {\n    display: block;\n    width: min(calc(100% - 2rem), 82rem);\n    min-height: 0;\n    height: auto;\n    margin: 0 auto;\n    padding: 0;\n    background: transparent;\n    color: var(--simple-ink);\n    overflow: visible;\n}\n\nbody.gallery-type-simple-gallery .cover.has-hero::after {\n    display: none;\n}\n\nbody.gallery-type-simple-gallery .cover-copy,\nbody.gallery-type-simple-gallery .cover.has-hero .cover-copy {\n    position: static;\n    inset: auto;\n    transform: none;\n    width: 100%;\n    max-width: none;\n    margin: 0;\n    padding: clamp(1.5rem, 3vw, 2.5rem) 0 1.25rem;\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .story-title,\nbody.gallery-type-simple-gallery .cover .story-title {\n    max-width: none;\n    margin: 0;\n    color: var(--simple-ink);\n    font: 700 clamp(2rem, 3.5vw, 3.7rem)/1.1\n          system-ui, sans-serif;\n    letter-spacing: -.035em;\n    text-transform: none;\n}\n\nbody.gallery-type-simple-gallery .masthead {\n    color: var(--simple-muted);\n}\n\nbody.gallery-type-simple-gallery .introduction,\nbody.gallery-type-simple-gallery .cover .introduction {\n    color: var(--simple-muted);\n    max-width: 72ch;\n    margin: .75rem 0 0;\n    font: 400 1.1rem/1.65 system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .hero-image,\nbody.gallery-type-simple-gallery .cover.has-hero .hero-image {\n    display: block;\n    position: static;\n    width: var(--story-image-render-width, 100%);\n    max-width: 100%;\n    height: auto;\n    min-height: 0;\n    margin: 0 auto;\n    padding: 0;\n    background: transparent;\n}\n\nbody.gallery-type-simple-gallery .hero-image img {\n    display: block;\n    width: auto;\n    max-width: 100%;\n    height: auto;\n    max-height: 83svh;\n    margin: 0;\n    object-fit: contain;\n}\n\nbody.gallery-type-simple-gallery .story-flow {\n    width: min(calc(100% - 2rem), 82rem);\n    margin: 0 auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section {\n    display: block;\n    width: 100%;\n    margin: clamp(1.75rem, 3vw, 3rem) auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .image-story-item {\n    display: flex;\n    flex-direction: column;\n    align-items: stretch;\n    width: var(--story-image-render-width, 100%);\n    max-width: 100%;\n    margin: 0 auto;\n    padding: 0;\n    gap: 0;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .photograph {\n    order: 0;\n    display: block;\n    width: 100%;\n    margin: 0;\n    padding: 0;\n    grid-column: auto;\n    grid-row: auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .photograph img {\n    display: block;\n    width: auto;\n    max-width: 100%;\n    height: auto;\n    max-height: 83svh;\n    margin: 0;\n    object-fit: contain;\n    outline: none;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .image-description {\n    order: 1;\n    display: block;\n    position: static;\n    width: 100%;\n    max-width: none;\n    margin: 1rem 0 0;\n    padding: 0;\n    grid-column: auto;\n    grid-row: auto;\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .image-description.prose,\nbody.gallery-type-simple-gallery .narrative .prose {\n    color: var(--simple-ink);\n    font: 400 clamp(1rem, 1.25vw, 1.18rem)/1.65\n          system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .image-pair {\n    display: grid;\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: clamp(1rem, 2vw, 2rem);\n    align-items: start;\n}\n\nbody.gallery-type-simple-gallery .image-pair .paired-image,\nbody.gallery-type-simple-gallery\n.image-pair .paired-image:nth-child(2) {\n    margin-top: 0;\n}\n\nbody.gallery-type-simple-gallery .image-pair .image-description {\n    width: 100%;\n    margin: 1rem 0 0;\n    padding: 0;\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .chapter {\n    margin: 3rem 0 1.5rem;\n    border-top: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .chapter h2 {\n    color: var(--simple-ink);\n    font: 700 clamp(1.7rem, 3vw, 2.7rem)/1.2\n          system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .narrative {\n    margin: 2rem auto;\n    padding: 0;\n    background: transparent;\n}\n\nbody.gallery-type-simple-gallery .story-ending {\n    border-top: 1px solid var(--simple-rule);\n    color: var(--simple-muted);\n}\n\n@media (max-width: 760px) {\n    body.gallery-type-simple-gallery .image-pair {\n        grid-template-columns: minmax(0, 1fr);\n    }\n\n    body.gallery-type-simple-gallery .cover,\n    body.gallery-type-simple-gallery .story-flow {\n        width: min(calc(100% - 1.5rem), 46rem);\n    }\n}\n'
+    return '\nbody.gallery-type-simple-gallery {\n    --simple-bg: #ffffff;\n    --simple-ink: #17212b;\n    --simple-muted: #536270;\n    --simple-rule: #d8e0e7;\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    font-family: system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery.visual-style-simple-dark {\n    --simple-bg: #12161c;\n    --simple-ink: #f1f4f7;\n    --simple-muted: #b4c1cc;\n    --simple-rule: #34404b;\n}\n\nbody.gallery-type-simple-gallery .site-nav {\n    min-height: 3rem;\n    padding: .6rem clamp(1rem, 3vw, 3rem);\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    border-bottom: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .contents ol {\n    background: var(--simple-bg);\n    color: var(--simple-ink);\n    border: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .cover,\nbody.gallery-type-simple-gallery .cover.has-hero {\n    display: block;\n    width: min(calc(100% - 2rem), 92rem);\n    min-height: 0;\n    height: auto;\n    margin: 0 auto;\n    padding: 0;\n    background: transparent;\n    color: var(--simple-ink);\n    overflow: visible;\n}\n\nbody.gallery-type-simple-gallery .cover.has-hero::after {\n    display: none;\n}\n\nbody.gallery-type-simple-gallery .cover-copy,\nbody.gallery-type-simple-gallery .cover.has-hero .cover-copy {\n    position: static;\n    inset: auto;\n    transform: none;\n    width: 100%;\n    max-width: none;\n    margin: 0;\n    padding: clamp(1rem, 2vw, 1.65rem) 0 clamp(.75rem, 1.5vw, 1.1rem);\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .story-title,\nbody.gallery-type-simple-gallery .cover .story-title {\n    max-width: none;\n    margin: 0;\n    color: var(--simple-ink);\n    font: 650 clamp(1.5rem, 2.4vw, 2.25rem)/1.15\n          system-ui, sans-serif;\n    letter-spacing: -.025em;\n    text-transform: none;\n}\n\nbody.gallery-type-simple-gallery .masthead {\n    color: var(--simple-muted);\n}\n\nbody.gallery-type-simple-gallery .introduction,\nbody.gallery-type-simple-gallery .cover .introduction {\n    color: var(--simple-muted);\n    max-width: 72ch;\n    margin: .45rem 0 0;\n    font: 400 1rem/1.55 system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .hero-image,\nbody.gallery-type-simple-gallery .cover.has-hero .hero-image {\n    display: block;\n    position: static;\n    width: var(--story-image-render-width, 100%);\n    max-width: 100%;\n    height: auto;\n    min-height: 0;\n    margin: 0 auto;\n    padding: 0;\n    background: transparent;\n}\n\nbody.gallery-type-simple-gallery .hero-image img {\n    display: block;\n    width: auto;\n    max-width: 100%;\n    height: auto;\n    max-height: 83svh;\n    margin: 0;\n    object-fit: contain;\n}\n\nbody.gallery-type-simple-gallery .story-flow {\n    width: min(calc(100% - 2rem), 92rem);\n    margin: 0 auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section {\n    display: block;\n    width: 100%;\n    margin: clamp(1.75rem, 3vw, 3rem) auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .image-story-item {\n    display: flex;\n    flex-direction: column;\n    align-items: stretch;\n    width: var(--story-image-render-width, 100%);\n    max-width: 100%;\n    margin: 0 auto;\n    padding: 0;\n    gap: 0;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .photograph {\n    order: 0;\n    display: block;\n    width: 100%;\n    margin: 0;\n    padding: 0;\n    grid-column: auto;\n    grid-row: auto;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .photograph img {\n    display: block;\n    width: auto;\n    max-width: 100%;\n    height: auto;\n    max-height: 83svh;\n    margin: 0;\n    object-fit: contain;\n    outline: none;\n}\n\nbody.gallery-type-simple-gallery\n.image-feature.layout-one-per-section .image-description {\n    order: 1;\n    display: block;\n    position: static;\n    width: 100%;\n    max-width: none;\n    margin: 1rem 0 0;\n    padding: 0;\n    grid-column: auto;\n    grid-row: auto;\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .image-description.prose,\nbody.gallery-type-simple-gallery .narrative .prose {\n    color: var(--simple-ink);\n    font: 400 clamp(1rem, 1.25vw, 1.18rem)/1.65\n          system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .image-pair {\n    display: grid;\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n    gap: clamp(1rem, 2vw, 2rem);\n    align-items: start;\n}\n\nbody.gallery-type-simple-gallery .image-pair .paired-image,\nbody.gallery-type-simple-gallery\n.image-pair .paired-image:nth-child(2) {\n    margin-top: 0;\n}\n\nbody.gallery-type-simple-gallery .image-pair .image-description {\n    width: 100%;\n    margin: 1rem 0 0;\n    padding: 0;\n    background: transparent;\n    color: var(--simple-ink);\n}\n\nbody.gallery-type-simple-gallery .chapter {\n    margin: 3rem 0 1.5rem;\n    border-top: 1px solid var(--simple-rule);\n}\n\nbody.gallery-type-simple-gallery .chapter h2 {\n    color: var(--simple-ink);\n    font: 700 clamp(1.7rem, 3vw, 2.7rem)/1.2\n          system-ui, sans-serif;\n}\n\nbody.gallery-type-simple-gallery .narrative {\n    margin: 2rem auto;\n    padding: 0;\n    background: transparent;\n}\n\nbody.gallery-type-simple-gallery .story-ending {\n    border-top: 1px solid var(--simple-rule);\n    color: var(--simple-muted);\n}\n\n@media (max-width: 760px) {\n    body.gallery-type-simple-gallery .image-pair {\n        grid-template-columns: minmax(0, 1fr);\n    }\n\n    body.gallery-type-simple-gallery .cover,\n    body.gallery-type-simple-gallery .story-flow {\n        width: min(calc(100% - 1.5rem), 46rem);\n    }\n}\n'
 
 
 def _simple_gallery_accessibility_css(gallery_type: str) -> str:
@@ -1385,7 +1496,9 @@ body { background: #f8f8f6; color: #17232d; }
 def make_document(title, introduction, elements, *, style, hide_filenames,
                   publication_type="photo-essay", source_identities=None,
                   show_captions=False, layout="adaptive", output_format="folder",
-                  website_structure="single-page", collections=()):
+                  website_structure="single-page", collections=(),
+                  image_quality_preset="standard", custom_max_dimension=2048,
+                  custom_jpeg_quality=90):
     source_identities = source_identities or {}
     image_number = 0
     converted = []
@@ -1393,21 +1506,25 @@ def make_document(title, introduction, elements, *, style, hide_filenames,
         kind = element.kind
         source = element.source if kind == "image" else ""
         output = ""
+        thumb = ""
         stamp = None
         if kind == "image":
             image_number += 1
             output = f"images/{image_number:04d}.jpg"
+            thumb = f"thumbs/{image_number:04d}.jpg"
             stamp = source_identities.get(source)
         converted.append(StoryElement(
             kind=kind, id=str(element.id), heading=element.heading or "",
             caption=element.caption or "", text=element.text or "",
             output_image=output, source=source, source_identity=tuple(stamp) if stamp else None,
             description=getattr(element, "description", "") or "",
+            thumb_image=thumb,
         ))
     doc = StoryDocument(title or "", introduction or "", publication_type,
                         style, bool(hide_filenames), tuple(converted),
                         bool(show_captions), layout, output_format,
-                        website_structure, tuple(collections))
+                        website_structure, tuple(collections),
+                        image_quality_preset, custom_max_dimension, custom_jpeg_quality)
     validate_document(doc)
     return doc
 
@@ -1426,6 +1543,7 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
     from kim_preview import identity
 
     validate_document(document)
+    max_dim, jpeg_quality = resolve_image_quality(document)
     root = Path(workspace)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     if root.is_symlink() or root.stat().st_uid != os.getuid():
@@ -1435,6 +1553,10 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
     image_root.mkdir(mode=0o700, exist_ok=True)
     if image_root.is_symlink() or image_root.stat().st_uid != os.getuid():
         raise ValueError("Private image workspace is unsafe")
+    thumb_root = root / "thumbs"
+    thumb_root.mkdir(mode=0o700, exist_ok=True)
+    if thumb_root.is_symlink() or thumb_root.stat().st_uid != os.getuid():
+        raise ValueError("Private thumbnail workspace is unsafe")
     prepared = []
     blocked = []
     rendered_dimensions = {}
@@ -1450,7 +1572,7 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
             if tuple(identity(element.source)) != element.source_identity:
                 raise ValueError("Source changed after selection or review")
             image, read_identity = read_thumbnail(
-                element.source, QSize(*DERIVATIVE_MAX_SIZE), allow_upscale=False)
+                element.source, QSize(max_dim, max_dim), allow_upscale=False)
             if image.isNull() or tuple(read_identity) != element.source_identity:
                 raise ValueError("Image preview is unavailable or changed")
             rgb = QImage(image.size(), QImage.Format_RGB32)
@@ -1465,20 +1587,47 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
             safe_output.setDirectWriteFallback(False)
             if not safe_output.open(QIODevice.WriteOnly):
                 raise ValueError("Could not create a safe JPEG derivative")
-            if not rgb.save(safe_output, "JPEG", DERIVATIVE_QUALITY) or not safe_output.commit():
+            if not rgb.save(safe_output, "JPEG", jpeg_quality) or not safe_output.commit():
                 safe_output.cancelWriting()
                 raise ValueError("Could not create a safe JPEG derivative")
             os.chmod(output, 0o600)
             _verify_private_jpeg(output)
+
+            # Generate thumbnail directly from the safely prepared display derivative
+            # without reopening the original file, preserving aspect ratio and never upscaling.
+            thumb_rel = element.thumb_image or f"thumbs/{PurePosixPath(element.output_image).name}"
+            if rgb.width() > THUMBNAIL_MAX_SIZE[0] or rgb.height() > THUMBNAIL_MAX_SIZE[1]:
+                thumb_img = rgb.scaled(
+                    THUMBNAIL_MAX_SIZE[0], THUMBNAIL_MAX_SIZE[1],
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                )
+            else:
+                thumb_img = rgb
+            thumb_output = root / thumb_rel
+            thumb_output.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            safe_thumb = QSaveFile(str(thumb_output))
+            safe_thumb.setDirectWriteFallback(False)
+            if not safe_thumb.open(QIODevice.WriteOnly):
+                raise ValueError("Could not create a safe thumbnail derivative")
+            if not thumb_img.save(safe_thumb, "JPEG", THUMBNAIL_QUALITY) or not safe_thumb.commit():
+                safe_thumb.cancelWriting()
+                raise ValueError("Could not create a safe thumbnail derivative")
+            os.chmod(thumb_output, 0o600)
+            _verify_private_jpeg(thumb_output)
+
             if tuple(identity(element.source)) != element.source_identity:
                 raise ValueError("Source changed while preparing")
             digest = hashlib.sha256(output.read_bytes()).hexdigest()
+            thumb_digest = hashlib.sha256(thumb_output.read_bytes()).hexdigest()
             prepared.append(PreparedImage(
                 element.id, element.source, element.source_identity, element.output_image,
                 rgb.width(), rgb.height(), output.stat().st_size, digest, str(output),
+                thumb_rel, thumb_img.width(), thumb_img.height(),
+                thumb_output.stat().st_size, thumb_digest, str(thumb_output),
             ))
             rendered_dimensions[element.id] = replace(
-                element, image_width=rgb.width(), image_height=rgb.height())
+                element, image_width=rgb.width(), image_height=rgb.height(),
+                thumb_image=thumb_rel, thumb_width=thumb_img.width(), thumb_height=thumb_img.height())
         except InterruptedError:
             raise
         except Exception as exc:
@@ -1486,7 +1635,7 @@ def prepare_publication(document: StoryDocument, workspace: str, *,
             blocked.append(BlockedImage(element.id, element.source, reason))
             warnings.append(f"{Path(element.source).name}: {reason}")
             rendered_dimensions[element.id] = replace(
-                element, output_image="", blocked_reason=reason)
+                element, output_image="", thumb_image="", blocked_reason=reason)
         progress(image_index, len(image_elements), Path(element.source).name)
     document = replace(
         document,
@@ -1562,6 +1711,12 @@ def validate_prepared(prepared: PreparedPublication, *, cancelled=lambda: False)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if digest != image.sha256:
             raise ValueError(f"Prepared image changed after Review Changes: {Path(image.source).name}")
+        if image.thumb_relative_path:
+            thumb_path = Path(image.thumb_staged_path)
+            if not thumb_path.is_file() or thumb_path.is_symlink():
+                raise ValueError(f"Prepared thumbnail is missing: {Path(image.source).name}")
+            if hashlib.sha256(thumb_path.read_bytes()).hexdigest() != image.thumb_sha256:
+                raise ValueError(f"Prepared thumbnail changed after Review Changes: {Path(image.source).name}")
 
 
 def publish_prepared(prepared: PreparedPublication, destination: str, *,
@@ -1602,6 +1757,8 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
         try:
             os.mkdir("images", mode=0o700, dir_fd=root_fd)
             image_fd = os.open("images", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0), dir_fd=root_fd)
+            os.mkdir("thumbs", mode=0o700, dir_fd=root_fd)
+            thumb_fd = os.open("thumbs", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0), dir_fd=root_fd)
             try:
                 for image_number, image in enumerate(prepared.images, 1):
                     if cancelled():
@@ -1618,6 +1775,17 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
                         stream.write(payload)
                         stream.flush()
                         os.fsync(stream.fileno())
+                    if image.thumb_relative_path:
+                        thumb_leaf = Path(image.thumb_relative_path).name
+                        thumb_source = Path(image.thumb_staged_path)
+                        thumb_payload = thumb_source.read_bytes()
+                        if hashlib.sha256(thumb_payload).hexdigest() != image.thumb_sha256:
+                            raise ValueError(f"Prepared thumbnail changed after Review Changes: {thumb_leaf}")
+                        tfd = os.open(thumb_leaf, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=thumb_fd)
+                        with os.fdopen(tfd, "wb") as stream:
+                            stream.write(thumb_payload)
+                            stream.flush()
+                            os.fsync(stream.fileno())
                     progress(image_number, len(prepared.images) + 3 + len(output_pages(prepared.document)),
                              Path(image.source).name)
                 for name, payload in (("style.css", prepared.style_css.encode("utf-8")),
@@ -1636,6 +1804,7 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
                          len(prepared.images) + 3 + len(output_pages(prepared.document)),
                          "Verifying gallery")
             finally:
+                os.close(thumb_fd)
                 os.close(image_fd)
         finally:
             os.close(root_fd)
@@ -1646,10 +1815,12 @@ def publish_prepared(prepared: PreparedPublication, destination: str, *,
         # Keep staging private while incomplete. Once complete, use portable
         # static-site permissions before the atomic publication rename.
         os.chmod(stage_path / "images", 0o755, follow_symlinks=False)
+        os.chmod(stage_path / "thumbs", 0o755, follow_symlinks=False)
         for output_file in (stage_path / "index.html", stage_path / "style.css",
                             stage_path / "gallery-viewer.css", stage_path / "gallery-viewer.js",
                             *(stage_path / name for name, _ in prepared.pages),
-                            *(stage_path / image.relative_path for image in prepared.images)):
+                            *(stage_path / image.relative_path for image in prepared.images),
+                            *(stage_path / image.thumb_relative_path for image in prepared.images if image.thumb_relative_path)):
             os.chmod(output_file, 0o644, follow_symlinks=False)
         os.chmod(stage_path, 0o755, follow_symlinks=False)
         if cancelled():
@@ -1746,7 +1917,14 @@ def publish_prepared_zip(prepared: PreparedPublication, destination: str, *,
                     or len(relative.parts) != 2 or relative.parts[0] != "images"
                     or relative.as_posix() != image.relative_path):
                 raise ValueError("Prepared image path is unsafe for ZIP output")
-            payloads.append((f"{gallery_name}/{image.relative_path}", image))
+            payloads.append((f"{gallery_name}/{image.relative_path}", ("image", image)))
+            if image.thumb_relative_path:
+                trel = PurePosixPath(image.thumb_relative_path)
+                if (trel.is_absolute() or ".." in trel.parts
+                        or len(trel.parts) != 2 or trel.parts[0] != "thumbs"
+                        or trel.as_posix() != image.thumb_relative_path):
+                    raise ValueError("Prepared thumbnail path is unsafe for ZIP output")
+                payloads.append((f"{gallery_name}/{image.thumb_relative_path}", ("thumb", image)))
 
         expected_digests = {}
         with os.fdopen(stage_file_fd, "w+b", closefd=True) as stream:
@@ -1760,18 +1938,19 @@ def publish_prepared_zip(prepared: PreparedPublication, destination: str, *,
                     if (path.is_absolute() or ".." in path.parts
                             or path.as_posix() != name or "\\" in name):
                         raise ValueError("ZIP archive entry path is unsafe")
-                    if isinstance(payload_source, PreparedImage):
-                        image = payload_source
+                    if isinstance(payload_source, tuple):
+                        kind, image = payload_source
                         if tuple(identity(image.source)) != image.source_identity:
                             raise ValueError(
                                 f"Source changed after Review Changes: {Path(image.source).name}")
-                        source_path = Path(image.staged_path)
+                        source_path = Path(image.staged_path if kind == "image" else image.thumb_staged_path)
+                        expected_sha = image.sha256 if kind == "image" else image.thumb_sha256
                         if not source_path.is_file() or source_path.is_symlink():
-                            raise ValueError(f"Prepared image is missing: {Path(image.source).name}")
+                            raise ValueError(f"Prepared {kind} is missing: {Path(image.source).name}")
                         payload = source_path.read_bytes()
-                        if hashlib.sha256(payload).hexdigest() != image.sha256:
+                        if hashlib.sha256(payload).hexdigest() != expected_sha:
                             raise ValueError(
-                                f"Prepared image changed after Review Changes: {source_path.name}")
+                                f"Prepared {kind} changed after Review Changes: {source_path.name}")
                     else:
                         payload = payload_source
                     info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
@@ -1878,11 +2057,16 @@ def _verify_site(root: Path, prepared: PreparedPublication, *, cancelled=lambda:
     expected_text = {"index.html": prepared.index_html, "style.css": prepared.style_css,
                      "gallery-viewer.css": prepared.viewer_css,
                      "gallery-viewer.js": prepared.viewer_js, **dict(prepared.pages)}
-    expected_files = set(expected_text) | {image.relative_path for image in prepared.images}
+    expected_files = (
+        set(expected_text)
+        | {image.relative_path for image in prepared.images}
+        | {image.thumb_relative_path for image in prepared.images if image.thumb_relative_path}
+    )
     actual_entries = {path.relative_to(root).as_posix(): path for path in root.rglob("*")}
-    if (set(actual_entries) != expected_files | {"images"}
+    if (set(actual_entries) != expected_files | {"images", "thumbs"}
             or any(path.is_symlink() for path in actual_entries.values())
-            or not actual_entries["images"].is_dir()):
+            or not actual_entries["images"].is_dir()
+            or not actual_entries["thumbs"].is_dir()):
         raise ValueError("Generated website files do not match the reviewed inventory")
     for name, content in expected_text.items():
         if cancelled():
@@ -1901,7 +2085,19 @@ def _verify_site(root: Path, prepared: PreparedPublication, *, cancelled=lambda:
             raise ValueError("Generated image derivative failed integrity verification")
         if not any(image.relative_path in text for text in page_text.values()):
             raise ValueError("Generated website does not reference a planned image")
-    inventory = set(required) | {image.relative_path for image in prepared.images}
+        if image.thumb_relative_path:
+            thumb_out = root / image.thumb_relative_path
+            if not thumb_out.is_file() or thumb_out.is_symlink():
+                raise ValueError("Generated website is missing a thumbnail derivative")
+            if hashlib.sha256(thumb_out.read_bytes()).hexdigest() != image.thumb_sha256:
+                raise ValueError("Generated thumbnail derivative failed integrity verification")
+            if not any(image.thumb_relative_path in text for text in page_text.values()):
+                raise ValueError("Generated website does not reference a planned thumbnail")
+    inventory = (
+        set(required)
+        | {image.relative_path for image in prepared.images}
+        | {image.thumb_relative_path for image in prepared.images if image.thumb_relative_path}
+    )
     for name, text in page_text.items():
         _verify_html_references(text, name, inventory, page_text.__getitem__)
 

@@ -188,20 +188,57 @@ class GalleryViewerBrowserTests(unittest.TestCase):
                     "width": 1440, "height": 900, "deviceScaleFactor": 1,
                     "mobile": False,
                 })
-                evaluate("window.scrollTo(0, 0)")
+                evaluate("window.scrollTo({left: 0, top: 0, behavior: 'instant'})")
                 desktop_path = save_screenshot("gallery-desktop.png")
 
-                evaluate("window.scrollTo(0, 420)")
+                evaluate("window.scrollTo({left: 0, top: 420, behavior: 'instant'})")
                 start_scroll = evaluate("window.scrollY")
+                self.assertGreater(start_scroll, 0, "Expected non-zero scroll position before opening viewer")
                 evaluate("document.querySelectorAll('.gallery-viewer-trigger')[0].click()")
                 self.assertTrue(evaluate("document.getElementById('gallery-viewer').open"))
+                self.assertEqual(evaluate("location.hash"), "#image-0001")
                 self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
                                  "Image 1 of 2")
                 self.assertTrue(evaluate("document.querySelector('[data-viewer-action=previous]').disabled"))
+                self.assertTrue(evaluate("document.querySelector('[data-viewer-action=zoom-out]').disabled"))
+                self.assertEqual(evaluate("document.querySelector('[data-viewer-action=fit]').getAttribute('aria-pressed')"), "true")
                 desktop_viewer_path = save_screenshot("gallery-desktop-viewer.png")
                 evaluate("document.querySelector('[data-viewer-action=zoom-in]').click()")
                 self.assertEqual(evaluate("document.querySelector('.gallery-viewer__image').style.getPropertyValue('--gallery-viewer-zoom')"), "1.5")
+                # Mouse-wheel zoom within stage and drag-to-pan when zoomed.
+                evaluate(
+                    "(()=>{const s=document.querySelector('.gallery-viewer__stage');"
+                    "const r=s.getBoundingClientRect();"
+                    "s.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,clientX:r.left+r.width*0.75,"
+                    "clientY:r.top+r.height*0.75,bubbles:true,cancelable:true}));})()"
+                )
+                self.assertGreater(
+                    float(evaluate("document.querySelector('.gallery-viewer__image').style.getPropertyValue('--gallery-viewer-zoom')")),
+                    1.5,
+                )
+                evaluate(
+                    "(()=>{const s=document.querySelector('.gallery-viewer__stage');"
+                    "s.scrollLeft=80; s.scrollTop=60;"
+                    "s.dispatchEvent(new PointerEvent('pointerdown',{pointerType:'mouse',button:0,pointerId:1,clientX:300,clientY:300,bubbles:true}));"
+                    "s.dispatchEvent(new PointerEvent('pointermove',{pointerType:'mouse',button:0,pointerId:1,clientX:240,clientY:260,bubbles:true}));"
+                    "s.dispatchEvent(new PointerEvent('pointerup',{pointerType:'mouse',button:0,pointerId:1,clientX:240,clientY:260,bubbles:true}));})()"
+                )
+                self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
+                                 "Image 1 of 2")
+                # Fit reset returns to 1x.
+                evaluate("document.querySelector('[data-viewer-action=fit]').click()")
+                self.assertEqual(evaluate("document.querySelector('.gallery-viewer__image').style.getPropertyValue('--gallery-viewer-zoom')"), "1")
                 evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}))")
+                self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
+                                 "Image 2 of 2")
+                self.assertEqual(evaluate("location.hash"), "#image-0002")
+                # Browser Back and Forward between images.
+                evaluate("new Promise(resolve=>{window.addEventListener('popstate',()=>resolve(true),{once:true});history.back();})")
+                self.assertTrue(evaluate("document.getElementById('gallery-viewer').open"))
+                self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
+                                 "Image 1 of 2")
+                self.assertEqual(evaluate("location.hash"), "#image-0001")
+                evaluate("new Promise(resolve=>{window.addEventListener('popstate',()=>resolve(true),{once:true});history.forward();})")
                 self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
                                  "Image 2 of 2")
                 evaluate("document.querySelector('[data-viewer-action=previous]').click()")
@@ -209,13 +246,38 @@ class GalleryViewerBrowserTests(unittest.TestCase):
                                  "Image 1 of 2")
                 evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))")
                 self.assertFalse(evaluate("document.getElementById('gallery-viewer').open"))
+                self.assertEqual(evaluate("location.hash"), "")
                 deadline = time.monotonic() + 2
                 while time.monotonic() < deadline:
                     if evaluate("document.activeElement.matches('.gallery-viewer-trigger')"):
                         break
                     time.sleep(.02)
                 self.assertTrue(evaluate("document.activeElement.matches('.gallery-viewer-trigger')"))
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    if evaluate(f"Math.abs(window.scrollY - {start_scroll}) <= 1"):
+                        break
+                    time.sleep(.02)
                 self.assertEqual(evaluate("window.scrollY"), start_scroll)
+
+                # Invalid fragment does not open viewer; valid fragment opens image 2 directly.
+                evaluate("location.hash = '#image-nonexistent'")
+                evaluate("new Promise(r => setTimeout(r, 40))")
+                self.assertFalse(evaluate("document.getElementById('gallery-viewer').open"))
+                evaluate("location.hash = '#story'")
+                evaluate("new Promise(r => setTimeout(r, 40))")
+                self.assertFalse(evaluate("document.getElementById('gallery-viewer').open"))
+                evaluate("location.hash = '#image-0002'")
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    if evaluate("document.getElementById('gallery-viewer').open"):
+                        break
+                    time.sleep(.02)
+                self.assertTrue(evaluate("document.getElementById('gallery-viewer').open"))
+                self.assertEqual(evaluate("document.querySelector('.gallery-viewer__status').textContent"),
+                                 "Image 2 of 2")
+                evaluate("document.querySelector('[data-viewer-action=close]').click()")
+                self.assertFalse(evaluate("document.getElementById('gallery-viewer').open"))
 
                 # Test a missing derivative in the actual browser.
                 # Do not modify or delete any real source image.

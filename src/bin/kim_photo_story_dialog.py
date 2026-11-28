@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QCheckBox, QComboBox,
     QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit,
-    QFileDialog, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSplitter, QStackedWidget,
+    QFileDialog, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget,
     QStyledItemDelegate, QStyle, QStyleOptionViewItem, QVBoxLayout, QWidget, QToolButton,
 )
 
@@ -1351,6 +1351,42 @@ class PhotoStoryDialog(QDialog):
         visibility_group.addWidget(self.show_captions)
         visibility_group.addWidget(self.show_filenames)
 
+        quality_group = setting_group()
+        quality_label = QLabel("Image quality")
+        quality_label.setStyleSheet("font-weight: 650;")
+        self.image_quality_selector = QComboBox()
+        self.image_quality_selector.setAccessibleName("Image quality")
+        self.image_quality_selector.addItem("Compact (1600 px, quality 85)", "compact")
+        self.image_quality_selector.addItem("Standard (2048 px, quality 90)", "standard")
+        self.image_quality_selector.addItem("High quality (3000 px, quality 95)", "high")
+        self.image_quality_selector.addItem("Custom…", "custom")
+        self.image_quality_selector.setCurrentIndex(1)
+        quality_group.addWidget(quality_label)
+        quality_group.addWidget(self.image_quality_selector)
+
+        self.custom_quality_panel = QWidget()
+        custom_form = QFormLayout(self.custom_quality_panel)
+        custom_form.setContentsMargins(0, 4, 0, 0)
+        custom_form.setSpacing(6)
+        self.custom_max_dim_spin = QSpinBox()
+        self.custom_max_dim_spin.setRange(320, 8000)
+        self.custom_max_dim_spin.setValue(2048)
+        self.custom_max_dim_spin.setSuffix(" px")
+        self.custom_max_dim_spin.setAccessibleName("Custom maximum dimension")
+        self.custom_jpeg_quality_spin = QSpinBox()
+        self.custom_jpeg_quality_spin.setRange(50, 100)
+        self.custom_jpeg_quality_spin.setValue(90)
+        self.custom_jpeg_quality_spin.setAccessibleName("Custom JPEG quality")
+        custom_form.addRow("Max dimension:", self.custom_max_dim_spin)
+        custom_form.addRow("JPEG quality:", self.custom_jpeg_quality_spin)
+        self.custom_quality_panel.hide()
+        quality_group.addWidget(self.custom_quality_panel)
+
+        self.image_quality_explanation = QLabel()
+        self.image_quality_explanation.setWordWrap(True)
+        self.image_quality_explanation.setObjectName("imageQualityExplanation")
+        quality_group.addWidget(self.image_quality_explanation)
+
         output_group = setting_group()
         self.output_format_selector = QComboBox()
         self.output_format_selector.setAccessibleName("Output format")
@@ -1444,12 +1480,14 @@ class PhotoStoryDialog(QDialog):
         self.visual_style_selector.currentIndexChanged.connect(self._update_style_preview)
         self.layout_selector.currentIndexChanged.connect(self._layout_changed)
         self.output_format_selector.currentIndexChanged.connect(self._update_output_format)
+        self.image_quality_selector.currentIndexChanged.connect(self._update_image_quality)
         self.website_structure_selector.currentIndexChanged.connect(
             self._update_website_structure_explanation)
         self.gallery_type_selector.currentIndexChanged.connect(
             self._update_sections_explanation)
         layout.addStretch(1)
         self._update_output_format()
+        self._update_image_quality()
         self._update_website_structure_explanation()
         self._update_sections_explanation()
         self._update_style_preview()
@@ -1560,6 +1598,17 @@ class PhotoStoryDialog(QDialog):
             "illustrated-story": "Divide your story into chapters or sections.",
             "simple-gallery": "Group related images into named sections.",
         }[self.gallery_type_selector.currentData()])
+
+    def _update_image_quality(self, *_):
+        preset = self.image_quality_selector.currentData()
+        self.custom_quality_panel.setVisible(preset == "custom")
+        notes = {
+            "compact": "Smaller full-view images (1600 px max, JPEG quality 85). Smaller images are never enlarged; grid thumbnails stay 640 px.",
+            "standard": "Balanced full-view images (2048 px max, JPEG quality 90). Smaller images are never enlarged; grid thumbnails stay 640 px.",
+            "high": "High-detail full-view images (3000 px max, JPEG quality 95). Smaller images are never enlarged; grid thumbnails stay 640 px.",
+            "custom": "Custom full-view size (320–8000 px) and JPEG quality (50–100). Smaller images are never enlarged; grid thumbnails stay 640 px.",
+        }
+        self.image_quality_explanation.setText(notes.get(preset, ""))
 
     def _update_output_format(self, *_):
         if self.output_format_selector.currentData() == "zip":
@@ -1995,6 +2044,9 @@ class PhotoStoryDialog(QDialog):
             output_format=self.output_format_selector.currentData(),
             website_structure=self.website_structure_selector.currentData(),
             collections=self.collections,
+            image_quality_preset=self.image_quality_selector.currentData(),
+            custom_max_dimension=self.custom_max_dim_spin.value(),
+            custom_jpeg_quality=self.custom_jpeg_quality_spin.value(),
         )
 
     def preview_in_browser(self):
