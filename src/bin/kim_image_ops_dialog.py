@@ -454,9 +454,10 @@ class VisualWorker(QThread):
     stage_changed = Signal(str)
 
     def __init__(self, recipe, files, sample, prefix, step, generation, parent,
-                 fast_crop=False):
+                 fast_crop=False, fast_overlay=False):
         super().__init__(parent)
         self.fast_crop = fast_crop
+        self.fast_overlay = fast_overlay
         self.recipe, self.files, self.sample = copy.deepcopy(recipe), list(files), sample
         self.prefix, self.step, self.generation = copy.deepcopy(prefix), copy.deepcopy(step), generation
         self.rows = []; self.image = QImage(); self.dimensions = None; self.error = None; self.rendered_overlay = False
@@ -520,7 +521,8 @@ class VisualWorker(QThread):
                             )
                     return
 
-                self.rows = preview(self.recipe, self.files)
+                if not self.fast_overlay:
+                    self.rows = preview(self.recipe, self.files)
                 checkpoint()
                 if not self.sample: return
                 with source_session(), tempfile.TemporaryDirectory(prefix='kimng-visual-') as workspace:
@@ -574,9 +576,17 @@ class ImageOperationDialog(QDialog):
         self.dimensions = None; self.checked_generation = None
         self.fields = {}
         self.setWindowTitle('KIMng - Crop images' if self.crop and self.standalone else 'Crop image' if self.crop else 'KIMng - Add watermark / overlay'); self.resize(1100, 820)
+        if self.standalone and not self.crop:
+            self.setWindowTitle('KIMng - Add watermark - Settings')
+            self.resize(1120, 690)
         layout = QVBoxLayout(self)
         note = QLabel('One crop configuration applies to all selected images. Preview each image before reviewing changes.' if self.crop else
                       'Visible overlays change image pixels independently of embedded rights metadata. Size and margins are percentages of each final image’s shorter edge; relative placement applies to every selected image.')
+        if self.standalone and not self.crop:
+            note.setText(
+                'Configure the visible watermark and inspect the result. '
+                'Final output validation occurs in Review Changes.'
+            )
         note.setWordWrap(True); layout.addWidget(note)
         selection = QHBoxLayout(); selection.addWidget(QLabel('Preview image:'))
         self.images = QComboBox()
@@ -592,6 +602,13 @@ class ImageOperationDialog(QDialog):
         split.handle(1).setToolTip('Drag to resize the controls and image preview')
         split.setStretchFactor(0, 0); split.setStretchFactor(1, 1)
         split.setSizes([420, 700])
+        if self.standalone and not self.crop:
+            scroll.setMinimumWidth(300)
+            split.setStretchFactor(0, 1)
+            split.setStretchFactor(1, 2)
+            split.setSizes([380, 720])
+            self.watermark_splitter = split
+            self.watermark_controls = scroll
         if self.crop: self.crop_controls()
         else: self.overlay_controls()
         if self.standalone: self.output_controls()
@@ -628,12 +645,20 @@ class ImageOperationDialog(QDialog):
             self.batch_summary = QLabel()
             self.batch_summary.setWordWrap(True)
             layout.addWidget(self.batch_summary)
+        elif self.standalone:
+            self.table.hide()
+            self.batch_summary = QLabel(
+                f'{len(self.files)} images selected. '
+                'Final validation occurs in Review Changes.'
+            )
+            self.batch_summary.setWordWrap(True)
+            layout.addWidget(self.batch_summary)
         else:
             layout.addWidget(self.table)
         self.status = QLabel(); self.status.setWordWrap(True); self.status.setTextFormat(Qt.PlainText); layout.addWidget(self.status)
         safety = QLabel('Original images stay unchanged. Outputs use the existing verified, create-only publication path; occupied filenames receive a number.')
         safety.setWordWrap(True)
-        if self.crop:
+        if self.crop or self.standalone:
             safety.hide()
         else:
             layout.addWidget(safety)
@@ -647,6 +672,8 @@ class ImageOperationDialog(QDialog):
             if self.standalone
             else 'Use settings'
         )
+        if self.standalone and not self.crop:
+            self.apply.setText('Review Changes')
         self.buttons.accepted.connect(self.accept); self.buttons.rejected.connect(self.reject); layout.addWidget(self.buttons)
         self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(250); self.timer.timeout.connect(self.refresh)
         self.canvas.message = (
@@ -700,15 +727,33 @@ class ImageOperationDialog(QDialog):
         self.spin('target_width', 'Target width (pixels)', 1, 100000); self.spin('target_height', 'Target height (pixels)', 1, 100000)
         self.check('upscale', 'Allow enlargement of cropped output')
 
+    def watermark_heading(self, title):
+        if not self.standalone or self.crop:
+            return
+        heading = QLabel(title)
+        font = heading.font()
+        font.setBold(True)
+        heading.setFont(font)
+        self.form.addRow(heading)
+
     def overlay_controls(self):
-        self.combo('kind', 'Overlay type', KINDS)
+        self.watermark_heading('Content')
+        self.combo(
+            'kind',
+            'Watermark type' if self.standalone else 'Overlay type',
+            KINDS
+        )
         self.step['camera_fields'] = camera_fields(self.step)
         self.camera_grid = QWidget(); grid = QGridLayout(self.camera_grid); grid.setContentsMargins(0, 0, 0, 0)
         for index, (label, key) in enumerate(CAMERA_FIELDS):
             checkbox = QCheckBox(label); checkbox.setChecked(self.step['camera_fields'][key])
             checkbox.toggled.connect(lambda checked, k=key: self.camera_field_changed(k, checked))
             grid.addWidget(checkbox, index // 2, index % 2)
-        self.form.addRow('Camera & EXIF details', self.camera_grid)
+        self.form.addRow(
+            'Camera and EXIF details'
+            if self.standalone else 'Camera & EXIF details',
+            self.camera_grid
+        )
         self.step['text_fields'] = watermark_fields(self.step)
         self.watermark_widgets = {}
         for label, key in TEXT_FIELDS:
@@ -729,20 +774,70 @@ class ImageOperationDialog(QDialog):
         self.form.addRow('Caption', self.fields['value'])
         self.show_text_value(); self.fields['value'].textChanged.connect(lambda: self.control_changed('value'))
         self.fields['logo'] = QLineEdit(self.step['logo']); self.fields['logo'].setAccessibleName('Local watermark image filename')
-        self.form.addRow('Watermark image', self.fields['logo']); self.fields['logo'].textChanged.connect(lambda: self.control_changed('logo'))
-        self.logo_button = QPushButton('Choose watermark image…'); self.logo_button.clicked.connect(self.choose_logo); self.form.addRow(self.logo_button)
+        self.fields['logo'].textChanged.connect(
+            lambda: self.control_changed('logo')
+        )
+        self.logo_button = QPushButton('Choose watermark image…')
+        self.logo_button.clicked.connect(self.choose_logo)
+        if self.standalone:
+            self.logo_row = QWidget()
+            logo_layout = QVBoxLayout(self.logo_row)
+            logo_layout.setContentsMargins(0, 0, 0, 0)
+            logo_layout.setSpacing(4)
+            logo_layout.addWidget(self.fields['logo'])
+            logo_layout.addWidget(self.logo_button)
+            self.form.addRow('Watermark image', self.logo_row)
+        else:
+            self.form.addRow('Watermark image', self.fields['logo'])
+            self.form.addRow(self.logo_button)
+        self.watermark_heading('Placement and size')
         self.combo('anchor', 'Position', ANCHORS)
-        self.spin('margin', 'Margin (% of shorter edge)', 0, 40, 2)
-        self.spin('size', 'Size (% of shorter edge)', .1, 100, 2)
-        self.size_note = QLabel('Text size is font height; logo size is its bounding box.'); self.size_note.setWordWrap(True); self.form.addRow(self.size_note)
-        self.spin('opacity', 'Opacity (%)', 0, 100)
+        margin = self.spin(
+            'margin',
+            'Margin' if self.standalone
+            else 'Margin (% of shorter edge)',
+            0, 40, 2
+        )
+        size = self.spin(
+            'size',
+            'Size' if self.standalone
+            else 'Size (% of shorter edge)',
+            .1, 100, 2
+        )
+        if self.standalone:
+            margin.setSuffix(' %')
+            size.setSuffix(' %')
+            margin.setToolTip(
+                'Margin as a percentage of the shorter image edge'
+            )
+            size.setToolTip(
+                'Watermark size as a percentage of the shorter image edge'
+            )
+        self.size_note = QLabel(
+            'Size and margin are relative to the shorter image edge. '
+            'Size controls font height for text, or the bounding box '
+            'for an image watermark.'
+            if self.standalone else
+            'Text size is font height; logo size is its bounding box.'
+        )
+        self.size_note.setWordWrap(True)
+        self.form.addRow(self.size_note)
+        self.watermark_heading('Appearance')
+        opacity = self.spin(
+            'opacity',
+            'Opacity' if self.standalone else 'Opacity (%)',
+            0, 100
+        )
+        if self.standalone:
+            opacity.setSuffix(' %')
         self.fields['font'] = QFontComboBox(); self.fields['font'].setCurrentFont(QFont(self.step['font']))
         self.fields['font'].setAccessibleName('Text overlay font'); self.form.addRow('Font', self.fields['font'])
         self.fields['font'].currentFontChanged.connect(lambda *_: self.control_changed('font'))
         self.fields['color'] = QLineEdit(self.step['color']); self.fields['color'].setAccessibleName('Text color, hexadecimal RGB')
         self.form.addRow('Text color', self.fields['color']); self.fields['color'].textChanged.connect(lambda: self.control_changed('color'))
         self.color_button = QPushButton('Choose color…'); self.color_button.clicked.connect(self.choose_color); self.form.addRow(self.color_button)
-        self.check('bold', 'Bold'); self.check('italic', 'Italic')
+        self.check('bold', 'Bold')
+        self.check('italic', 'Italic')
         self.combo('assistance', 'Readability', [('Outline', 'outline'), ('Shadow', 'shadow'), ('None', 'none')])
 
     def output_controls(self):
@@ -777,6 +872,11 @@ class ImageOperationDialog(QDialog):
         editor.blockSignals(True); editor.setPlainText(value); editor.blockSignals(False)
         mode.setText(message); editor.setEnabled(selected.isChecked())
         if reset: reset.setEnabled(selected.isChecked())
+        if self.standalone and not self.crop:
+            editor.setVisible(selected.isChecked())
+            mode.setVisible(selected.isChecked())
+            if reset:
+                reset.setVisible(selected.isChecked())
 
     def watermark_field_changed(self, key, selection=None):
         if self.loading: return
@@ -855,7 +955,14 @@ class ImageOperationDialog(QDialog):
             self.form.setRowVisible(self.fields['source'], kind == 'caption')
             self.form.setRowVisible(self.fields['value'], kind == 'caption' and self.step['source'] == 'custom')
             for key in ('font', 'color', 'bold', 'italic', 'assistance'): self.form.setRowVisible(self.fields[key], text)
-            self.color_button.setVisible(text); self.form.setRowVisible(self.fields['logo'], kind == 'image'); self.logo_button.setVisible(kind == 'image')
+            self.color_button.setVisible(text)
+            if self.standalone:
+                self.form.setRowVisible(self.logo_row, kind == 'image')
+            else:
+                self.form.setRowVisible(
+                    self.fields['logo'], kind == 'image'
+                )
+                self.logo_button.setVisible(kind == 'image')
         if self.standalone:
             mode = self.destination.currentData()
             self.form.setRowVisible(self.folder, mode == 'subfolder'); self.form.setRowVisible(self.directory, mode == 'directory'); self.directory_button.setVisible(mode == 'directory')
@@ -979,14 +1086,15 @@ class ImageOperationDialog(QDialog):
             self.worker = VisualWorker(
                 recipe, files, sample, prefix,
                 dict(self.step, enabled=True), self.generation, self,
-                fast_crop=self.standalone and self.crop
+                fast_crop=self.standalone and self.crop,
+                fast_overlay=self.standalone and not self.crop
             )
             self.worker.stage_changed.connect(self.stage)
             self.worker.finished.connect(self.finished_preview)
             self.worker.start()
             self.status.setText(
                 'Loading selected image preview…'
-                if self.standalone and self.crop else
+                if self.standalone else
                 'Checking each selected image and rendering the preview…'
             )
         except (RecipeError, OSError) as exc:
@@ -1038,6 +1146,53 @@ class ImageOperationDialog(QDialog):
             if self.pending:
                 self.pending = False
                 self.refresh()
+            return
+
+        if worker.fast_overlay:
+            valid = (
+                not worker.image.isNull()
+                and worker.rendered_overlay
+                and not worker.error
+            )
+
+            self.table.setRowCount(0)
+
+            if not worker.image.isNull():
+                self.canvas.image = worker.image
+                self.dimensions = worker.dimensions
+                self.canvas.message = ''
+            else:
+                self.canvas.image = QImage()
+                self.canvas.message = (
+                    worker.error or 'Preview unavailable'
+                )
+
+            self.canvas.update()
+
+            if valid:
+                width, height = worker.dimensions
+                self.geometry.setText(
+                    f'Result: {width} × {height} pixels'
+                )
+                self.status.setText('')
+            else:
+                self.geometry.setText(
+                    'Source image preview only. '
+                    'Complete the watermark settings.'
+                )
+                self.status.setText(
+                    worker.error
+                    or 'A valid watermark preview is required.'
+                )
+
+            self.checked_generation = self.generation
+            self.apply.setEnabled(valid)
+            worker.deleteLater()
+
+            if self.pending:
+                self.pending = False
+                self.refresh()
+
             return
 
         self.table.setRowCount(len(worker.rows)); problems = []; warnings = []
@@ -1143,7 +1298,7 @@ class ImageOperationDialog(QDialog):
             runner = RunRecipeDialog(
                 self.result_recipe,
                 self.files,
-                operation_title=self.windowTitle(),
+                operation_title='KIMng - Add watermark',
                 parent=self,
             )
             result = runner.exec()

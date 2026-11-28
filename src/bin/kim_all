@@ -9902,6 +9902,13 @@ video_run_monitored() {
         out_time_ms)
           if [[ "$value" =~ ^[0-9]+$ ]] && awk -v d="$duration" 'BEGIN { exit !(d > 0) }'; then
             percent="$(awk -v t="$value" -v d="$duration" 'BEGIN { p = int(t / 1000000 / d * 100); if (p > 100) p = 100; print p }')"
+            if [ "${video_progress_enabled:-false}" = true ]; then
+              if ! progress_value "$ref" "$((video_progress_base + percent))"; then
+                interrupted=1
+                video_terminate_owned_process "$pid"
+                break
+              fi
+            fi
             if ! progress_label "$ref" "$(cat "$KIMDIR/job.label" 2>/dev/null)
 $label: ${percent}% of measured video duration"; then
               interrupted=1
@@ -10296,7 +10303,9 @@ action_video() {
   # collision handling, and ownership of published results.
 
   report_init
-  ref="$(progress_open "${#files[@]}" "$(gettext 'KIMng - Initializing video transcode…')")" || return 1
+  local video_progress_enabled=true video_progress_base=0
+  ref="$(progress_open "$((200 * ${#files[@]}))" "$(gettext 'KIMng - Initializing video transcode…')")" || return 1
+  printf '%s\n' "${#files[@]}" > "$KIMDIR/job.total"
   trap 'video_cleanup_owned_process; exit 130' INT TERM HUP
 
   for source in "${files[@]}"; do
@@ -10308,7 +10317,7 @@ action_video() {
     fi
     if ! video_probe "$source"; then
       video_item_error "$source" "$(gettext 'could not inspect a valid video stream and container')"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     source_width="$VIDEO_WIDTH" source_height="$VIDEO_HEIGHT" rotation="$VIDEO_ROTATION"
@@ -10327,7 +10336,7 @@ action_video() {
       else
         video_item_error "$source" "$(gettext 'the original container cannot be identified safely from the file extension')"
       fi
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     muxer="$VIDEO_MUXER"; ext="$VIDEO_EXTENSION"
@@ -10336,7 +10345,7 @@ action_video() {
       input_ext="${input_ext,,}"
       if [ "$input_ext" != mp4 ] && [ "$input_ext" != m4v ]; then
         video_item_error "$source" "$(gettext 'MP4 cannot replace a source with a different filename extension; choose Create new files')"
-        progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+        progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
         continue
       fi
     fi
@@ -10349,7 +10358,7 @@ action_video() {
         [ -d "$directory" ] && [ ! -L "$directory" ] &&
         [ -w "$directory" ] && [ -x "$directory" ] || {
           video_item_error "$source" "$(gettext 'destination is no longer available')"
-          progress_value "$ref" "$index" || {
+          progress_value "$ref" "$((index * 200))" || {
             report_finish_dialog "$(gettext 'KIMng')"
             return 1
           }
@@ -10366,7 +10375,7 @@ action_video() {
 
       if [ -e "$target" ] || [ -L "$target" ]; then
         video_item_error "$source" "$(gettext 'approved output filename is now occupied; review again before converting')"
-        progress_value "$ref" "$index" || {
+        progress_value "$ref" "$((index * 200))" || {
           report_finish_dialog "$(gettext 'KIMng')"
           return 1
         }
@@ -10375,7 +10384,7 @@ action_video() {
     fi
     stage="$(tmp_for_target "$target")" || {
       video_item_error "$source" "$(gettext 'could not create destination-local staging')"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     }
     error_file="${stage%/*}/ffmpeg.stderr"
@@ -10399,7 +10408,8 @@ action_video() {
     fi
     ffmpeg_args+=(-f "$muxer" "$stage")
     rc=0
-    video_run_monitored "$ref" "$label" "$duration" "$error_file" "${ffmpeg_args[@]}" || rc=$?
+    video_progress_base=$(((index - 1) * 200))
+    video_run_monitored "$ref" "$(gettext 'Encoding video')" "$duration" "$error_file" "${ffmpeg_args[@]}" || rc=$?
     if [ "$rc" -eq 130 ]; then
       video_item_error "$source" "$(gettext 'interrupted during encoding; no output was published')"
       progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
@@ -10409,7 +10419,7 @@ action_video() {
       ffmpeg_reason="$(video_ffmpeg_error_summary "$error_file")"
       video_item_error "$source" "$(gettext 'FFmpeg failed or produced no complete output')${ffmpeg_reason:+: $ffmpeg_reason}"
       rm -f -- "$stage" "$error_file"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     if progress_cancelled "$ref"; then
@@ -10421,13 +10431,14 @@ action_video() {
     if [ "$rc" -ne 0 ]; then
       video_item_error "$source" "$(gettext 'output validation failed: wrong container, codec, dimensions, streams, duration or incomplete decode')"
       rm -f -- "$stage" "$error_file"
-      progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+      progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
       continue
     fi
     # Decode each staged stream completely before publication. The same owned
     # process monitor enforces cancellation and targets only this child.
     rc=0
-    video_run_monitored "$ref" "$label" "$duration" "$error_file" -hide_banner -v error -xerror -nostdin \
+    video_progress_base=$(((index - 1) * 200 + 100))
+    video_run_monitored "$ref" "$(gettext 'Validating video')" "$duration" "$error_file" -hide_banner -v error -xerror -nostdin \
       -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -map '0:a?' -f null - || rc=$?
     if [ "$rc" -eq 130 ]; then
       video_item_error "$source" "$(gettext 'interrupted during output validation; no output was published')"
@@ -10460,7 +10471,7 @@ action_video() {
       fi
       rm -f -- "$stage" "$error_file"
     fi
-    progress_value "$ref" "$index" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+    progress_value "$ref" "$((index * 200))" || { report_finish_dialog "$(gettext 'KIMng')"; return 1; }
   done
   progress_close "$ref"
   report_finish_dialog "$(gettext 'KIMng')"
@@ -11820,7 +11831,8 @@ action_slideshow() {
   done
   [ -n "$rec709_profile" ] || { progress_error "$(gettext 'An installed Rec. 709 ICC profile is required for slideshow color conversion.')"; return 1; }
   report_init
-  ref="$(progress_open "$(( ${#ordered[@]} + 1 ))" "$(gettext 'KIMng - Preparing slideshow…')")" || return 1
+  local video_progress_enabled=true video_progress_base=0
+  ref="$(progress_open "$((100 * ${#ordered[@]} + 200))" "$(gettext 'KIMng - Preparing slideshow…')")" || return 1
   trap 'slideshow_stop_owned_magick; video_cleanup_owned_process; exit 130' INT TERM HUP
   stage="$(tmp_for_target "$target")" || { progress_close "$ref" || true; progress_error "$(gettext 'Slideshow staging failed.')"; return 1; }
   for source in "${ordered[@]}"; do
@@ -11875,7 +11887,7 @@ action_slideshow() {
       return 1
     fi
     frames_out+=("$frame_path")
-    progress_value "$ref" "$index" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1; }
+    progress_value "$ref" "$((index * 100))" || { report_fail "$source"; progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1; }
   done
   [ "${#frames_out[@]}" -gt 0 ] || {
     report_fail "$(gettext 'No slideshow frames prepared.')"
@@ -11901,6 +11913,7 @@ action_slideshow() {
   ffargs+=(-filter_complex "$filter_chain" -map '[vout]' -an -sn -dn -fps_mode cfr -r "$fps"
     -t "$total" -c:v libx264 -pix_fmt yuv420p -color_primaries bt709 -color_trc bt709 -colorspace bt709
     -x264-params colorprim=bt709:transfer=bt709:colormatrix=bt709 -movflags +faststart -f mp4 "$stage")
+  video_progress_base=$((100 * ${#ordered[@]}))
   if video_run_monitored "$ref" "$(gettext 'Encoding MP4 slideshow')" "$total" "$error_file" "${ffargs[@]}"; then
     rc=0
   else
@@ -11956,6 +11969,7 @@ Staged output: $stage"
   [ "$actual_frames" -eq "$((total * fps))" ] || rc=1
   awk -v expected="$total" -v actual="$actual_duration" -v fps="$fps" 'BEGIN { if(actual!~/^[0-9]+([.][0-9]+)?$/)exit 1; d=expected-actual;if(d<0)d=-d;exit !(d<=1/fps) }' || rc=1
   if [ "$rc" -eq 0 ]; then
+    video_progress_base=$((100 * ${#ordered[@]} + 100))
     video_run_monitored "$ref" "$(gettext 'Validating slideshow decode')" "$total" "$error_file" \
       -hide_banner -v error -xerror -nostdin -progress pipe:1 -nostats -i "$stage" -map 0:v:0 -an -f null - || rc=$?
   fi

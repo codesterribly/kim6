@@ -314,7 +314,13 @@ class OrderedImages(QWidget):
             self.refresh_items()
 
     def resize_image_list(self):
-        self.images.setFixedHeight(12 + min(4, max(1, self.images.count())) * 79)
+        if self.mode == 'slideshow':
+            self.images.setMinimumHeight(180)
+            self.images.setMaximumHeight(16777215)
+        else:
+            self.images.setFixedHeight(
+                12 + min(4, max(1, self.images.count())) * 79
+            )
         self.resized.emit()
 
     def state(self, path):
@@ -531,9 +537,16 @@ class SlideshowDialog(OrderedImageDialog):
         self.destination = Path(destination)
         self.max_images = 200
 
-        self.setWindowTitle('KIMng - Create video slideshow')
-        self.resize(760, 400)
-        self.setMinimumWidth(640)
+        from PySide6.QtWidgets import (
+            QSplitter, QSizePolicy, QWidget
+        )
+        from PySide6.QtCore import QTimer
+
+        self.setWindowTitle(
+            'KIMng - Create a video slideshow - Settings'
+        )
+        self.resize(1080, 690)
+        self.setMinimumWidth(820)
 
         layout = QVBoxLayout(self)
 
@@ -545,10 +558,23 @@ class SlideshowDialog(OrderedImageDialog):
         layout.addWidget(instruction)
 
         self.ordered = OrderedImages(self)
-        layout.addWidget(self.ordered)
+
+        self.slideshow_splitter = QSplitter(Qt.Horizontal)
+        self.slideshow_splitter.setChildrenCollapsible(False)
+        self.slideshow_splitter.setHandleWidth(8)
+        self.slideshow_splitter.addWidget(self.ordered)
+
+        preview_panel = QWidget()
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.setContentsMargins(4, 0, 0, 0)
+        self.slideshow_splitter.addWidget(preview_panel)
+        self.slideshow_splitter.setStretchFactor(0, 1)
+        self.slideshow_splitter.setStretchFactor(1, 2)
+        self.slideshow_splitter.setSizes([390, 650])
+        layout.addWidget(self.slideshow_splitter, 1)
 
         # Static preview using the existing thumbnail cache.
-        preview_row = QHBoxLayout()
+        preview_row = QVBoxLayout()
 
         self.slide_preview = QLabel('Select an image')
         self.slide_preview.setObjectName('slideshowSelectedPreview')
@@ -557,9 +583,16 @@ class SlideshowDialog(OrderedImageDialog):
         )
         self.slide_preview.setAlignment(Qt.AlignCenter)
         self.slide_preview.setFrameShape(QFrame.StyledPanel)
-        self.slide_preview.setFixedSize(280, 158)
+        self.slide_preview.setMinimumSize(300, 170)
+        self.slide_preview.setSizePolicy(
+            QSizePolicy.Ignored, QSizePolicy.Expanding
+        )
+        self.slide_preview.setStyleSheet(
+            'background-color: #25282b; color: white;'
+        )
+        self.slide_preview.installEventFilter(self)
 
-        preview_row.addWidget(self.slide_preview)
+        preview_row.addWidget(self.slide_preview, 1)
 
         self.slide_details = QLabel()
         self.slide_details.setObjectName('slideshowSlideDetails')
@@ -568,8 +601,49 @@ class SlideshowDialog(OrderedImageDialog):
             Qt.AlignLeft | Qt.AlignVCenter
         )
 
-        preview_row.addWidget(self.slide_details, 1)
-        layout.addLayout(preview_row)
+        preview_row.addWidget(self.slide_details)
+        preview_layout.addLayout(preview_row, 1)
+
+        self.playback_timer = QTimer(self)
+        self.playback_timer.timeout.connect(
+            self.advance_slideshow_preview
+        )
+
+        playback_row = QHBoxLayout()
+
+        self.previous_slide = QPushButton('Previous')
+        self.play_slideshow = QPushButton('Play')
+        self.next_slide = QPushButton('Next')
+        self.restart_slideshow = QPushButton('Restart')
+
+        for button, theme_icon in (
+            (self.previous_slide, 'media-skip-backward'),
+            (self.play_slideshow, 'media-playback-start'),
+            (self.next_slide, 'media-skip-forward'),
+            (self.restart_slideshow, 'media-seek-backward'),
+        ):
+            button.setIcon(QIcon.fromTheme(theme_icon))
+            playback_row.addWidget(button)
+
+        playback_row.addStretch(1)
+        preview_layout.addLayout(playback_row)
+
+        self.previous_slide.clicked.connect(
+            lambda: self.select_slideshow_offset(-1)
+        )
+        self.next_slide.clicked.connect(
+            lambda: self.select_slideshow_offset(1)
+        )
+        self.play_slideshow.clicked.connect(
+            self.toggle_slideshow_preview
+        )
+        self.restart_slideshow.clicked.connect(
+            self.restart_slideshow_preview
+        )
+
+        self.finished.connect(
+            lambda *_: self.stop_slideshow_preview()
+        )
 
         form = QFormLayout()
 
@@ -577,7 +651,7 @@ class SlideshowDialog(OrderedImageDialog):
         self.seconds.setRange(1, 30)
         self.seconds.setValue(int(seconds))
         self.seconds.setSuffix(' seconds')
-        form.addRow('Seconds per image', self.seconds)
+        form.addRow('Slide duration', self.seconds)
 
         self.size = QComboBox()
 
@@ -668,7 +742,7 @@ class SlideshowDialog(OrderedImageDialog):
         output_row.addWidget(self.browse_button)
 
         form.addRow('Save video as', output_row)
-        layout.addLayout(form)
+        preview_layout.addLayout(form)
 
         self.summary = QLabel()
         self.summary.setWordWrap(True)
@@ -683,7 +757,7 @@ class SlideshowDialog(OrderedImageDialog):
         self.create = buttons.button(
             QDialogButtonBox.Ok
         )
-        self.create.setText('Create slideshow')
+        self.create.setText('Review Changes')
         self.create.setEnabled(False)
 
         self.add_source_notice(layout)
@@ -702,8 +776,23 @@ class SlideshowDialog(OrderedImageDialog):
         self.ordered.images.currentRowChanged.connect(
             self.refresh_slide_preview
         )
-        self.ordered.resized.connect(self.fit_images)
-        self.seconds.valueChanged.connect(self.refresh_slide_preview)
+        # The slideshow splitter owns list geometry.
+        # Retain fixed-height fitting for animation only.
+        self.seconds.valueChanged.connect(
+            self.refresh_slide_preview
+        )
+        self.seconds.valueChanged.connect(
+            self.update_slideshow_interval
+        )
+        self.size.currentIndexChanged.connect(
+            self.refresh_slide_preview
+        )
+        self.background.currentIndexChanged.connect(
+            self.refresh_slide_preview
+        )
+        self.custom_color.textChanged.connect(
+            self.refresh_slide_preview
+        )
 
         for control in (
             self.seconds,
@@ -760,11 +849,16 @@ class SlideshowDialog(OrderedImageDialog):
         self.update_controls()
         self.refresh_slide_preview()
 
+
     def refresh_slide_preview(self, *_):
+        from PySide6.QtGui import QColor, QPainter
+        from PySide6.QtCore import QRect
+
         paths = self.ordered.ordered_paths()
         count = len(paths)
 
         if not count:
+            self.stop_slideshow_preview()
             self.slide_preview.setPixmap(QPixmap())
             self.slide_preview.setText('No images selected')
             self.slide_details.setText(
@@ -773,44 +867,27 @@ class SlideshowDialog(OrderedImageDialog):
             return
 
         index = self.ordered.images.currentRow()
-
-        if index < 0 or index >= count:
+        if not 0 <= index < count:
             index = 0
 
         path = paths[index]
         seconds = self.seconds.value()
 
-        start = index * seconds
-        end = start + seconds
-
         def timestamp(value):
             return f'{value // 60:02d}:{value % 60:02d}'
 
         self.slide_details.setText(
-            f'Slide {index + 1} of {count}\n'
-            f'{Path(path).name}\n\n'
-            f'On screen: {seconds} seconds\n'
-            f'Playback position: '
-            f'{timestamp(start)} to {timestamp(end)}'
+            f'Slide {index + 1} of {count}: '
+            f'{Path(path).name}\n'
+            f'Playback: {timestamp(index * seconds)} to '
+            f'{timestamp((index + 1) * seconds)}'
+            f' | Total: {timestamp(count * seconds)}'
         )
 
         thumbnail = self.ordered.thumbnails.get(path)
 
-        if thumbnail is not None and not thumbnail.isNull():
-            pixmap = QPixmap.fromImage(thumbnail)
-
-            self.slide_preview.setPixmap(
-                pixmap.scaled(
-                    self.slide_preview.size() - QSize(12, 12),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation,
-                )
-            )
-            self.slide_preview.setText('')
-
-        else:
+        if thumbnail is None or thumbnail.isNull():
             self.slide_preview.setPixmap(QPixmap())
-
             status = self.ordered.states.get(
                 path, ('Inspecting', '', None)
             )[0]
@@ -824,6 +901,172 @@ class SlideshowDialog(OrderedImageDialog):
                 self.ordered.request_preview(path)
 
             self.slide_preview.setText(message)
+            return
+
+        video_width, video_height = map(
+            int, self.size.currentData().split('x')
+        )
+
+        available_width = max(
+            1, self.slide_preview.width() - 12
+        )
+        available_height = max(
+            1, self.slide_preview.height() - 12
+        )
+
+        scale = min(
+            available_width / video_width,
+            available_height / video_height
+        )
+
+        frame_width = max(1, round(video_width * scale))
+        frame_height = max(1, round(video_height * scale))
+
+        color_name = (
+            self.custom_color.text().strip()
+            if self.background.currentData() == 'custom'
+            else self.background.currentData()
+        )
+
+        background = QColor(color_name)
+        if not background.isValid():
+            background = QColor('black')
+
+        frame = QPixmap(frame_width, frame_height)
+        frame.fill(background)
+
+        details = self.ordered.states.get(
+            path, ('', '', None)
+        )[2] or {}
+
+        # Use inspected dimensions when available. Qt
+        # thumbnails themselves may have been downscaled.
+        width = details.get('display_width') or details.get('width')
+        height = details.get('display_height') or details.get('height')
+
+        try:
+            width, height = int(width), int(height)
+            if width <= 0 or height <= 0:
+                raise ValueError
+
+            # Match orientation to the decoded thumbnail.
+            if (
+                (width > height)
+                != (thumbnail.width() > thumbnail.height())
+                and width != height
+            ):
+                width, height = height, width
+
+            image_scale = min(
+                1.0,
+                video_width / width,
+                video_height / height
+            )
+
+            draw_width = max(
+                1, round(width * image_scale * scale)
+            )
+            draw_height = max(
+                1, round(height * image_scale * scale)
+            )
+        except (ValueError, TypeError):
+            # An unavailable dimension record still
+            # permits a fitted composition preview.
+            fitted = thumbnail.size().scaled(
+                frame_width, frame_height,
+                Qt.KeepAspectRatio
+            )
+            draw_width = fitted.width()
+            draw_height = fitted.height()
+
+        painter = QPainter(frame)
+        painter.setRenderHint(
+            QPainter.SmoothPixmapTransform, True
+        )
+        painter.drawImage(
+            QRect(
+                (frame_width - draw_width) // 2,
+                (frame_height - draw_height) // 2,
+                draw_width,
+                draw_height
+            ),
+            thumbnail
+        )
+        painter.end()
+
+        self.slide_preview.setPixmap(frame)
+
+    def eventFilter(self, watched, event):
+        from PySide6.QtCore import QEvent, QTimer
+
+        if (
+            watched is getattr(self, 'slide_preview', None)
+            and event.type() == QEvent.Resize
+            and hasattr(self, 'size')
+        ):
+            QTimer.singleShot(
+                0, self.refresh_slide_preview
+            )
+        return super().eventFilter(watched, event)
+
+    def update_slideshow_interval(self, *_):
+        if self.playback_timer.isActive():
+            self.playback_timer.start(
+                self.seconds.value() * 1000
+            )
+
+    def stop_slideshow_preview(self):
+        self.playback_timer.stop()
+        self.play_slideshow.setText('Play')
+        self.play_slideshow.setIcon(
+            QIcon.fromTheme('media-playback-start')
+        )
+
+    def toggle_slideshow_preview(self):
+        if self.playback_timer.isActive():
+            self.stop_slideshow_preview()
+            return
+
+        count = self.ordered.images.count()
+        if not count:
+            return
+
+        if (
+            self.ordered.images.currentRow() < 0
+            or self.ordered.images.currentRow() == count - 1
+        ):
+            self.ordered.images.setCurrentRow(0)
+
+        self.play_slideshow.setText('Pause')
+        self.play_slideshow.setIcon(
+            QIcon.fromTheme('media-playback-pause')
+        )
+        self.playback_timer.start(
+            self.seconds.value() * 1000
+        )
+
+    def select_slideshow_offset(self, offset):
+        self.stop_slideshow_preview()
+        count = self.ordered.images.count()
+        if count:
+            row = max(0, self.ordered.images.currentRow())
+            self.ordered.images.setCurrentRow(
+                max(0, min(count - 1, row + offset))
+            )
+
+    def restart_slideshow_preview(self):
+        self.stop_slideshow_preview()
+        if self.ordered.images.count():
+            self.ordered.images.setCurrentRow(0)
+            self.refresh_slide_preview()
+
+    def advance_slideshow_preview(self):
+        count = self.ordered.images.count()
+        row = self.ordered.images.currentRow()
+        if count == 0 or row >= count - 1:
+            self.stop_slideshow_preview()
+            return
+        self.ordered.images.setCurrentRow(row + 1)
 
     def ordered_paths(self):
         return self.ordered.ordered_paths()
@@ -947,6 +1190,194 @@ class SlideshowDialog(OrderedImageDialog):
             )
         )
 
+
+    def review_slideshow(self):
+        from PySide6.QtWidgets import (
+            QDialog, QDialogButtonBox, QFormLayout,
+            QHBoxLayout, QLabel, QLineEdit, QListWidget,
+            QPushButton, QFileDialog, QVBoxLayout
+        )
+
+        self.stop_slideshow_preview()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            'KIMng - Create a video slideshow - Review Changes'
+        )
+        dialog.resize(820, 560)
+
+        layout = QVBoxLayout(dialog)
+
+        paths = tuple(self.ordered_paths())
+        approved = self.output.text().strip()
+
+        layout.addWidget(QLabel(
+            'Review the playback sequence and planned video.'
+        ))
+
+        sequence = QListWidget()
+        sequence.setAccessibleName(
+            'Approved slideshow playback order'
+        )
+
+        for index, path in enumerate(paths, 1):
+            item = QListWidgetItem(
+                f'{index}. {Path(path).name}'
+            )
+            item.setToolTip(path)
+            sequence.addItem(item)
+
+        layout.addWidget(sequence, 1)
+
+        form = QFormLayout()
+        duration = len(paths) * self.seconds.value()
+
+        form.addRow('Images', QLabel(str(len(paths))))
+        form.addRow(
+            'Total duration',
+            QLabel(f'{duration // 60:02d}:{duration % 60:02d}')
+        )
+        form.addRow(
+            'Video size',
+            QLabel(self.size.currentText())
+        )
+        form.addRow(
+            'Frame rate',
+            QLabel(f'{self.fps.value()} fps')
+        )
+        form.addRow(
+            'Format',
+            QLabel('MP4 / H.264, silent video')
+        )
+
+        filename = QLineEdit(Path(approved).name)
+        filename.setReadOnly(True)
+        form.addRow('Filename', filename)
+
+        layout.addLayout(form)
+
+        notice = QLabel(
+            'Originals are not being changed.'
+        )
+        layout.addWidget(notice)
+
+        layout.addWidget(QLabel('Destination'))
+
+        destination_row = QHBoxLayout()
+        directory = QLineEdit(str(Path(approved).parent))
+        directory.setReadOnly(True)
+        destination_row.addWidget(directory, 1)
+
+        choose = QPushButton('Change Destination…')
+        destination_row.addWidget(choose)
+
+        layout.addLayout(destination_row)
+
+        status = QLabel()
+        status.setWordWrap(True)
+        layout.addWidget(status)
+
+        footer = QHBoxLayout()
+
+        back = QPushButton('Back')
+        from PySide6.QtGui import QPainter, QColor, QPolygon
+        from PySide6.QtCore import QPoint
+
+        arrow = QPixmap(20, 20)
+        arrow.fill(Qt.transparent)
+
+        painter = QPainter(arrow)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor('#202020'))
+        painter.drawPolygon(QPolygon([
+            QPoint(3, 10),
+            QPoint(11, 3),
+            QPoint(11, 17),
+        ]))
+        painter.end()
+
+        back.setIcon(QIcon(arrow))
+        footer.addWidget(back)
+        footer.addStretch(1)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        style_button_box(buttons)
+
+        apply = buttons.button(QDialogButtonBox.Ok)
+        apply.setText('Apply Changes')
+
+        footer.addWidget(buttons)
+        layout.addLayout(footer)
+
+        def target():
+            return Path(directory.text()) / filename.text()
+
+        def validate():
+            candidate = target()
+            problem = ''
+
+            if (
+                not candidate.parent.is_dir()
+                or not os.access(
+                    candidate.parent, os.W_OK | os.X_OK
+                )
+            ):
+                problem = 'Output directory is unavailable.'
+            elif candidate.exists() or candidate.is_symlink():
+                problem = (
+                    'Output already exists. Change the '
+                    'destination or return to settings.'
+                )
+            elif str(candidate) in paths:
+                problem = 'Output cannot replace an input image.'
+
+            status.setText(problem)
+            apply.setEnabled(not problem)
+            return not problem
+
+        def change_destination():
+            chosen = QFileDialog.getExistingDirectory(
+                dialog,
+                'Choose output directory',
+                directory.text()
+            )
+
+            if chosen:
+                directory.setText(chosen)
+                validate()
+
+        def approve():
+            if (
+                validate()
+                and tuple(self.ordered_paths()) == paths
+                and self.ordered.validate_sources()
+            ):
+                dialog.accept()
+
+        choose.clicked.connect(change_destination)
+        back.clicked.connect(lambda: dialog.done(131))
+        buttons.accepted.connect(approve)
+        buttons.rejected.connect(dialog.reject)
+
+        validate()
+
+        result = dialog.exec()
+        approved_target = str(target())
+        dialog.deleteLater()
+
+        if result == 131:
+            return False
+
+        if result != QDialog.Accepted:
+            self.reject()
+            return False
+
+        self.output.setText(approved_target)
+        return True
+
     def accept(self):
         self.update_controls()
         if not self.create.isEnabled() or not self.ordered.validate_sources():
@@ -954,6 +1385,9 @@ class SlideshowDialog(OrderedImageDialog):
         self.update_controls()
 
         if not self.create.isEnabled():
+            return
+
+        if not self.review_slideshow():
             return
 
         color = (

@@ -34,6 +34,7 @@ def source_identity(path):
         info.st_ino,
         info.st_size,
         info.st_mtime_ns,
+        info.st_ctime_ns,
     )
 
 
@@ -42,7 +43,7 @@ class VideoReview(QDialog):
         super().__init__()
 
         self.setWindowTitle("KIMng - Convert video - Review Changes")
-        self.resize(1060, min(760, 300 + 52 * len(plan)))
+        self.resize(1160, min(700, 320 + 42 * len(plan)))
         self.setMinimumWidth(850)
 
         self.plan = plan
@@ -76,7 +77,7 @@ class VideoReview(QDialog):
 
         policy_row = QHBoxLayout()
         create_radio = QRadioButton(
-            'Create new files (originals untouched)'
+            'Create converted copies'
         )
         overwrite_radio = QRadioButton(
             'Overwrite originals (confirmation required)'
@@ -113,22 +114,25 @@ class VideoReview(QDialog):
             "Shared destination directory"
         )
         destination_entry.setText(destination)
+        destination_entry.setReadOnly(True)
         destination_row.addWidget(destination_entry, 1)
 
-        choose_button = QPushButton("Change destination…")
+        choose_button = QPushButton("Change Destination…")
         choose_button.clicked.connect(
             lambda: self.choose_destination(destination_entry.text().strip())
         )
         destination_row.addWidget(choose_button)
 
-        self.table = QTableWidget(len(plan), 6)
+        self.table = QTableWidget(len(plan), 8)
         self.table.setHorizontalHeaderLabels((
-            "Source video",
+            "Original",
             "Original size",
+            "Planned size",
             "Duration",
             "Audio",
             "Planned filename",
             "Destination",
+            "Status",
         ))
         self.table.setEditTriggers(
             QTableWidget.NoEditTriggers
@@ -147,7 +151,7 @@ class VideoReview(QDialog):
         header.setSectionResizeMode(QHeaderView.Interactive)
 
         for column, width in enumerate(
-            (210, 108, 90, 82, 315, 205)
+            (180, 100, 130, 85, 80, 235, 180, 85)
         ):
             self.table.setColumnWidth(column, width)
 
@@ -184,20 +188,28 @@ class VideoReview(QDialog):
                 else "No audio"
             )
 
+            # Exact geometry is determined by the
+            # production scale filter, including orientation
+            # and even-dimension constraints. Do not claim
+            # unverified exact output dimensions here.
+            planned_size = f'Fit within {limit}'
+
             values = (
                 filename,
                 dimensions,
+                planned_size,
                 duration_text,
                 audio_text,
                 output_name,
                 target_directory,
+                'Blocked' if source in self.errors else 'Ready',
             )
 
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(
                     source if column == 0
-                    else target if column in (4, 5)
+                    else target if column in (5, 6)
                     else value
                 )
                 self.table.setItem(number, column, item)
@@ -205,6 +217,31 @@ class VideoReview(QDialog):
             self.table.setRowHeight(number, 34)
 
         outer.addWidget(self.table, 1)
+
+        self.selected_details = QLabel()
+        self.selected_details.setWordWrap(True)
+        self.selected_details.setTextFormat(Qt.PlainText)
+        outer.addWidget(self.selected_details)
+
+        def show_selected_details():
+            row = self.table.currentRow()
+            if 0 <= row < len(self.plan):
+                record = self.plan[row]
+                source_path = record[0]
+                message = self.errors.get(
+                    source_path,
+                    'Ready to convert'
+                )
+                self.selected_details.setText(
+                    f'{source_path}\n{message}'
+                )
+
+        self.table.itemSelectionChanged.connect(
+            show_selected_details
+        )
+        if self.plan:
+            self.table.selectRow(0)
+            show_selected_details()
 
         self.status = QLabel()
         outer.addWidget(self.status)
@@ -296,6 +333,13 @@ class VideoReview(QDialog):
                 for path, reason in self.errors.items()
             )
             self.status.setToolTip(details)
+
+        for row, record in enumerate(self.plan):
+            item = self.table.item(row, 7)
+            if item is not None:
+                reason = self.errors.get(record[0])
+                item.setText('Blocked' if reason else 'Ready')
+                item.setToolTip(reason or 'Ready to convert')
 
         self.apply.setEnabled(
             bool(self.plan) and not blocked
