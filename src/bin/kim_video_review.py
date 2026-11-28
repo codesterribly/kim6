@@ -107,9 +107,7 @@ class VideoReview(QDialog):
 
         destination_row = QHBoxLayout()
         destination_entry = QLineEdit(self)
-        destination_entry.setPlaceholderText(
-            "Beside each source (leave empty)"
-        )
+        destination_entry.setPlaceholderText("")
         destination_entry.setAccessibleName(
             "Shared destination directory"
         )

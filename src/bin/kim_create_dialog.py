@@ -216,6 +216,10 @@ class OrderedImages(QWidget):
         self.states = {}
         self.items = {}
         self.thumbnails = OrderedDict()
+        self.preview_images = OrderedDict()
+        self.preview_unavailable = set()
+        self.preview_items = {}
+        self.loading_large_preview = False
         self.unavailable = set()
         self.worker = None
         self.thumbnail_worker = None
@@ -297,6 +301,8 @@ class OrderedImages(QWidget):
             self.items.pop(path, None)
             self.states.pop(path, None)
             self.thumbnails.pop(path, None)
+            self.preview_images.pop(path, None)
+            self.preview_unavailable.discard(path)
             self.unavailable.discard(path)
         self.resize_image_list()
         self.refresh_items()
@@ -415,6 +421,32 @@ class OrderedImages(QWidget):
     def load_thumbnails(self):
         if self.stopped or self.thumbnail_worker is not None:
             return
+
+        requested = self.preview_path
+        if (
+            self.mode == 'slideshow'
+            and requested in self.items
+            and self.states[requested][0] == 'Ready'
+            and requested not in self.preview_images
+            and requested not in self.preview_unavailable
+        ):
+            self.loading_large_preview = True
+            self.preview_items = {
+                requested: self.items[requested]
+            }
+            self.thumbnail_worker = ThumbnailWorker(
+                [requested], QSize(1280, 720), self
+            )
+            self.thumbnail_worker.thumbnail_ready.connect(
+                self.receive_large_preview
+            )
+            self.thumbnail_worker.finished.connect(
+                self.thumbnails_finished
+            )
+            self.thumbnail_worker.start()
+            return
+
+        self.loading_large_preview = False
         viewport = self.images.viewport().rect()
         visible = [p for p, item in self.items.items()
                    if self.images.visualItemRect(item).intersects(viewport)]
@@ -430,6 +462,47 @@ class OrderedImages(QWidget):
             self.thumbnail_worker.thumbnail_ready.connect(self.receive_thumbnail)
             self.thumbnail_worker.finished.connect(self.thumbnails_finished)
             self.thumbnail_worker.start()
+
+    def receive_large_preview(self, path, image, stamp):
+        if (
+            self.stopped
+            or path not in self.items
+            or self.states[path][0] != 'Ready'
+            or self.items[path] is not self.preview_items.get(path)
+        ):
+            return
+
+        details = self.states[path][2]
+
+        try:
+            unchanged = (
+                details is not None
+                and identity(path) == details['stamp']
+            )
+        except (OSError, ValueError):
+            unchanged = False
+
+        if not unchanged:
+            self.states[path] = (
+                'Blocked',
+                'Source changed; remove and add it again',
+                None
+            )
+            self.preview_images.pop(path, None)
+            self.preview_unavailable.add(path)
+            self.refresh_item(path)
+            self.changed.emit()
+        elif image.isNull() or stamp != details['stamp']:
+            self.preview_unavailable.add(path)
+        else:
+            self.preview_images[path] = image
+            self.preview_images.move_to_end(path)
+
+            # Only retain four large decoded previews.
+            while len(self.preview_images) > 4:
+                self.preview_images.popitem(last=False)
+
+        self.thumbnail_changed.emit(path)
 
     def receive_thumbnail(self, path, image, stamp):
         if (self.stopped or path not in self.items or self.states[path][0] != 'Ready'
@@ -884,7 +957,14 @@ class SlideshowDialog(OrderedImageDialog):
             f' | Total: {timestamp(count * seconds)}'
         )
 
-        thumbnail = self.ordered.thumbnails.get(path)
+        self.ordered.request_preview(path)
+
+        thumbnail = self.ordered.preview_images.get(path)
+
+        if thumbnail is not None:
+            self.ordered.preview_images.move_to_end(path)
+        else:
+            thumbnail = self.ordered.thumbnails.get(path)
 
         if thumbnail is None or thumbnail.isNull():
             self.slide_preview.setPixmap(QPixmap())
@@ -1372,7 +1452,6 @@ class SlideshowDialog(OrderedImageDialog):
             return False
 
         if result != QDialog.Accepted:
-            self.reject()
             return False
 
         self.output.setText(approved_target)

@@ -255,12 +255,12 @@ Name=Separator
             "A01ExtractVideoAudio": (["video-multiaudio.mkv"], "derived"),
             "A04MuteVideo": (["video-multiaudio.mkv"], "derived"),
             "06Crop": (["wide.jpg"], "derived"),
-            "04Overlay": (["metadata.jpg"], "derived"),
-            "02SetDates": (["metadata.jpg"], "authorized_overwrite"),
-            "03Apply": (["metadata.jpg"], "authorized_overwrite"),
-            "05Reduce": (["metadata.jpg"], "authorized_overwrite"),
-            "04Report": (["metadata.jpg"], "none"),
-            "00CheckExtensions": (["mislabeled.jpg"], "derived"),
+            "07Overlay": (["metadata.jpg"], "derived"),
+            "05SetDates": (["metadata.jpg"], "authorized_overwrite"),
+            "01Edit": (["metadata.jpg"], "authorized_overwrite"),
+            "04Reduce": (["metadata.jpg"], "authorized_overwrite"),
+            "02View": (["metadata.jpg"], "none"),
+            "06CheckExtensions": (["mislabeled.jpg"], "derived"),
             "KIMRecipe0Run": (["orientation-6.jpg"], "derived"),
             "KIMRecipe1Editor": (["photo.jpg"], "none"),
             "01Settings": (["photo.jpg"], "none"),
@@ -307,7 +307,7 @@ Name=Separator
         plan = acceptance.render_plan(cases)
         self.assertIn(f"{len(cases)} executable menu actions", plan)
         self.assertIn(f"{len({case['menu'] for case in cases})} current service-menu templates", plan)
-        self.assertIn("KIMng User Guide", plan)
+        self.assertIn(manual["label"], plan)
         self.assertIn("# KIMng Human Acceptance Plan", plan)
         self.assertEqual(len(cases), len(re.findall(r"^\| `kim_[^`]+` \| `[^`]+` \|", plan, re.MULTILINE)))
 
@@ -579,7 +579,7 @@ class AcceptanceStateAndSafetyTests(unittest.TestCase):
 
     def test_non_processing_cases_require_human_review_and_preserve_context_fixtures(self):
         cases = [case for case in acceptance.load_cases(ROOT) if case["source_behavior"] == "none"]
-        self.assertEqual({"about", "license", "manual", "settings", "location-report", "metadata-view", "metadata-edit", "recipe"},
+        self.assertEqual({"about", "license", "manual", "settings", "location-report", "metadata-view", "metadata-edit", "metadata-compare", "recipe"},
                          {case["route"] for case in cases})
         with tempfile.TemporaryDirectory() as tmp:
             case_dir = Path(tmp)

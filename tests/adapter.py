@@ -103,9 +103,18 @@ def main():
                       or (args[4] in ("value", "maximum") and args[5].isdecimal()))))
         if not valid:
             raise ValueError("qdbus method argument contract mismatch")
-        if (not owner_query and method == "org.freedesktop.DBus.Properties.Set" and
-                len(args) == 6 and args[4:] == ["value", "1"] and
-                plan.get("video_interrupt_after_first_item")):
+        if (
+            not owner_query
+            and method == "org.freedesktop.DBus.Properties.Set"
+            and len(args) == 6
+            and args[4] == "value"
+            and plan.get("video_interrupt_after_first_item")
+            and any(
+                candidate.is_file()
+                for candidate in ROOT.rglob("*-transcoded.mp4")
+                if CONTROL not in candidate.parents
+            )
+        ):
             (CONTROL / "progress-gone").touch()
             return 0
     # A producer can remove only this workspace's simulated dialog service.
@@ -542,7 +551,10 @@ def main():
         if args[1] == '%x:%y':
             print(f'{info.st_atime_ns}:{info.st_mtime_ns}')
             return 0
-        if args[1] == '%h:%d:%i:%s:%y:%z':
+        if args[1] in (
+            '%h:%d:%i:%s:%y:%z',
+            '%d:%i:%s:%y:%z:%h',
+        ):
             return subprocess.run(
                 [shutil.which('stat', path=os.defpath), *args],
                 timeout=10,

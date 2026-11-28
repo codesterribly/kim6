@@ -1078,9 +1078,17 @@ print(json.dumps([doc]))
         window.previews.limit = window.overview_records.limit = window.records.limit = 1
         for row, path in enumerate(self.paths):
             window.image_list.setCurrentRow(row)
-            self.wait_for(lambda: window.overview_records.get(str(path)) is not None)
+            self.wait_for(lambda: window._overview_record(str(path)) is not None)
             window.tabs.setCurrentIndex(1)
-            self.wait_for(lambda: window.records.get(str(path)) is not None)
+            self.wait_for(lambda: window._full_record(str(path)) is not None)
+            overview = window._overview_record(str(path))
+            full = window._full_record(str(path))
+
+            self.assertEqual(str(path), overview.path)
+            self.assertEqual(str(path), full.path)
+            self.assertFalse(overview.error)
+            self.assertFalse(full.error)
+
             window.tabs.setCurrentIndex(0)
             for cache in (window.records, window.overview_records, window.previews):
                 self.assertLessEqual(len(cache), 1)

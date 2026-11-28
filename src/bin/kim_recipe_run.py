@@ -2268,16 +2268,30 @@ class RunRecipeDialog(QDialog):
     @Slot(str,int,int)
     def preflight_started(self,source,index,total):
         if self.sender().generation != self.generation or self._closing: return
+        item = self.inputs.topLevelItem(index - 1)
+        if (
+            item is None
+            or not 0 <= index - 1 < len(self.files)
+            or str(self.files[index - 1]) != str(source)
+        ):
+            return
         self.preflight_active=(source,index,total,'Inspecting source',time.monotonic())
-        self.inputs.topLevelItem(index-1).setText(1,'Inspecting')
+        item.setText(1,'Inspecting')
         self.refresh_preflight_status()
 
     def preflight_stage(self, message):
         if self.sender().generation != self.generation or self._closing or not self.preflight_active: return
         source,index,total,_,started=self.preflight_active
+        item = self.inputs.topLevelItem(index - 1)
+        if (
+            item is None
+            or not 0 <= index - 1 < len(self.files)
+            or str(self.files[index - 1]) != str(source)
+        ):
+            return
         self.preflight_active=(source,index,total,message,started)
-        self.inputs.topLevelItem(index-1).setText(1,'Inspecting: '+message)
-        self.inputs.topLevelItem(index-1).setToolTip(1, message)
+        item.setText(1,'Inspecting: '+message)
+        item.setToolTip(1, message)
         self.refresh_preflight_status()
 
     def refresh_preflight_status(self):
@@ -2292,6 +2306,14 @@ class RunRecipeDialog(QDialog):
     @Slot(object, int)
     def inspected(self, row, index):
         if self.sender().generation != self.generation: return
+        item = self.inputs.topLevelItem(index)
+        if (
+            self._closing
+            or item is None
+            or not 0 <= index < len(self.files)
+            or str(self.files[index]) != str(row.source)
+        ):
+            return
         previous = self.rows.get(index)
         for item, change in ((previous, -1), (row, 1)):
             if item is None: continue

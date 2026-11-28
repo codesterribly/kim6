@@ -10036,7 +10036,7 @@ action_video() {
   local size='' crf='' codec='' container='' av1_quality='' av1_encoder='' av1_speed='' option='' mode rc=0 ref=''
   local max_width max_height source input_ext muxer ext target stem directory stage error_file
   local source_width source_height display_width display_height rotation duration formats dar
-  local audio_count encoder_output label index=0 retry target_number
+  local audio_count encoder_output label index=0 target_number
   local -a raw_files=() files=() ffmpeg_args=()
 
   while [ "$#" -gt 0 ]; do
@@ -10132,7 +10132,8 @@ action_video() {
   local review_number review_input_ext review_rc review_result
   local review_request="$KIMDIR/video.destination"
   local KIM_VIDEO_REVIEW_DIRECTORY=''
-  local -A review_reserved=() review_targets=()
+  local -A review_reserved=() review_targets=() review_identities=()
+  local review_identity current_identity
 
   # Destination changes trigger a new preflight and approval.
   while :; do
@@ -10140,10 +10141,26 @@ action_video() {
     rm -f -- "$review_request" || return 1
     review_reserved=()
     review_targets=()
+    review_identities=()
 
     for review_source in "${files[@]}"; do
+      review_identity="$(stat -c '%d:%i:%s:%y:%z:%h' -- "$review_source")" || {
+        progress_error "Cannot establish video source identity."
+        return 1
+      }
+      if [ -L "$review_source" ] || [ ! -f "$review_source" ]; then
+        progress_error "Video source is no longer a regular file."
+        return 1
+      fi
+      review_identities["$review_source"]="$review_identity"
       if ! video_probe "$review_source"; then
         progress_error "Video review could not inspect: ${review_source##*/}"
+        return 1
+      fi
+
+      current_identity="$(stat -c '%d:%i:%s:%y:%z:%h' -- "$review_source")" || return 1
+      if [ "$current_identity" != "$review_identity" ]; then
+        progress_error "Video source changed during review preparation."
         return 1
       fi
 
@@ -10299,6 +10316,14 @@ action_video() {
     }
   fi
 
+  for review_source in "${files[@]}"; do
+    current_identity="$(stat -c '%d:%i:%s:%y:%z:%h' -- "$review_source")" || return 1
+    if [ "$current_identity" != "${review_identities[$review_source]}" ]; then
+      progress_error "Video source changed after review; review it again."
+      return 1
+    fi
+  done
+
   # The existing dispatcher retains final output validation,
   # collision handling, and ownership of published results.
 
@@ -10392,6 +10417,17 @@ action_video() {
       video_item_error "$source" "$(gettext 'interrupted before encoding')"
       progress_close "$ref" || true; report_finish_dialog "$(gettext 'KIMng')"; return 1
     fi
+    current_identity="$(stat -c '%d:%i:%s:%y:%z:%h' -- "$source")" || current_identity=''
+    if [ "$current_identity" != "${review_identities[$source]}" ]; then
+      video_item_error "$source" "$(gettext 'source changed after review; no output was published')"
+      rm -f -- "$stage" "$error_file"
+      progress_value "$ref" "$((index * 200))" || {
+        report_finish_dialog "$(gettext 'KIMng')"
+        return 1
+      }
+      continue
+    fi
+
     ffmpeg_args=(-hide_banner -v error -nostdin -n -progress pipe:1 -nostats -i "$source" -map 0:v:0 -map '0:a?' \
       -map_metadata 0 -map_chapters 0 -vf "scale=w='min(iw,$max_width)':h='min(ih,$max_height)':force_original_aspect_ratio=decrease:force_divisible_by=2" \
       -fps_mode passthrough)
@@ -10454,6 +10490,17 @@ action_video() {
       video_item_error "$source" "$(gettext 'interrupted immediately before publication')"
       rm -f -- "$stage" "$error_file"; progress_close "$ref" || true
       report_finish_dialog "$(gettext 'KIMng')"; return 1
+    fi
+
+    current_identity="$(stat -c '%d:%i:%s:%y:%z:%h' -- "$source")" || current_identity=''
+    if [ "$current_identity" != "${review_identities[$source]}" ]; then
+      video_item_error "$source" "$(gettext 'source changed during conversion; no output was published')"
+      rm -f -- "$stage" "$error_file"
+      progress_value "$ref" "$((index * 200))" || {
+        report_finish_dialog "$(gettext 'KIMng')"
+        return 1
+      }
+      continue
     fi
 
     # Publish only the exact filename approved in Review Changes.

@@ -17,6 +17,10 @@ class VideoTests(unittest.TestCase):
         self.w = Workspace()
         self.addCleanup(self.w.close)
         self.w.env["KIM_POLICY"] = "create"
+        self.w.env["KIM_TEST_VIDEO_REVIEW"] = "create"
+        (self.w.control / "kim_video_review.py").write_text(
+            'import os\nimport sys\nfrom pathlib import Path\n\n_, plan_path, codec, limit, quality, mode, request, destination = sys.argv\n\nraw = Path(plan_path).read_bytes()\n\nif not raw.endswith(b"\\0"):\n    sys.exit(125)\n\nfields = raw[:-1].split(b"\\0")\n\nif not fields or len(fields) % 6:\n    sys.exit(125)\n\nrecords = [\n    fields[index:index + 6]\n    for index in range(0, len(fields), 6)\n]\n\nif any(not record[0] or not record[4] for record in records):\n    sys.exit(125)\n\nrequested = os.environ.get("KIM_TEST_VIDEO_REVIEW", "create")\n\nif requested == "cancel":\n    sys.exit(130)\n\nif requested == "overwrite" and mode != "overwrite":\n    Path(request).write_bytes(b"policy:overwrite\\0")\n    sys.exit(130)\n\nif requested == "create" and mode != "create":\n    Path(request).write_bytes(b"policy:create\\0")\n    sys.exit(130)\n\nif requested not in ("create", "overwrite"):\n    sys.exit(125)\n\n# Test-only explicit approval of the prepared plan.\nsys.exit(0)\n'
+        )
         self.source = self.w.path("input/short clip.mp4")
         self.source.parent.mkdir(parents=True)
         subprocess.run([
@@ -160,7 +164,7 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(self.w.observe(mkv), second_before)
 
     def test_real_authorized_overwrite_replaces_only_after_validated_encoding(self):
-        self.w.approve_overwrite()
+        self.w.env["KIM_TEST_VIDEO_REVIEW"] = "overwrite"
         before = self.w.observe(self.source)
         result = self.transcode(self.source, codec="libx265", container="orig")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -231,15 +235,16 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(args[args.index("-crf") + 1], "35")
         self.assertIn("-cpu-used", args)
 
-    def test_destination_created_during_transcode_survives_and_uses_next_collision_number(self):
+    def test_destination_created_during_transcode_blocks_reviewed_publication(self):
         self.plan_update(video_create_collision=True)
         source_before = self.w.observe(self.source)
         target = self.source.with_name("short clip-transcoded.mp4")
         result = self.transcode()
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(target.read_bytes(), b"created during transcode; preserve me")
-        self.assertTrue(target.with_name("short clip-transcoded_1.mp4").is_file())
+        self.assertFalse(target.with_name("short clip-transcoded_1.mp4").exists())
         self.assertEqual(self.w.observe(self.source), source_before)
+        self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
     def test_refuses_symlink_hardlink_and_duplicate_source_selections(self):
         symlink = self.w.path("input/linked.mp4")
@@ -291,16 +296,19 @@ class VideoTests(unittest.TestCase):
         self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
         self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
 
-    def test_invalid_source_is_reported_and_batch_continues(self):
+    def test_invalid_source_blocks_batch_before_review_approval(self):
         invalid = self.w.path("input/not-a-video [x].mp4")
         invalid.write_bytes(b"invalid video bytes")
+        before = self.w.observe(self.source)
+        invalid_before = self.w.observe(invalid)
         result = self.w.dispatch("video", "--size", "hd720", "--crf", "23", "--codec", "libx264",
                                  "--container", "mp4", "--", invalid, self.source)
         self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(self.source.with_name("short clip-transcoded.mp4").is_file())
+        self.assertFalse(self.source.with_name("short clip-transcoded.mp4").exists())
         encoded = [args for args in self.ffmpeg_calls(result) if args[-1] != "-"]
-        self.assertEqual(len(encoded), 1)
-        self.assertEqual(self.w.observe(self.source).sha256, result.before_entries["input/short clip.mp4"].sha256)
+        self.assertEqual(len(encoded), 0)
+        self.assertEqual(self.w.observe(self.source), before)
+        self.assertEqual(self.w.observe(invalid), invalid_before)
 
     def test_missing_encoder_fails_before_processing(self):
         self.w.respond_to("ffmpeg", "-encoders", {"stdout": " V..... unavailable encoder\n"})
@@ -332,6 +340,19 @@ class VideoTests(unittest.TestCase):
         self.assertFalse(list(self.w.root.rglob(".kimng-stage.*")))
         self.assertTrue(any(call["tool"] == "kdialog" and "--error" in call["argv"] and
                             "publication failed" in call["argv"][-1] for call in result.calls))
+
+    def test_cancel_review_does_not_start_encoder_or_publish(self):
+        self.w.env["KIM_TEST_VIDEO_REVIEW"] = "cancel"
+        before = self.w.observe(self.source)
+
+        result = self.transcode()
+
+        self.assertEqual(result.returncode, 130, result.stderr)
+        self.assertFalse(self.ffmpeg_calls(result))
+        self.assertFalse(
+            self.source.with_name("short clip-transcoded.mp4").exists()
+        )
+        self.assertEqual(self.w.observe(self.source), before)
 
     def test_cancel_before_processing_does_not_start_encoder(self):
         (self.w.control / "progress-state").write_text("cancelled")

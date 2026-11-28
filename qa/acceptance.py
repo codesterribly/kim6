@@ -133,6 +133,12 @@ def _route_and_args(entry: dict[str, Any]) -> tuple[str, list[str]]:
 
 
 def _fixture_class(route: str, args: list[str], menu: str = "") -> list[str]:
+    if route == "metadata-compare":
+        return ["metadata.jpg", "photo.jpg"]
+    if route in {"pdf-pages", "pdf-extract"}:
+        return ["sample.pdf"]
+    if route == "gallery-choose":
+        return ["sequence-red.png", "sequence-green.png", "sequence-blue.png"]
     if route in {"about", "license", "manual", "settings"} or (route == "recipe" and "--editor" in args):
         # The dispatcher takes no media argument, but a right-click context
         # menu needs a harmless selected file to expose its informational item.
@@ -186,6 +192,10 @@ def _fixture_class(route: str, args: list[str], menu: str = "") -> list[str]:
 
 
 def _source_behavior(route: str, args: list[str] | None = None) -> str:
+    if route == "metadata-compare":
+        return "none"
+    if route in {"pdf-pages", "pdf-extract", "gallery-choose"}:
+        return "derived"
     if route in {"about", "license", "manual", "settings", "location-report", "metadata-view", "metadata-edit"} or (route == "recipe" and "--editor" in (args or [])):
         return "none"
     if route in {"rotate", "rotatewithexif", "flipflop"}:
@@ -200,6 +210,26 @@ def _source_behavior(route: str, args: list[str] | None = None) -> str:
 
 
 def _expected(route: str, args: list[str]) -> str:
+    if route == "metadata-compare":
+        return (
+            "Compare the metadata of two disposable images "
+            "without modifying either source."
+        )
+    if route == "pdf-pages":
+        return (
+            "Create readable images of the reviewed PDF pages; "
+            "the original PDF remains unchanged."
+        )
+    if route == "pdf-extract":
+        return (
+            "Extract the reviewed embedded images into separate "
+            "files without modifying the PDF."
+        )
+    if route == "gallery-choose":
+        return (
+            "Create a reviewed gallery publication containing "
+            "the selected images; originals remain unchanged."
+        )
     if route in {"about", "license", "manual"}:
         return {"about": "KDialog About text opens.", "license": "Installed LICENSE.md opens.",
                 "manual": "Installed docs/index.html and its stylesheet open."}[route]
@@ -247,6 +277,14 @@ def _expected(route: str, args: list[str]) -> str:
 
 
 def _dependencies(route: str) -> list[str]:
+    if route == "metadata-compare":
+        return ["python3", "PySide6", "exiftool"]
+    if route == "pdf-pages":
+        return ["python3", "PySide6", "pdfinfo", "pdftoppm"]
+    if route == "pdf-extract":
+        return ["python3", "PySide6", "pdfinfo", "pdfimages"]
+    if route == "gallery-choose":
+        return ["python3", "PySide6", "magick", "exiftool"]
     deps = {"about": ["kdialog"], "license": ["xdg-open"], "manual": ["xdg-open"],
             "compress": ["magick", "identify", "qdbus", "kdialog"],
             "convert": ["magick", "identify", "qdbus", "kdialog"],
@@ -281,6 +319,27 @@ def _dependencies(route: str) -> list[str]:
 
 
 def _checks(route: str) -> list[str]:
+    if route == "metadata-compare":
+        return [
+            "Inspect differences and provenance between two images.",
+            "Verify source bytes, size and timestamps remain unchanged.",
+        ]
+    if route == "pdf-pages":
+        return [
+            "Verify selected page count, image dimensions and decode.",
+            "Verify the source PDF remains unchanged.",
+        ]
+    if route == "pdf-extract":
+        return [
+            "Verify extracted image count, readable formats and decode.",
+            "Verify the source PDF remains unchanged.",
+        ]
+    if route == "gallery-choose":
+        return [
+            "Verify gallery HTML, image assets and relative links.",
+            "Inspect gallery presentation and navigation in a browser.",
+            "Verify the selected sources remain unchanged.",
+        ]
     checks = {
         "settings": ["Human: confirm Settings opens and closes without saving; no media output is expected."],
         "location-report": ["Human: inspect GPS coordinates; source hashes must remain unchanged."],
@@ -326,6 +385,14 @@ def _checks(route: str) -> list[str]:
 
 
 def _interactive_choices(route: str, args: list[str], label: str) -> list[str]:
+    if route == "metadata-compare":
+        return ["Inspect both images and close without writing."]
+    if route == "pdf-pages":
+        return ["Select PDF pages, output format and destination; review before applying."]
+    if route == "pdf-extract":
+        return ["Select embedded images and destination; review before applying."]
+    if route == "gallery-choose":
+        return ["Choose Simple Gallery, review the publication and create a gallery folder."]
     choices: dict[str, list[str]] = {
         "settings": ["Inspect Settings tabs, then close without saving; use the isolated QA session."],
         "metadata-view": ["Inspect metadata and alternate representations, then close without writing."],
@@ -1310,6 +1377,67 @@ def _draw_image(magick: str, target: Path, color: str, width: int = 640, height:
     _run_checked(commands, f"create {target.name}")
 
 
+def _write_acceptance_pdf(path: Path) -> None:
+    """Create a deterministic PDF containing one embedded RGB image."""
+    import zlib
+
+    pixels = bytes.fromhex(
+        "ff0000 00ff00 0000ff ffff00 00ffff ff00ff"
+    )
+    compressed = zlib.compress(pixels)
+    drawing = b"q 240 0 0 160 36 36 cm /Im0 Do Q"
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R "
+            b"/MediaBox [0 0 312 232] "
+            b"/Resources << /XObject << /Im0 5 0 R >> >> "
+            b"/Contents 4 0 R >>"
+        ),
+        (
+            b"<< /Length " + str(len(drawing)).encode()
+            + b" >>\nstream\n" + drawing + b"\nendstream"
+        ),
+        (
+            b"<< /Type /XObject /Subtype /Image "
+            b"/Width 3 /Height 2 /ColorSpace /DeviceRGB "
+            b"/BitsPerComponent 8 /Filter /FlateDecode /Length "
+            + str(len(compressed)).encode()
+            + b" >>\nstream\n" + compressed + b"\nendstream"
+        ),
+    ]
+
+    data = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(data))
+        data.extend(
+            f"{index} 0 obj\n".encode()
+            + obj + b"\nendobj\n"
+        )
+
+    xref = len(data)
+    data.extend(f"xref\n0 {len(offsets)}\n".encode())
+    data.extend(b"0000000000 65535 f \n")
+
+    for offset in offsets[1:]:
+        data.extend(f"{offset:010d} 00000 n \n".encode())
+
+    data.extend(
+        (
+            f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\n"
+            f"startxref\n{xref}\n%%EOF\n"
+        ).encode()
+    )
+
+    # Never replace an existing master fixture.
+    with path.open("xb") as stream:
+        stream.write(data)
+
+
 def _generate_masters(directory: Path) -> dict[str, Any]:
     magick = shutil.which("magick")
     if not magick:
@@ -1318,6 +1446,7 @@ def _generate_masters(directory: Path) -> dict[str, Any]:
     ffmpeg = shutil.which("ffmpeg")
     _draw_image(magick, directory / "photo.jpg", "#e11d48", suffix="jpeg")
     _draw_image(magick, directory / "photo.png", "#16a34a")
+    _write_acceptance_pdf(directory / "sample.pdf")
     _draw_image(magick, directory / "wide.jpg", "#f59e0b", 960, 360, "jpeg")
     _draw_image(magick, directory / "portrait.jpg", "#7c3aed", 360, 640, "jpeg")
     _draw_image(magick, directory / "tiny.png", "#0ea5e9", 48, 32)
@@ -1538,6 +1667,27 @@ def _source_explanation(case: dict[str, Any]) -> str:
 
 
 def _case_guidance(case: dict[str, Any]) -> tuple[str, str]:
+    route = case["dispatcher"][0]
+    if route == "metadata-compare":
+        return (
+            "Select the two disposable images and inspect metadata differences.",
+            "Confirm neither source changes.",
+        )
+    if route == "pdf-pages":
+        return (
+            "Select the PDF, render the first page as PNG and review the destination.",
+            "Open the resulting PNG and confirm the source PDF is unchanged.",
+        )
+    if route == "pdf-extract":
+        return (
+            "Select the PDF, choose an embedded image and review the destination.",
+            "Open the extracted image and confirm the source PDF is unchanged.",
+        )
+    if route == "gallery-choose":
+        return (
+            "Choose Simple Gallery and publish a reviewed gallery folder.",
+            "Open index.html and inspect the selected images and navigation.",
+        )
     route, args, label = case["route"], case["args"], case["label"]
     fixtures = ", ".join(case["fixtures"])
     tag = ""
