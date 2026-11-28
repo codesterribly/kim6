@@ -10,14 +10,14 @@ _X-KDE-Submenu=KIMng - Location/GPS
 X-KIMng-Managed=true
 
 [Desktop Action 01Edit]
-Icon=mark-location
-_Name=Edit GPS metadata…
-Exec=kim_all location-apply -- %F
-
-[Desktop Action 02View]
 Icon=document-properties
 _Name=View GPS metadata
 Exec=kim_all location-report -- %F
+
+[Desktop Action 02View]
+Icon=mark-location
+_Name=Edit GPS metadata…
+Exec=kim_all location-apply -- %F
 
 [Desktop Action 03Remove]
 Icon=document-properties

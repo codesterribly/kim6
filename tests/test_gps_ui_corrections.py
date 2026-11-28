@@ -54,11 +54,13 @@ class GPSUICorrections(unittest.TestCase):
         field = actions.gps_field(record, record.entries[-1])
         actions.add_field_controls(layout, object(), field)
         buttons = widget.findChildren(QToolButton)
-        self.assertEqual(['View on map…', 'Edit GPS'], [b.text() for b in buttons])
-        self.assertEqual(Qt.ToolButtonIconOnly, buttons[0].toolButtonStyle())
+        self.assertEqual(['Map', 'Edit GPS location…'], [b.text() for b in buttons])
+        self.assertEqual(Qt.ToolButtonTextBesideIcon, buttons[0].toolButtonStyle())
         self.assertFalse(buttons[0].icon().isNull())
         self.assertEqual("View on map", buttons[0].accessibleName())
-        self.assertEqual(Qt.ToolButtonTextOnly, buttons[1].toolButtonStyle())
+        self.assertEqual(Qt.ToolButtonTextBesideIcon, buttons[1].toolButtonStyle())
+        self.assertFalse(buttons[1].icon().isNull())
+        self.assertTrue(buttons[1].isEnabled())
         with patch.object(actions, 'show_field_map') as show:
             buttons[0].click()
         self.assertEqual([12, 34], show.call_args.args[2])
@@ -79,8 +81,94 @@ class GPSUICorrections(unittest.TestCase):
         overview = MetadataOverview(MetadataSourcePreferences(settings), prefs)
         self.addCleanup(overview.deleteLater)
         overview.set_record(self.record())
+        # Camera GPS fields share the Location section action.
+        # Individual coordinate and altitude cards must not
+        # duplicate the camera editing controls.
         buttons = overview.findChildren(QToolButton, 'gpsFieldAction')
-        self.assertEqual(['View on map…', 'Edit GPS'], [b.text() for b in buttons])
+        self.assertEqual([], buttons)
+
+        location_buttons = overview.findChildren(
+            QToolButton, 'editGpsLocation'
+        )
+        self.assertEqual(1, len(location_buttons))
+        self.assertEqual(
+            'Edit GPS location…', location_buttons[0].text()
+        )
+        self.assertTrue(location_buttons[0].isEnabled())
+        self.assertFalse(location_buttons[0].icon().isNull())
+        self.assertFalse(location_buttons[0].isHidden())
+
+    def test_map_projection_preserves_signed_coordinates(self):
+        positions = (
+            (41.8973676, 12.5084420),
+            (42.2720472, 18.8468667),
+            (43.5384611, -71.3651250),
+            (-33.8688, 151.2093),
+            (21.3069, -157.8583),
+            (0.0, 0.0),
+            (0.0, 179.999),
+            (0.0, -179.999),
+        )
+
+        for position in positions:
+            for zoom in (2, 5, 10, 13, 19):
+                with self.subTest(position=position, zoom=zoom):
+                    actual = maps.geographic_point(
+                        maps.world_point(position, zoom), zoom
+                    )
+                    self.assertAlmostEqual(
+                        position[0], actual[0], places=8
+                    )
+                    self.assertAlmostEqual(
+                        position[1], actual[1], places=8
+                    )
+
+    def test_map_selection_and_display_zoom(self):
+        from PySide6.QtCore import QPointF
+
+        rome = [41.8973676, 12.5084420]
+        budva = [42.2720472, 18.8468667]
+
+        picker = maps.TileMap(
+            interactive=True, persistent=False
+        )
+        self.addCleanup(picker.deleteLater)
+        self.addCleanup(picker.stop_requests)
+
+        picker.resize(800, 500)
+        picker.zoom = 13
+        picker.centre = maps.world_point(rome, 13)
+        picker.select_at(
+            QPointF(picker.width() / 2, picker.height() / 2)
+        )
+
+        self.assertAlmostEqual(
+            rome[0], picker.selected[0], places=8
+        )
+        self.assertAlmostEqual(
+            rome[1], picker.selected[1], places=8
+        )
+
+        display = maps.TileMap(
+            interactive=False, persistent=False
+        )
+        self.addCleanup(display.deleteLater)
+        self.addCleanup(display.stop_requests)
+
+        display.set_position(rome)
+        self.assertEqual(13, display.zoom)
+
+        display.zoom_by(-8)
+        self.assertEqual(5, display.zoom)
+
+        display.set_position(rome)
+        self.assertEqual(5, display.zoom)
+
+        display.set_position(budva)
+        self.assertEqual(13, display.zoom)
+        self.assertEqual(
+            maps.world_point(budva, 13), display.centre
+        )
 
     def test_saved_map_preference_is_independent_of_cache_persistence(self):
         path = self.folder / 'map-test.jpg'

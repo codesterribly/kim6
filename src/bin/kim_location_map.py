@@ -94,7 +94,7 @@ def world_point(position, zoom):
 
 def geographic_point(point, zoom):
     scale = 256 * 2 ** zoom
-    lon = (point.x() / scale * 360 + 180) % 360 - 180
+    lon = (point.x() / scale * 360) % 360 - 180
     lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * max(0, min(scale, point.y())) / scale))))
     return [lat, lon]
 
@@ -132,7 +132,15 @@ class TileStore(QObject):
             root.mkdir(parents=True, exist_ok=True)
             self.lock = QLockFile(str(root / 'cache.lock'))
             if not self.lock.tryLock(0):
-                raise OSError('Another KIMng window owns the tile cache. Close it and choose Retry.')
+                # Another process owns the shared disk cache.
+                # Keep the existing privacy preference and
+                # bounded in-memory tile store, but do not
+                # access or modify the other process's cache.
+                self.lock = None
+                self.network = QNetworkAccessManager(self)
+                debug_map('initialized-memory-only',
+                          reason='persistent tile cache is in use')
+                return
             # Verify actual access, rather than relying on os.access().
             from tempfile import TemporaryFile
             with TemporaryFile(dir=root): pass
@@ -347,7 +355,11 @@ class TileMap(QWidget):
         if value != self.selected:
             self.store.release(self)
             self.selected = value
-            if value is not None: self.centre = world_point(value, self.zoom)
+            if value is not None:
+                if not self.interactive:
+                    self.zoom = 13
+
+                self.centre = world_point(value, self.zoom)
             debug_map('position', coordinates=value, zoom=self.zoom, projected_center=[self.centre.x(), self.centre.y()])
         self.empty_text = empty_text; self.update(); self.fetch_timer.start()
         if value is None and not self.interactive: self.store.release(self)
@@ -500,8 +512,9 @@ class TileMap(QWidget):
 class LocationMap(QWidget):
     position_changed = Signal(object)
 
-    def __init__(self, parent=None, interactive=False, units='metric', persistent=True):
+    def __init__(self, parent=None, interactive=False, units='metric', persistent=True, compact=False):
         super().__init__(parent)
+        self.compact = compact
         outer_layout = QVBoxLayout(self); outer_layout.setContentsMargins(0, 0, 0, 0)
         self.online = QPushButton('Enable Maps')
         self.online.setCheckable(False); self.online.setAutoDefault(False)
@@ -544,6 +557,11 @@ class LocationMap(QWidget):
         centre = QPushButton(QIcon.fromTheme('mark-location'), 'Center'); centre.setAutoDefault(False)
         centre.clicked.connect(self.recenter); row.addWidget(centre)
         retry = QPushButton('Retry'); retry.setAutoDefault(False); retry.clicked.connect(self.store.retry); row.addWidget(retry)
+        self.retry_button = retry
+
+        if self.compact:
+            centre.hide()
+            retry.hide()
         row.addStretch(); layout.addLayout(row)
         self.status = QLabel(); self.status.setWordWrap(True); self.status.setTextFormat(Qt.PlainText)
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred); layout.addWidget(self.status)
@@ -584,8 +602,12 @@ class LocationMap(QWidget):
                     'Click to select coordinates. Enable maps for geographic imagery in this session; no settings or disk cache are saved.')
         elif has_failure: text = MAP_FAILURE_TEXT
         elif self.store.active: text = 'Loading geographic imagery…'
-        else: text = 'Visible map areas are sent to OpenStreetMap. Drag or use arrow keys to pan.'
+        else: text = 'Drag or use arrow keys to pan.'
         self.status.setText(text); self.status.setToolTip(text)
+
+        if self.compact:
+            self.status.setVisible(has_failure)
+            self.retry_button.setVisible(has_failure)
         self.technical_toggle.setVisible(has_failure)
         if has_failure:
             detail = self.store.initialization_problem or (json.dumps(failures[-1], indent=2, ensure_ascii=False, default=str) if failures else self.store.problem)

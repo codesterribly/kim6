@@ -34,7 +34,15 @@ class GPSSourceIOTests(unittest.TestCase):
     def setUp(self):
         if not all(shutil.which(tool) for tool in ('exiftool', 'magick', 'identify')):
             self.skipTest('ExifTool and ImageMagick required')
-        self.temp = tempfile.TemporaryDirectory(prefix='.kimng-gps-test-', dir=ROOT)
+        self.temp = tempfile.TemporaryDirectory(
+            prefix='.kimng-gps-test-',
+            dir=ROOT.parent,
+        )
+        self.assertEqual(
+            ROOT.stat().st_dev,
+            Path(self.temp.name).stat().st_dev,
+            'GPS integrity fixtures must use the repository filesystem',
+        )
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
         self.control = self.folder / 'control'
@@ -94,6 +102,114 @@ metadata_publish_one "$2" "$3" "$4" '' expected || status=$?
 cleanup_stages
 exit "$status"
 ''', self.control, source, output, mode, 'true' if cancel else 'false')
+
+    def test_independent_map_drafts_preserve_untouched_images(self):
+        fixtures = [
+            self.fixture('first.jpg'),
+            self.fixture('second.jpg'),
+            self.fixture('third.jpg', gps=False),
+            self.fixture('fourth.jpg'),
+        ]
+
+        files = [str(path) for path, _ in fixtures]
+        cache = {
+            str(path): data for path, data in fixtures
+        }
+
+        before = {
+            path: signature(Path(path)) for path in files
+        }
+
+        targets = [
+            str(self.folder / f'result-{index}.jpg')
+            for index in range(len(files))
+        ]
+
+        config = dict(method='map', image_drafts={})
+
+        empty = build_plan(
+            'apply', 'create', files, config,
+            targets, cache=cache,
+        )
+
+        self.assertTrue(empty['pending_input'])
+        self.assertTrue(all(
+            entry['status'] != 'change'
+            for entry in empty['entries']
+        ))
+
+        config['image_drafts'] = {
+            files[1]: dict(
+                latitude='41.8973676',
+                longitude='12.5084420',
+                altitude='30.48',
+                direction='178.5',
+                direction_ref='M',
+            ),
+            files[2]: dict(
+                latitude='42.2720472',
+                longitude='18.8468667',
+                altitude='',
+                direction='',
+            ),
+        }
+
+        plan = build_plan(
+            'apply', 'create', files, config,
+            targets, cache=cache,
+        )
+
+        self.assertEqual(
+            ['skip', 'change', 'change', 'skip'],
+            [entry['status'] for entry in plan['entries']],
+        )
+
+        first, second, third, fourth = plan['entries']
+
+        self.assertEqual([], first['args'])
+        self.assertEqual([], fourth['args'])
+
+        self.assertEqual(
+            [41.8973676, 12.5084420],
+            second['approved_location']['position'],
+        )
+        self.assertEqual(
+            [42.2720472, 18.8468667],
+            third['approved_location']['position'],
+        )
+
+        self.assertEqual(
+            30.48, second['approved_location']['altitude']
+        )
+        self.assertEqual(
+            178.5, second['approved_location']['direction']
+        )
+        self.assertEqual(
+            'M', second['approved_location']['direction_ref']
+        )
+        self.assertIn(
+            '-EXIF:GPSImgDirectionRef=M', second['args']
+        )
+
+        self.assertIsNone(
+            third['approved_location']['altitude']
+        )
+        self.assertIsNone(
+            third['approved_location']['direction']
+        )
+
+        self.assertEqual(targets[1], second['target'])
+        self.assertEqual(targets[2], third['target'])
+
+        save_plan(self.control / 'individual.approved', plan)
+
+        self.assertFalse(any(
+            Path(target).exists() for target in targets
+        ))
+
+        self.assertEqual(before, {
+            path: signature(Path(path)) for path in files
+        })
 
     def test_inspection_preserves_exact_signature(self):
         source, _ = self.fixture()
@@ -410,7 +526,12 @@ def choose():
 timer=QTimer();timer.timeout.connect(choose);timer.start(10)
 status=dialog.exec()
 if status!=QDialog.Accepted:sys.exit(130)
-if policy=='select':Path(result).write_text(json.dumps(dict(dialog.config(),files=dialog.files)))
+if policy=='select':
+    Path(result).write_text(json.dumps(dict(
+        dialog.config(),
+        files=dialog.files,
+        output_policy='create',
+    )))
 else:save_plan(result,dialog.plan)
 ''')
                 python = workspace.bin/'python3'
@@ -431,6 +552,11 @@ os.execv(sys.executable,[sys.executable,*args])
                                         cwd=workspace.root, env=workspace.env, capture_output=True, text=True, timeout=45)
                 self.assertEqual(before, signature(source))
                 events = [json.loads(line) for line in trace.read_text().splitlines()] if trace.exists() else []
+                self.assertTrue(
+                    any(event['phase'] == 'create' for event in events),
+                    'Dispatcher did not reach review: '
+                    + repr(events) + '\n' + result.stderr,
+                )
                 review = next(event for event in events if event['phase']=='create')
                 self.assertEqual([str(source)], review['files'])
                 self.assertEqual('Apply changes', review['button'])
@@ -502,7 +628,14 @@ os.execv(sys.executable,[sys.executable,*args])
                           dict(method='manual', latitude='40.25', longitude='-71.5'),
                           [str(self.folder/'blocked.gif')])
         self.assertEqual('error', plan['entries'][0]['status'])
-        self.assertIn('GPS writes require verified', plan['entries'][0]['error'])
+        self.assertIn(
+            'GPS location changes require verified',
+            plan['entries'][0]['error'],
+        )
+        self.assertIn(
+            'read-only',
+            plan['entries'][0]['error'],
+        )
         self.assertFalse((self.folder/'blocked.gif').exists())
         self.assertEqual(before, signature(source))
 

@@ -1767,7 +1767,8 @@ class MetadataEditor(QMainWindow, ListThumbnails):
         style_button_box(self.buttons)
         self.buttons.button(QDialogButtonBox.Cancel).setIcon(QIcon.fromTheme('dialog-cancel', self.style().standardIcon(QStyle.SP_DialogCancelButton)))
         self.review_button = self.buttons.addButton('Review changes', QDialogButtonBox.AcceptRole)
-        self.review_button.setIcon(QIcon.fromTheme('go-next', self.style().standardIcon(QStyle.SP_ArrowForward)))
+        from kim_dialog_buttons import style_button
+        style_button(self.review_button, 'review')
         self.review_button.setDefault(True)
         self.review_button.clicked.connect(self.review_changes)
         self.buttons.rejected.connect(self.close)

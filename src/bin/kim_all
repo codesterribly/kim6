@@ -160,6 +160,9 @@ preview_run() {
     0) return 0 ;;
     125|130) return "$status" ;;
     132)
+      if [ "${2:-}" = "$DISPATCHER_DIR/kim_location_dialog.py" ]; then
+        return 132
+      fi
       if [ "${2:-}" = "$DISPATCHER_DIR/kim_action_dialog.py" ] &&
          [ "${3:-}" = resize-output-review ]; then
         return 132
@@ -7556,11 +7559,15 @@ action_location() {
     KIM_LOCATION_CONFIG='' preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" report "$KIMDIR/location-report" create - "${files[@]}"
     return $?
   fi
+  local initial_config="${KIM_LOCATION_CONFIG:-}"
+  local review_status=0
+
+  while :; do
   if [ "$kind" = apply ] || [ "$kind" = gpx ]; then
     # Select source and destinations before the unchanged output-policy decision.
     # This returns input configuration only, never an approved publication plan.
     selection_config="$KIMDIR/location-selection"
-    KIM_LOCATION_CONFIG='' preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
+    KIM_LOCATION_CONFIG="$initial_config" preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$selection_config" select - "${files[@]}" || return 1
     if ! python3 - "$selection_config" > "$KIMDIR/location-inputs" <<'KIMNG_LOCATION_INPUTS'
 import json
 from pathlib import Path
@@ -7596,12 +7603,24 @@ KIMNG_GPS_SELECTED_POLICY
     policy="$(choose_output_mode 'KIMng - Image location tools' 'Create location copies or explicitly replace the selected originals?' "${#files[@]}" originals)"
     [ "$policy" != cancel ] || return 1
   fi
+  rm -f -- "$location_plan"
   : > "$KIMDIR/location-seeds" || return 1
   for source in "${files[@]}"; do
     target="$(metadata_output_path "$source" location "$policy")" || return 1
     printf '%s\0' "$target" >> "$KIMDIR/location-seeds" || return 1
   done
-  KIM_LOCATION_CONFIG="$selection_config" preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$location_plan" "$policy" "$KIMDIR/location-seeds" "${files[@]}" || return 1
+  review_status=0
+  KIM_LOCATION_CONFIG="$selection_config" preview_run python3 "$DISPATCHER_DIR/kim_location_dialog.py" "$kind" "$location_plan" "$policy" "$KIMDIR/location-seeds" "${files[@]}" || review_status=$?
+
+  case "$review_status" in
+    0) break ;;
+    132)
+      initial_config="$selection_config"
+      continue
+      ;;
+    *) return "$review_status" ;;
+  esac
+  done
   preview_run preview_verify || return 1
   # Preview acceptance never substitutes for choose_output_mode's explicit
   # replacement confirmation under KIM_POLICY=prompt.

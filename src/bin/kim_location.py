@@ -759,7 +759,10 @@ def input_instruction(kind, config):
         method = config.get('method', 'photo' if kind == 'copy' else 'manual')
         if method == 'photo' and not config.get('reference'):
             return 'Choose a reference image. Its camera coordinates can be copied or applied to the other selected images.'
-        if method == 'map' and (config.get('latitude', '') == '' or config.get('longitude', '') == ''):
+        if method == 'map' and 'image_drafts' in config:
+            if not config['image_drafts']:
+                return 'Choose a location for an image.'
+        elif method == 'map' and (config.get('latitude', '') == '' or config.get('longitude', '') == ''):
             return 'Choose a point on the map to preview changes.'
         if method == 'manual' and (not config.get('latitude', '').strip() or not config.get('longitude', '').strip()):
             return 'Enter latitude and longitude in signed decimal degrees to preview changes.'
@@ -929,6 +932,30 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
     if not files or len(files) > MAX_FILES: raise ValueError('Select between 1 and 1000 images')
     cache = cache if cache is not None else {}; files = [absolute(p) for p in files]
     config = dict(config); dependencies = []; reference = None; reference_error = None; track = None
+
+    individual = (
+        kind == 'apply'
+        and config.get('method') == 'map'
+        and 'image_drafts' in config
+    )
+
+    drafts = config.get('image_drafts', {}) if individual else {}
+
+    if individual:
+        if not isinstance(drafts, dict):
+            raise ValueError('Invalid individual GPS drafts')
+
+        if not set(drafts).issubset(set(files)):
+            raise ValueError('GPS draft refers to an unselected image')
+
+        for draft in drafts.values():
+            if not isinstance(draft, dict):
+                raise ValueError('Invalid GPS draft')
+            _position, _altitude, direction = manual_location(draft)
+
+            if direction is not None:
+                if draft.get('direction_ref', 'T') not in ('T', 'M'):
+                    raise ValueError('Invalid image direction reference')
     requested_kind = kind
     instruction = input_instruction(kind, config)
     if instruction: kind = 'report'
@@ -993,6 +1020,21 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                     entry['status'] = 'skip'; entry['rows'] = report_rows(path, info)
                     if info['issues']: entry['warnings'] += info['issues']
                     plan['entries'].append(entry); continue
+                if individual and path not in drafts:
+                    entry['status'] = 'skip'
+                    entry['args'] = []
+                    entry['removed_fields'] = []
+                    entry['skip_reason'] = 'No GPS change selected.'
+                    entry['rows'] = report_rows(path, info)
+
+                    finish_entry(entry, path, 'overwrite')
+
+                    if identity(path) != entry['identity']:
+                        raise ValueError('Source changed during planning')
+
+                    plan['entries'].append(entry)
+                    continue
+
                 if reference_error: raise ValueError(reference_error)
                 if kind == 'copy' and entry['identity'][:2] == dependencies[0]['identity'][:2]:
                     entry['status'] = 'skip'; entry['rows'] = [[Path(path).name, 'Reference image', display_position(info['position']), 'Preserve reference unchanged', 'Skipped reference']]
@@ -1001,7 +1043,54 @@ def build_plan(kind, policy, files, config, seeds=None, progress=lambda *_: None
                 args, removed = removal_args(info, kind == 'reduce')
                 altitude = direction = altitude_ref = None; direction_ref = 'T'
                 if kind == 'apply':
-                    position, altitude, direction = manual_location(config)
+                    location_input = drafts[path] if individual else config
+                    position, altitude, direction = manual_location(location_input)
+
+                    if individual and direction is not None:
+                        direction_ref = location_input.get(
+                            'direction_ref', 'T'
+                        )
+
+                        if direction_ref not in ('T', 'M'):
+                            raise ValueError(
+                                'Invalid image direction reference'
+                            )
+
+                    if (
+                        config.get('method') == 'map'
+                        and info['position'] is not None
+                        and not info['categories']['camera']['issues']
+                        and same_position(info['position'], position)
+                        and altitude is None
+                        and direction is None
+                    ):
+                        entry['status'] = 'skip'
+                        entry['args'] = []
+                        entry['removed_fields'] = []
+
+                        entry['skip_reason'] = (
+                            'GPS coordinates are unchanged. '
+                            'Existing GPS metadata is preserved.'
+                        )
+
+                        entry['rows'].append([
+                            Path(path).name,
+                            'GPS location',
+                            display_position(info['position']),
+                            display_position(position),
+                            entry['skip_reason'],
+                        ])
+
+                        finish_entry(entry, path, 'overwrite')
+
+                        if identity(path) != entry['identity']:
+                            raise ValueError(
+                                'Source changed during planning'
+                            )
+
+                        plan['entries'].append(entry)
+                        continue
+
                 elif kind == 'copy':
                     position = reference['position']
                     if config.get('altitude'):

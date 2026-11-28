@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QGroupBox, QMessageBox, QSizePolicy, QToolButton, QTabWidget)
 
 from kim_location import (build_manual_proposal, proposal_problem, inspect_editor_gps, editor_gps_description,
-    TITLES, build_plan, coordinate, number, source_info, summarize, optional_gps, MAX_FILES)
+    TITLES, build_plan, coordinate, number, source_info, summarize, optional_gps, optional_gps_record, MAX_FILES)
 from kim_preview import verify_plan, save_plan, identity, absolute
 from kim_location_ui import (preferred_units, unit_preference, persist_units, altitude_to_metres,
     altitude_from_metres, distance, position_text, reference_caption, location_unit_choices,
@@ -75,11 +75,16 @@ class LocationDialog(QDialog):
             raise ValueError('Select exactly one image for a GPS proposal')
         self.kind, self.files, self.policy, self.seeds = kind, [absolute(p) for p in files], policy, seeds
         self.selection_only = policy == 'select'
+        self.launched_from_report = bool(
+            initial and initial.get('launched_from_report')
+        )
         if self.selection_only: self.policy = 'create'
         self.worker = None; self.thumbnail_worker = None; self.thumbnail_queue = []
         self.pending = False; self.closing = False; self.accept_after_thumbnails = False; self.completed_report = False
         self.plan = None; self.cache = {}; self.track_cache = {}; self.inputs = {}; self.display_entries = []
         self.initial_reference_checked = bool(initial); self.reference = ''; self.map_position = None; self.altitude_metres = ''
+        self.image_drafts = {}
+        self.draft_selection_path = ''
         self.unit_preference = unit_preference(); self.units = preferred_units(self.unit_preference)
         self.apply_button = None; self.candidate_items = {}; self.thumbnail_stamps = {}; self.thumbnail_icons = {}
         self.visual_source = ''; self.usable_reference_paths = []
@@ -141,8 +146,14 @@ class LocationDialog(QDialog):
         else:
             self.destination_splitter = QSplitter(Qt.Vertical); self.destination_splitter.setChildrenCollapsible(False)
             self.destination_splitter.addWidget(self.image_list); self.destination_splitter.addWidget(self.inspector)
-            self.destination_splitter.setSizes([300, 220])
-            self.destination_splitter.setStretchFactor(0, 1); self.destination_splitter.setStretchFactor(1, 1)
+            if kind == 'apply' and self.selection_only:
+                self.destination_splitter.setSizes([480, 120])
+                self.destination_splitter.setStretchFactor(0, 4)
+                self.destination_splitter.setStretchFactor(1, 0)
+            else:
+                self.destination_splitter.setSizes([300, 220])
+                self.destination_splitter.setStretchFactor(0, 1)
+                self.destination_splitter.setStretchFactor(1, 1)
             side_layout.addWidget(self.destination_splitter, 1)
         self.sidebar = sidebar; self.main_splitter.addWidget(sidebar)
         self.visual_splitter = QSplitter(Qt.Horizontal); self.visual_splitter.setChildrenCollapsible(False)
@@ -264,7 +275,16 @@ class LocationDialog(QDialog):
 
         buttons_row = QHBoxLayout()
         self.refresh_button = QPushButton(QIcon.fromTheme('view-refresh'), '&Refresh'); self.refresh_button.clicked.connect(self.schedule_plan)
-        buttons_row.addWidget(self.refresh_button); buttons_row.addStretch()
+        buttons_row.addWidget(self.refresh_button)
+
+        if self.selection_only and self.launched_from_report:
+            self.settings_back = QPushButton('Back')
+            style_button(self.settings_back, 'back')
+            self.settings_back.setAutoDefault(False)
+            self.settings_back.clicked.connect(self.reject)
+            buttons_row.insertWidget(0, self.settings_back)
+
+        buttons_row.addStretch()
         if kind == 'report':
             self.buttons = QDialogButtonBox(QDialogButtonBox.Close)
             style_button_box(self.buttons)
@@ -305,8 +325,26 @@ class LocationDialog(QDialog):
         if self.proposal_only:
             self._init_proposal(files, initial)
             return
-        if initial: self.restore_input(initial)
+        if not initial and self.kind == 'apply' and self.selection_only:
+            initial = dict(
+                method='map',
+                latitude='',
+                longitude='',
+                open_map_on_start=False,
+            )
+            self.initial_reference_checked = True
+
+        if initial:
+            self.restore_input(initial)
+            if self.selection_only:
+                self.output_overwrite.setChecked(
+                    initial.get('output_policy') == 'overwrite'
+                )
+                self.output_create.setChecked(
+                    initial.get('output_policy') != 'overwrite'
+                )
         self.schedule_plan()
+
         self.thumbnail_queue = list(dict.fromkeys([*self.files, *self.candidate_items]))
         QTimer.singleShot(0, self.start_thumbnails)
 
@@ -338,7 +376,26 @@ class LocationDialog(QDialog):
         self.source_form = form
         self.method = QComboBox()
         for title, key in [('Another Image', 'photo'), ('Point on Map', 'map'), ('Manual Coordinates', 'manual'), ('GPX Track', 'gpx')]: self.method.addItem(title, key)
-        form.addRow('&Location source', self.method); layout.addLayout(form)
+        source_row = QWidget()
+        source_actions = QHBoxLayout(source_row)
+        source_actions.setContentsMargins(0, 0, 0, 0)
+        source_actions.setSpacing(8)
+
+        source_actions.addWidget(self.method)
+
+        self.map_button = QPushButton('Choose on Map…')
+        self.map_button.setAutoDefault(False)
+        self.map_button.setToolTip(
+            'Choose a new location for the selected image.'
+        )
+        self.map_button.clicked.connect(self.open_map)
+        source_actions.addWidget(self.map_button)
+
+        self.map_source_actions = source_actions
+        self.map_button.hide()
+
+        form.addRow('&Location source', source_row)
+        layout.addLayout(form)
         self.method_pages = QStackedWidget(); self.method_pages.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum); layout.addWidget(self.method_pages)
         photo_page = QWidget(); photo_layout = QVBoxLayout(photo_page); photo_layout.setContentsMargins(0, 0, 0, 0)
         self.candidates = QComboBox(); self.candidates.setIconSize(QSize(48, 36))
@@ -353,10 +410,25 @@ class LocationDialog(QDialog):
         browse = QPushButton(QIcon.fromTheme('document-open'), '&Browse…'); browse.clicked.connect(self.choose_reference); browse.setToolTip('Browse for GPS source image'); reference_row.addWidget(browse); photo_layout.addLayout(reference_row)
         self.candidate_help = self.label('Choose the image that supplies GPS.'); photo_layout.addWidget(self.candidate_help)
         self.method_pages.addWidget(photo_page)
-        map_page = QWidget(); map_layout = QVBoxLayout(map_page); map_layout.setContentsMargins(0, 0, 0, 0)
-        map_button = QPushButton('Choose on Map…'); map_button.clicked.connect(self.open_map); map_layout.addWidget(map_button)
-        self.map_label = self.label('No location selected.'); map_layout.addWidget(self.map_label)
-        map_layout.addWidget(self.label('Applies to all destinations. Old altitude and direction are removed.'))
+        map_page = QWidget()
+        map_page.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Maximum
+        )
+        map_layout = QVBoxLayout(map_page)
+        map_layout.setContentsMargins(0, 0, 0, 0)
+        map_layout.setSpacing(4)
+        map_layout.setAlignment(Qt.AlignTop)
+
+        self.map_label = self.label('No location change selected.')
+        self.map_label.setWordWrap(False)
+        self.map_label.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Fixed
+        )
+        map_layout.addWidget(self.map_label)
+
+        self.build_advanced_gps_controls(map_layout)
+
+
         self.method_pages.addWidget(map_page)
         self.add_source_page(self.build_manual_page())
         gpx_page = QWidget(); gpx_layout = QVBoxLayout(gpx_page)
@@ -365,6 +437,7 @@ class LocationDialog(QDialog):
         self.gpx_inputs, self.inputs = self.inputs, manual_inputs
         self.add_source_page(gpx_page)
         self.method.currentIndexChanged.connect(self.change_method)
+        self.method.activated.connect(self.open_selected_map)
         for i in range(self.method_pages.count()):
             self.method_pages.widget(i).setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred if i == 0 else QSizePolicy.Ignored)
         self.fit_method_page()
@@ -674,7 +747,36 @@ class LocationDialog(QDialog):
             self.method_pages.setMaximumHeight(height)
 
     def change_method(self, index):
+        if (
+            self.selection_only
+            and self.image_drafts
+            and self.method.currentData() != 'map'
+        ):
+            answer = QMessageBox.question(
+                self,
+                'Change location source',
+                'Discard all pending individual GPS changes '
+                'and switch location source?',
+                QMessageBox.Yes | QMessageBox.Cancel,
+                QMessageBox.Cancel,
+            )
+
+            if answer != QMessageBox.Yes:
+                self.method.blockSignals(True)
+                self.method.setCurrentIndex(
+                    self.method.findData('map')
+                )
+                self.method.blockSignals(False)
+                return
+
+            self.image_drafts.clear()
+
         self.method_pages.setCurrentIndex(index)
+
+        map_mode = self.method.currentData() == 'map'
+        self.map_button.setVisible(map_mode)
+        self.advanced_toggle.setVisible(map_mode)
+
         self.pending_reference_choice = ''
         if self.selection_only and self.method.currentData() == 'photo' and not self.reference:
             self.initial_reference_checked = False
@@ -701,6 +803,10 @@ class LocationDialog(QDialog):
             field.setText(altitude_from_metres(self.altitude_metres, chosen) if self.altitude_metres != '' else '')
             field.blockSignals(False); self.altitude_label.setText('Altitude (optional, ft)' if chosen == 'imperial' else 'Altitude (optional, m)')
         if self.kind == 'reduce': self.update_grid_labels()
+
+        if hasattr(self, 'advanced_panel'):
+            self.refresh_advanced_gps_controls()
+
         try:
             if not self.proposal_only: persist_units(preference)
         except (OSError, ValueError) as exc:
@@ -723,25 +829,111 @@ class LocationDialog(QDialog):
         except ValueError as exc: QMessageBox.information(self, 'Check coordinates', str(exc)); return
         self.open_map(initial=initial, into_manual=True)
 
+    def open_selected_map(self, *_):
+        if self.closing or self.proposal_only:
+            return
+
+        if self.kind != 'apply' or not self.selection_only:
+            return
+
+        if self.method.currentData() != 'map':
+            return
+
+        self.open_map()
+
     def open_map(self, checked=False, initial=None, into_manual=False):
-        if initial is None:
-            initial = self.map_position
-            if initial is None:
-                try: initial = self.manual_position()
-                except ValueError: pass
-            if initial is None and self.reference and not self.worker:
-                data = source_info(self.reference, self.cache)
-                if data:
-                    try: initial = summarize(data['raw'])['position']
-                    except ValueError: pass
         from kim_location_map import choose_location
+        from kim_location import same_position
+
+        individual = (
+            self.selection_only
+            and self.individual_map_mode()
+            and not into_manual
+        )
+
+        path = self.image_list.current_path()
+        entry = next(
+            (
+                item for item in self.display_entries
+                if item['source'] == path
+            ),
+            None,
+        )
+
+        if individual:
+            if not path or not entry or not self.plan:
+                QMessageBox.information(
+                    self, 'Choose an image',
+                    'Select an inspected image first.'
+                )
+                return
+
+            blocked = blocked_destination(entry, True)
+
+            if blocked:
+                QMessageBox.information(
+                    self, 'GPS editing unavailable', blocked
+                )
+                return
+
+            info = entry.get('location_before') or {}
+            recorded = info.get('position')
+
+            if initial is None:
+                initial = self.draft_position(path)
+
+            if initial is None:
+                initial = recorded
+
+            point = choose_location(self, initial, self.units)
+
+            if point is None:
+                return
+
+            # The picker may return its initial coordinates.
+            # An unchanged location is not a new GPS edit.
+            previous = self.draft_position(path)
+
+            if previous is not None and same_position(previous, point):
+                pass
+            elif recorded is not None and same_position(recorded, point):
+                self.image_drafts.pop(path, None)
+            else:
+                self.image_drafts[path] = dict(
+                    latitude=f'{point[0]:.12f}',
+                    longitude=f'{point[1]:.12f}',
+                    altitude='',
+                    direction='',
+                    direction_ref='T',
+                )
+
+            self.refresh_draft_controls()
+            self.schedule_plan()
+            self.update_visual()
+            return
+
+        if initial is None:
+            try:
+                initial = self.manual_position()
+            except ValueError:
+                pass
+
+        if initial is None and entry:
+            initial = (
+                entry.get('location_before') or {}
+            ).get('position')
+
         point = choose_location(self, initial, self.units)
-        if point is None: return
+
+        if point is None:
+            return
+
         if into_manual:
-            self.inputs['latitude'].setText(f'{point[0]:.12f}'); self.inputs['longitude'].setText(f'{point[1]:.12f}')
-        else:
-            self.map_position = point; self.map_label.setText('Selected location: ' + position_text(point))
+            self.inputs['latitude'].setText(f'{point[0]:.12f}')
+            self.inputs['longitude'].setText(f'{point[1]:.12f}')
+
         self.schedule_plan()
+        self.update_visual()
 
     def config(self):
         result = {'units': self.units}
@@ -750,7 +942,13 @@ class LocationDialog(QDialog):
             if method == 'photo':
                 result.update(reference=self.reference, altitude=self.copy_altitude.isChecked(), direction=self.copy_direction.isChecked())
             elif method == 'map':
-                result.update(latitude=f'{self.map_position[0]:.12f}' if self.map_position else '', longitude=f'{self.map_position[1]:.12f}' if self.map_position else '', altitude='', direction='')
+                result.update(
+                    image_drafts={
+                        path: dict(draft)
+                        for path, draft in self.image_drafts.items()
+                        if path in self.files
+                    }
+                )
             elif method == 'gpx': result.update(self.gpx_config())
             else:
                 result.update(latitude=self.inputs['latitude'].text().strip(), longitude=self.inputs['longitude'].text().strip(), altitude=self.altitude_metres if self.altitude_metres is not None else 'invalid altitude', direction=self.inputs['direction'].text().strip())
@@ -783,15 +981,10 @@ class LocationDialog(QDialog):
         if self.kind != 'apply' or self.initial_reference_checked: return False
         self.initial_reference_checked = True
         if not self.uses_reference() or self.reference or len(self.files) < 2: return False
-        eligible = []
-        for path in self.files:
-            data = source_info(path, self.cache)
-            if data and not data.get('error'):
-                info = summarize(data['raw'])
-                if info['position'] is not None: eligible.append(path)
-        if len(eligible) != 1: return False
-        self.candidates.setCurrentIndex(self.candidate_items[eligible[0]].row())
-        return True
+        # A selected image containing GPS is not implicitly
+        # a reference. Only explicit user selection assigns
+        # this role and excludes it from the destinations.
+        return False
 
     def reference_instruction(self):
         if self.reference:
@@ -827,6 +1020,7 @@ class LocationDialog(QDialog):
         if len(self.files) == 1:
             QMessageBox.information(self, 'Keep an image selected', 'Add another destination before removing this image.'); return
         self.files.remove(path)
+        self.image_drafts.pop(path, None)
         if path in self.candidate_items:
             item = self.candidate_items.pop(path); self.candidates.removeItem(item.row())
         self.schedule_plan()
@@ -873,6 +1067,22 @@ class LocationDialog(QDialog):
             self.summary.setText('Could not prepare image locations. No images were changed.')
             print('Image Location Tools: ' + worker.error, file=sys.stderr)
             self.show_failure_rows(worker.error)
+
+            if getattr(self, 'dedicated_review', False):
+                preparing = getattr(self, 'review_preparing', None)
+
+                if preparing is not None:
+                    preparing.hide()
+
+                QMessageBox.warning(
+                    None,
+                    'GPS Review Changes',
+                    worker.error,
+                )
+
+                worker.deleteLater()
+                self.reject()
+                return
         else:
             if self.pending_reference_choice:
                 path, self.pending_reference_choice = self.pending_reference_choice, ''
@@ -930,7 +1140,42 @@ class LocationDialog(QDialog):
             self.apply_button.setEnabled(self.selection_ready() if self.selection_only and not self.plan.get('pending_input') else not self.selection_only and not self.plan.get('pending_input') and not errors and changes > 0 and self.destination_count() > 0)
         self.update_visual()
 
+        if getattr(self, 'dedicated_review', False):
+            QTimer.singleShot(0, self.open_dedicated_review)
+
+    def open_dedicated_review(self):
+        if self.closing or self.worker or not self.plan:
+            return
+
+        if getattr(self, '_dedicated_review_open', False):
+            return
+
+        self._dedicated_review_open = True
+
+        preparing = getattr(self, 'review_preparing', None)
+
+        if preparing is not None:
+            preparing.hide()
+
+        review = GPSReviewDialog(self)
+        result = review.exec()
+        review.deleteLater()
+
+        self._dedicated_review_open = False
+
+        if result == GPSReviewDialog.BACK:
+            self.review_back = True
+            self.reject()
+            return
+
+        if result != QDialog.Accepted:
+            self.reject()
+            return
+
+        self.accept()
+
     def show_selected_details(self, *_):
+        self.refresh_draft_controls()
         self.refresh_inspector()
         self.update_visual()
 
@@ -1006,6 +1251,9 @@ class LocationDialog(QDialog):
         )
 
         if entry is None:
+            return path, None, 'Waiting for GPS inspection.'
+
+        if not self.plan:
             return path, None, 'Waiting for GPS inspection.'
 
         if entry.get('error'):
@@ -1113,23 +1361,112 @@ class LocationDialog(QDialog):
         # Keep the process independent of the report's
         # window lifetime. Closing a report must not kill
         # an active GPS review or publication operation.
-        process = QProcess(QApplication.instance())
-        self.report_edit_process = process
-        process.setProgram(str(dispatcher))
-        process.setArguments(['location-apply', '--', path])
+        process = None
+        config_directory = None
+        try:
+            process = QProcess(QApplication.instance())
+            self.report_edit_process = process
+            process.setProgram(str(dispatcher))
+            process.setArguments([
+                'location-apply', '--', *self.files
+            ])
 
-        process.finished.connect(self.report_edit_finished)
-        process.finished.connect(process.deleteLater)
-        process.errorOccurred.connect(self.report_edit_error)
+            # Editing the report's selected image must not treat
+            # that image as an unchanged GPS reference.
+            import tempfile
+            from PySide6.QtCore import QProcessEnvironment
 
-        process.start()
+            initial = dict(
+                method='map',
+                image_drafts={},
+                launched_from_report=True,
+                open_map_on_start=False,
+            )
+
+            config_directory = tempfile.TemporaryDirectory(
+                prefix='kimng-gps-edit-'
+            )
+            config_path = Path(config_directory.name) / 'initial.json'
+            config_path.write_text(json.dumps(initial), encoding='utf-8')
+
+            environment = QProcessEnvironment.systemEnvironment()
+            environment.insert('KIM_LOCATION_CONFIG', str(config_path))
+            process.setProcessEnvironment(environment)
+
+            # The configuration belongs to the launched process,
+            # including when the original report closes first.
+            process._kimng_config_directory = config_directory
+            process.finished.connect(
+                lambda *_: config_directory.cleanup()
+            )
+            process.destroyed.connect(
+                lambda *_: config_directory.cleanup()
+            )
+
+            process.finished.connect(self.report_edit_finished)
+            process.finished.connect(process.deleteLater)
+            process.errorOccurred.connect(self.report_edit_error)
+
+            process.start()
+        except Exception as exc:
+            self.report_edit_process = None
+            self.report_edit_busy = False
+
+            if process is not None:
+                process.deleteLater()
+
+            if config_directory is not None:
+                config_directory.cleanup()
+
+            self.refresh_report_edit_action()
+            QMessageBox.warning(
+                self,
+                'Edit GPS location',
+                'Could not open the GPS editing workflow:\n'
+                + str(exc)
+            )
 
     def report_edit_finished(self, *_):
         self.report_edit_process = None
         self.report_edit_busy = False
 
-        if not self.closing:
-            self.refresh_report_edit_action()
+        if self.closing:
+            return
+
+        # The standalone editor may have replaced an original
+        # or published a separate derivative. Reinspect only
+        # the existing report selection; never silently switch
+        # the report to a newly created output.
+        #
+        # Refresh even after a nonzero exit because a partially
+        # completed operation may have changed an original.
+        self.refresh_report_sources()
+
+    def refresh_report_sources(self):
+        if self.kind != 'report' or self.closing:
+            return
+
+        self.completed_report = False
+
+        # Do not mutate a cache while an inspection worker
+        # may still be using it. Replace the cache object
+        # and let the existing cancellation lifecycle retire
+        # any previous inspection.
+        self.cache = {}
+
+        self.display_entries = [
+            dict(source=path, status='pending')
+            for path in self.files
+        ]
+
+        self.schedule_plan()
+        self.summary.setText('Refreshing GPS locations…')
+        self.selected_location.setText('Refreshing GPS location…')
+        self.report_copy.setEnabled(False)
+        self.report_map.setEnabled(False)
+        self.details_copy.setEnabled(False)
+        self.details_browser.setEnabled(False)
+        self.refresh_report_edit_action()
 
     def report_edit_error(self, error):
         from PySide6.QtCore import QProcess
@@ -1172,8 +1509,21 @@ class LocationDialog(QDialog):
     def selection_ready(self):
         config = self.config()
         if self.destination_count() == 0: return False
+
+        if self.individual_map_mode():
+            return bool(self.image_drafts)
+
         try:
             method = config.get('method')
+
+            if method == 'manual' and len(self.files) != 1:
+                self.context.setText(
+                    'Manual coordinates require a single image. '
+                    'Use Point on Map to edit images individually.'
+                )
+                self.context.show()
+                return False
+
             if method == 'photo':
                 data = source_info(self.reference, self.cache) if self.reference else None
                 if not data or data.get('error') or summarize(data['raw'])['position'] is None: return False
@@ -1183,6 +1533,12 @@ class LocationDialog(QDialog):
             elif method == 'gpx':
                 return bool(config.get('gpx') and self.plan and not self.plan.get('pending_input') and self.track_cache.get('track'))
             else:
+                if (
+                    not config.get('latitude')
+                    or not config.get('longitude')
+                ):
+                    return False
+
                 coordinate(config.get('latitude'), None, True); coordinate(config.get('longitude'), None, False)
                 if config.get('altitude', '') != '': number(config['altitude'], 'altitude', -12000, 100000)
                 if config.get('direction', '') != '': number(config['direction'], 'image direction', 0, 359.999999)
@@ -1213,8 +1569,14 @@ class LocationDialog(QDialog):
                 self.gpx_inputs['camera' + str(i)].setText(pair[0]); self.gpx_inputs['gps' + str(i)].setText(pair[1])
             self.clock_advanced.setChecked(bool(sync) or config.get('seconds', '0') != '0')
         elif method == 'map':
-            self.map_position = [coordinate(config.get('latitude'), None, True), coordinate(config.get('longitude'), None, False)]
-            self.map_label.setText('Selected location: ' + position_text(self.map_position))
+            self.map_position = None
+            self.image_drafts = {
+                path: dict(draft)
+                for path, draft in config.get('image_drafts', {}).items()
+                if path in self.files
+            }
+            self.refresh_draft_controls()
+
         else:
             for key in ('latitude', 'longitude', 'direction'): self.inputs[key].setText(config.get(key, ''))
             self.altitude_metres = config.get('altitude', '')
@@ -1314,6 +1676,10 @@ class LocationDialog(QDialog):
     def render_image_list(self):
         rows = []; reference_info = self.reference_info() if self.uses_reference() else None
         proposed = reference_info['position'] if reference_info else None
+
+        if proposed is None:
+            proposed = self.selected_input_position()
+
         inspecting = self.selection_only or bool(self.plan and self.plan.get('pending_input'))
         refreshing = not self.plan and bool(self.worker or self.timer.isActive())
         ready = matching = blocked_count = pending = 0
@@ -1328,7 +1694,25 @@ class LocationDialog(QDialog):
             else:
                 approved = entry.get('approved_location') if self.plan else None
                 blocked = not refreshing and bool(blocked_destination(entry, inspecting))
-                caption = destination_status(entry, approved['position'] if approved else proposed, inspecting) if self.plan or blocked else 'Refreshing proposal…'
+                row_proposed = (
+                    self.draft_position(entry['source'])
+                    if self.individual_map_mode()
+                    else proposed
+                )
+
+                caption = destination_status(
+                    entry,
+                    approved['position'] if approved else row_proposed,
+                    inspecting,
+                ) if self.plan or blocked else 'Reading GPS location…'
+
+                if (
+                    self.selection_only
+                    and self.individual_map_mode()
+                    and not blocked
+                    and row_proposed is not None
+                ):
+                    caption = 'GPS change pending'
                 if blocked: blocked_count += 1
                 elif not self.plan or inspecting: pending += 1
                 elif entry['status'] == 'change': ready += 1
@@ -1344,7 +1728,20 @@ class LocationDialog(QDialog):
         self.images_heading.setText(heading + f' ({len(rows)})')
         if self.kind != 'report':
             def images(n): return f'{n} ' + ('image' if n == 1 else 'images')
-            if inspecting or not self.plan:
+            if (
+                self.selection_only
+                and self.kind == 'apply'
+                and self.method.currentData() == 'map'
+            ):
+                count = len(self.image_drafts)
+
+                lines = [
+                    f'{count} pending GPS changes'
+                    if count
+                    else 'No changes selected',
+                    f'{max(0, len(rows) - count - blocked_count)} unchanged',
+                ]
+            elif inspecting or not self.plan:
                 lines = ['Preview required: ' + images(pending)]
             else:
                 lines = ['Ready to update: ' + images(ready), 'No changes needed: ' + images(matching)]
@@ -1362,6 +1759,346 @@ class LocationDialog(QDialog):
         icon = QIcon.fromTheme('image-x-generic'); self.image_list.set_thumbnail(path, icon)
         if path in self.candidate_items: self.candidate_items[path].setIcon(icon)
         if path not in self.thumbnail_queue: self.thumbnail_queue.append(path)
+
+
+    def build_advanced_gps_controls(self, layout):
+        from PySide6.QtWidgets import QDoubleSpinBox
+
+        self.advanced_refreshing = False
+
+        self.advanced_toggle = QToolButton()
+        self.advanced_toggle.setText('Advanced GPS settings')
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setChecked(False)
+        self.advanced_toggle.setArrowType(Qt.RightArrow)
+        self.advanced_toggle.setToolButtonStyle(
+            Qt.ToolButtonTextBesideIcon
+        )
+        self.advanced_toggle.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Fixed
+        )
+
+        self.map_source_actions.addWidget(
+            self.advanced_toggle
+        )
+        self.map_source_actions.addStretch(1)
+        self.advanced_toggle.hide()
+
+        self.advanced_panel = QWidget()
+        self.advanced_panel.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Fixed
+        )
+        form = QGridLayout(self.advanced_panel)
+        form.setContentsMargins(18, 0, 0, 0)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(4)
+
+        self.advanced_altitude_enabled = QCheckBox(
+            'Specify altitude'
+        )
+
+        self.advanced_altitude = QDoubleSpinBox()
+        self.advanced_altitude.setDecimals(3)
+        self.advanced_altitude.setKeyboardTracking(False)
+        self.advanced_altitude.setToolTip(
+            'Signed altitude relative to the WGS84 ellipsoid. '
+            'Negative values are below the reference surface.'
+        )
+
+        self.advanced_direction_enabled = QCheckBox(
+            'Specify image direction'
+        )
+
+        self.advanced_direction = QDoubleSpinBox()
+        self.advanced_direction.setDecimals(6)
+        self.advanced_direction.setRange(0, 359.999999)
+        self.advanced_direction.setSuffix('°')
+        self.advanced_direction.setKeyboardTracking(False)
+
+        self.advanced_direction_ref = QComboBox()
+        self.advanced_direction_ref.addItem(
+            'True north', 'T'
+        )
+        self.advanced_direction_ref.addItem(
+            'Magnetic north', 'M'
+        )
+
+        form.addWidget(
+            self.advanced_altitude_enabled, 0, 0
+        )
+        form.addWidget(
+            self.advanced_altitude, 0, 1
+        )
+
+        form.addWidget(
+            self.advanced_direction_enabled, 0, 2
+        )
+        form.addWidget(
+            self.advanced_direction, 0, 3
+        )
+        form.addWidget(
+            self.advanced_direction_ref, 0, 4
+        )
+
+        self.advanced_toggle.setToolTip(
+            'Optional GPS fix details for the selected image. '
+            'Unspecified fix details are removed when '
+            'assigning a different location.'
+        )
+        form.setColumnStretch(5, 1)
+
+        layout.addWidget(self.advanced_panel)
+        self.advanced_panel.hide()
+
+        self.advanced_toggle.toggled.connect(
+            self.toggle_advanced_gps
+        )
+
+        self.advanced_altitude_enabled.toggled.connect(
+            self.capture_advanced_gps
+        )
+        self.advanced_direction_enabled.toggled.connect(
+            self.capture_advanced_gps
+        )
+
+        self.advanced_altitude.valueChanged.connect(
+            self.capture_advanced_gps
+        )
+        self.advanced_direction.valueChanged.connect(
+            self.capture_advanced_gps
+        )
+        self.advanced_direction_ref.currentIndexChanged.connect(
+            self.capture_advanced_gps
+        )
+
+        self.advanced_altitude.setEnabled(False)
+        self.advanced_direction.setEnabled(False)
+        self.advanced_direction_ref.setEnabled(False)
+        self.advanced_toggle.setEnabled(False)
+
+    def toggle_advanced_gps(self, expanded):
+        self.advanced_toggle.setArrowType(
+            Qt.DownArrow if expanded else Qt.RightArrow
+        )
+        self.advanced_panel.setVisible(expanded)
+        self.advanced_panel.updateGeometry()
+
+        QTimer.singleShot(0, self.fit_method_page)
+
+    def refresh_advanced_gps_controls(self):
+        if not hasattr(self, 'advanced_panel'):
+            return
+
+        if not hasattr(self, 'image_list'):
+            return
+
+        path = self.image_list.current_path()
+        draft = self.image_drafts.get(path)
+
+        self.advanced_refreshing = True
+
+        try:
+            self.advanced_toggle.setEnabled(
+                self.selection_only and bool(draft)
+            )
+
+            self.advanced_panel.setEnabled(bool(draft))
+
+            if self.units == 'imperial':
+                self.advanced_altitude.setSuffix(' ft')
+
+                # Conservative bounds at three decimal places.
+                self.advanced_altitude.setRange(
+                    -39370.078, 328083.989
+                )
+            else:
+                self.advanced_altitude.setSuffix(' m')
+                self.advanced_altitude.setRange(
+                    -12000, 100000
+                )
+
+            altitude = (
+                draft.get('altitude', '')
+                if draft else ''
+            )
+
+            direction = (
+                draft.get('direction', '')
+                if draft else ''
+            )
+
+            self.advanced_altitude_enabled.setChecked(
+                altitude != ''
+            )
+
+            self.advanced_direction_enabled.setChecked(
+                direction != ''
+            )
+
+            self.advanced_altitude.setValue(
+                float(
+                    altitude_from_metres(
+                        altitude, self.units
+                    )
+                )
+                if altitude != '' else 0
+            )
+
+            self.advanced_direction.setValue(
+                float(direction)
+                if direction != '' else 0
+            )
+
+            reference = (
+                draft.get('direction_ref', 'T')
+                if draft else 'T'
+            )
+
+            self.advanced_direction_ref.setCurrentIndex(
+                self.advanced_direction_ref.findData(
+                    reference
+                )
+            )
+
+            self.advanced_altitude.setEnabled(
+                bool(draft) and altitude != ''
+            )
+            self.advanced_direction.setEnabled(
+                bool(draft) and direction != ''
+            )
+            self.advanced_direction_ref.setEnabled(
+                bool(draft) and direction != ''
+            )
+
+        finally:
+            self.advanced_refreshing = False
+
+    def capture_advanced_gps(self, *_):
+        if self.advanced_refreshing:
+            return
+
+        if not self.selection_only:
+            return
+
+        if not self.individual_map_mode():
+            return
+
+        path = self.image_list.current_path()
+        draft = self.image_drafts.get(path)
+
+        if not draft:
+            return
+
+        altitude_enabled = (
+            self.advanced_altitude_enabled.isChecked()
+        )
+        direction_enabled = (
+            self.advanced_direction_enabled.isChecked()
+        )
+
+        self.advanced_altitude.setEnabled(
+            altitude_enabled
+        )
+
+        self.advanced_direction.setEnabled(
+            direction_enabled
+        )
+
+        self.advanced_direction_ref.setEnabled(
+            direction_enabled
+        )
+
+        sender = self.sender()
+
+        # Only recalculate an altitude when that field
+        # or its checkbox changes. Navigating images,
+        # changing units or editing direction must not
+        # introduce altitude rounding errors.
+
+        if sender in (
+            self.advanced_altitude,
+            self.advanced_altitude_enabled,
+        ):
+            draft['altitude'] = (
+                altitude_to_metres(
+                    str(self.advanced_altitude.value()),
+                    self.units,
+                )
+                if altitude_enabled else ''
+            )
+
+        if sender in (
+            self.advanced_direction,
+            self.advanced_direction_enabled,
+            self.advanced_direction_ref,
+        ):
+            draft['direction'] = (
+                f'{self.advanced_direction.value():.6f}'
+                if direction_enabled else ''
+            )
+
+            draft['direction_ref'] = (
+                self.advanced_direction_ref.currentData()
+                if direction_enabled else 'T'
+            )
+
+        # Advanced values do not change source inspection.
+        # The final planner will consume this updated draft.
+        # No source metadata is written here.
+
+        self.refresh_inspector()
+
+    def individual_map_mode(self):
+        return (
+            self.kind == 'apply'
+            and not self.proposal_only
+            and self.method.currentData() == 'map'
+        )
+
+    def draft_position(self, path):
+        draft = self.image_drafts.get(path)
+        if not draft:
+            return None
+
+        return [
+            coordinate(draft['latitude'], None, True),
+            coordinate(draft['longitude'], None, False),
+        ]
+
+    def refresh_draft_controls(self):
+        if not self.individual_map_mode():
+            return
+
+        path = self.image_list.current_path()
+        point = self.draft_position(path)
+
+        self.map_label.setText(
+            'Proposed location: ' + position_text(point)
+            if point is not None
+            else 'No location change selected.'
+        )
+
+        self.refresh_advanced_gps_controls()
+
+    def selected_input_position(self, path=None):
+        if self.kind != 'apply' or self.proposal_only:
+            return None
+
+        if not self.selection_only:
+            return None
+
+        if self.individual_map_mode():
+            return self.draft_position(
+                path or self.image_list.current_path()
+            )
+
+        if self.method.currentData() == 'manual':
+            try:
+                return self.manual_position()
+            except ValueError:
+                return None
+
+        return None
 
     def update_visual(self, *_):
         if not hasattr(self, 'location_map'): return
@@ -1382,16 +2119,56 @@ class LocationDialog(QDialog):
         except ValueError: info = None
         approved = entry.get('approved_location') if entry and not reference and self.plan and entry['status'] == 'change' else None
         position = info['position'] if info else None
+
+        proposed_position = (
+            approved['position'] if approved else None
+        )
+
+        if (
+            proposed_position is None
+            and path
+            and not reference
+            and not (entry and entry.get('error'))
+        ):
+            proposed_position = self.selected_input_position(path)
+
         pending = path and not data and (not entry or self.worker)
-        self.selected_location.setText('Original GPS: ' + position_text(position) if position is not None else 'Reading GPS location…' if pending else camera_status(info) if path else '')
-        if approved: self.selected_location.setText(self.selected_location.text() + '\nNew GPS: ' + position_text(approved['position']))
-        self.report_copy.setEnabled(position is not None); self.report_map.setEnabled(position is not None)
+        if proposed_position is not None:
+            self.selected_location.setText(
+                'Selected location: '
+                + position_text(proposed_position)
+            )
+        elif position is not None:
+            self.selected_location.setText(
+                position_text(position)
+            )
+        else:
+            self.selected_location.setText(
+                'Reading GPS location…' if pending
+                else camera_status(info) if path else ''
+            )
+        recorded_available = (
+            position is not None
+            and proposed_position is None
+        )
+        self.report_copy.setEnabled(recorded_available)
+        self.report_map.setEnabled(recorded_available)
+        self.report_copy.setVisible(proposed_position is None)
+        self.report_map.setVisible(proposed_position is None)
         self.report_copy.setToolTip('Copy exact signed camera latitude and longitude' if position is not None else 'Requires valid, unambiguous camera coordinates.')
         self.report_map.setToolTip('Open the camera coordinates in your browser. This explicitly shares the position with OpenStreetMap.' if position is not None else 'Requires valid, unambiguous camera coordinates.')
-        self.map_subject.setVisible(bool(approved)); self.map_subject.setEnabled(bool(approved))
-        if approved and self.map_subject.currentData() == 'proposed':
-            position = approved['position']; self.map_heading.setText('New GPS location')
-        else: self.map_heading.setText('GPS source location' if reference else 'GPS Location')
+        has_proposed = proposed_position is not None
+
+        self.map_subject.hide()
+        self.map_subject.setEnabled(False)
+
+        if has_proposed:
+            position = proposed_position
+
+        self.map_heading.setText(
+            'GPS source location' if reference
+            else 'GPS Location'
+        )
         empty = ('Choose a GPS source image with camera GPS.' if reference else 'Select an image to see its GPS location.') if not path else camera_status(info) + '. No camera marker can be shown.'
         self.location_map.set_position(position, empty)
         if reference:
@@ -1456,6 +2233,401 @@ def show_location_result(result_path, plan_path):
     dialog.exec()
 
 
+
+class GPSReviewDialog(QDialog):
+    """Read-only review of the exact GPS publication plan."""
+
+    BACK = 132
+
+    def __init__(self, owner):
+        super().__init__(owner)
+        from PySide6.QtWidgets import (
+            QTableWidget, QTableWidgetItem, QHeaderView,
+            QAbstractItemView, QPlainTextEdit,
+        )
+
+        self.owner = owner
+        self.entries = owner.plan['entries']
+        self.setWindowTitle(
+            'KIMng - Edit GPS metadata - Review Changes'
+        )
+        available = self.screen().availableGeometry()
+        self.resize(
+            min(1100, available.width() * 9 // 10),
+            min(800, available.height() * 9 // 10),
+        )
+        self.setSizeGripEnabled(True)
+
+        layout = QVBoxLayout(self)
+
+        heading = QLabel('Review the planned GPS metadata changes.')
+        layout.addWidget(heading)
+
+        self.table = QTableWidget(len(self.entries), 3)
+        self.table.setHorizontalHeaderLabels(
+            ['Image', 'Action', 'Status']
+        )
+        self.table.setEditTriggers(
+            QAbstractItemView.NoEditTriggers
+        )
+        self.table.setSelectionBehavior(
+            QAbstractItemView.SelectRows
+        )
+        self.table.setSelectionMode(
+            QAbstractItemView.SingleSelection
+        )
+        self.table.verticalHeader().hide()
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        header.setMinimumSectionSize(90)
+        self.table.setColumnWidth(1, 220)
+        self.table.setColumnWidth(2, 100)
+
+        self.table.verticalHeader().setDefaultSectionSize(28)
+
+        for row, entry in enumerate(self.entries):
+            status = entry['status']
+            action = (
+                destination_status(
+                    entry,
+                    entry.get('approved_location', {}).get('position'),
+                )
+            )
+            if status == 'skip' and entry.get('skip_reason'):
+                action = 'No changes'
+
+            values = (
+                Path(entry['source']).name,
+                action,
+                {
+                    'change': 'Ready',
+                    'skip': 'Unchanged',
+                    'error': 'Blocked',
+                }.get(status, status)
+            )
+
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                item.setToolTip(
+                    entry.get('error', '')
+                    or entry['source']
+                )
+                self.table.setItem(row, column, item)
+
+        table_height = (
+            header.sizeHint().height()
+            + min(max(len(self.entries), 1), 4) * 28
+            + 8
+        )
+
+        self.table.setFixedHeight(table_height)
+        layout.addWidget(self.table)
+
+        maps = QSplitter(Qt.Horizontal)
+
+        self.map_panels = []
+
+        for title in ('Current', 'Proposed'):
+            panel = QWidget()
+            column = QVBoxLayout(panel)
+            column.setContentsMargins(0, 0, 0, 0)
+
+            label = QLabel(title)
+            font = label.font()
+            font.setBold(True)
+            label.setFont(font)
+            column.addWidget(label)
+
+            # Both panels use the existing map implementation,
+            # including online-map consent and attribution.
+            location_map = LocationMap(
+                panel,
+                units=owner.units,
+                persistent=False,
+                compact=True,
+            )
+            column.addWidget(location_map, 1)
+
+            coordinates = QLabel()
+            coordinates.setTextFormat(Qt.PlainText)
+            coordinates.setWordWrap(True)
+            column.addWidget(coordinates)
+
+            maps.addWidget(panel)
+            self.map_panels.append(
+                (location_map, coordinates)
+            )
+
+        maps.setSizes([480, 480])
+        layout.addWidget(maps, 1)
+
+        changes_heading = QLabel('Additional changes')
+        font = changes_heading.font()
+        font.setBold(True)
+        changes_heading.setFont(font)
+        layout.addWidget(changes_heading)
+
+        self.details = QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setMaximumHeight(80)
+        self.details.setMinimumHeight(48)
+        layout.addWidget(self.details)
+
+        output = QFormLayout()
+
+        self.filename = QLineEdit()
+        self.filename.setReadOnly(True)
+        output.addRow('Filename', self.filename)
+
+        layout.addLayout(output)
+
+        self.policy_notice = QLabel(
+            'Originals are not being changed.'
+            if owner.policy == 'create'
+            else 'The selected originals will be replaced.'
+        )
+        layout.addWidget(self.policy_notice)
+
+        layout.addWidget(QLabel('Destination'))
+
+        destination_row = QHBoxLayout()
+
+        self.destination = QLineEdit()
+        self.destination.setReadOnly(True)
+        self.destination.setPlaceholderText(
+            'Beside each source'
+        )
+        destination_row.addWidget(self.destination, 1)
+
+        change = QPushButton('Change Destination…')
+        change.setEnabled(owner.policy == 'create')
+        change.clicked.connect(self.change_destination)
+        destination_row.addWidget(change)
+
+        layout.addLayout(destination_row)
+
+        buttons = QHBoxLayout()
+
+        back = QPushButton('Back')
+        style_button(back, 'back')
+        back.clicked.connect(
+            lambda: self.done(self.BACK)
+        )
+        buttons.addWidget(back)
+        buttons.addStretch()
+
+        apply = QPushButton('Apply Changes')
+        style_button(apply, 'apply')
+        apply.setEnabled(
+            any(e['status'] == 'change' for e in self.entries)
+            and not any(
+                e['status'] == 'error'
+                for e in self.entries
+            )
+        )
+        apply.clicked.connect(self.accept)
+        buttons.addWidget(apply)
+
+        cancel = QPushButton('Cancel')
+        style_button(cancel, 'cancel')
+        cancel.clicked.connect(self.reject)
+        buttons.addWidget(cancel)
+
+        for button in (back, apply, cancel):
+            button.setAutoDefault(False)
+
+        layout.addLayout(buttons)
+
+        self.table.currentCellChanged.connect(
+            self.show_entry
+        )
+
+        self.table.selectRow(0)
+        self.show_entry(0)
+
+    def show_entry(self, row, *_):
+        if not 0 <= row < len(self.entries):
+            return
+
+        entry = self.entries[row]
+        info = entry.get('location_before') or {}
+        approved = entry.get('approved_location') or {}
+
+        positions = (
+            info.get('position'),
+            (
+                info.get('position')
+                if entry['status'] == 'skip'
+                else approved.get('position')
+            ),
+        )
+
+        for (location_map, label), position in zip(
+            self.map_panels, positions
+        ):
+            location_map.set_position(
+                position,
+                'No GPS data'
+            )
+            label.setText(
+                position_text(position)
+                if position is not None
+                else 'No GPS data'
+            )
+
+        target = entry.get('target')
+
+        self.filename.setText(
+            Path(target).name
+            if target and entry['status'] == 'change'
+            else ''
+        )
+
+        if target:
+            parent = Path(target).parent
+            original_parent = Path(entry['source']).parent
+
+            self.destination.setText(
+                str(parent)
+                if parent != original_parent
+                else ''
+            )
+        else:
+            self.destination.clear()
+
+        display = next(
+            (
+                item for item in self.owner.display_entries
+                if item['source'] == entry['source']
+            ),
+            entry,
+        )
+
+        rows = gps_summary_changes(display)
+
+        details = [
+            line for line in rows
+            if line not in (
+                'Set camera GPS coordinates',
+                'Replace camera coordinates',
+            )
+        ]
+
+        if entry['status'] == 'change':
+            altitude = approved.get('altitude')
+
+            if altitude is not None:
+                units = self.owner.units
+                suffix = ' ft' if units == 'imperial' else ' m'
+
+                details.append(
+                    'Planned altitude: '
+                    + altitude_from_metres(altitude, units)
+                    + suffix
+                    + ' (WGS84)'
+                )
+
+            direction = approved.get('direction')
+
+            if direction is not None:
+                reference = (
+                    'magnetic north'
+                    if approved.get('direction_ref') == 'M'
+                    else 'true north'
+                )
+
+                details.append(
+                    f'Planned image direction: {direction:g}° '
+                    + 'from ' + reference
+                )
+
+        details.extend(entry.get('warnings', []))
+
+        if entry.get('error'):
+            details.append(entry['error'])
+
+        if entry['status'] == 'skip':
+            details = [
+                entry.get(
+                    'skip_reason',
+                    'No changes required. No output will be created.'
+                )
+            ]
+            details.extend(entry.get('warnings', []))
+
+        self.details.setPlainText(
+            '\n'.join(dict.fromkeys(details))
+            or 'No additional GPS metadata changes.'
+        )
+
+    def change_destination(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            'Choose destination',
+            str(Path(
+                self.entries[0]['source']
+            ).parent),
+        )
+
+        if not folder:
+            return
+
+        from kim_preview import allocate, finish_entry
+        from kim_location import approval_digest
+        import copy
+
+        try:
+            plan = copy.deepcopy(self.owner.plan)
+            reserved = set()
+
+            for entry in plan['entries']:
+                if entry['status'] != 'change':
+                    continue
+
+                candidate = str(
+                    Path(folder) / Path(entry['target']).name
+                )
+
+                target = allocate(
+                    entry['source'],
+                    candidate,
+                    'create',
+                    reserved,
+                    '-',
+                )
+
+                finish_entry(entry, target, 'create')
+
+                for row in entry['rows']:
+                    if row[1] == 'Output policy / destination':
+                        row[3] = Path(target).name
+                        row[4] = str(Path(target).parent)
+
+            plan['approval_digest'] = approval_digest(plan)
+            verify_plan(plan)
+
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                'Change Destination',
+                str(exc),
+            )
+            return
+
+        # The changed destination is part of the exact plan
+        # shown by this review and subsequently executed.
+        self.owner.plan = plan
+        self.entries = plan['entries']
+        self.show_entry(self.table.currentRow())
+
+    def done(self, result):
+        for location_map, _label in self.map_panels:
+            location_map.stop_requests()
+        super().done(result)
+
+
 def main():
     check_graphical_session()
     if sys.argv[1:2] == ['--result']:
@@ -1469,7 +2641,44 @@ def main():
     initial = json.loads(Path(initial_path).read_text()) if initial_path else None
     if kind == 'gpx' and not initial: initial = {'method': 'gpx'}
     if kind in ('copy', 'gpx'): kind = 'apply'
-    dialog = LocationDialog(kind, files, policy, seeds, initial); status = dialog.exec()
+    dialog = LocationDialog(kind, files, policy, seeds, initial)
+
+    if kind == 'apply' and policy in ('create', 'overwrite'):
+        dialog.dedicated_review = True
+        dialog.review_back = False
+        dialog.setAttribute(Qt.WA_DontShowOnScreen, True)
+
+    preparing = None
+
+    if getattr(dialog, 'dedicated_review', False):
+        from PySide6.QtWidgets import QProgressDialog
+
+        preparing = QProgressDialog(
+            'Preparing GPS changes…',
+            'Cancel',
+            0, 0,
+        )
+
+        preparing.setWindowTitle(
+            'KIMng - Edit GPS metadata - Review Changes'
+        )
+        preparing.setMinimumDuration(0)
+        preparing.setAutoClose(False)
+        preparing.setAutoReset(False)
+        preparing.canceled.connect(dialog.reject)
+
+        dialog.review_preparing = preparing
+        preparing.resize(460, 120)
+        preparing.show()
+
+    status = dialog.exec()
+
+    if preparing is not None:
+        preparing.hide()
+        preparing.deleteLater()
+
+    if getattr(dialog, 'review_back', False):
+        return 132
     if kind == 'report': return 0 if dialog.completed_report else 130
     if status != QDialog.Accepted: return 130
     if policy == 'select':
@@ -1482,6 +2691,7 @@ def main():
             dialog.config(),
             files=dialog.files,
             output_policy=requested_policy,
+            launched_from_report=dialog.launched_from_report,
         )))
     else:
         save_plan(result, dialog.plan)

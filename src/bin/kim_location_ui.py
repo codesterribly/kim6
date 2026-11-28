@@ -218,7 +218,7 @@ def destination_status(entry, proposed=None, inspecting=False):
     if blocked: return blocked
     if not inspecting and entry['status'] == 'skip': return 'Already matches, no change'
     if not info: return 'Blocked: inspection unavailable'
-    if proposed is None: return 'Choose a location source'
+    if proposed is None: return camera_status(info)
     if info['position'] is None:
         return 'GPS conflict, review required' if info['categories']['camera']['issues'] else 'Add GPS'
     if same_position(info['position'], proposed):
@@ -443,9 +443,8 @@ def operation_inspector_rows(entry, *, planned, inspecting, refreshing=False):
         if warning: rows.append(('Review', warning))
         return rows
     if not planned:
-        rows += [('Action', 'Preview required'), ('Existing location', position_text(info['position'])
-                 if info and info['position'] is not None else camera_status(info)),
-                 ('Output', 'Determined in final preview')]
+        rows += [('Existing location', position_text(info['position'])
+                 if info and info['position'] is not None else camera_status(info))]
     elif entry['status'] == 'skip':
         rows += [('Action', 'Already matches, no change'), ('Location', 'Existing GPS already matches the requested result.'),
                  ('Output', 'No output created')]
